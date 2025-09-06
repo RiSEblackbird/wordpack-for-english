@@ -20,3 +20,12 @@ bin-release/
 .env
 __pycache__/
 *.pyc
+# Node
+node_modules/
+dist/
+
+# Python
+__pycache__/
+
+# Test artifacts
+.coverage
