@@ -1,2 +1,5 @@
 fastapi
+uvicorn
+structlog
+pydantic-settings
 pytest
