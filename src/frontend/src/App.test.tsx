@@ -21,6 +21,7 @@ describe('App navigation', () => {
 
     await userEvent.keyboard('{Alt>}{1}{/Alt}');
     await userEvent.keyboard('/');
-    expect(cardBtn).toHaveFocus();
+    const cardPanel = document.getElementById('card-panel')!;
+    expect(cardPanel).toHaveFocus();
   });
 });

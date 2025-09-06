@@ -63,8 +63,8 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
   }, []);
 
   return (
-    <section>
-      <button onClick={getCard} ref={focusRef as React.RefObject<HTMLButtonElement>}>Get Card</button>
+    <section id="card-panel" tabIndex={-1}>
+      <button onClick={getCard}>Get Card</button>
       {loading && <div role="status">Loading…</div>}
       {card && (
         <div>

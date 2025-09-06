@@ -20,12 +20,24 @@ export const App: React.FC = () => {
         if (e.key === '4') setTab('settings');
       } else if (e.key === '/') {
         e.preventDefault();
-        focusRef.current?.focus();
+        if (tab === 'card') {
+          const cardPanel = document.getElementById('card-panel');
+          if (cardPanel) (cardPanel as HTMLElement).focus();
+        } else {
+          focusRef.current?.focus();
+        }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  useEffect(() => {
+    if (tab === 'card') {
+      const cardPanel = document.getElementById('card-panel');
+      if (cardPanel) (cardPanel as HTMLElement).focus();
+    }
+  }, [tab]);
 
   return (
     <SettingsProvider>
