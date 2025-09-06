@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Wordpack</title>
+  </head>
+  <body>
+    <div id="content">Loading...</div>
+    <script>
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
+      fetch('/api/example', {signal: controller.signal})
+        .then(resp => resp.json())
+        .then(data => {
+          clearTimeout(timeout);
+          document.getElementById('content').textContent = data.message;
+        })
+        .catch(() => {
+          const c = document.getElementById('content');
+          c.innerHTML = 'Request timed out. <a href="">再試行</a>';
+        });
+    </script>
+  </body>
+</html>
