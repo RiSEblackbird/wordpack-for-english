@@ -11,7 +11,7 @@ export const AssistPanel: React.FC<Props> = ({ focusRef }) => {
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
-  const abortRef = useRef<AbortController>();
+  const abortRef = useRef<AbortController | null>(null);
 
   const assist = async () => {
     abortRef.current?.abort();
