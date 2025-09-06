@@ -1,5 +1,6 @@
 import sys
 import types
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,6 +8,7 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture(scope="module")
 def client():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
     sys.modules.setdefault("langgraph", types.SimpleNamespace(Graph=object))
     sys.modules.setdefault("chromadb", types.SimpleNamespace())
     from backend.main import app
