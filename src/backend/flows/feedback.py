@@ -2,8 +2,10 @@ from typing import Any
 
 try:
     from langgraph import Graph
-except Exception:  # pragma: no cover - library optional
-    Graph = Any  # type: ignore
+except Exception as exc:  # pragma: no cover - library required
+    raise ImportError(
+        "FeedbackFlow requires the 'langgraph' package. Install it to use this flow."
+    ) from exc
 
 
 class FeedbackFlow:
