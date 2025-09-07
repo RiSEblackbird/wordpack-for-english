@@ -179,10 +179,10 @@ TBD
 ### 9-1. WordPackFlow（語彙パック生成）
 ```mermaid
 graph TD
-    A[Client: POST /api/word/pack] --> B[WordPackFlow]
-    B --> C["retrieve(lemma) - 将来: ChromaDB 近傍検索"]
-    C --> D["synthesize(lemma) - 将来: LLM で整形"]
-    D --> E[WordPack Response]
+    A[Client: POST /api/word/pack] --> B[WordPackFlow];
+    B --> C["retrieve(lemma) - 将来: ChromaDB 近傍検索"];
+    C --> D["synthesize(lemma) - 将来: LLM で整形"];
+    D --> E[WordPack Response];
 
     subgraph LangGraph_StateGraph
         C
@@ -193,12 +193,12 @@ graph TD
 ### 9-2. ReadingAssistFlow（リーディング支援）
 ```mermaid
 graph TD
-    A[Client: POST /api/text/assist] --> B[ReadingAssistFlow]
-    B --> C["segment(paragraph) - MVP: ピリオドで分割"]
-    C --> D{for each sentence}
-    D --> E["analyze(sentence) - MVP: ダミー構文/用語/言い換え"]
-    E --> F[AssistedSentence]
-    F --> G["TextAssistResponse - sentences/summary/citations"]
+    A[Client: POST /api/text/assist] --> B[ReadingAssistFlow];
+    B --> C["segment(paragraph) - MVP: ピリオドで分割"];
+    C --> D{for each sentence};
+    D --> E["analyze(sentence) - MVP: ダミー構文/用語/言い換え"];
+    E --> F[AssistedSentence];
+    F --> G["TextAssistResponse - sentences/summary/citations"];
 
     subgraph LangGraph_StateGraph
         C
@@ -209,10 +209,10 @@ graph TD
 ### 9-3. FeedbackFlow（自作文フィードバック）
 ```mermaid
 graph TD
-    A[Client: POST /api/sentence/check] --> B[FeedbackFlow]
-    B --> C[run(sentence)]
-    C --> D["issues / revisions / exercise - MVP: ダミー生成"]
-    D --> E[SentenceCheckResponse]
+    A[Client: POST /api/sentence/check] --> B[FeedbackFlow];
+    B --> C["run(sentence)"];
+    C --> D["issues / revisions / exercise - MVP: ダミー生成"];
+    D --> E[SentenceCheckResponse];
 
     subgraph LangGraph_StateGraph
         C
