@@ -10,7 +10,7 @@ export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
   return (
     <section>
       <label>
-        API Base
+        API ベースURL
         <input
           ref={focusRef as React.RefObject<HTMLInputElement>}
           value={settings.apiBase}

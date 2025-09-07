@@ -30,10 +30,10 @@ export const SentencePanel: React.FC<Props> = ({ focusRef }) => {
       if (!res.ok) throw new Error();
       const data = await res.json();
       setResult(data.result || 'OK');
-      setMsg({ kind: 'status', text: 'Checked' });
+      setMsg({ kind: 'status', text: 'チェックしました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setMsg({ kind: 'alert', text: 'Error checking sentence' });
+      setMsg({ kind: 'alert', text: '文のチェックに失敗しました' });
     } finally {
       setLoading(false);
     }
@@ -49,10 +49,10 @@ export const SentencePanel: React.FC<Props> = ({ focusRef }) => {
         ref={focusRef as React.RefObject<HTMLInputElement>}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Enter a sentence"
+        placeholder="英文を入力してください"
       />
-      <button onClick={checkSentence}>Check</button>
-      {loading && <div role="status">Loading…</div>}
+      <button onClick={checkSentence}>チェック</button>
+      {loading && <div role="status">読み込み中…</div>}
       {result && <p>{result}</p>}
       {msg && <div role={msg.kind}>{msg.text}</div>}
     </section>

@@ -30,10 +30,10 @@ export const AssistPanel: React.FC<Props> = ({ focusRef }) => {
       if (!res.ok) throw new Error();
       const data = await res.json();
       setResult(data.result || '');
-      setMsg({ kind: 'status', text: 'Assisted' });
+      setMsg({ kind: 'status', text: 'アシストしました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setMsg({ kind: 'alert', text: 'Error assisting paragraph' });
+      setMsg({ kind: 'alert', text: '段落のアシストに失敗しました' });
     } finally {
       setLoading(false);
     }
@@ -49,10 +49,10 @@ export const AssistPanel: React.FC<Props> = ({ focusRef }) => {
         ref={focusRef as React.RefObject<HTMLTextAreaElement>}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Enter a paragraph"
+        placeholder="段落を入力してください"
       />
-      <button onClick={assist}>Assist</button>
-      {loading && <div role="status">Loading…</div>}
+      <button onClick={assist}>アシスト</button>
+      {loading && <div role="status">読み込み中…</div>}
       {result && <p>{result}</p>}
       {msg && <div role={msg.kind}>{msg.text}</div>}
     </section>
