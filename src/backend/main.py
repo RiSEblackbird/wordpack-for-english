@@ -1,7 +1,10 @@
 import time
 from fastapi import FastAPI, Request
 from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.timeout import TimeoutMiddleware
+try:
+    from starlette.middleware.timeout import TimeoutMiddleware  # type: ignore
+except Exception:  # Starlette が古い場合などに備えたフォールバック
+    TimeoutMiddleware = None  # type: ignore[assignment]
 
 from .config import settings  # noqa: F401 - imported for side effects or future use
 from .logging import configure_logging, logger
@@ -20,8 +23,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# タイムアウト（運用の初期値: 10秒）
-app.add_middleware(TimeoutMiddleware, timeout=10)
+# タイムアウト（運用の初期値: 10秒）: Starlette が未対応ならスキップ
+if TimeoutMiddleware is not None:
+    app.add_middleware(TimeoutMiddleware, timeout=10)
 
 
 @app.middleware("http")
