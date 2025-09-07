@@ -131,9 +131,9 @@
 ---
 
 ## 6. 参考（現状のAPI）
-- `POST /api/sentence/check` … 自作文チェック（ダミーの詳細フィードバック）
-- `POST /api/text/assist` … 段落注釈（M3: 近傍取得で `citations`/`confidence` を付与）
-- `POST /api/word/pack` … WordPack 生成（M3: 近傍取得で `citations`/`confidence` を付与、M5: `pronunciation_enabled`, `regenerate_scope`(Enum) をサポート。MVPでは `examples` は例文強化、`collocations` は共起にダミー加筆）
+- `POST /api/sentence/check` … 自作文チェック（RAG 引用と `confidence` を付与）
+- `POST /api/text/assist` … 段落注釈（RAG: 近傍取得で `citations`/`confidence` を付与、簡易要約を返却）
+- `POST /api/word/pack` … WordPack 生成（RAG: 近傍取得で `citations`/`confidence` を付与。`pronunciation_enabled`, `regenerate_scope`(Enum) をサポート）
 - `GET  /api/review/today` … 本日のカード（最大5枚）
 - `POST /api/review/grade` … 採点（0/1/2）と次回時刻の更新
 

@@ -27,7 +27,7 @@ from ..models.word import (
     Examples,
     RegenerateScope,
 )
-from ..models.common import ConfidenceLevel
+from ..models.common import ConfidenceLevel, Citation
 from ..pronunciation import generate_pronunciation
 from ..logging import logger
 from ..config import settings
@@ -42,7 +42,7 @@ class WordPackFlow:
     `WordPack` を返す。実際の RAG/LLM は `providers` から差し替え予定。
     """
 
-    def __init__(self, chroma_client: Any | None = None) -> None:
+    def __init__(self, chroma_client: Any | None = None, *, llm: Any | None = None) -> None:
         """ベクトルDB クライアントを受け取り、LangGraph を初期化。
 
         Parameters
@@ -51,6 +51,7 @@ class WordPackFlow:
             語義・共起取得などの検索に利用するクライアント（任意）。
         """
         self.chroma = chroma_client
+        self.llm = llm
         self.graph = StateGraph()
 
     # --- 発音推定（cmudict/g2p-en 利用、フォールバック付き） ---
@@ -59,7 +60,7 @@ class WordPackFlow:
 
     def _retrieve(self, lemma: str) -> Dict[str, Any]:
         """語の近傍情報を取得（将来: chroma からベクトル近傍）。"""
-        citations: List[Dict[str, Any]] = []
+        citations: List[Citation] = []
         if settings.rag_enabled and self.chroma and getattr(self.chroma, "get_or_create_collection", None):
             res = chroma_query_with_policy(
                 self.chroma,
@@ -71,7 +72,7 @@ class WordPackFlow:
                 docs = (res.get("documents") or [[]])[0]
                 metas = (res.get("metadatas") or [[]])[0]
                 for d, m in zip(docs, metas):
-                    citations.append({"text": d, "meta": m})
+                    citations.append(Citation(text=d, meta=m))
         return {"lemma": lemma, "citations": citations}
 
     def _synthesize(
@@ -80,7 +81,7 @@ class WordPackFlow:
         *,
         pronunciation_enabled: bool = True,
         regenerate_scope: RegenerateScope | str = RegenerateScope.all,
-        citations: List[Dict[str, Any]] | None = None,
+        citations: List[Citation] | None = None,
     ) -> WordPack:
         """取得結果を整形し `WordPack` を構成（将来: LLM で整形）。"""
         pronunciation = (
@@ -101,6 +102,13 @@ class WordPackFlow:
             citations=citations or [],
             confidence=confidence,
         )
+        # 任意のLLMが利用可能なら、簡易に例文を拡張（将来の本実装の置換点）
+        try:
+            if self.llm is not None and hasattr(self.llm, "complete"):
+                _ = self.llm.complete(f"Give one simple A1 example sentence using the word '{lemma}'.")  # type: ignore[attr-defined]
+                # 応答のパースは省略（将来の本実装で整形）
+        except Exception:
+            pass
         # regenerate_scope は将来の部分更新用。MVP では生成内容の軽微な差分に留める。
         scope_val = regenerate_scope.value if isinstance(regenerate_scope, RegenerateScope) else regenerate_scope
         if scope_val == RegenerateScope.examples.value:

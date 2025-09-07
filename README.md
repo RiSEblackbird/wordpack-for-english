@@ -105,7 +105,7 @@ FastAPI アプリは `src/backend/main.py`。
   - 運用メトリクスのスナップショット。パス別に `p95_ms`, `count`, `errors`, `timeouts` を返す（M6）。
 
 - `POST /api/word/pack`
-  - 周辺知識パック生成（M3: Chroma から近傍を取得し `citations` と `confidence` を付与）。
+  - 周辺知識パック生成（RAG: Chroma から近傍を取得し `citations` と `confidence` を付与）。
   - 発音（M5）: cmudict/g2p-en を優先し、失敗時は規則ベースのフォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
   - リクエスト例（M5 追加パラメータ・Enum化）:
     ```json
@@ -132,7 +132,7 @@ FastAPI アプリは `src/backend/main.py`。
   
 
 - `POST /api/sentence/check`
-  - 自作文チェック（MVP: issues/revisions/exercise をダミー生成）。
+  - 自作文チェック（RAG 引用と `confidence` を付与、将来LLM統合）。
   - レスポンス例（抜粋）:
     ```json
     { "issues": [{"what":"語法","why":"対象語の使い分け不正確","fix":"共起に合わせて置換"}],
@@ -141,7 +141,7 @@ FastAPI アプリは `src/backend/main.py`。
     ```
 
 - `POST /api/text/assist`
-  - 段落注釈（M3: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。
+  - 段落注釈（RAG: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。簡易要約を返却。
   - レスポンス例（抜粋）:
     ```json
     { "sentences": [{"raw":"Some text","terms":[{"lemma":"Some"}]}], "summary": null, "citations": [] }
@@ -161,7 +161,7 @@ FastAPI アプリは `src/backend/main.py`。
 
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
-- `flows/*` は LangGraph 依存の最小実装（将来差し替え可能）。各ルータにはタグ/summaryが付与され、OpenAPI の可読性を向上しています。
+`flows/*` は LangGraph による処理で、RAG（Chroma）と `citations`/`confidence` の一貫管理を導入済みです。`ReadingAssistFlow` は簡易要約を返し、`FeedbackFlow` はRAG引用を付与します。各ルータにはタグ/summaryが付与され、OpenAPI の可読性を向上しています。
 
 ---
 

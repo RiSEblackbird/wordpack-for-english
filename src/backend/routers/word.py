@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from ..flows.word_pack import WordPackFlow
-from ..providers import ChromaClientFactory
+from ..providers import ChromaClientFactory, get_llm_provider
 from ..config import settings
 from ..models.word import WordPackRequest, WordPack
 
@@ -23,7 +23,8 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     """
     # RAG が有効なときのみ Chroma を接続
     chroma_client = ChromaClientFactory().create_client() if settings.rag_enabled else None
-    flow = WordPackFlow(chroma_client=chroma_client)
+    llm = get_llm_provider()
+    flow = WordPackFlow(chroma_client=chroma_client, llm=llm)
     return flow.run(
         req.lemma,
         pronunciation_enabled=req.pronunciation_enabled,
