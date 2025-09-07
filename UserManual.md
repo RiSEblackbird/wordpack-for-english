@@ -143,8 +143,14 @@
 ## 7. 開発メモ（導入・検証のヒント）
 - テスト実行:
   ```bash
+  pytest
+  # または従来の明示オプション
   pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   ```
+- 追加テスト（PR7）:
+  - `tests/test_integration_rag.py` … Chroma に最小シード投入→ `citations`/`confidence` を統合検証
+  - `tests/test_e2e_backend_frontend.py` … APIフローのE2E相当（正常/タイムアウト周辺の健全性）
+  - `tests/test_load_and_regression.py` … 軽負荷スモーク（10リクエスト）とスキーマ回帰
 - コード配置（抜粋）:
   - バックエンド: `src/backend`（`routers/*`, `flows/*`, `models/*`, `metrics.py`）
   - フロントエンド: `src/frontend`（React + Vite）

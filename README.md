@@ -194,12 +194,22 @@ FastAPI アプリは `src/backend/main.py`。
 ---
 
 ## 5. テスト
-`pytest` による API の基本動作テストが含まれます。
+`pytest` による統合/E2E/負荷・回帰テストを含みます。
 ```bash
+pytest
+# もしくは従来同様の明示オプション
 pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ```
-- テストは `tests/test_api.py`。LangGraph/Chroma のスタブを挿入して起動します。
-- カバレッジ閾値: 60%（M6 運用・品質）。必要に応じて `--cov-fail-under` を調整してください。
+- カバレッジ閾値は `pytest.ini` に設定（60%）。必要に応じて上書き可。
+- テスト構成:
+  - `tests/test_api.py` … API基本動作（LangGraph/Chroma はスタブ）
+  - `tests/test_integration_rag.py` … LangGraph/Chroma 統合（最小シードで近傍と `citations`/`confidence` を検証）
+  - `tests/test_e2e_backend_frontend.py` … フロント→バックE2E相当のAPIフロー（正常/異常系の健全性）
+  - `tests/test_load_and_regression.py` … 軽負荷スモークとスキーマ回帰チェック
+
+注意:
+- 統合テストはローカルの Chroma クライアント（`chromadb`）を利用し、フィクスチャでテスト専用ディレクトリに最小シードを投入します（環境変数 `CHROMA_PERSIST_DIR` を内部使用）。
+- RAG は `settings.rag_enabled` に従います。既定 `True`。
 
 ---
 
