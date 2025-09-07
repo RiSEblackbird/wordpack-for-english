@@ -4,10 +4,10 @@ from ..flows.reading_assist import ReadingAssistFlow
 from ..providers import ChromaClientFactory
 from ..models.text import TextAssistRequest, TextAssistResponse
 
-router = APIRouter()
+router = APIRouter(tags=["text"])
 
 
-@router.post("/assist", response_model=TextAssistResponse)
+@router.post("/assist", response_model=TextAssistResponse, response_model_exclude_none=True, summary="段落のアシスト（ダミー）")
 async def assist_text(req: TextAssistRequest) -> TextAssistResponse:
     """Provide reading assistance for a given paragraph using LangGraph flow.
 

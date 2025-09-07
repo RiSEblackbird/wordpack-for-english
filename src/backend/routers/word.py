@@ -4,10 +4,16 @@ from ..flows.word_pack import WordPackFlow
 from ..providers import ChromaClientFactory
 from ..models.word import WordPackRequest, WordPack, WordLookupResponse
 
-router = APIRouter()
+router = APIRouter(tags=["word"])
 
 
-@router.post("/pack", response_model=WordPack)
+@router.post(
+    "/pack",
+    response_model=WordPack,
+    response_model_exclude_none=True,
+    summary="WordPack を生成",
+    response_description="生成された WordPack を返します",
+)
 async def generate_word_pack(req: WordPackRequest) -> WordPack:
     """Generate a new word pack using LangGraph flow.
 
@@ -24,7 +30,12 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     )
 
 
-@router.get("", response_model=WordLookupResponse)
+@router.get(
+    "",
+    response_model=WordLookupResponse,
+    summary="単語の簡易参照（プレースホルダ）",
+    response_description="語義や例文の最小情報を返します",
+)
 async def get_word() -> WordLookupResponse:
     """Retrieve information about a word (placeholder).
 

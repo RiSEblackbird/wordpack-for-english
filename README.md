@@ -7,7 +7,7 @@
 - フロントエンド: React + TypeScript + Vite、単一ページ/4パネル構成（カード/自作文/段落注釈/設定）
 - SRS（簡易SM-2）最小実装: 今日のカード取得・3段階採点に対応
 - 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（フォールバック規則付き）
-- WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択
+- WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
 
 ---
 
@@ -78,7 +78,7 @@ src/backend/             # 本番用FastAPIアプリ
   logging.py             # structlog設定
   routers/               # エンドポイント群
   flows/                 # LangGraphベースの処理(プレースホルダ)
-  models/                # pydanticモデル(プレースホルダ)
+  models/                # pydanticモデル（厳密化済み: Enum/Field制約/例）
 src/frontend/            # React + Vite
   src/components/        # 4パネルのコンポーネント
   src/SettingsContext.tsx
@@ -99,12 +99,12 @@ FastAPI アプリは `src/backend/main.py`。
 - `POST /api/word/pack`
   - 周辺知識パック生成（M3: Chroma から近傍を取得し `citations` と `confidence` を付与）。
   - 発音（M5）: cmudict/g2p-en を優先し、失敗時は規則ベースのフォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - リクエスト例（M5 追加パラメータ）:
+  - リクエスト例（M5 追加パラメータ・Enum化）:
     ```json
     { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
     ```
     - `pronunciation_enabled`: 発音情報の生成 ON/OFF（既定 true）
-    - `regenerate_scope`: `all` | `examples` | `collocations`
+    - `regenerate_scope`: `all` | `examples` | `collocations`（Enum）
   - レスポンス例（抜粋）:
     ```json
     {
@@ -155,7 +155,7 @@ FastAPI アプリは `src/backend/main.py`。
 
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
-- `flows/*` は LangGraph 依存の最小実装（将来差し替え可能）です。
+- `flows/*` は LangGraph 依存の最小実装（将来差し替え可能）。各ルータにはタグ/summaryが付与され、OpenAPI の可読性を向上しています。
 
 ---
 
@@ -177,7 +177,7 @@ FastAPI アプリは `src/backend/main.py`。
 - 設定（`SettingsPanel.tsx`）
   - API Base（デフォルト `/api`）
   - 発音の有効/無効トグル（M5）
-  - 再生成スコープ選択（`全体/例文のみ/コロケのみ`）（M5）
+  - 再生成スコープ選択（`全体/例文のみ/コロケのみ`）（M5, Enum）
 
 アクセシビリティ/操作:
 - Alt+1..4 でタブ切替、`/` で主要入力へフォーカス

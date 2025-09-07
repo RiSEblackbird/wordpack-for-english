@@ -25,7 +25,9 @@ from ..models.word import (
     Etymology,
     Pronunciation,
     Examples,
+    RegenerateScope,
 )
+from ..models.common import ConfidenceLevel
 from ..pronunciation import generate_pronunciation
 from ..logging import logger
 
@@ -78,7 +80,7 @@ class WordPackFlow:
         lemma: str,
         *,
         pronunciation_enabled: bool = True,
-        regenerate_scope: str = "all",
+        regenerate_scope: RegenerateScope | str = RegenerateScope.all,
         citations: List[Dict[str, Any]] | None = None,
     ) -> WordPack:
         """取得結果を整形し `WordPack` を構成（将来: LLM で整形）。"""
@@ -87,7 +89,7 @@ class WordPackFlow:
             if pronunciation_enabled
             else Pronunciation(ipa_GA=None, ipa_RP=None, syllables=None, stress_index=None, linking_notes=[])
         )
-        confidence = "medium" if citations else "low"
+        confidence = ConfidenceLevel.medium if citations else ConfidenceLevel.low
         pack = WordPack(
             lemma=lemma,
             pronunciation=pronunciation,
@@ -95,20 +97,21 @@ class WordPackFlow:
             collocations=Collocations(),
             contrast=[],
             examples=Examples(A1=[f"{lemma} example."], tech=[]),
-            etymology=Etymology(note="TBD", confidence="low"),
+            etymology=Etymology(note="TBD", confidence=ConfidenceLevel.low),
             study_card="この語の要点（暫定）。",
             citations=citations or [],
             confidence=confidence,
         )
         # regenerate_scope は将来の部分更新用。MVP では生成内容の軽微な差分に留める。
-        if regenerate_scope == "examples":
+        scope_val = regenerate_scope.value if isinstance(regenerate_scope, RegenerateScope) else regenerate_scope
+        if scope_val == RegenerateScope.examples.value:
             pack.examples = Examples(A1=[f"{lemma} example.", f"{lemma} example 2."], tech=[])
-        elif regenerate_scope == "collocations":
+        elif scope_val == RegenerateScope.collocations.value:
             # ダミーで collocations.general に 1 つ追加
             pack.collocations.general.verb_object = [f"use {lemma}"]
         return pack
 
-    def run(self, lemma: str, *, pronunciation_enabled: bool = True, regenerate_scope: str = "all") -> WordPack:
+    def run(self, lemma: str, *, pronunciation_enabled: bool = True, regenerate_scope: RegenerateScope | str = RegenerateScope.all) -> WordPack:
         """語を入力として `WordPack` を生成して返す（MVP ダミー）。"""
         data = self._retrieve(lemma)
         return self._synthesize(

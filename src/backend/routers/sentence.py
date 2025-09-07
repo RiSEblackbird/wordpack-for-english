@@ -4,10 +4,10 @@ from ..flows.feedback import FeedbackFlow
 from ..providers import ChromaClientFactory
 from ..models.sentence import SentenceCheckRequest, SentenceCheckResponse
 
-router = APIRouter()
+router = APIRouter(tags=["sentence"])
 
 
-@router.post("/check", response_model=SentenceCheckResponse)
+@router.post("/check", response_model=SentenceCheckResponse, response_model_exclude_none=True, summary="英文の診断（ダミー）")
 async def check_sentence(req: SentenceCheckRequest) -> SentenceCheckResponse:
     """Check a sentence and return feedback using LangGraph flow.
 
