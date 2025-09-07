@@ -21,15 +21,29 @@ from ..models.sentence import SentenceCheckResponse, Issue, Revision, MiniExerci
 class FeedbackFlow:
     """Minimal feedback generator.
 
+    文の診断フィードバックを最小構成で生成するフロー。
     MVP では固定の3要素（issues/revisions/exercise）をダミー生成。
-    実装置換ポイント：LLM による診断と修正案生成。
+    将来的には LLM によるエラー検出・説明・修正案、および
+    ミニ演習（穴埋め等）の自動生成に置き換える想定。
     """
 
     def __init__(self, llm: Any | None = None) -> None:
+        """LLM クライアント等を受け取り、LangGraph の状態遷移を初期化。
+
+        Parameters
+        ----------
+        llm: Any | None
+            フィードバック生成に用いる LLM クライアント（任意）。
+        """
         self.llm = llm
         self.graph = StateGraph()
 
     def run(self, sentence: str) -> SentenceCheckResponse:
+        """与えられた文を解析し、フィードバックを返す（MVP ダミー）。
+
+        現状は入力文をそのまま用いて 2 種類の書き換え案と、
+        サンプルの指摘/演習を返す。
+        """
         issues = [Issue(what="語法", why="対象語の使い分け不正確", fix="共起に合わせて置換")]  # type: ignore[arg-type]
         revisions = [
             Revision(style="natural", text=sentence),

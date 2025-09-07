@@ -8,12 +8,20 @@ router = APIRouter()
 
 @router.post("/pack", response_model=WordPack)
 async def generate_word_pack(req: WordPackRequest) -> WordPack:
-    """Generate a new word pack using LangGraph flow."""
+    """Generate a new word pack using LangGraph flow.
+
+    指定した語について、発音・語義・共起・対比・例文・語源などを
+    まとめた学習パックを生成して返す（MVP はダミー）。
+    """
     flow = WordPackFlow()
     return flow.run(req.lemma)
 
 
 @router.get("", response_model=WordLookupResponse)
 async def get_word() -> WordLookupResponse:
-    """Retrieve information about a word (placeholder)."""
+    """Retrieve information about a word (placeholder).
+
+    単語の簡易参照エンドポイント（プレースホルダ）。
+    実装後は辞書検索やキャッシュからの取得を想定。
+    """
     return WordLookupResponse(definition=None, examples=[])

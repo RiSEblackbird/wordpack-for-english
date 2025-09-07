@@ -3,7 +3,11 @@ from pydantic import BaseModel
 
 
 class TextAssistRequest(BaseModel):
-    """Request model for reading assistance."""
+    """Request model for reading assistance.
+
+    段落テキストを受け取り、文分割・用語注・パラフレーズ等の
+    リーディング支援を要求するためのリクエスト。
+    """
 
     paragraph: str
 
@@ -29,7 +33,11 @@ class AssistedSentence(BaseModel):
 
 
 class TextAssistResponse(BaseModel):
-    """Response model for reading assistance."""
+    """Response model for reading assistance.
+
+    文ごとの支援情報（構文・用語・言い換え等）や、文章全体の要約、
+    参考文献・出典の引用を含める想定。
+    """
 
     sentences: List[AssistedSentence] = []
     summary: Optional[str] = None

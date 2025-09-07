@@ -3,7 +3,10 @@ from typing import List, Optional, Dict
 
 
 class WordPackRequest(BaseModel):
-    """Request model for generating a word pack (MVP)."""
+    """Request model for generating a word pack (MVP).
+
+    学習対象の語（lemma）と必要に応じて品詞などの条件を指定する。
+    """
 
     lemma: str
     pos: Optional[str] = None
@@ -67,7 +70,11 @@ class WordPack(BaseModel):
 
 
 class WordLookupResponse(BaseModel):
-    """Response model for word lookup (placeholder)."""
+    """Response model for word lookup (placeholder).
+
+    語義・用例などの簡易な参照結果を返すプレースホルダ。
+    本格実装では `WordPack` からの要約や辞書 API 連携を想定。
+    """
 
     definition: Optional[str] = None
     examples: List[str] = []

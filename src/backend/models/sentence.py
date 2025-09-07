@@ -3,7 +3,11 @@ from pydantic import BaseModel
 
 
 class SentenceCheckRequest(BaseModel):
-    """Request model for sentence checking."""
+    """Request model for sentence checking.
+
+    クライアントから文を受け取り、診断・修正案の生成を要求するための
+    リクエストボディ。
+    """
 
     sentence: str
 
@@ -25,7 +29,11 @@ class MiniExercise(BaseModel):
 
 
 class SentenceCheckResponse(BaseModel):
-    """Detailed feedback about a sentence."""
+    """Detailed feedback about a sentence.
+
+    文法・語法の指摘（issues）、スタイル別の書き換え案（revisions）、
+    簡易演習（exercise）を含むフィードバック。
+    """
 
     issues: List[Issue] = []
     revisions: List[Revision] = []
