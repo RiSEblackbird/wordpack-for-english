@@ -9,7 +9,9 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def client():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-    sys.modules.setdefault("langgraph", types.SimpleNamespace(Graph=object))
+    # langgraph の最小スタブ（StateGraph の参照を許す）
+    lg = types.SimpleNamespace(graph=types.SimpleNamespace(StateGraph=object))
+    sys.modules.setdefault("langgraph", lg)
     sys.modules.setdefault("chromadb", types.SimpleNamespace())
     from backend.main import app
     return TestClient(app)
@@ -22,27 +24,31 @@ def test_health(client):
 
 
 def test_word_pack(client):
-    resp = client.post("/api/word/pack")
+    resp = client.post("/api/word/pack", json={"lemma": "converge"})
     assert resp.status_code == 200
-    assert resp.json() == {"detail": "word pack generation pending"}
+    body = resp.json()
+    assert body["lemma"] == "converge"
+    assert "senses" in body
 
 
 def test_word_lookup(client):
     resp = client.get("/api/word")
     assert resp.status_code == 200
-    assert resp.json() == {"detail": "word lookup pending"}
+    assert resp.json() == {"definition": None, "examples": []}
 
 
 def test_sentence_check(client):
     resp = client.post("/api/sentence/check", json={"sentence": "Hello"})
     assert resp.status_code == 200
-    assert resp.json() == {"detail": "sentence checking pending"}
+    j = resp.json()
+    assert "issues" in j and isinstance(j["issues"], list)
 
 
 def test_text_assist(client):
-    resp = client.post("/api/text/assist", json={"paragraph": "Some text"})
+    resp = client.post("/api/text/assist", json={"paragraph": "Some text."})
     assert resp.status_code == 200
-    assert resp.json() == {"detail": "reading assistance pending"}
+    j = resp.json()
+    assert "sentences" in j and isinstance(j["sentences"], list)
 
 
 def test_review_today(client):

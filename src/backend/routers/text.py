@@ -1,16 +1,13 @@
 from fastapi import APIRouter
 
 from ..flows.reading_assist import ReadingAssistFlow
+from ..models.text import TextAssistRequest, TextAssistResponse
 
 router = APIRouter()
 
 
-@router.post("/assist")
-async def assist_text() -> dict[str, str]:
-    """Provide reading assistance for a given text.
-
-    TODO: hook into ``ReadingAssistFlow`` for real assistance.
-    """
+@router.post("/assist", response_model=TextAssistResponse)
+async def assist_text(req: TextAssistRequest) -> TextAssistResponse:
+    """Provide reading assistance for a given paragraph using LangGraph flow."""
     flow = ReadingAssistFlow()
-    _ = flow  # placeholder
-    return {"detail": "reading assistance pending"}
+    return flow.run(req.paragraph)

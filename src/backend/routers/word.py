@@ -1,25 +1,19 @@
 from fastapi import APIRouter
 
 from ..flows.word_pack import WordPackFlow
+from ..models.word import WordPackRequest, WordPack, WordLookupResponse
 
 router = APIRouter()
 
 
-@router.post("/pack")
-async def generate_word_pack() -> dict[str, str]:
-    """Generate a new word pack.
-
-    TODO: use ``WordPackFlow`` to create real packs.
-    """
+@router.post("/pack", response_model=WordPack)
+async def generate_word_pack(req: WordPackRequest) -> WordPack:
+    """Generate a new word pack using LangGraph flow."""
     flow = WordPackFlow()
-    _ = flow  # placeholder to avoid unused variable
-    return {"detail": "word pack generation pending"}
+    return flow.run(req.lemma)
 
 
-@router.get("")
-async def get_word() -> dict[str, str]:
-    """Retrieve information about a word.
-
-    TODO: implement word lookup logic.
-    """
-    return {"detail": "word lookup pending"}
+@router.get("", response_model=WordLookupResponse)
+async def get_word() -> WordLookupResponse:
+    """Retrieve information about a word (placeholder)."""
+    return WordLookupResponse(definition=None, examples=[])

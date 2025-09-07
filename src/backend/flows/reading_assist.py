@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Dict, List
 
 # LangGraph は必須
 try:
@@ -13,15 +13,36 @@ try:
 except Exception:  # pragma: no cover - library optional
     chromadb = Any  # type: ignore
 
+from ..models.text import (
+    TextAssistResponse,
+    AssistedSentence,
+    SyntaxInfo,
+    TermInfo,
+)
+
 
 class ReadingAssistFlow:
-    """Flow that assists reading comprehension with RAG."""
+    """Minimal reading assistance via LangGraph.
+
+    MVP では段落を文に単純分割し、ダミーの構文情報と用語注を返す。
+    実装置換ポイント：RAG 用語検出、IPA 付与、パラフレーズ生成。
+    """
 
     def __init__(self, chroma_client: Any | None = None) -> None:
         self.chroma = chroma_client
-        self.graph = None
+        self.graph = StateGraph()
 
-    def run(self, text: str) -> dict[str, Any]:
-        """Return assistance data for the supplied text."""
-        # TODO: implement reading assistance logic.
-        return {}
+    def _segment(self, paragraph: str) -> List[str]:
+        return [s.strip() for s in paragraph.replace("\n", " ").split(".") if s.strip()]
+
+    def _analyze(self, sentence: str) -> AssistedSentence:
+        return AssistedSentence(
+            raw=sentence,
+            syntax=SyntaxInfo(subject=None, predicate=None, mods=[]),
+            terms=[TermInfo(lemma=w, gloss_ja=None, ipa=None) for w in sentence.split()[:1]],
+            paraphrase=sentence,
+        )
+
+    def run(self, paragraph: str) -> TextAssistResponse:
+        sentences = [self._analyze(s) for s in self._segment(paragraph)]
+        return TextAssistResponse(sentences=sentences, summary=None, citations=[])
