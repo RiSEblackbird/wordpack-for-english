@@ -9,6 +9,9 @@ try:
 except Exception:  # pragma: no cover - optional during tests
     chromadb = None  # type: ignore
 
+# クライアントのシングルトンキャッシュ（persist path / server URL 単位）
+_CLIENT_CACHE: dict[str, Any] = {}
+
 
 class SimpleEmbeddingFunction:
     """超軽量のダミー埋め込み関数（決定的）。
@@ -71,9 +74,14 @@ class ChromaClientFactory:
         self.persist_directory = persist_directory or settings.chroma_persist_dir
 
     def create_client(self) -> Any | None:
+        key = f"url:{getattr(settings, 'chroma_server_url', None) or ''}|persist:{self.persist_directory}"
+        if key in _CLIENT_CACHE:
+            return _CLIENT_CACHE[key]
         if chromadb is None:  # pragma: no cover - tests may stub
             # フォールバック：インメモリ互換クライアント
-            return _InMemoryChromaClient(SimpleEmbeddingFunction())
+            client = _InMemoryChromaClient(SimpleEmbeddingFunction())
+            _CLIENT_CACHE[key] = client
+            return client
         # サーバURLが指定されていれば優先（利用可能な場合）
         if getattr(settings, "chroma_server_url", None):
             try:
@@ -92,9 +100,13 @@ class ChromaClientFactory:
                     underlying = None
         if underlying is None:
             # フォールバック：インメモリ互換クライアント
-            return _InMemoryChromaClient(SimpleEmbeddingFunction())
+            client = _InMemoryChromaClient(SimpleEmbeddingFunction())
+            _CLIENT_CACHE[key] = client
+            return client
         # ラッパーを返し、コレクション作成時に埋め込み関数を注入
-        return _ChromaClientAdapter(underlying, SimpleEmbeddingFunction())
+        client = _ChromaClientAdapter(underlying, SimpleEmbeddingFunction())
+        _CLIENT_CACHE[key] = client
+        return client
 
     def get_or_create_collection(self, client: Any, name: str) -> Any | None:
         if client is None:  # pragma: no cover

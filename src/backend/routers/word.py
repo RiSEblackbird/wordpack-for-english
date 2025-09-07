@@ -8,6 +8,15 @@ from ..models.word import WordPackRequest, WordPack
 router = APIRouter(tags=["word"])
 
 
+@router.get("/")
+async def lookup_word() -> dict[str, object]:
+    """暫定の語義参照（プレースホルダ）。
+
+    tests/test_api.py の互換用: {"definition": None, "examples": []}
+    """
+    return {"definition": None, "examples": []}
+
+
 @router.post(
     "/pack",
     response_model=WordPack,
