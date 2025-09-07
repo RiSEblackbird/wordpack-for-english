@@ -29,10 +29,10 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
       if (!res.ok) throw new Error();
       const data = await res.json();
       setCard(data);
-      setMsg({ kind: 'status', text: 'Card loaded' });
+      setMsg({ kind: 'status', text: 'カードを読み込みました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setMsg({ kind: 'alert', text: 'Failed to load card' });
+      setMsg({ kind: 'alert', text: 'カードの読み込みに失敗しました' });
     } finally {
       setLoading(false);
     }
@@ -48,11 +48,11 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
     try {
       const res = await fetch(`${settings.apiBase}/cards/${card.id}/review`, { method: 'POST', signal: ctrl.signal });
       if (!res.ok) throw new Error();
-      setMsg({ kind: 'status', text: 'Reviewed' });
+      setMsg({ kind: 'status', text: '復習しました' });
       setCard(null);
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setMsg({ kind: 'alert', text: 'Failed to review' });
+      setMsg({ kind: 'alert', text: '復習に失敗しました' });
     } finally {
       setLoading(false);
     }
@@ -64,13 +64,13 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
 
   return (
     <section id="card-panel" tabIndex={-1}>
-      <button onClick={getCard}>Get Card</button>
-      {loading && <div role="status">Loading…</div>}
+      <button onClick={getCard}>カードを取得</button>
+      {loading && <div role="status">読み込み中…</div>}
       {card && (
         <div>
           <p><strong>{card.front}</strong></p>
           <p>{card.back}</p>
-          <button onClick={reviewCard}>Review</button>
+          <button onClick={reviewCard}>復習</button>
         </div>
       )}
       {msg && <div role={msg.kind}>{msg.text}</div>}

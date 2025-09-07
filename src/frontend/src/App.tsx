@@ -51,10 +51,10 @@ export const App: React.FC = () => {
           <h1>WordPack</h1>
         </header>
         <nav>
-          <button onClick={() => setTab('card')} aria-selected={tab === 'card'}>Cards</button>
-          <button onClick={() => setTab('sentence')} aria-selected={tab === 'sentence'}>Sentence</button>
-          <button onClick={() => setTab('assist')} aria-selected={tab === 'assist'}>Assist</button>
-          <button onClick={() => setTab('settings')} aria-selected={tab === 'settings'}>Settings</button>
+          <button onClick={() => setTab('card')} aria-selected={tab === 'card'}>カード</button>
+          <button onClick={() => setTab('sentence')} aria-selected={tab === 'sentence'}>文</button>
+          <button onClick={() => setTab('assist')} aria-selected={tab === 'assist'}>アシスト</button>
+          <button onClick={() => setTab('settings')} aria-selected={tab === 'settings'}>設定</button>
         </nav>
         <main>
           {tab === 'card' && <CardPanel focusRef={focusRef} />}
@@ -63,7 +63,7 @@ export const App: React.FC = () => {
           {tab === 'settings' && <SettingsPanel focusRef={focusRef} />}
         </main>
         <footer>
-          <small>WordPack for English</small>
+          <small>WordPack 英語学習</small>
         </footer>
       </div>
     </SettingsProvider>
