@@ -51,11 +51,11 @@ class TextAssistResponse(BaseModel):
                 "sentences": [
                     {
                         "raw": "Our algorithm converges under mild assumptions",
-                        "syntax": {"subject": null, "predicate": null, "mods": []},
-                        "terms": [{"lemma": "Our", "gloss_ja": null, "ipa": null}]
+                        "syntax": {"subject": None, "predicate": None, "mods": []},
+                        "terms": [{"lemma": "Our", "gloss_ja": None, "ipa": None}]
                     }
                 ],
-                "summary": null,
+                "summary": None,
                 "citations": [],
                 "confidence": "low"
             }
