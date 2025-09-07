@@ -6,7 +6,7 @@
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
 - フロントエンド: React + TypeScript + Vite、単一ページ/4パネル構成（カード/自作文/段落注釈/設定）
 - SRS（簡易SM-2）最小実装: 今日のカード取得・3段階採点に対応
-- 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（フォールバック規則付き）
+- 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（例外辞書・辞書キャッシュ・タイムアウト付きフォールバック）
 - WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
 
 ---
@@ -87,6 +87,7 @@ src/backend/             # 本番用FastAPIアプリ
   routers/               # エンドポイント群
   flows/                 # LangGraphベースの処理(プレースホルダ)
   models/                # pydanticモデル（厳密化済み: Enum/Field制約/例）
+  pronunciation.py       # 発音（cmudict/g2p-en優先・例外辞書/キャッシュ/タイムアウト付き）
 src/frontend/            # React + Vite
   src/components/        # 4パネルのコンポーネント
   src/SettingsContext.tsx
@@ -106,7 +107,7 @@ FastAPI アプリは `src/backend/main.py`。
 
 - `POST /api/word/pack`
   - 周辺知識パック生成（RAG: Chroma から近傍を取得し `citations` と `confidence` を付与）。
-  - 発音（M5）: cmudict/g2p-en を優先し、失敗時は規則ベースのフォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
+  - 発音（M5）: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
   - リクエスト例（M5 追加パラメータ・Enum化）:
     ```json
     { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
@@ -229,7 +230,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - `backend/indexing.py` で JSONL/最小シードからの投入に対応
 - SRS/発音
   - SRS: `src/backend/srs.py` に簡易SM-2のインメモリ実装を追加（`/api/review/*` が利用）
-  - 発音: `src/backend/pronunciation.py` に実装（cmudict/g2p-en 優先、規則フォールバック）。`WordPackRequest.pronunciation_enabled` で生成の ON/OFF が可能。
+  - 発音: `src/backend/pronunciation.py` に実装（cmudict/g2p-en 優先、例外辞書/辞書キャッシュ/タイムアウト付きフォールバック）。`WordPackRequest.pronunciation_enabled` で生成の ON/OFF が可能。
 - CORS/タイムアウト/メトリクス（M6）
   - `src/backend/main.py` に CORS/Timeout/アクセスログ（JSON, structlog）とメトリクス記録を実装
   - `/metrics` で p95/件数/エラー/タイムアウトのスナップショットを返却
