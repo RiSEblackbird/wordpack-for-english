@@ -65,9 +65,10 @@
 
 ### 2-2. 設定パネル（最初に設定）
 - ナビの「設定」をクリック
-- フィールド: 「API ベースURL」
-  - 既定値: `/api`
-  - 入力例（ローカル開発）: `http://127.0.0.1:8000/api`
+- フィールド: 
+  - 「API ベースURL」 … 既定 `/api`（例: `http://127.0.0.1:8000/api`）
+  - 「発音を有効化」 … WordPack の発音生成を ON/OFF（M5）
+  - 「再生成スコープ」 … `全体/例文のみ/コロケのみ` から選択（M5）
 - 入力後は、他パネルに移動して各機能を試してください
 
 ### 2-3. 文（自作文）パネルの使い方
@@ -107,6 +108,7 @@
   - `WordPackFlow` と `ReadingAssistFlow` は ChromaDB からの近傍取得により `citations`/`confidence` を付与します（シード未投入時は空/low）
   - `FeedbackFlow` は現状ダミー（将来RAG/LLM統合）
 - 日本語UIはMVP文言（用語は今後統一予定）
+- 発音生成は cmudict/g2p-en が使用可能な環境で精度が向上し、未導入時は規則フォールバック（簡易）となります（M5）。
 
 ---
 
@@ -124,7 +126,7 @@
 ## 6. 参考（現状のAPI）
 - `POST /api/sentence/check` … 自作文チェック（ダミーの詳細フィードバック）
 - `POST /api/text/assist` … 段落注釈（M3: 近傍取得で `citations`/`confidence` を付与）
-- `POST /api/word/pack` … WordPack 生成（M3: 近傍取得で `citations`/`confidence` を付与）
+- `POST /api/word/pack` … WordPack 生成（M3: 近傍取得で `citations`/`confidence` を付与、M5: `pronunciation_enabled`, `regenerate_scope` をサポート）
 - `GET  /api/review/today` … 本日のカード（最大5枚）
 - `POST /api/review/grade` … 採点（0/1/2）と次回時刻の更新
 

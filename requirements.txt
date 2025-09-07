@@ -6,3 +6,5 @@ pytest
 httpx
 langgraph
 chromadb
+cmudict
+g2p_en

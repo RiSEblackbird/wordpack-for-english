@@ -26,6 +26,7 @@ from ..models.word import (
     Pronunciation,
     Examples,
 )
+from ..pronunciation import generate_pronunciation
 
 
 class WordPackFlow:
@@ -47,43 +48,9 @@ class WordPackFlow:
         self.chroma = chroma_client
         self.graph = StateGraph()
 
-    # --- MVP: 簡易発音推定（暫定・不完全） ---
-    def _guess_pronunciation(self, lemma: str) -> Pronunciation:
-        """非常に大雑把な規則で IPA, 音節数, 強勢位置を推定（暫定）。
-
-        将来的に g2p-en / cmudict を導入するまでのプレースホルダ。
-        """
-        word = lemma.lower()
-        # ごく簡易な母音クラスタによる音節近似
-        import re
-
-        vowel_groups = re.findall(r"[aeiouy]+", word)
-        syllables = max(1, len(vowel_groups))
-
-        # 強勢はとりあえず最初の音節（暫定）
-        stress_index = 0
-
-        # 超簡易 IPA 置換（非常に不完全）
-        ipa = word
-        ipa = re.sub(r"ph", "f", ipa)
-        ipa = re.sub(r"tion\b", "ʃən", ipa)
-        ipa = re.sub(r"sion\b", "ʒən", ipa)
-        ipa = re.sub(r"ch", "tʃ", ipa)
-        ipa = re.sub(r"sh", "ʃ", ipa)
-        ipa = re.sub(r"th", "θ", ipa)
-        ipa = re.sub(r"\bcon", "kɒn", ipa)
-        ipa_GA = f"/{ipa}/"
-
-        linking_notes: list[str] = []
-        if word.endswith(("r",)):
-            linking_notes.append("語末 r の連結に注意（rhotic）")
-
-        return Pronunciation(
-            ipa_GA=ipa_GA,
-            syllables=syllables,
-            stress_index=stress_index,
-            linking_notes=linking_notes,
-        )
+    # --- 発音推定（cmudict/g2p-en 利用、フォールバック付き） ---
+    def _generate_pronunciation(self, lemma: str) -> Pronunciation:
+        return generate_pronunciation(lemma)
 
     def _retrieve(self, lemma: str) -> Dict[str, Any]:
         """語の近傍情報を取得（将来: chroma からベクトル近傍）。"""
@@ -101,11 +68,22 @@ class WordPackFlow:
                 pass
         return {"lemma": lemma, "citations": citations}
 
-    def _synthesize(self, lemma: str, citations: List[Dict[str, Any]] | None = None) -> WordPack:
+    def _synthesize(
+        self,
+        lemma: str,
+        *,
+        pronunciation_enabled: bool = True,
+        regenerate_scope: str = "all",
+        citations: List[Dict[str, Any]] | None = None,
+    ) -> WordPack:
         """取得結果を整形し `WordPack` を構成（将来: LLM で整形）。"""
-        pronunciation = self._guess_pronunciation(lemma)
+        pronunciation = (
+            self._generate_pronunciation(lemma)
+            if pronunciation_enabled
+            else Pronunciation(ipa_GA=None, ipa_RP=None, syllables=None, stress_index=None, linking_notes=[])
+        )
         confidence = "medium" if citations else "low"
-        return WordPack(
+        pack = WordPack(
             lemma=lemma,
             pronunciation=pronunciation,
             senses=[Sense(id="s1", gloss_ja="意味（暫定）", patterns=[], register=None)],
@@ -117,8 +95,20 @@ class WordPackFlow:
             citations=citations or [],
             confidence=confidence,
         )
+        # regenerate_scope は将来の部分更新用。MVP では生成内容の軽微な差分に留める。
+        if regenerate_scope == "examples":
+            pack.examples = Examples(A1=[f"{lemma} example.", f"{lemma} example 2."], tech=[])
+        elif regenerate_scope == "collocations":
+            # ダミーで collocations.general に 1 つ追加
+            pack.collocations.general.verb_object = [f"use {lemma}"]
+        return pack
 
-    def run(self, lemma: str) -> WordPack:
+    def run(self, lemma: str, *, pronunciation_enabled: bool = True, regenerate_scope: str = "all") -> WordPack:
         """語を入力として `WordPack` を生成して返す（MVP ダミー）。"""
         data = self._retrieve(lemma)
-        return self._synthesize(lemma, citations=data.get("citations"))
+        return self._synthesize(
+            lemma,
+            pronunciation_enabled=pronunciation_enabled,
+            regenerate_scope=regenerate_scope,
+            citations=data.get("citations"),
+        )

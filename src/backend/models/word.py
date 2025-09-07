@@ -10,6 +10,10 @@ class WordPackRequest(BaseModel):
 
     lemma: str
     pos: Optional[str] = None
+    pronunciation_enabled: bool = True
+    regenerate_scope: str = Field(
+        default="all", description="再生成スコープ: all/examples/collocations"
+    )
 
 
 class Sense(BaseModel):

@@ -6,7 +6,8 @@
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
 - フロントエンド: React + TypeScript + Vite、単一ページ/4パネル構成（カード/自作文/段落注釈/設定）
 - SRS（簡易SM-2）最小実装: 今日のカード取得・3段階採点に対応
-- 今後の実装: LangGraph フロー、RAG（ChromaDB）、発音変換（cmudict/g2p-en→IPA）
+- 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（フォールバック規則付き）
+- WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択
 
 ---
 
@@ -21,7 +22,7 @@
 # Python
 python -m venv .venv
 . .venv/Scripts/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements.txt  # M5: 発音で cmudict / g2p-en を使用
 
 # Frontend
 cd src/frontend
@@ -94,18 +95,26 @@ FastAPI アプリは `src/backend/main.py`。
 
 - `POST /api/word/pack`
   - 周辺知識パック生成（M3: Chroma から近傍を取得し `citations` と `confidence` を付与）。
-  - 発音は暫定規則ベースで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
+  - 発音（M5）: cmudict/g2p-en を優先し、失敗時は規則ベースのフォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
+  - リクエスト例（M5 追加パラメータ）:
+    ```json
+    { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
+    ```
+    - `pronunciation_enabled`: 発音情報の生成 ON/OFF（既定 true）
+    - `regenerate_scope`: `all` | `examples` | `collocations`
   - レスポンス例（抜粋）:
     ```json
     {
       "lemma": "converge",
-      "pronunciation": {"ipa_GA":"/kɒnverge/","syllables":2,"stress_index":0,"linking_notes":[]},
+      "pronunciation": {"ipa_GA":"/kənvɝdʒ/","syllables":2,"stress_index":1,"linking_notes":[]},
       "senses": [{"id":"s1","gloss_ja":"意味（暫定）","patterns":[]}],
       "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
       "contrast": [],
       "examples": {"A1": ["converge example."], "B1": [], "C1": [], "tech": []},
       "etymology": {"note":"TBD","confidence":"low"},
-      "study_card": "この語の要点（暫定）。"
+      "study_card": "この語の要点（暫定）。",
+      "citations": [],
+      "confidence": "low"
     }
     ```
 
@@ -163,7 +172,9 @@ FastAPI アプリは `src/backend/main.py`。
   - 返却された `sentences/summary` を画面に表示
 
 - 設定（`SettingsPanel.tsx`）
-  - API Base の入力のみ（デフォルト `/api`）。
+  - API Base（デフォルト `/api`）
+  - 発音の有効/無効トグル（M5）
+  - 再生成スコープ選択（`全体/例文のみ/コロケのみ`）（M5）
 
 アクセシビリティ/操作:
 - Alt+1..4 でタブ切替、`/` で主要入力へフォーカス

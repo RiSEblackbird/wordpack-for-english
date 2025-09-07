@@ -17,7 +17,11 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     # Chroma を利用可能なら接続
     chroma_client = ChromaClientFactory().create_client()
     flow = WordPackFlow(chroma_client=chroma_client)
-    return flow.run(req.lemma)
+    return flow.run(
+        req.lemma,
+        pronunciation_enabled=req.pronunciation_enabled,
+        regenerate_scope=req.regenerate_scope,
+    )
 
 
 @router.get("", response_model=WordLookupResponse)
