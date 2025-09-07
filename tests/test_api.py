@@ -9,9 +9,13 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def client():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-    # langgraph の最小スタブ（StateGraph の参照を許す）
-    lg = types.SimpleNamespace(graph=types.SimpleNamespace(StateGraph=object))
-    sys.modules.setdefault("langgraph", lg)
+    # langgraph を本物のモジュールとしてスタブ（パッケージ/サブモジュール両方）
+    lg_mod = types.ModuleType("langgraph")
+    graph_mod = types.ModuleType("langgraph.graph")
+    graph_mod.StateGraph = object  # 最小スタブ
+    lg_mod.graph = graph_mod
+    sys.modules.setdefault("langgraph", lg_mod)
+    sys.modules.setdefault("langgraph.graph", graph_mod)
     sys.modules.setdefault("chromadb", types.SimpleNamespace())
     from backend.main import app
     return TestClient(app)
