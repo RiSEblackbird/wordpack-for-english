@@ -180,11 +180,11 @@ TBD
 ```mermaid
 graph TD
     A[Client: POST /api/word/pack] --> B[WordPackFlow]
-    B --> C[_retrieve(lemma) <br/> 将来: ChromaDB 近傍検索]
-    C --> D[_synthesize(lemma) <br/> 将来: LLM で整形]
+    B --> C["retrieve(lemma) - 将来: ChromaDB 近傍検索"]
+    C --> D["synthesize(lemma) - 将来: LLM で整形"]
     D --> E[WordPack Response]
 
-    subgraph LangGraph StateGraph
+    subgraph LangGraph_StateGraph
         C
         D
     end
@@ -194,13 +194,13 @@ graph TD
 ```mermaid
 graph TD
     A[Client: POST /api/text/assist] --> B[ReadingAssistFlow]
-    B --> C[_segment(paragraph) <br/> MVP: ピリオドで分割]
+    B --> C["segment(paragraph) - MVP: ピリオドで分割"]
     C --> D{for each sentence}
-    D --> E[_analyze(sentence) <br/> MVP: ダミー構文/用語/言い換え]
+    D --> E["analyze(sentence) - MVP: ダミー構文/用語/言い換え"]
     E --> F[AssistedSentence]
-    F --> G[TextAssistResponse <br/> sentences/summary/citations]
+    F --> G["TextAssistResponse - sentences/summary/citations"]
 
-    subgraph LangGraph StateGraph
+    subgraph LangGraph_StateGraph
         C
         E
     end
@@ -211,10 +211,10 @@ graph TD
 graph TD
     A[Client: POST /api/sentence/check] --> B[FeedbackFlow]
     B --> C[run(sentence)]
-    C --> D[issues / revisions / exercise <br/> MVP: ダミー生成]
+    C --> D["issues / revisions / exercise - MVP: ダミー生成"]
     D --> E[SentenceCheckResponse]
 
-    subgraph LangGraph StateGraph
+    subgraph LangGraph_StateGraph
         C
     end
 ```
