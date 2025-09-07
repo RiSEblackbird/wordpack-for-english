@@ -4,3 +4,4 @@ structlog
 pydantic-settings
 pytest
 httpx
+langgraph

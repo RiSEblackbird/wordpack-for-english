@@ -1,10 +1,11 @@
 from typing import Any
 
+# LangGraph は必須
 try:
-    from langgraph import Graph
+    from langgraph.graph import StateGraph  # type: ignore
 except Exception as exc:  # pragma: no cover - library required
     raise ImportError(
-        "WordPackFlow requires the 'langgraph' package. Install it to use this flow."
+        "WordPackFlow requires the 'langgraph' package (expected langgraph.graph.StateGraph)."
     ) from exc
 
 try:
@@ -18,8 +19,7 @@ class WordPackFlow:
 
     def __init__(self, chroma_client: Any | None = None) -> None:
         self.chroma = chroma_client
-        self.graph = Graph()  # type: ignore[call-arg]
-        # TODO: define graph nodes for retrieval and generation.
+        self.graph = None
 
     def run(self, topic: str) -> list[str]:
         """Generate a list of words related to ``topic``."""
