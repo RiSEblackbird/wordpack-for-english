@@ -43,6 +43,20 @@ npm run dev
 - 既定ポート: `http://127.0.0.1:5173`
 - `Settings` パネルで API Base を `/api` → `http://127.0.0.1:8000` に変更して利用してください（開発時の別ポート運用のため）。
 
+### 1-5. Docker で一括起動（推奨・ホットリロード対応）
+```bash
+# リポジトリルートで
+docker compose up --build
+```
+- バックエンド: http://127.0.0.1:8000
+- フロントエンド: http://127.0.0.1:5173
+- ホットリロード:
+  - backend: `uvicorn --reload` + ボリュームマウント `.:/app`
+  - frontend: Vite dev サーバ + ボリュームマウント `src/frontend:/app`
+- フロントからの API 呼び出しは Vite のプロキシ設定で `http://backend:8000` に転送されます。
+
+Tips (Windows)：Vite のファイル監視が不安定な場合、`CHOKIDAR_USEPOLLING=1` を環境変数に設定してください（compose の service へ追加可能）。
+
 ---
 
 ## 2. ディレクトリ構成（抜粋）
