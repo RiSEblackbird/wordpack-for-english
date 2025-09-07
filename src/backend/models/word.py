@@ -20,8 +20,8 @@ class WordPackRequest(BaseModel):
 
     model_config = ConfigDict(json_schema_extra={
         "examples": [
-            {"lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all"},
-            {"lemma": "converge", "pronunciation_enabled": false, "regenerate_scope": "examples"},
+            {"lemma": "converge", "pronunciation_enabled": True, "regenerate_scope": "all"},
+            {"lemma": "converge", "pronunciation_enabled": False, "regenerate_scope": "examples"},
             {"lemma": "converge", "regenerate_scope": "collocations"}
         ],
         "x-schema-version": "0.3.0"
