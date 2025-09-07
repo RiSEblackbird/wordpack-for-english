@@ -57,6 +57,16 @@ class Settings(BaseSettings):
     azure_openai_api_key: str | None = Field(default=None, description="Azure OpenAI API Key")
     voyage_api_key: str | None = Field(default=None, description="Voyage API Key")
 
+    # --- SRS（復習）の永続化設定 ---
+    srs_db_path: str = Field(
+        default=".data/srs.sqlite3",
+        description="Path to SRS SQLite database / SRS用SQLite DBパス",
+    )
+    srs_max_today: int = Field(
+        default=5,
+        description="Max items to return for today's review / 本日の最大出題数",
+    )
+
     class Config:
         env_file = ".env"
 

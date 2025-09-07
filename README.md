@@ -5,7 +5,7 @@
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
 - フロントエンド: React + TypeScript + Vite、単一ページ/4パネル構成（カード/自作文/段落注釈/設定）
-- SRS（簡易SM-2）最小実装: 今日のカード取得・3段階採点に対応
+- SRS（簡易SM-2, SQLite 永続化）: 今日のカード取得・3段階採点に対応（M6）
 - 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（例外辞書・辞書キャッシュ・タイムアウト付きフォールバック）
 - WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
 
@@ -159,6 +159,7 @@ FastAPI アプリは `src/backend/main.py`。
   - 復習カードの採点を記録。簡易SM-2で次回出題時刻を更新。
   - リクエスト例: `{ "item_id": "w:converge", "grade": 2 }`（2=正解,1=部分的,0=不正解）
   - レスポンス例: `{ "ok": true, "next_due": "2025-01-01T12:34:56.000Z" }`
+  - 実装: `src/backend/srs.py`（SQLite 永続化）。復習履歴は `reviews` テーブルに保存され、同時実行はトランザクションで保護されます。
 
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
@@ -213,6 +214,9 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
     - `chroma_persist_dir` … Chroma 永続ディレクトリ
     - `chroma_server_url` … 任意の Chroma サーバURL（未指定時はローカル）
     - APIキー類（必要に応じて）: `openai_api_key`, `azure_openai_api_key`, `voyage_api_key`
+  - SRS（SQLite）
+    - `srs_db_path` … SRS 用 SQLite ファイルのパス（既定 `.data/srs.sqlite3`）
+    - `srs_max_today` … `GET /api/review/today` の最大件数（既定 5）
   - `.env` を読み込みます。
 - `app/config.py`
   - `api_key`, `allowed_origins`（カンマ区切り対応）
