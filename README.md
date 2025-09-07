@@ -27,7 +27,13 @@ cd src/frontend
 npm install
 ```
 
-### 1-3. バックエンド起動
+### 1-3. RAG 用インデクスの準備（M3）
+```bash
+# 任意: 初回のみ、最小シードを投入（ChromaDB）
+python -m backend.indexing --persist .chroma
+```
+
+### 1-4. バックエンド起動
 ```bash
 # リポジトリルートで
 python -m uvicorn backend.main:app --reload --app-dir src
@@ -35,7 +41,7 @@ python -m uvicorn backend.main:app --reload --app-dir src
 - 既定ポート: `http://127.0.0.1:8000`
 - ヘルスチェック: `GET /healthz`
 
-### 1-4. フロントエンド起動
+### 1-5. フロントエンド起動
 ```bash
 cd src/frontend
 npm run dev
@@ -45,7 +51,7 @@ npm run dev
   - 方法A: `Settings` パネルの API Base を `http://127.0.0.1:8000/api` に設定
   - 方法B: Viteのプロキシ（既定）を利用し、API Base はデフォルトの `/api` のまま
 
-### 1-5. Docker で一括起動（推奨・ホットリロード対応）
+### 1-6. Docker で一括起動（推奨・ホットリロード対応）
 ```bash
 # リポジトリルートで
 docker compose up --build
@@ -86,7 +92,7 @@ FastAPI アプリは `src/backend/main.py`。
   - ヘルスチェック。レスポンス: `{ "status": "ok" }`
 
 - `POST /api/word/pack`
-  - 周辺知識パック生成（MVP: スキーマ準拠の最小返却 + 簡易発音）。
+  - 周辺知識パック生成（M3: Chroma から近傍を取得し `citations` と `confidence` を付与）。
   - 発音は暫定規則ベースで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
   - レスポンス例（抜粋）:
     ```json
@@ -116,7 +122,7 @@ FastAPI アプリは `src/backend/main.py`。
     ```
 
 - `POST /api/text/assist`
-  - 段落注釈（MVP: ピリオド分割 + 簡易構文/語注/パラフレーズ）。
+  - 段落注釈（M3: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。
   - レスポンス例（抜粋）:
     ```json
     { "sentences": [{"raw":"Some text","terms":[{"lemma":"Some"}]}], "summary": null, "citations": [] }
@@ -182,8 +188,9 @@ pytest -q
 - フロントエンドAPIパスの整合: Sentence/Assist は `/api/*` に統一済み
 - LangGraph フロー実装
   - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`（MVPダミー）
-- RAG(ChromaDB) と埋め込み/LLMプロバイダ
-  - `backend/providers.py` のプロバイダ実装
+- RAG(ChromaDB) と埋め込み/LLMプロバイダ（M3 実装済み）
+  - `backend/providers.py` に Chroma クライアントファクトリと簡易埋め込み関数を実装
+  - `backend/indexing.py` で最小シードの投入が可能
 - SRS/発音
   - `app/srs.py`, `app/pronunciation.py` は未実装（NotImplemented）
 - CORS/タイムアウト/メトリクス

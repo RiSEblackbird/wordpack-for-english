@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
 
@@ -38,3 +38,5 @@ class SentenceCheckResponse(BaseModel):
     issues: List[Issue] = []
     revisions: List[Revision] = []
     exercise: Optional[MiniExercise] = None
+    citations: List[Dict[str, Any]] = []
+    confidence: str = "low"

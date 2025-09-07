@@ -87,11 +87,24 @@ class WordPackFlow:
 
     def _retrieve(self, lemma: str) -> Dict[str, Any]:
         """語の近傍情報を取得（将来: chroma からベクトル近傍）。"""
-        return {"lemma": lemma}
+        citations: List[Dict[str, Any]] = []
+        if self.chroma and getattr(self.chroma, "get_or_create_collection", None):  # server client
+            try:
+                col = self.chroma.get_or_create_collection(name="word_snippets")
+                res = col.query(query_texts=[lemma], n_results=3)
+                # res: {ids, distances, documents, metadatas}
+                docs = (res.get("documents") or [[]])[0]
+                metas = (res.get("metadatas") or [[]])[0]
+                for d, m in zip(docs, metas):
+                    citations.append({"text": d, "meta": m})
+            except Exception:
+                pass
+        return {"lemma": lemma, "citations": citations}
 
-    def _synthesize(self, lemma: str) -> WordPack:
+    def _synthesize(self, lemma: str, citations: List[Dict[str, Any]] | None = None) -> WordPack:
         """取得結果を整形し `WordPack` を構成（将来: LLM で整形）。"""
         pronunciation = self._guess_pronunciation(lemma)
+        confidence = "medium" if citations else "low"
         return WordPack(
             lemma=lemma,
             pronunciation=pronunciation,
@@ -101,9 +114,11 @@ class WordPackFlow:
             examples=Examples(A1=[f"{lemma} example."], tech=[]),
             etymology=Etymology(note="TBD", confidence="low"),
             study_card="この語の要点（暫定）。",
+            citations=citations or [],
+            confidence=confidence,
         )
 
     def run(self, lemma: str) -> WordPack:
         """語を入力として `WordPack` を生成して返す（MVP ダミー）。"""
-        _ = self._retrieve(lemma)
-        return self._synthesize(lemma)
+        data = self._retrieve(lemma)
+        return self._synthesize(lemma, citations=data.get("citations"))

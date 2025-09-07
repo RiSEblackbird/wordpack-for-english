@@ -33,6 +33,8 @@ def test_word_pack(client):
     body = resp.json()
     assert body["lemma"] == "converge"
     assert "senses" in body
+    # RAG導入後のフィールド
+    assert "citations" in body and "confidence" in body
 
 
 def test_word_lookup(client):
@@ -46,6 +48,7 @@ def test_sentence_check(client):
     assert resp.status_code == 200
     j = resp.json()
     assert "issues" in j and isinstance(j["issues"], list)
+    assert "citations" in j and "confidence" in j
 
 
 def test_text_assist(client):
@@ -53,6 +56,7 @@ def test_text_assist(client):
     assert resp.status_code == 200
     j = resp.json()
     assert "sentences" in j and isinstance(j["sentences"], list)
+    assert "citations" in j and "confidence" in j
 
 
 def test_review_today(client):

@@ -40,6 +40,8 @@
 - サービス起動（別ターミナルで）:
   ```bash
   # Backend（リポジトリルートで）
+  # 事前に（初回のみ）RAGの最小シードを投入できます:
+  #   python -m backend.indexing --persist .chroma
   python -m uvicorn backend.main:app --reload --app-dir src
 
   # Frontend
@@ -100,8 +102,9 @@
 
 ## 4. 制約・既知の事項（MVP）
 - エンドポイント整合は文/アシストとも `/api/*` に統一済み
-- LangGraph/RAG/LLM は最小ダミー実装
-  - `WordPackFlow/ReadingAssistFlow/FeedbackFlow` は将来差し替え可能な最小の戻り値を返します
+- LangGraph/RAG/LLM は M3 で RAG の最小導入を実施
+  - `WordPackFlow` と `ReadingAssistFlow` は ChromaDB からの近傍取得により `citations`/`confidence` を付与します（シード未投入時は空/low）
+  - `FeedbackFlow` は現状ダミー（将来RAG/LLM統合）
 - 日本語UIはMVP文言（用語は今後統一予定）
 
 ---
@@ -119,8 +122,8 @@
 
 ## 6. 参考（現状のAPI）
 - `POST /api/sentence/check` … 自作文チェック（ダミーの詳細フィードバック）
-- `POST /api/text/assist` … 段落注釈（文分割＋簡易構文/語注/パラフレーズ）
-- `POST /api/word/pack` … WordPack の最小生成（簡易発音付き: ipa_GA/syllables/stress_index）
+- `POST /api/text/assist` … 段落注釈（M3: 近傍取得で `citations`/`confidence` を付与）
+- `POST /api/word/pack` … WordPack 生成（M3: 近傍取得で `citations`/`confidence` を付与）
 - `GET  /api/review/today` / `POST /api/review/grade` … MVPのプレースホルダ
 
 ---

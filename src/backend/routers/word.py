@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from ..flows.word_pack import WordPackFlow
+from ..providers import ChromaClientFactory
 from ..models.word import WordPackRequest, WordPack, WordLookupResponse
 
 router = APIRouter()
@@ -13,7 +14,9 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     指定した語について、発音・語義・共起・対比・例文・語源などを
     まとめた学習パックを生成して返す（MVP はダミー）。
     """
-    flow = WordPackFlow()
+    # Chroma を利用可能なら接続
+    chroma_client = ChromaClientFactory().create_client()
+    flow = WordPackFlow(chroma_client=chroma_client)
     return flow.run(req.lemma)
 
 

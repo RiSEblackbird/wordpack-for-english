@@ -5,7 +5,7 @@ from .logging import configure_logging
 from .routers import health, review, sentence, text, word
 
 configure_logging()
-app = FastAPI()
+app = FastAPI(title="WordPack API", version="0.3.0")
 
 app.include_router(word.router, prefix="/api/word")  # 語彙関連エンドポイント
 app.include_router(sentence.router, prefix="/api/sentence")  # 例文チェック関連

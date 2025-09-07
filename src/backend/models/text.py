@@ -42,3 +42,4 @@ class TextAssistResponse(BaseModel):
     sentences: List[AssistedSentence] = []
     summary: Optional[str] = None
     citations: List[Dict[str, Any]] = []
+    confidence: str = "low"

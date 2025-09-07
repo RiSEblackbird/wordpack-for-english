@@ -67,6 +67,8 @@ class WordPack(BaseModel):
     examples: Examples = Field(default_factory=Examples)
     etymology: Etymology
     study_card: str
+    citations: List[Dict[str, Any]] = []  # RAG 出典（任意）
+    confidence: str = "low"  # RAG 信頼度（low/medium/high）
 
 
 class WordLookupResponse(BaseModel):
