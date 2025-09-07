@@ -86,10 +86,20 @@ FastAPI アプリは `src/backend/main.py`。
   - ヘルスチェック。レスポンス: `{ "status": "ok" }`
 
 - `POST /api/word/pack`
-  - 周辺知識パック生成（MVP: スキーマ準拠のダミーを返却）。
+  - 周辺知識パック生成（MVP: スキーマ準拠の最小返却 + 簡易発音）。
+  - 発音は暫定規則ベースで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
   - レスポンス例（抜粋）:
     ```json
-    { "lemma": "converge", "senses": [{"id":"s1","gloss_ja":"意味（暫定）"}], "etymology": {"note":"TBD","confidence":"low"} }
+    {
+      "lemma": "converge",
+      "pronunciation": {"ipa_GA":"/kɒnverge/","syllables":2,"stress_index":0,"linking_notes":[]},
+      "senses": [{"id":"s1","gloss_ja":"意味（暫定）","patterns":[]}],
+      "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
+      "contrast": [],
+      "examples": {"A1": ["converge example."], "B1": [], "C1": [], "tech": []},
+      "etymology": {"note":"TBD","confidence":"low"},
+      "study_card": "この語の要点（暫定）。"
+    }
     ```
 
 - `GET /api/word`

@@ -47,15 +47,54 @@ class WordPackFlow:
         self.chroma = chroma_client
         self.graph = StateGraph()
 
+    # --- MVP: 簡易発音推定（暫定・不完全） ---
+    def _guess_pronunciation(self, lemma: str) -> Pronunciation:
+        """非常に大雑把な規則で IPA, 音節数, 強勢位置を推定（暫定）。
+
+        将来的に g2p-en / cmudict を導入するまでのプレースホルダ。
+        """
+        word = lemma.lower()
+        # ごく簡易な母音クラスタによる音節近似
+        import re
+
+        vowel_groups = re.findall(r"[aeiouy]+", word)
+        syllables = max(1, len(vowel_groups))
+
+        # 強勢はとりあえず最初の音節（暫定）
+        stress_index = 0
+
+        # 超簡易 IPA 置換（非常に不完全）
+        ipa = word
+        ipa = re.sub(r"ph", "f", ipa)
+        ipa = re.sub(r"tion\b", "ʃən", ipa)
+        ipa = re.sub(r"sion\b", "ʒən", ipa)
+        ipa = re.sub(r"ch", "tʃ", ipa)
+        ipa = re.sub(r"sh", "ʃ", ipa)
+        ipa = re.sub(r"th", "θ", ipa)
+        ipa = re.sub(r"\bcon", "kɒn", ipa)
+        ipa_GA = f"/{ipa}/"
+
+        linking_notes: list[str] = []
+        if word.endswith(("r",)):
+            linking_notes.append("語末 r の連結に注意（rhotic）")
+
+        return Pronunciation(
+            ipa_GA=ipa_GA,
+            syllables=syllables,
+            stress_index=stress_index,
+            linking_notes=linking_notes,
+        )
+
     def _retrieve(self, lemma: str) -> Dict[str, Any]:
         """語の近傍情報を取得（将来: chroma からベクトル近傍）。"""
         return {"lemma": lemma}
 
     def _synthesize(self, lemma: str) -> WordPack:
         """取得結果を整形し `WordPack` を構成（将来: LLM で整形）。"""
+        pronunciation = self._guess_pronunciation(lemma)
         return WordPack(
             lemma=lemma,
-            pronunciation=Pronunciation(ipa_GA=None, syllables=None, stress_index=None),
+            pronunciation=pronunciation,
             senses=[Sense(id="s1", gloss_ja="意味（暫定）", patterns=[], register=None)],
             collocations=Collocations(),
             contrast=[],

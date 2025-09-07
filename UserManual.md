@@ -120,7 +120,7 @@
 ## 6. 参考（現状のAPI）
 - `POST /api/sentence/check` … 自作文チェック（ダミーの詳細フィードバック）
 - `POST /api/text/assist` … 段落注釈（文分割＋簡易構文/語注/パラフレーズ）
-- `POST /api/word/pack` … WordPackの最小生成（固定ダミー）
+- `POST /api/word/pack` … WordPack の最小生成（簡易発音付き: ipa_GA/syllables/stress_index）
 - `GET  /api/review/today` / `POST /api/review/grade` … MVPのプレースホルダ
 
 ---
