@@ -1,11 +1,57 @@
-from fastapi import FastAPI
+import time
+import asyncio
+from fastapi import FastAPI, Request
+from starlette.middleware.cors import CORSMiddleware
+try:
+    from starlette.middleware.timeout import TimeoutMiddleware  # type: ignore
+except Exception:  # Starlette が古い場合などに備えたフォールバック
+    TimeoutMiddleware = None  # type: ignore[assignment]
+
+try:
+    from starlette.exceptions import TimeoutException  # type: ignore
+except Exception:
+    TimeoutException = None  # type: ignore[assignment]
 
 from .config import settings  # noqa: F401 - imported for side effects or future use
-from .logging import configure_logging
+from .logging import configure_logging, logger
 from .routers import health, review, sentence, text, word
+from .metrics import registry
 
 configure_logging()
-app = FastAPI()
+app = FastAPI(title="WordPack API", version="0.3.0")
+
+# CORS（必要に応じて環境変数に移行可能）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# タイムアウト（運用の初期値: 10秒）: Starlette が未対応ならスキップ
+if TimeoutMiddleware is not None:
+    app.add_middleware(TimeoutMiddleware, timeout=10)
+
+
+@app.middleware("http")
+async def access_log_and_metrics(request: Request, call_next):
+    start = time.time()
+    path = request.url.path
+    is_error = False
+    is_timeout = False
+    try:
+        response = await call_next(request)
+        return response
+    except Exception as exc:
+        is_error = True
+        if (TimeoutException is not None and isinstance(exc, TimeoutException)) or isinstance(exc, asyncio.TimeoutError):
+            is_timeout = True
+        raise exc
+    finally:
+        latency_ms = (time.time() - start) * 1000
+        registry.record(path, latency_ms, is_error=is_error, is_timeout=is_timeout)
+        logger.info("request_complete", path=path, latency_ms=latency_ms)
 
 app.include_router(word.router, prefix="/api/word")  # 語彙関連エンドポイント
 app.include_router(sentence.router, prefix="/api/sentence")  # 例文チェック関連

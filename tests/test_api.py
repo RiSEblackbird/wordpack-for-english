@@ -33,6 +33,8 @@ def test_word_pack(client):
     body = resp.json()
     assert body["lemma"] == "converge"
     assert "senses" in body
+    # RAG導入後のフィールド
+    assert "citations" in body and "confidence" in body
 
 
 def test_word_lookup(client):
@@ -46,6 +48,7 @@ def test_sentence_check(client):
     assert resp.status_code == 200
     j = resp.json()
     assert "issues" in j and isinstance(j["issues"], list)
+    assert "citations" in j and "confidence" in j
 
 
 def test_text_assist(client):
@@ -53,15 +56,27 @@ def test_text_assist(client):
     assert resp.status_code == 200
     j = resp.json()
     assert "sentences" in j and isinstance(j["sentences"], list)
+    assert "citations" in j and "confidence" in j
 
 
 def test_review_today(client):
     resp = client.get("/api/review/today")
     assert resp.status_code == 200
-    assert resp.json() == {"detail": "review retrieval pending"}
+    j = resp.json()
+    assert "items" in j and isinstance(j["items"], list)
+    # when seeded, at least 1 item should be due
+    if j["items"]:
+        first = j["items"][0]
+        assert set(["id", "front", "back"]).issubset(first.keys())
 
 
 def test_review_grade(client):
-    resp = client.post("/api/review/grade")
+    # get one card
+    today = client.get("/api/review/today").json()
+    if not today["items"]:
+        return
+    item_id = today["items"][0]["id"]
+    resp = client.post("/api/review/grade", json={"item_id": item_id, "grade": 2})
     assert resp.status_code == 200
-    assert resp.json() == {"detail": "review grading pending"}
+    j = resp.json()
+    assert j.get("ok") is True and "next_due" in j

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from ..flows.reading_assist import ReadingAssistFlow
+from ..providers import ChromaClientFactory
 from ..models.text import TextAssistRequest, TextAssistResponse
 
 router = APIRouter()
@@ -13,5 +14,6 @@ async def assist_text(req: TextAssistRequest) -> TextAssistResponse:
     段落テキストを入力として、文分割・用語注・パラフレーズ等の
     リーディング支援情報を返す。MVP はダミー応答。
     """
-    flow = ReadingAssistFlow()
+    chroma_client = ChromaClientFactory().create_client()
+    flow = ReadingAssistFlow(chroma_client=chroma_client)
     return flow.run(req.paragraph)

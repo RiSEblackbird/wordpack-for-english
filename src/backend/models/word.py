@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 
 class WordPackRequest(BaseModel):
@@ -10,6 +10,10 @@ class WordPackRequest(BaseModel):
 
     lemma: str
     pos: Optional[str] = None
+    pronunciation_enabled: bool = True
+    regenerate_scope: str = Field(
+        default="all", description="再生成スコープ: all/examples/collocations"
+    )
 
 
 class Sense(BaseModel):
@@ -67,6 +71,8 @@ class WordPack(BaseModel):
     examples: Examples = Field(default_factory=Examples)
     etymology: Etymology
     study_card: str
+    citations: List[Dict[str, Any]] = []  # RAG 出典（任意）
+    confidence: str = "low"  # RAG 信頼度（low/medium/high）
 
 
 class WordLookupResponse(BaseModel):

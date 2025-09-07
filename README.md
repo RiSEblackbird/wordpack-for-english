@@ -5,7 +5,9 @@
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
 - フロントエンド: React + TypeScript + Vite、単一ページ/4パネル構成（カード/自作文/段落注釈/設定）
-- 今後の実装: LangGraph フロー、RAG（ChromaDB）、SRS、発音変換（cmudict/g2p-en→IPA）
+- SRS（簡易SM-2）最小実装: 今日のカード取得・3段階採点に対応
+- 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（フォールバック規則付き）
+- WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択
 
 ---
 
@@ -20,14 +22,20 @@
 # Python
 python -m venv .venv
 . .venv/Scripts/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements.txt  # M5: 発音で cmudict / g2p-en を使用
 
 # Frontend
 cd src/frontend
 npm install
 ```
 
-### 1-3. バックエンド起動
+### 1-3. RAG 用インデクスの準備（M3）
+```bash
+# 任意: 初回のみ、最小シードを投入（ChromaDB）
+python -m backend.indexing --persist .chroma
+```
+
+### 1-4. バックエンド起動
 ```bash
 # リポジトリルートで
 python -m uvicorn backend.main:app --reload --app-dir src
@@ -35,15 +43,17 @@ python -m uvicorn backend.main:app --reload --app-dir src
 - 既定ポート: `http://127.0.0.1:8000`
 - ヘルスチェック: `GET /healthz`
 
-### 1-4. フロントエンド起動
+### 1-5. フロントエンド起動
 ```bash
 cd src/frontend
 npm run dev
 ```
 - 既定ポート: `http://127.0.0.1:5173`
-- `Settings` パネルで API Base を `/api` → `http://127.0.0.1:8000` に変更して利用してください（開発時の別ポート運用のため）。
+- 開発時（別ポート）の呼び分け:
+  - 方法A: `Settings` パネルの API Base を `http://127.0.0.1:8000/api` に設定
+  - 方法B: Viteのプロキシ（既定）を利用し、API Base はデフォルトの `/api` のまま
 
-### 1-5. Docker で一括起動（推奨・ホットリロード対応）
+### 1-6. Docker で一括起動（推奨・ホットリロード対応）
 ```bash
 # リポジトリルートで
 docker compose up --build
@@ -83,33 +93,69 @@ FastAPI アプリは `src/backend/main.py`。
 - `GET /healthz`
   - ヘルスチェック。レスポンス: `{ "status": "ok" }`
 
+- `GET /metrics`
+  - 運用メトリクスのスナップショット。パス別に `p95_ms`, `count`, `errors`, `timeouts` を返す（M6）。
+
 - `POST /api/word/pack`
-  - 周辺知識パック生成（現在はプレースホルダ）。
-  - レスポンス例: `{ "detail": "word pack generation pending" }`
+  - 周辺知識パック生成（M3: Chroma から近傍を取得し `citations` と `confidence` を付与）。
+  - 発音（M5）: cmudict/g2p-en を優先し、失敗時は規則ベースのフォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
+  - リクエスト例（M5 追加パラメータ）:
+    ```json
+    { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
+    ```
+    - `pronunciation_enabled`: 発音情報の生成 ON/OFF（既定 true）
+    - `regenerate_scope`: `all` | `examples` | `collocations`
+  - レスポンス例（抜粋）:
+    ```json
+    {
+      "lemma": "converge",
+      "pronunciation": {"ipa_GA":"/kənvɝdʒ/","syllables":2,"stress_index":1,"linking_notes":[]},
+      "senses": [{"id":"s1","gloss_ja":"意味（暫定）","patterns":[]}],
+      "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
+      "contrast": [],
+      "examples": {"A1": ["converge example."], "B1": [], "C1": [], "tech": []},
+      "etymology": {"note":"TBD","confidence":"low"},
+      "study_card": "この語の要点（暫定）。",
+      "citations": [],
+      "confidence": "low"
+    }
+    ```
 
 - `GET /api/word`
   - 単語情報取得（プレースホルダ）。
-  - レスポンス例: `{ "detail": "word lookup pending" }`
+  - レスポンス例: `{ "definition": null, "examples": [] }`
 
 - `POST /api/sentence/check`
-  - 自作文チェック（プレースホルダ）。
-  - レスポンス例: `{ "detail": "sentence checking pending" }`
+  - 自作文チェック（MVP: issues/revisions/exercise をダミー生成）。
+  - レスポンス例（抜粋）:
+    ```json
+    { "issues": [{"what":"語法","why":"対象語の使い分け不正確","fix":"共起に合わせて置換"}],
+      "revisions": [{"style":"natural","text":"..."}],
+      "exercise": {"q":"Fill the blank: ...","a":"..."} }
+    ```
 
 - `POST /api/text/assist`
-  - 段落注釈（プレースホルダ）。
-  - レスポンス例: `{ "detail": "reading assistance pending" }`
+  - 段落注釈（M3: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。
+  - レスポンス例（抜粋）:
+    ```json
+    { "sentences": [{"raw":"Some text","terms":[{"lemma":"Some"}]}], "summary": null, "citations": [] }
+    ```
 
 - `GET /api/review/today`
-  - 本日の復習アイテム取得（プレースホルダ）。
-  - レスポンス例: `{ "detail": "review retrieval pending" }`
+  - 本日の復習カード（最大5枚）を返します。
+  - レスポンス例:
+    ```json
+    { "items": [ { "id": "w:converge", "front": "converge", "back": "to come together" } ] }
+    ```
 
 - `POST /api/review/grade`
-  - 復習アイテムの採点（プレースホルダ）。
-  - レスポンス例: `{ "detail": "review grading pending" }`
+  - 復習カードの採点を記録。簡易SM-2で次回出題時刻を更新。
+  - リクエスト例: `{ "item_id": "w:converge", "grade": 2 }`（2=正解,1=部分的,0=不正解）
+  - レスポンス例: `{ "ok": true, "next_due": "2025-01-01T12:34:56.000Z" }`
 
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
-- `flows/*` は LangGraph 依存のプレースホルダ実装です。
+- `flows/*` は LangGraph 依存の最小実装（将来差し替え可能）です。
 
 ---
 
@@ -117,17 +163,21 @@ FastAPI アプリは `src/backend/main.py`。
 単一ページで以下の4タブを切替。最小スタイル・セマンティックHTMLを志向。
 
 - カード（`CardPanel.tsx`）
-  - `Get Card` でカード取得、`Review` で採点。現在のAPI実装とはエンドポイントが異なるため、MVPではモック状態です。
-  - 使用API（現状実装と差異あり）: `GET {apiBase}/cards/next`, `POST {apiBase}/cards/{id}/review`
+  - `カードを取得` で本日の一枚を取得（MVPではダミー）、`復習` で採点
+  - 使用API: `GET {apiBase}/review/today`, `POST {apiBase}/review/grade`
 
 - 自作文（`SentencePanel.tsx`）
-  - 文入力→`Check`。現在のバックエンド実装は `POST /api/sentence/check` なので、`SentencePanel` のパスは後で整合が必要です。
+  - 文入力→`チェック`。使用API: `POST {apiBase}/sentence/check`
+  - 返却された `issues/revisions/exercise` を画面に表示
 
 - 段落注釈（`AssistPanel.tsx`）
-  - 段落入力→`Assist`。現状 `POST /api/text/assist` がバックエンド実装。`AssistPanel` は `/assist` を呼んでいるため、後で整合が必要です。
+  - 段落入力→`アシスト`。使用API: `POST {apiBase}/text/assist`
+  - 返却された `sentences/summary` を画面に表示
 
 - 設定（`SettingsPanel.tsx`）
-  - API Base の入力のみ（デフォルト `/api`）。
+  - API Base（デフォルト `/api`）
+  - 発音の有効/無効トグル（M5）
+  - 再生成スコープ選択（`全体/例文のみ/コロケのみ`）（M5）
 
 アクセシビリティ/操作:
 - Alt+1..4 でタブ切替、`/` で主要入力へフォーカス
@@ -138,9 +188,10 @@ FastAPI アプリは `src/backend/main.py`。
 ## 5. テスト
 `pytest` による API の基本動作テストが含まれます。
 ```bash
-pytest -q
+pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ```
 - テストは `tests/test_api.py`。LangGraph/Chroma のスタブを挿入して起動します。
+- カバレッジ閾値: 60%（M6 運用・品質）。必要に応じて `--cov-fail-under` を調整してください。
 
 ---
 
@@ -154,18 +205,19 @@ pytest -q
 ---
 
 ## 7. 開発メモ（現状とTODO）
-- フロントエンドAPIパスの整合
-  - Sentence: `/sentence` → `/api/sentence/check` に合わせる
-  - Assist: `/assist` → `/api/text/assist` に合わせる
-  - Cards: バックエンドに `/cards/*` ルータ未実装 → 実装 or フロント側を `/api/review/*` 等に寄せる
+- フロントエンドAPIパスの整合: Sentence/Assist は `/api/*` に統一済み
 - LangGraph フロー実装
-  - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`
-- RAG(ChromaDB) と埋め込み/LLMプロバイダ
-  - `backend/providers.py` のプロバイダ実装
+  - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`（MVPダミー）
+- RAG(ChromaDB) と埋め込み/LLMプロバイダ（M3 実装済み）
+  - `backend/providers.py` に Chroma クライアントファクトリと簡易埋め込み関数を実装
+  - `backend/indexing.py` で最小シードの投入が可能
 - SRS/発音
-  - `app/srs.py`, `app/pronunciation.py` は未実装（NotImplemented）
-- CORS/タイムアウト/メトリクス
-  - `app/main.py` にサンプル実装あり。必要に応じて `src/backend` に移植
+  - SRS: `src/backend/srs.py` に簡易SM-2のインメモリ実装を追加（`/api/review/*` が利用）
+  - 発音: `app/pronunciation.py` は今後実装
+- CORS/タイムアウト/メトリクス（M6）
+  - `src/backend/main.py` に CORS/Timeout/アクセスログ（JSON, structlog）とメトリクス記録を実装
+  - `/metrics` で p95/件数/エラー/タイムアウトのスナップショットを返却
+  - Chroma 近傍クエリは2回まで軽量リトライ
 
 ---
 

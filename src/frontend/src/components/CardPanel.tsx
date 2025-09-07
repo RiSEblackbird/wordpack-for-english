@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useSettings } from '../SettingsContext';
+import { fetchJson, ApiError } from '../lib/fetcher';
 
 interface Card {
   id: string;
@@ -25,20 +26,19 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch(`${settings.apiBase}/cards/next`, { signal: ctrl.signal });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setCard(data);
+      const data = await fetchJson<{ items: Card[] }>(`${settings.apiBase}/review/today`, { signal: ctrl.signal });
+      setCard(data.items?.[0] ?? null);
       setMsg({ kind: 'status', text: 'カードを読み込みました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setMsg({ kind: 'alert', text: 'カードの読み込みに失敗しました' });
+      const msg = e instanceof ApiError ? e.message : 'カードの読み込みに失敗しました';
+      setMsg({ kind: 'alert', text: msg });
     } finally {
       setLoading(false);
     }
   };
 
-  const reviewCard = async () => {
+  const reviewCard = async (grade: 0 | 1 | 2) => {
     if (!card) return;
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -46,13 +46,17 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch(`${settings.apiBase}/cards/${card.id}/review`, { method: 'POST', signal: ctrl.signal });
-      if (!res.ok) throw new Error();
-      setMsg({ kind: 'status', text: '復習しました' });
+      await fetchJson(`${settings.apiBase}/review/grade`, {
+        method: 'POST',
+        body: { item_id: card.id, grade },
+        signal: ctrl.signal,
+      });
+      setMsg({ kind: 'status', text: '復習しました（次のカードに進みます）' });
       setCard(null);
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setMsg({ kind: 'alert', text: '復習に失敗しました' });
+      const msg = e instanceof ApiError ? e.message : '復習に失敗しました';
+      setMsg({ kind: 'alert', text: msg });
     } finally {
       setLoading(false);
     }
@@ -70,7 +74,11 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
         <div>
           <p><strong>{card.front}</strong></p>
           <p>{card.back}</p>
-          <button onClick={reviewCard}>復習</button>
+          <div>
+            <button onClick={() => reviewCard(0)}>× わからない</button>
+            <button onClick={() => reviewCard(1)}>△ あいまい</button>
+            <button onClick={() => reviewCard(2)}>○ できた</button>
+          </div>
         </div>
       )}
       {msg && <div role={msg.kind}>{msg.text}</div>}

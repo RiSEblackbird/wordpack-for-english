@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Dict, Any as AnyType
 
 # LangGraph は必須。未導入やAPI不一致なら起動失敗とする。
 # まずは正式な import（サブモジュールからの直接 import）を試み、
@@ -50,4 +50,6 @@ class FeedbackFlow:
             Revision(style="formal", text=sentence),
         ]
         exercise = MiniExercise(q="Fill the blank: ...", a="...")
-        return SentenceCheckResponse(issues=issues, revisions=revisions, exercise=exercise)
+        # RAGの引用（将来）。現状は空。低信頼。
+        citations: List[Dict[str, Any]] = []
+        return SentenceCheckResponse(issues=issues, revisions=revisions, exercise=exercise, citations=citations, confidence="low")

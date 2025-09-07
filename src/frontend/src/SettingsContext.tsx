@@ -2,6 +2,8 @@ import React, { useContext, useState } from 'react';
 
 export interface Settings {
   apiBase: string;
+  pronunciationEnabled: boolean;
+  regenerateScope: 'all' | 'examples' | 'collocations';
 }
 
 interface SettingsValue {
@@ -12,7 +14,7 @@ interface SettingsValue {
 const SettingsContext = React.createContext<SettingsValue | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<Settings>({ apiBase: '/api' });
+  const [settings, setSettings] = useState<Settings>({ apiBase: '/api', pronunciationEnabled: true, regenerateScope: 'all' });
   return (
     <SettingsContext.Provider value={{ settings, setSettings }}>
       {children}
