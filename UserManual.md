@@ -86,10 +86,11 @@
 
 使用APIは `POST {APIベースURL}/text/assist` に統一済みです。`Settings` の API ベースURL を `/api`（または `http://127.0.0.1:8000/api`）に設定すればそのまま動作します。
 
-### 2-5. カードパネルの使い方（MVPダミー）
+### 2-5. カードパネルの使い方（SRS最小実装）
 1) 「カード」を選択
-2) 「カードを取得」をクリック → `GET /api/review/today` のダミー応答から1枚を取得
-3) 「復習」ボタンをクリック → `POST /api/review/grade` を呼び出し
+2) 「カードを取得」をクリック → `GET /api/review/today` から本日のカード（最大1枚表示）を取得
+3) 採点ボタンを選択 → `× わからない(0)` / `△ あいまい(1)` / `○ できた(2)`
+4) 採点すると `POST /api/review/grade` が送信され、次回出題時刻が更新されます
 
 ---
 
@@ -124,7 +125,8 @@
 - `POST /api/sentence/check` … 自作文チェック（ダミーの詳細フィードバック）
 - `POST /api/text/assist` … 段落注釈（M3: 近傍取得で `citations`/`confidence` を付与）
 - `POST /api/word/pack` … WordPack 生成（M3: 近傍取得で `citations`/`confidence` を付与）
-- `GET  /api/review/today` / `POST /api/review/grade` … MVPのプレースホルダ
+- `GET  /api/review/today` … 本日のカード（最大5枚）
+- `POST /api/review/grade` … 採点（0/1/2）と次回時刻の更新
 
 ---
 

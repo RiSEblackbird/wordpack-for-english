@@ -5,7 +5,8 @@
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
 - フロントエンド: React + TypeScript + Vite、単一ページ/4パネル構成（カード/自作文/段落注釈/設定）
-- 今後の実装: LangGraph フロー、RAG（ChromaDB）、SRS、発音変換（cmudict/g2p-en→IPA）
+- SRS（簡易SM-2）最小実装: 今日のカード取得・3段階採点に対応
+- 今後の実装: LangGraph フロー、RAG（ChromaDB）、発音変換（cmudict/g2p-en→IPA）
 
 ---
 
@@ -129,12 +130,16 @@ FastAPI アプリは `src/backend/main.py`。
     ```
 
 - `GET /api/review/today`
-  - 本日の復習アイテム取得（プレースホルダ）。
-  - レスポンス例: `{ "detail": "review retrieval pending" }`
+  - 本日の復習カード（最大5枚）を返します。
+  - レスポンス例:
+    ```json
+    { "items": [ { "id": "w:converge", "front": "converge", "back": "to come together" } ] }
+    ```
 
 - `POST /api/review/grade`
-  - 復習アイテムの採点（プレースホルダ）。
-  - レスポンス例: `{ "detail": "review grading pending" }`
+  - 復習カードの採点を記録。簡易SM-2で次回出題時刻を更新。
+  - リクエスト例: `{ "item_id": "w:converge", "grade": 2 }`（2=正解,1=部分的,0=不正解）
+  - レスポンス例: `{ "ok": true, "next_due": "2025-01-01T12:34:56.000Z" }`
 
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
@@ -192,7 +197,8 @@ pytest -q
   - `backend/providers.py` に Chroma クライアントファクトリと簡易埋め込み関数を実装
   - `backend/indexing.py` で最小シードの投入が可能
 - SRS/発音
-  - `app/srs.py`, `app/pronunciation.py` は未実装（NotImplemented）
+  - SRS: `src/backend/srs.py` に簡易SM-2のインメモリ実装を追加（`/api/review/*` が利用）
+  - 発音: `app/pronunciation.py` は今後実装
 - CORS/タイムアウト/メトリクス
   - `app/main.py` にサンプル実装あり。必要に応じて `src/backend` に移植
 

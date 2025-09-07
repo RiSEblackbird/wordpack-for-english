@@ -26,9 +26,8 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
     setLoading(true);
     setMsg(null);
     try {
-      const data = await fetchJson<Card | null>(`${settings.apiBase}/review/today`, { signal: ctrl.signal });
-      // MVP: today は配列想定だがサーバ側がダミーのため null を許容
-      setCard((data as any)?.items?.[0] ?? null);
+      const data = await fetchJson<{ items: Card[] }>(`${settings.apiBase}/review/today`, { signal: ctrl.signal });
+      setCard(data.items?.[0] ?? null);
       setMsg({ kind: 'status', text: 'カードを読み込みました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
@@ -39,7 +38,7 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
     }
   };
 
-  const reviewCard = async () => {
+  const reviewCard = async (grade: 0 | 1 | 2) => {
     if (!card) return;
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -47,8 +46,12 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
     setLoading(true);
     setMsg(null);
     try {
-      await fetchJson(`${settings.apiBase}/review/grade`, { method: 'POST', signal: ctrl.signal });
-      setMsg({ kind: 'status', text: '復習しました' });
+      await fetchJson(`${settings.apiBase}/review/grade`, {
+        method: 'POST',
+        body: { item_id: card.id, grade },
+        signal: ctrl.signal,
+      });
+      setMsg({ kind: 'status', text: '復習しました（次のカードに進みます）' });
       setCard(null);
     } catch (e) {
       if (ctrl.signal.aborted) return;
@@ -71,7 +74,11 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
         <div>
           <p><strong>{card.front}</strong></p>
           <p>{card.back}</p>
-          <button onClick={reviewCard}>復習</button>
+          <div>
+            <button onClick={() => reviewCard(0)}>× わからない</button>
+            <button onClick={() => reviewCard(1)}>△ あいまい</button>
+            <button onClick={() => reviewCard(2)}>○ できた</button>
+          </div>
         </div>
       )}
       {msg && <div role={msg.kind}>{msg.text}</div>}
