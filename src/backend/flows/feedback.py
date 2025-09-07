@@ -1,10 +1,11 @@
 from typing import Any
 
+# LangGraph は必須。未導入やAPI不一致なら起動失敗とする。
 try:
-    from langgraph import Graph
+    from langgraph.graph import StateGraph  # type: ignore
 except Exception as exc:  # pragma: no cover - library required
     raise ImportError(
-        "FeedbackFlow requires the 'langgraph' package. Install it to use this flow."
+        "FeedbackFlow requires the 'langgraph' package (expected langgraph.graph.StateGraph)."
     ) from exc
 
 
@@ -13,8 +14,8 @@ class FeedbackFlow:
 
     def __init__(self, llm: Any | None = None) -> None:
         self.llm = llm
-        self.graph = Graph()  # type: ignore[call-arg]
-        # TODO: construct graph nodes for evaluation and feedback generation.
+        # 実グラフは実装時に構築する（StateGraph が利用可能であることはインポート時に保証）
+        self.graph = None
 
     def run(self, sentence: str) -> dict[str, Any]:
         """Return feedback for a given sentence."""
