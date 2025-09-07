@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useSettings } from '../SettingsContext';
+import { fetchJson, ApiError } from '../lib/fetcher';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -21,19 +22,17 @@ export const AssistPanel: React.FC<Props> = ({ focusRef }) => {
     setMsg(null);
     setResult('');
     try {
-      const res = await fetch(`${settings.apiBase}/assist`, {
+      const data = await fetchJson<any>(`${settings.apiBase}/text/assist`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paragraph: text }),
+        body: { paragraph: text },
         signal: ctrl.signal,
       });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
       setResult(data.result || '');
       setMsg({ kind: 'status', text: 'アシストしました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setMsg({ kind: 'alert', text: '段落のアシストに失敗しました' });
+      const msg = e instanceof ApiError ? e.message : '段落のアシストに失敗しました';
+      setMsg({ kind: 'alert', text: msg });
     } finally {
       setLoading(false);
     }

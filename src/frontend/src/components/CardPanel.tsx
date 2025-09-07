@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useSettings } from '../SettingsContext';
+import { fetchJson, ApiError } from '../lib/fetcher';
 
 interface Card {
   id: string;
@@ -25,14 +26,14 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch(`${settings.apiBase}/cards/next`, { signal: ctrl.signal });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setCard(data);
+      const data = await fetchJson<Card | null>(`${settings.apiBase}/review/today`, { signal: ctrl.signal });
+      // MVP: today は配列想定だがサーバ側がダミーのため null を許容
+      setCard((data as any)?.items?.[0] ?? null);
       setMsg({ kind: 'status', text: 'カードを読み込みました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setMsg({ kind: 'alert', text: 'カードの読み込みに失敗しました' });
+      const msg = e instanceof ApiError ? e.message : 'カードの読み込みに失敗しました';
+      setMsg({ kind: 'alert', text: msg });
     } finally {
       setLoading(false);
     }
@@ -46,13 +47,13 @@ export const CardPanel: React.FC<Props> = ({ focusRef }) => {
     setLoading(true);
     setMsg(null);
     try {
-      const res = await fetch(`${settings.apiBase}/cards/${card.id}/review`, { method: 'POST', signal: ctrl.signal });
-      if (!res.ok) throw new Error();
+      await fetchJson(`${settings.apiBase}/review/grade`, { method: 'POST', signal: ctrl.signal });
       setMsg({ kind: 'status', text: '復習しました' });
       setCard(null);
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setMsg({ kind: 'alert', text: '復習に失敗しました' });
+      const msg = e instanceof ApiError ? e.message : '復習に失敗しました';
+      setMsg({ kind: 'alert', text: msg });
     } finally {
       setLoading(false);
     }

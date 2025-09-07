@@ -41,7 +41,9 @@ cd src/frontend
 npm run dev
 ```
 - 既定ポート: `http://127.0.0.1:5173`
-- `Settings` パネルで API Base を `/api` → `http://127.0.0.1:8000` に変更して利用してください（開発時の別ポート運用のため）。
+- 開発時（別ポート）の呼び分け:
+  - 方法A: `Settings` パネルの API Base を `http://127.0.0.1:8000/api` に設定
+  - 方法B: Viteのプロキシ（既定）を利用し、API Base はデフォルトの `/api` のまま
 
 ### 1-5. Docker で一括起動（推奨・ホットリロード対応）
 ```bash
@@ -117,14 +119,14 @@ FastAPI アプリは `src/backend/main.py`。
 単一ページで以下の4タブを切替。最小スタイル・セマンティックHTMLを志向。
 
 - カード（`CardPanel.tsx`）
-  - `Get Card` でカード取得、`Review` で採点。現在のAPI実装とはエンドポイントが異なるため、MVPではモック状態です。
-  - 使用API（現状実装と差異あり）: `GET {apiBase}/cards/next`, `POST {apiBase}/cards/{id}/review`
+  - `カードを取得` で本日の一枚を取得（MVPではダミー）、`復習` で採点
+  - 使用API: `GET {apiBase}/review/today`, `POST {apiBase}/review/grade`
 
 - 自作文（`SentencePanel.tsx`）
-  - 文入力→`Check`。現在のバックエンド実装は `POST /api/sentence/check` なので、`SentencePanel` のパスは後で整合が必要です。
+  - 文入力→`チェック`。使用API: `POST {apiBase}/sentence/check`
 
 - 段落注釈（`AssistPanel.tsx`）
-  - 段落入力→`Assist`。現状 `POST /api/text/assist` がバックエンド実装。`AssistPanel` は `/assist` を呼んでいるため、後で整合が必要です。
+  - 段落入力→`アシスト`。使用API: `POST {apiBase}/text/assist`
 
 - 設定（`SettingsPanel.tsx`）
   - API Base の入力のみ（デフォルト `/api`）。

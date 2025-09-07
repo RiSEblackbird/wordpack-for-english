@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useSettings } from '../SettingsContext';
+import { fetchJson, ApiError } from '../lib/fetcher';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -21,19 +22,17 @@ export const SentencePanel: React.FC<Props> = ({ focusRef }) => {
     setMsg(null);
     setResult('');
     try {
-      const res = await fetch(`${settings.apiBase}/sentence`, {
+      const data = await fetchJson<any>(`${settings.apiBase}/sentence/check`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sentence: text }),
+        body: { sentence: text },
         signal: ctrl.signal,
       });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
       setResult(data.result || 'OK');
       setMsg({ kind: 'status', text: 'チェックしました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      setMsg({ kind: 'alert', text: '文のチェックに失敗しました' });
+      const msg = e instanceof ApiError ? e.message : '文のチェックに失敗しました';
+      setMsg({ kind: 'alert', text: msg });
     } finally {
       setLoading(false);
     }
