@@ -110,6 +110,10 @@
 - 日本語UIはMVP文言（用語は今後統一予定）
 - 発音生成は cmudict/g2p-en が使用可能な環境で精度が向上し、未導入時は規則フォールバック（簡易）となります（M5）。
 
+運用・品質（M6）:
+- `/metrics` で API パス別の p95・件数・エラー・タイムアウトを即時確認できます。
+- ログは `structlog` により JSON 形式で出力され、`request_complete` に `path` と `latency_ms` が含まれます。
+
 ---
 
 ## 5. トラブルシュート
@@ -135,13 +139,14 @@
 ## 7. 開発メモ（導入・検証のヒント）
 - テスト実行:
   ```bash
-  pytest -q
+  pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   ```
 - コード配置（抜粋）:
-  - バックエンド: `src/backend`（`routers/*`, `flows/*`, `models/*`）
+  - バックエンド: `src/backend`（`routers/*`, `flows/*`, `models/*`, `metrics.py`）
   - フロントエンド: `src/frontend`（React + Vite）
 - 実装差し替えポイント:
   - `src/backend/providers.py` … LLM/Embedding クライアントの実体
   - `flows/*` … LangGraph ノードを本実装へ置換
+  - 運用: `/metrics` で p95/件数/エラー/タイムアウトを確認可能（M6）
 
 

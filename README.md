@@ -93,6 +93,9 @@ FastAPI アプリは `src/backend/main.py`。
 - `GET /healthz`
   - ヘルスチェック。レスポンス: `{ "status": "ok" }`
 
+- `GET /metrics`
+  - 運用メトリクスのスナップショット。パス別に `p95_ms`, `count`, `errors`, `timeouts` を返す（M6）。
+
 - `POST /api/word/pack`
   - 周辺知識パック生成（M3: Chroma から近傍を取得し `citations` と `confidence` を付与）。
   - 発音（M5）: cmudict/g2p-en を優先し、失敗時は規則ベースのフォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
@@ -185,9 +188,10 @@ FastAPI アプリは `src/backend/main.py`。
 ## 5. テスト
 `pytest` による API の基本動作テストが含まれます。
 ```bash
-pytest -q
+pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ```
 - テストは `tests/test_api.py`。LangGraph/Chroma のスタブを挿入して起動します。
+- カバレッジ閾値: 60%（M6 運用・品質）。必要に応じて `--cov-fail-under` を調整してください。
 
 ---
 
@@ -210,8 +214,10 @@ pytest -q
 - SRS/発音
   - SRS: `src/backend/srs.py` に簡易SM-2のインメモリ実装を追加（`/api/review/*` が利用）
   - 発音: `app/pronunciation.py` は今後実装
-- CORS/タイムアウト/メトリクス
-  - `app/main.py` にサンプル実装あり。必要に応じて `src/backend` に移植
+- CORS/タイムアウト/メトリクス（M6）
+  - `src/backend/main.py` に CORS/Timeout/アクセスログ（JSON, structlog）とメトリクス記録を実装
+  - `/metrics` で p95/件数/エラー/タイムアウトのスナップショットを返却
+  - Chroma 近傍クエリは2回まで軽量リトライ
 
 ---
 

@@ -27,6 +27,7 @@ from ..models.word import (
     Examples,
 )
 from ..pronunciation import generate_pronunciation
+from ..logging import logger
 
 
 class WordPackFlow:
@@ -56,16 +57,20 @@ class WordPackFlow:
         """語の近傍情報を取得（将来: chroma からベクトル近傍）。"""
         citations: List[Dict[str, Any]] = []
         if self.chroma and getattr(self.chroma, "get_or_create_collection", None):  # server client
-            try:
-                col = self.chroma.get_or_create_collection(name="word_snippets")
-                res = col.query(query_texts=[lemma], n_results=3)
-                # res: {ids, distances, documents, metadatas}
-                docs = (res.get("documents") or [[]])[0]
-                metas = (res.get("metadatas") or [[]])[0]
-                for d, m in zip(docs, metas):
-                    citations.append({"text": d, "meta": m})
-            except Exception:
-                pass
+            for attempt in range(1, 3):
+                try:
+                    col = self.chroma.get_or_create_collection(name="word_snippets")
+                    res = col.query(query_texts=[lemma], n_results=3)
+                    # res: {ids, distances, documents, metadatas}
+                    docs = (res.get("documents") or [[]])[0]
+                    metas = (res.get("metadatas") or [[]])[0]
+                    for d, m in zip(docs, metas):
+                        citations.append({"text": d, "meta": m})
+                    break
+                except Exception as exc:
+                    logger.warning("chroma_query_failed", attempt=attempt, phase="word_snippets", error=str(exc))
+                    if attempt >= 2:
+                        break
         return {"lemma": lemma, "citations": citations}
 
     def _synthesize(

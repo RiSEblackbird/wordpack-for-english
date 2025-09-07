@@ -4,6 +4,7 @@ structlog
 pydantic-settings
 pytest
 httpx
+pytest-cov
 langgraph
 chromadb
 cmudict
