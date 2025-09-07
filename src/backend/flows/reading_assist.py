@@ -1,12 +1,17 @@
 from typing import Any, Dict, List
 
 # LangGraph は必須
+# 正式 import を試し、失敗時は tests スタブ互換のフォールバック。
 try:
     from langgraph.graph import StateGraph  # type: ignore
-except Exception as exc:  # pragma: no cover - library required
-    raise ImportError(
-        "ReadingAssistFlow requires the 'langgraph' package (expected langgraph.graph.StateGraph)."
-    ) from exc
+except Exception:
+    try:
+        import langgraph  # type: ignore
+        StateGraph = langgraph.graph.StateGraph  # type: ignore[attr-defined]
+    except Exception as exc:  # pragma: no cover - library required
+        raise ImportError(
+            "ReadingAssistFlow requires the 'langgraph' package (expected langgraph.graph.StateGraph)."
+        ) from exc
 
 try:
     import chromadb
