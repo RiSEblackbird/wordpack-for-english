@@ -1,6 +1,6 @@
-## WordPack for English ユーザー操作ガイド（MVP）
+## WordPack for English ユーザー操作ガイド
 
-本書は、現状のMVP実装を前提とした操作ガイドです。画面上のUIの使い方、起動方法、必要な準備（ユーザー/開発者）を説明します。現状は一部APIがモック/最小実装であり、パネルごとに挙動・エンドポイントが異なります（制約事項を末尾に記載）。
+本書は現行実装に基づく操作ガイドです。画面上のUIの使い方、起動方法、必要な準備（ユーザー/開発者）を説明します。パネルごとに挙動・エンドポイントが異なる場合は各セクションに記載します（制約事項は末尾）。
 
 ### 想定読者
 - 英語学習者（日本語UI）
@@ -40,9 +40,8 @@
 - サービス起動（別ターミナルで）:
   ```bash
   # Backend（リポジトリルートで）
-  # 事前に（初回のみ）RAGインデクスを投入できます（JSONL対応）:
+  # 任意（初回のみ）RAGインデクスを投入できます（JSONL対応）:
   #   python -m backend.indexing
-  #   # 例: JSONL から投入
   #   python -m backend.indexing --word-jsonl data/word_snippets.jsonl --terms-jsonl data/domain_terms.jsonl
   python -m uvicorn backend.main:app --reload --app-dir src
 
@@ -77,7 +76,7 @@
 1) 「文」を選択
 2) 英文を入力（例: `I researches about AI.`）
 3) 「チェック」をクリック
-4) 結果: 簡易ダミーのフィードバック（issues/revisions/mini exercise）を表示
+4) 結果: フィードバック（issues/revisions/mini exercise）を表示
 
 ヒント: バックエンドは `POST /api/sentence/check` を提供します。ベースURLが `/api` の場合、そのまま動作します。
 
@@ -85,7 +84,7 @@
 1) 「アシスト」を選択
 2) 英文の段落を貼り付け（例: `Our algorithm converges under mild assumptions.`）
 3) 「アシスト」をクリック
-4) 結果: 文分割＋簡易構文情報＋語注（ダミー）＋パラフレーズ（原文）を表示
+4) 結果: 文分割＋構文情報＋語注＋パラフレーズ（原文）を表示
 
 使用APIは `POST {APIベースURL}/text/assist` に統一済みです。`Settings` の API ベースURL を `/api`（または `http://127.0.0.1:8000/api`）に設定すればそのまま動作します。
 
@@ -104,13 +103,13 @@
 
 ---
 
-## 4. 制約・既知の事項（MVP）
+## 4. 制約・既知の事項
 - エンドポイント整合は文/アシストとも `/api/*` に統一済み
-- LangGraph/RAG/LLM は M3/PR3 で RAG の導入を実施
+- LangGraph/RAG/LLM は M3/PR3 で RAG を導入
   - `WordPackFlow` と `ReadingAssistFlow` は ChromaDB からの近傍取得により `citations`/`confidence`（low/medium/high, Enum）を付与します（シード未投入時は空/low）
   - RAG は `rag_enabled` フラグで無効化可能。近傍クエリはレート制御/タイムアウト/リトライ/フォールバックを標準化しています。
-  - `FeedbackFlow` は現状ダミー（将来RAG/LLM統合）
-- 日本語UIはMVP文言（用語は今後統一予定）
+  - `FeedbackFlow` は将来RAG/LLM統合を予定
+- 日本語UIの文言は暫定で、今後統一予定
 - 発音生成は `src/backend/pronunciation.py` に統一。cmudict/g2p-en が使用可能な環境で精度が向上し、未導入時は例外辞書と規則フォールバック（タイムアウト制御あり）となります（M5）。`設定` パネルの「発音を有効化」で ON/OFF 可能です。
 - 復習（SRS）は SQLite で永続化されます（ファイル既定: `.data/srs.sqlite3`）。初回起動時に数枚のカードがシードされます。
 

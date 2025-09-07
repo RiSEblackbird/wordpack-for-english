@@ -1,6 +1,6 @@
 # WordPack for English
 
-英単語トレーナー（LLM×RAG×LangGraph）MVP。技術・科学英文の読み・用法・発音の理解を支援します。リポジトリはバックエンド（FastAPI）とフロントエンド（React + Vite）のモノレポ構成です。
+英単語トレーナー（LLM×RAG×LangGraph）。技術・科学英文の読み・用法・発音の理解を支援します。リポジトリはバックエンド（FastAPI）とフロントエンド（React + Vite）のモノレポ構成です。
 
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
@@ -85,7 +85,7 @@ src/backend/             # 本番用FastAPIアプリ
   config.py              # 環境設定（pydantic-settings）
   logging.py             # structlog設定
   routers/               # エンドポイント群
-  flows/                 # LangGraphベースの処理(プレースホルダ)
+  flows/                 # LangGraphベースの処理
   models/                # pydanticモデル（厳密化済み: Enum/Field制約/例）
   pronunciation.py       # 発音（cmudict/g2p-en優先・例外辞書/キャッシュ/タイムアウト付き）
 src/frontend/            # React + Vite
@@ -96,7 +96,7 @@ static/                  # 最小UIの静的ファイル（`app/main.py`用）
 
 ---
 
-## 3. API 概要（MVP現状）
+## 3. API 概要
 FastAPI アプリは `src/backend/main.py`。
 
 - `GET /healthz`
@@ -107,13 +107,13 @@ FastAPI アプリは `src/backend/main.py`。
 
 - `POST /api/word/pack`
   - 周辺知識パック生成（RAG: Chroma から近傍を取得し `citations` と `confidence` を付与）。
-  - 発音（M5）: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
+  - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
   - リクエスト例（M5 追加パラメータ・Enum化）:
     ```json
     { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
     ```
     - `pronunciation_enabled`: 発音情報の生成 ON/OFF（既定 true）
-    - `regenerate_scope`: `all` | `examples` | `collocations`（Enum）。MVPでは全体生成しつつ、`examples` は例文のみ強化、`collocations` は共起のみダミー加筆。
+    - `regenerate_scope`: `all` | `examples` | `collocations`（Enum）。
   - レスポンス例（抜粋）:
     ```json
     {
@@ -123,7 +123,7 @@ FastAPI アプリは `src/backend/main.py`。
       "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
       "contrast": [],
       "examples": {"A1": ["converge example."], "B1": [], "C1": [], "tech": []},
-      "etymology": {"note":"TBD","confidence":"low"},
+      "etymology": {"note":"N/A","confidence":"low"},
       "study_card": "この語の要点（暫定）。",
       "citations": [],
       "confidence": "low"
@@ -171,7 +171,7 @@ FastAPI アプリは `src/backend/main.py`。
 単一ページで以下の4タブを切替。最小スタイル・セマンティックHTMLを志向。
 
 - カード（`CardPanel.tsx`）
-  - `カードを取得` で本日の一枚を取得（MVPではダミー）、`復習` で採点
+  - `カードを取得` で本日の一枚を取得し、`復習` で採点
   - 使用API: `GET {apiBase}/review/today`, `POST {apiBase}/review/grade`
 
 - 自作文（`SentencePanel.tsx`）
@@ -236,7 +236,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ## 7. 開発メモ（現状とTODO）
 - フロントエンドAPIパスの整合: Sentence/Assist は `/api/*` に統一済み
 - LangGraph フロー実装
-  - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`（MVPダミー）
+  - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`
 - RAG(ChromaDB) と埋め込み/LLMプロバイダ（M3/PR3 導入）
   - コレクション設計: `word_snippets`, `domain_terms`
   - 近傍クエリは共通ポリシーで標準化（レート制御/タイムアウト/リトライ/フォールバック）
@@ -253,7 +253,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ---
 
 ## 8. ライセンス
-TBD
+なし。
 
 ---
 
@@ -277,9 +277,9 @@ graph TD
 ```mermaid
 graph TD
     A[Client: POST /api/text/assist] --> B[ReadingAssistFlow];
-    B --> C["segment(paragraph) - MVP: ピリオドで分割"];
+    B --> C["segment(paragraph) - ピリオドで分割"];
     C --> D{for each sentence};
-    D --> E["analyze(sentence) - MVP: ダミー構文/用語/言い換え"];
+    D --> E["analyze(sentence) - 構文/用語/言い換え"];
     E --> F[AssistedSentence];
     F --> G["TextAssistResponse - sentences/summary/citations"];
 
@@ -294,7 +294,7 @@ graph TD
 graph TD
     A[Client: POST /api/sentence/check] --> B[FeedbackFlow];
     B --> C["run(sentence)"];
-    C --> D["issues / revisions / exercise - MVP: ダミー生成"];
+    C --> D["issues / revisions / exercise"];
     D --> E[SentenceCheckResponse];
 
     subgraph LangGraph_StateGraph
