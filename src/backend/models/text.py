@@ -1,5 +1,7 @@
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
+from typing import List, Optional
+from pydantic import BaseModel, Field, ConfigDict
+
+from .common import Citation, ConfidenceLevel
 
 
 class TextAssistRequest(BaseModel):
@@ -9,13 +11,17 @@ class TextAssistRequest(BaseModel):
     リーディング支援を要求するためのリクエスト。
     """
 
-    paragraph: str
+    model_config = ConfigDict(json_schema_extra={
+        "examples": [{"paragraph": "Our algorithm converges under mild assumptions."}]
+    })
+
+    paragraph: str = Field(min_length=1, max_length=2000, description="対象の段落（最大2000字）")
 
 
 class SyntaxInfo(BaseModel):
     subject: Optional[str] = None
     predicate: Optional[str] = None
-    mods: List[str] = []
+    mods: List[str] = Field(default_factory=list)
 
 
 class TermInfo(BaseModel):
@@ -28,7 +34,7 @@ class TermInfo(BaseModel):
 class AssistedSentence(BaseModel):
     raw: str
     syntax: SyntaxInfo
-    terms: List[TermInfo] = []
+    terms: List[TermInfo] = Field(default_factory=list)
     paraphrase: Optional[str] = None
 
 
@@ -39,7 +45,24 @@ class TextAssistResponse(BaseModel):
     参考文献・出典の引用を含める想定。
     """
 
-    sentences: List[AssistedSentence] = []
+    model_config = ConfigDict(json_schema_extra={
+        "examples": [
+            {
+                "sentences": [
+                    {
+                        "raw": "Our algorithm converges under mild assumptions",
+                        "syntax": {"subject": None, "predicate": None, "mods": []},
+                        "terms": [{"lemma": "Our", "gloss_ja": None, "ipa": None}]
+                    }
+                ],
+                "summary": None,
+                "citations": [],
+                "confidence": "low"
+            }
+        ]
+    })
+
+    sentences: List[AssistedSentence] = Field(default_factory=list)
     summary: Optional[str] = None
-    citations: List[Dict[str, Any]] = []
-    confidence: str = "low"
+    citations: List[Citation] = Field(default_factory=list)
+    confidence: ConfidenceLevel = ConfidenceLevel.low

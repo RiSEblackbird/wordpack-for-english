@@ -1,5 +1,7 @@
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
+from typing import List, Optional
+from pydantic import BaseModel, Field, ConfigDict
+
+from .common import Citation, ConfidenceLevel
 
 
 class SentenceCheckRequest(BaseModel):
@@ -9,7 +11,11 @@ class SentenceCheckRequest(BaseModel):
     リクエストボディ。
     """
 
-    sentence: str
+    model_config = ConfigDict(json_schema_extra={
+        "examples": [{"sentence": "I researches about AI."}]
+    })
+
+    sentence: str = Field(min_length=1, max_length=500, description="対象の英文（最大500字）")
 
 
 class Issue(BaseModel):
@@ -35,8 +41,20 @@ class SentenceCheckResponse(BaseModel):
     簡易演習（exercise）を含むフィードバック。
     """
 
-    issues: List[Issue] = []
-    revisions: List[Revision] = []
+    model_config = ConfigDict(json_schema_extra={
+        "examples": [
+            {
+                "issues": [{"what": "語法", "why": "動詞の一致", "fix": "research"}],
+                "revisions": [{"style": "natural", "text": "I research AI."}],
+                "exercise": {"q": "Fix the verb: I ____ about AI.", "a": "research"},
+                "citations": [],
+                "confidence": "low"
+            }
+        ]
+    })
+
+    issues: List[Issue] = Field(default_factory=list)
+    revisions: List[Revision] = Field(default_factory=list)
     exercise: Optional[MiniExercise] = None
-    citations: List[Dict[str, Any]] = []
-    confidence: str = "low"
+    citations: List[Citation] = Field(default_factory=list)
+    confidence: ConfidenceLevel = ConfidenceLevel.low

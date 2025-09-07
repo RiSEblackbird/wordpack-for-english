@@ -9,10 +9,10 @@ from ..models.review import (
     ReviewCard,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["review"])
 
 
-@router.get("/today", response_model=ReviewTodayResponse)
+@router.get("/today", response_model=ReviewTodayResponse, response_model_exclude_none=True, summary="本日の復習カードを取得")
 async def review_today() -> ReviewTodayResponse:
     """Return today's review items (up to 5)."""
     items = store.get_today(limit=5)
@@ -20,7 +20,7 @@ async def review_today() -> ReviewTodayResponse:
     return ReviewTodayResponse(items=cards)
 
 
-@router.post("/grade", response_model=ReviewGradeResponse)
+@router.post("/grade", response_model=ReviewGradeResponse, response_model_exclude_none=True, summary="採点して次回出題時刻を更新")
 async def review_grade(req: ReviewGradeRequest) -> ReviewGradeResponse:
     """Grade a review item using simplified SM-2 and return next due time."""
     _ = FeedbackFlow()  # kept for future linkage

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Optional, Callable, Any
+from functools import lru_cache
+import threading
 
 try:
     # g2p_en は ARPABET を返す
@@ -79,6 +81,53 @@ _VOWELS = {
 }
 
 
+# 例外辞書（運用で拡張予定）。キーは小文字の見出し語、値は ARPABET 配列。
+_EXCEPTION_DICT: Dict[str, List[str]] = {
+    # 最小サンプル。必要に応じて追加・更新する。
+    "the": ["DH", "AH0"],
+    "of": ["AH1", "V"],
+    "data": ["D", "EY1", "T", "AH0"],
+    "converge": ["K", "AH0", "N", "V", "ER1", "JH"],
+}
+
+# cmudict の辞書インスタンスは高コストのためキャッシュ
+_CMU_CACHE: Dict[str, List[List[str]]] | None = None
+
+
+def _get_cmu_dict() -> Optional[Dict[str, List[List[str]]]]:
+    global _CMU_CACHE
+    if cmudict is None:
+        return None
+    if _CMU_CACHE is None:
+        try:
+            _CMU_CACHE = cmudict.dict()  # type: ignore[attr-defined]
+        except Exception:  # pragma: no cover
+            _CMU_CACHE = None
+    return _CMU_CACHE
+
+
+def _call_with_timeout(func: Callable[[], Any], timeout_ms: int) -> Any | None:
+    """Run func with a timeout in ms. Return None on timeout or exception."""
+    result: Dict[str, Any] = {"value": None}
+    exc: Dict[str, BaseException | None] = {"err": None}
+
+    def target() -> None:
+        try:
+            result["value"] = func()
+        except BaseException as e:  # pragma: no cover
+            exc["err"] = e
+
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(timeout=timeout_ms / 1000.0)
+    if thread.is_alive() or exc["err"] is not None:
+        return None
+    return result["value"]
+
+
+_PRONUN_TIMEOUT_MS = 800  # g2p_en の安全タイムアウト（ミリ秒）
+
+
 def _strip_stress(phone: str) -> Tuple[str, int | None]:
     """Return base ARPABET phone and stress (0/1/2) if present."""
     if not phone:
@@ -114,31 +163,43 @@ def _phones_to_ipa(phones: List[str]) -> Tuple[str, int, int | None]:
     return " ".join(ipa_parts), syllable_count, primary_stress_index
 
 
+@lru_cache(maxsize=4096)
 def _g2p_phones(word: str) -> List[str] | None:
-    """Get ARPABET phones using cmudict or g2p-en; return None on failure."""
-    w = word.upper()
-    # Prefer cmudict if available
-    if cmudict is not None:
+    """Get ARPABET phones using exception dict, cmudict, then g2p-en (with timeout)."""
+    if not word:
+        return None
+    lower = word.lower()
+    if lower in _EXCEPTION_DICT:
+        return list(_EXCEPTION_DICT[lower])
+
+    # Prefer cached cmudict results
+    cmu = _get_cmu_dict()
+    if cmu is not None:
         try:
-            entries = cmudict.dict().get(w)
+            entries = cmu.get(lower.upper()) or cmu.get(lower)
             if entries:
-                # take the first pronunciation variant
                 return list(entries[0])
         except Exception:  # pragma: no cover
             pass
-    # Fallback to g2p_en
+
+    # Fallback to g2p_en with timeout
     if G2p is not None:
         try:
-            g2p = G2p()
-            seq = g2p(word)
-            # filter to ARPABET tokens (letters optionally with stress digit)
-            phones = [t for t in seq if t and t[0].isalpha()]
-            return phones or None
+            def _run() -> List[str] | None:
+                g2p = G2p()
+                seq = g2p(word)
+                phones = [t for t in seq if t and t[0].isalpha()]
+                return phones or None
+
+            phones = _call_with_timeout(_run, _PRONUN_TIMEOUT_MS)
+            if isinstance(phones, list) and phones:
+                return phones
         except Exception:  # pragma: no cover
             pass
     return None
 
 
+@lru_cache(maxsize=4096)
 def generate_pronunciation(lemma: str) -> Pronunciation:
     """Generate Pronunciation with IPA (GA), syllables, stress, and notes.
 

@@ -16,6 +16,9 @@ except Exception:
         ) from exc
 
 from ..models.sentence import SentenceCheckResponse, Issue, Revision, MiniExercise
+from ..models.common import Citation, ConfidenceLevel
+from ..providers import chroma_query_with_policy, COL_DOMAIN_TERMS
+from ..config import settings
 
 
 class FeedbackFlow:
@@ -27,7 +30,7 @@ class FeedbackFlow:
     ミニ演習（穴埋め等）の自動生成に置き換える想定。
     """
 
-    def __init__(self, llm: Any | None = None) -> None:
+    def __init__(self, llm: Any | None = None, *, chroma_client: Any | None = None) -> None:
         """LLM クライアント等を受け取り、LangGraph の状態遷移を初期化。
 
         Parameters
@@ -36,6 +39,7 @@ class FeedbackFlow:
             フィードバック生成に用いる LLM クライアント（任意）。
         """
         self.llm = llm
+        self.chroma = chroma_client
         self.graph = StateGraph()
 
     def run(self, sentence: str) -> SentenceCheckResponse:
@@ -50,6 +54,19 @@ class FeedbackFlow:
             Revision(style="formal", text=sentence),
         ]
         exercise = MiniExercise(q="Fill the blank: ...", a="...")
-        # RAGの引用（将来）。現状は空。低信頼。
-        citations: List[Dict[str, Any]] = []
-        return SentenceCheckResponse(issues=issues, revisions=revisions, exercise=exercise, citations=citations, confidence="low")
+        # 可能ならRAGの引用を付与
+        citations: List[Citation] = []
+        if settings.rag_enabled and self.chroma and getattr(self.chroma, "get_or_create_collection", None):
+            res = chroma_query_with_policy(
+                self.chroma,
+                collection=COL_DOMAIN_TERMS,
+                query_text=sentence.split()[0] if sentence.split() else "",
+                n_results=3,
+            )
+            if res:
+                docs = (res.get("documents") or [[]])[0]
+                metas = (res.get("metadatas") or [[]])[0]
+                for d, m in zip(docs, metas):
+                    citations.append(Citation(text=d, meta=m))
+        confidence = ConfidenceLevel.medium if citations else ConfidenceLevel.low
+        return SentenceCheckResponse(issues=issues, revisions=revisions, exercise=exercise, citations=citations, confidence=confidence)

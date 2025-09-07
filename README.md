@@ -1,13 +1,13 @@
 # WordPack for English
 
-英単語トレーナー（LLM×RAG×LangGraph）MVP。技術・科学英文の読み・用法・発音の理解を支援します。リポジトリはバックエンド（FastAPI）とフロントエンド（React + Vite）のモノレポ構成です。
+英単語トレーナー（LLM×RAG×LangGraph）。技術・科学英文の読み・用法・発音の理解を支援します。リポジトリはバックエンド（FastAPI）とフロントエンド（React + Vite）のモノレポ構成です。
 
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
 - フロントエンド: React + TypeScript + Vite、単一ページ/4パネル構成（カード/自作文/段落注釈/設定）
-- SRS（簡易SM-2）最小実装: 今日のカード取得・3段階採点に対応
-- 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（フォールバック規則付き）
-- WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択
+- SRS（簡易SM-2, SQLite 永続化）: 今日のカード取得・3段階採点に対応（M6）
+- 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（例外辞書・辞書キャッシュ・タイムアウト付きフォールバック）
+- WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
 
 ---
 
@@ -29,9 +29,17 @@ cd src/frontend
 npm install
 ```
 
-### 1-3. RAG 用インデクスの準備（M3）
+### 1-3. RAG 用インデクスの準備（M3/PR3）
 ```bash
-# 任意: 初回のみ、最小シードを投入（ChromaDB）
+# 任意: 初回のみ、最小シードを投入（ChromaDB, 既定は settings.chroma_persist_dir）
+python -m backend.indexing
+
+# JSONL から投入する場合（例）
+python -m backend.indexing \
+  --word-jsonl data/word_snippets.jsonl \
+  --terms-jsonl data/domain_terms.jsonl
+
+# 永続ディレクトリを上書きする場合
 python -m backend.indexing --persist .chroma
 ```
 
@@ -77,8 +85,9 @@ src/backend/             # 本番用FastAPIアプリ
   config.py              # 環境設定（pydantic-settings）
   logging.py             # structlog設定
   routers/               # エンドポイント群
-  flows/                 # LangGraphベースの処理(プレースホルダ)
-  models/                # pydanticモデル(プレースホルダ)
+  flows/                 # LangGraphベースの処理
+  models/                # pydanticモデル（厳密化済み: Enum/Field制約/例）
+  pronunciation.py       # 発音（cmudict/g2p-en優先・例外辞書/キャッシュ/タイムアウト付き）
 src/frontend/            # React + Vite
   src/components/        # 4パネルのコンポーネント
   src/SettingsContext.tsx
@@ -87,7 +96,7 @@ static/                  # 最小UIの静的ファイル（`app/main.py`用）
 
 ---
 
-## 3. API 概要（MVP現状）
+## 3. API 概要
 FastAPI アプリは `src/backend/main.py`。
 
 - `GET /healthz`
@@ -97,14 +106,14 @@ FastAPI アプリは `src/backend/main.py`。
   - 運用メトリクスのスナップショット。パス別に `p95_ms`, `count`, `errors`, `timeouts` を返す（M6）。
 
 - `POST /api/word/pack`
-  - 周辺知識パック生成（M3: Chroma から近傍を取得し `citations` と `confidence` を付与）。
-  - 発音（M5）: cmudict/g2p-en を優先し、失敗時は規則ベースのフォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - リクエスト例（M5 追加パラメータ）:
+  - 周辺知識パック生成（RAG: Chroma から近傍を取得し `citations` と `confidence` を付与）。
+  - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
+  - リクエスト例（M5 追加パラメータ・Enum化）:
     ```json
     { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
     ```
     - `pronunciation_enabled`: 発音情報の生成 ON/OFF（既定 true）
-    - `regenerate_scope`: `all` | `examples` | `collocations`
+    - `regenerate_scope`: `all` | `examples` | `collocations`（Enum）。
   - レスポンス例（抜粋）:
     ```json
     {
@@ -114,19 +123,17 @@ FastAPI アプリは `src/backend/main.py`。
       "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
       "contrast": [],
       "examples": {"A1": ["converge example."], "B1": [], "C1": [], "tech": []},
-      "etymology": {"note":"TBD","confidence":"low"},
+      "etymology": {"note":"N/A","confidence":"low"},
       "study_card": "この語の要点（暫定）。",
       "citations": [],
       "confidence": "low"
     }
     ```
 
-- `GET /api/word`
-  - 単語情報取得（プレースホルダ）。
-  - レスポンス例: `{ "definition": null, "examples": [] }`
+  
 
 - `POST /api/sentence/check`
-  - 自作文チェック（MVP: issues/revisions/exercise をダミー生成）。
+  - 自作文チェック（RAG 引用と `confidence` を付与、将来LLM統合）。
   - レスポンス例（抜粋）:
     ```json
     { "issues": [{"what":"語法","why":"対象語の使い分け不正確","fix":"共起に合わせて置換"}],
@@ -135,7 +142,7 @@ FastAPI アプリは `src/backend/main.py`。
     ```
 
 - `POST /api/text/assist`
-  - 段落注釈（M3: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。
+  - 段落注釈（RAG: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。簡易要約を返却。
   - レスポンス例（抜粋）:
     ```json
     { "sentences": [{"raw":"Some text","terms":[{"lemma":"Some"}]}], "summary": null, "citations": [] }
@@ -152,10 +159,11 @@ FastAPI アプリは `src/backend/main.py`。
   - 復習カードの採点を記録。簡易SM-2で次回出題時刻を更新。
   - リクエスト例: `{ "item_id": "w:converge", "grade": 2 }`（2=正解,1=部分的,0=不正解）
   - レスポンス例: `{ "ok": true, "next_due": "2025-01-01T12:34:56.000Z" }`
+  - 実装: `src/backend/srs.py`（SQLite 永続化）。復習履歴は `reviews` テーブルに保存され、同時実行はトランザクションで保護されます。
 
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
-- `flows/*` は LangGraph 依存の最小実装（将来差し替え可能）です。
+`flows/*` は LangGraph による処理で、RAG（Chroma）と `citations`/`confidence` の一貫管理を導入済みです。`ReadingAssistFlow` は簡易要約を返し、`FeedbackFlow` はRAG引用を付与します。各ルータにはタグ/summaryが付与され、OpenAPI の可読性を向上しています。
 
 ---
 
@@ -163,7 +171,7 @@ FastAPI アプリは `src/backend/main.py`。
 単一ページで以下の4タブを切替。最小スタイル・セマンティックHTMLを志向。
 
 - カード（`CardPanel.tsx`）
-  - `カードを取得` で本日の一枚を取得（MVPではダミー）、`復習` で採点
+  - `カードを取得` で本日の一枚を取得し、`復習` で採点
   - 使用API: `GET {apiBase}/review/today`, `POST {apiBase}/review/grade`
 
 - 自作文（`SentencePanel.tsx`）
@@ -177,7 +185,7 @@ FastAPI アプリは `src/backend/main.py`。
 - 設定（`SettingsPanel.tsx`）
   - API Base（デフォルト `/api`）
   - 発音の有効/無効トグル（M5）
-  - 再生成スコープ選択（`全体/例文のみ/コロケのみ`）（M5）
+  - 再生成スコープ選択（`全体/例文のみ/コロケのみ`）（M5, Enum）
 
 アクセシビリティ/操作:
 - Alt+1..4 でタブ切替、`/` で主要入力へフォーカス
@@ -186,18 +194,39 @@ FastAPI アプリは `src/backend/main.py`。
 ---
 
 ## 5. テスト
-`pytest` による API の基本動作テストが含まれます。
+`pytest` による統合/E2E/負荷・回帰テストを含みます。
 ```bash
+pytest
+# もしくは従来同様の明示オプション
 pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ```
-- テストは `tests/test_api.py`。LangGraph/Chroma のスタブを挿入して起動します。
-- カバレッジ閾値: 60%（M6 運用・品質）。必要に応じて `--cov-fail-under` を調整してください。
+- カバレッジ閾値は `pytest.ini` に設定（60%）。必要に応じて上書き可。
+- テスト構成:
+  - `tests/test_api.py` … API基本動作（LangGraph/Chroma はスタブ）
+  - `tests/test_integration_rag.py` … LangGraph/Chroma 統合（最小シードで近傍と `citations`/`confidence` を検証）
+  - `tests/test_e2e_backend_frontend.py` … フロント→バックE2E相当のAPIフロー（正常/異常系の健全性）
+  - `tests/test_load_and_regression.py` … 軽負荷スモークとスキーマ回帰チェック
+
+注意:
+- 統合テストはローカルの Chroma クライアント（`chromadb`）を利用し、フィクスチャでテスト専用ディレクトリに最小シードを投入します（環境変数 `CHROMA_PERSIST_DIR` を内部使用）。
+- RAG は `settings.rag_enabled` に従います。既定 `True`。
 
 ---
 
 ## 6. 設定/環境変数
 - `src/backend/config.py`
   - `environment`, `llm_provider`, `embedding_provider`
+  - RAG/Chroma 関連（PR3）:
+    - `rag_enabled` … RAG の有効/無効（既定 true）
+    - `rag_timeout_ms` … 近傍クエリの試行毎タイムアウト（ms）
+    - `rag_max_retries` … 近傍クエリの最大リトライ回数
+    - `rag_rate_limit_per_min` … RAG クエリの毎分レート上限
+    - `chroma_persist_dir` … Chroma 永続ディレクトリ
+    - `chroma_server_url` … 任意の Chroma サーバURL（未指定時はローカル）
+    - APIキー類（必要に応じて）: `openai_api_key`, `azure_openai_api_key`, `voyage_api_key`
+  - SRS（SQLite）
+    - `srs_db_path` … SRS 用 SQLite ファイルのパス（既定 `.data/srs.sqlite3`）
+    - `srs_max_today` … `GET /api/review/today` の最大件数（既定 5）
   - `.env` を読み込みます。
 - `app/config.py`
   - `api_key`, `allowed_origins`（カンマ区切り対応）
@@ -207,13 +236,15 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ## 7. 開発メモ（現状とTODO）
 - フロントエンドAPIパスの整合: Sentence/Assist は `/api/*` に統一済み
 - LangGraph フロー実装
-  - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`（MVPダミー）
-- RAG(ChromaDB) と埋め込み/LLMプロバイダ（M3 実装済み）
-  - `backend/providers.py` に Chroma クライアントファクトリと簡易埋め込み関数を実装
-  - `backend/indexing.py` で最小シードの投入が可能
+  - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`
+- RAG(ChromaDB) と埋め込み/LLMプロバイダ（M3/PR3 導入）
+  - コレクション設計: `word_snippets`, `domain_terms`
+  - 近傍クエリは共通ポリシーで標準化（レート制御/タイムアウト/リトライ/フォールバック）
+  - `backend/providers.py` に Chroma クライアントファクトリ・共通クエリ関数を実装
+  - `backend/indexing.py` で JSONL/最小シードからの投入に対応
 - SRS/発音
   - SRS: `src/backend/srs.py` に簡易SM-2のインメモリ実装を追加（`/api/review/*` が利用）
-  - 発音: `app/pronunciation.py` は今後実装
+  - 発音: `src/backend/pronunciation.py` に実装（cmudict/g2p-en 優先、例外辞書/辞書キャッシュ/タイムアウト付きフォールバック）。`WordPackRequest.pronunciation_enabled` で生成の ON/OFF が可能。
 - CORS/タイムアウト/メトリクス（M6）
   - `src/backend/main.py` に CORS/Timeout/アクセスログ（JSON, structlog）とメトリクス記録を実装
   - `/metrics` で p95/件数/エラー/タイムアウトのスナップショットを返却
@@ -222,7 +253,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ---
 
 ## 8. ライセンス
-TBD
+なし。
 
 ---
 
@@ -246,9 +277,9 @@ graph TD
 ```mermaid
 graph TD
     A[Client: POST /api/text/assist] --> B[ReadingAssistFlow];
-    B --> C["segment(paragraph) - MVP: ピリオドで分割"];
+    B --> C["segment(paragraph) - ピリオドで分割"];
     C --> D{for each sentence};
-    D --> E["analyze(sentence) - MVP: ダミー構文/用語/言い換え"];
+    D --> E["analyze(sentence) - 構文/用語/言い換え"];
     E --> F[AssistedSentence];
     F --> G["TextAssistResponse - sentences/summary/citations"];
 
@@ -263,7 +294,7 @@ graph TD
 graph TD
     A[Client: POST /api/sentence/check] --> B[FeedbackFlow];
     B --> C["run(sentence)"];
-    C --> D["issues / revisions / exercise - MVP: ダミー生成"];
+    C --> D["issues / revisions / exercise"];
     D --> E[SentenceCheckResponse];
 
     subgraph LangGraph_StateGraph
