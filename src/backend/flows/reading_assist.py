@@ -25,6 +25,8 @@ from ..models.text import (
     TermInfo,
 )
 from ..logging import logger
+from ..config import settings
+from ..providers import chroma_query_with_policy, COL_DOMAIN_TERMS
 
 
 class ReadingAssistFlow:
@@ -64,22 +66,20 @@ class ReadingAssistFlow:
         """段落を入力として文ごとの支援情報を返す。RAG の引用を付与（任意）。"""
         sentences = [self._analyze(s) for s in self._segment(paragraph)]
         citations: List[Dict[str, Any]] = []
-        if self.chroma and getattr(self.chroma, "get_or_create_collection", None):
-            for attempt in range(1, 3):
-                try:
-                    col = self.chroma.get_or_create_collection(name="domain_terms")
-                    # 先頭文の先頭語で軽く近傍を引く（MVP）
-                    query = sentences[0].terms[0].lemma if sentences and sentences[0].terms else ""
-                    if query:
-                        res = col.query(query_texts=[query], n_results=3)
-                        docs = (res.get("documents") or [[]])[0]
-                        metas = (res.get("metadatas") or [[]])[0]
-                        for d, m in zip(docs, metas):
-                            citations.append({"text": d, "meta": m})
-                    break
-                except Exception as exc:
-                    logger.warning("chroma_query_failed", attempt=attempt, phase="domain_terms", error=str(exc))
-                    if attempt >= 2:
-                        break
+        if settings.rag_enabled and self.chroma and getattr(self.chroma, "get_or_create_collection", None):
+            # 先頭文の先頭語で軽く近傍を引く（MVP）
+            query = sentences[0].terms[0].lemma if sentences and sentences[0].terms else ""
+            if query:
+                res = chroma_query_with_policy(
+                    self.chroma,
+                    collection=COL_DOMAIN_TERMS,
+                    query_text=query,
+                    n_results=3,
+                )
+                if res:
+                    docs = (res.get("documents") or [[]])[0]
+                    metas = (res.get("metadatas") or [[]])[0]
+                    for d, m in zip(docs, metas):
+                        citations.append({"text": d, "meta": m})
         confidence = "medium" if citations else "low"
         return TextAssistResponse(sentences=sentences, summary=None, citations=citations, confidence=confidence)

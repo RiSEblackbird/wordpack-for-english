@@ -40,8 +40,10 @@
 - サービス起動（別ターミナルで）:
   ```bash
   # Backend（リポジトリルートで）
-  # 事前に（初回のみ）RAGの最小シードを投入できます:
-  #   python -m backend.indexing --persist .chroma
+  # 事前に（初回のみ）RAGインデクスを投入できます（JSONL対応）:
+  #   python -m backend.indexing
+  #   # 例: JSONL から投入
+  #   python -m backend.indexing --word-jsonl data/word_snippets.jsonl --terms-jsonl data/domain_terms.jsonl
   python -m uvicorn backend.main:app --reload --app-dir src
 
   # Frontend
@@ -104,8 +106,9 @@
 
 ## 4. 制約・既知の事項（MVP）
 - エンドポイント整合は文/アシストとも `/api/*` に統一済み
-- LangGraph/RAG/LLM は M3 で RAG の最小導入を実施
+- LangGraph/RAG/LLM は M3/PR3 で RAG の導入を実施
   - `WordPackFlow` と `ReadingAssistFlow` は ChromaDB からの近傍取得により `citations`/`confidence`（low/medium/high, Enum）を付与します（シード未投入時は空/low）
+  - RAG は `rag_enabled` フラグで無効化可能。近傍クエリはレート制御/タイムアウト/リトライ/フォールバックを標準化しています。
   - `FeedbackFlow` は現状ダミー（将来RAG/LLM統合）
 - 日本語UIはMVP文言（用語は今後統一予定）
 - 発音生成は cmudict/g2p-en が使用可能な環境で精度が向上し、未導入時は規則フォールバック（簡易）となります（M5）。`設定` パネルの「発音を有効化」で ON/OFF 可能です。

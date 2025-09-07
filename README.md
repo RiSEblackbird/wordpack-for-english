@@ -29,9 +29,17 @@ cd src/frontend
 npm install
 ```
 
-### 1-3. RAG 用インデクスの準備（M3）
+### 1-3. RAG 用インデクスの準備（M3/PR3）
 ```bash
-# 任意: 初回のみ、最小シードを投入（ChromaDB）
+# 任意: 初回のみ、最小シードを投入（ChromaDB, 既定は settings.chroma_persist_dir）
+python -m backend.indexing
+
+# JSONL から投入する場合（例）
+python -m backend.indexing \
+  --word-jsonl data/word_snippets.jsonl \
+  --terms-jsonl data/domain_terms.jsonl
+
+# 永続ディレクトリを上書きする場合
 python -m backend.indexing --persist .chroma
 ```
 
@@ -196,6 +204,14 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ## 6. 設定/環境変数
 - `src/backend/config.py`
   - `environment`, `llm_provider`, `embedding_provider`
+  - RAG/Chroma 関連（PR3）:
+    - `rag_enabled` … RAG の有効/無効（既定 true）
+    - `rag_timeout_ms` … 近傍クエリの試行毎タイムアウト（ms）
+    - `rag_max_retries` … 近傍クエリの最大リトライ回数
+    - `rag_rate_limit_per_min` … RAG クエリの毎分レート上限
+    - `chroma_persist_dir` … Chroma 永続ディレクトリ
+    - `chroma_server_url` … 任意の Chroma サーバURL（未指定時はローカル）
+    - APIキー類（必要に応じて）: `openai_api_key`, `azure_openai_api_key`, `voyage_api_key`
   - `.env` を読み込みます。
 - `app/config.py`
   - `api_key`, `allowed_origins`（カンマ区切り対応）
@@ -206,9 +222,11 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 - フロントエンドAPIパスの整合: Sentence/Assist は `/api/*` に統一済み
 - LangGraph フロー実装
   - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`（MVPダミー）
-- RAG(ChromaDB) と埋め込み/LLMプロバイダ（M3 実装済み）
-  - `backend/providers.py` に Chroma クライアントファクトリと簡易埋め込み関数を実装
-  - `backend/indexing.py` で最小シードの投入が可能
+- RAG(ChromaDB) と埋め込み/LLMプロバイダ（M3/PR3 導入）
+  - コレクション設計: `word_snippets`, `domain_terms`
+  - 近傍クエリは共通ポリシーで標準化（レート制御/タイムアウト/リトライ/フォールバック）
+  - `backend/providers.py` に Chroma クライアントファクトリ・共通クエリ関数を実装
+  - `backend/indexing.py` で JSONL/最小シードからの投入に対応
 - SRS/発音
   - SRS: `src/backend/srs.py` に簡易SM-2のインメモリ実装を追加（`/api/review/*` が利用）
   - 発音: `src/backend/pronunciation.py` に実装（cmudict/g2p-en 優先、規則フォールバック）。`WordPackRequest.pronunciation_enabled` で生成の ON/OFF が可能。

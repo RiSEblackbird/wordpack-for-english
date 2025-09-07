@@ -30,6 +30,8 @@ from ..models.word import (
 from ..models.common import ConfidenceLevel
 from ..pronunciation import generate_pronunciation
 from ..logging import logger
+from ..config import settings
+from ..providers import chroma_query_with_policy, COL_WORD_SNIPPETS
 
 
 class WordPackFlow:
@@ -58,21 +60,18 @@ class WordPackFlow:
     def _retrieve(self, lemma: str) -> Dict[str, Any]:
         """語の近傍情報を取得（将来: chroma からベクトル近傍）。"""
         citations: List[Dict[str, Any]] = []
-        if self.chroma and getattr(self.chroma, "get_or_create_collection", None):  # server client
-            for attempt in range(1, 3):
-                try:
-                    col = self.chroma.get_or_create_collection(name="word_snippets")
-                    res = col.query(query_texts=[lemma], n_results=3)
-                    # res: {ids, distances, documents, metadatas}
-                    docs = (res.get("documents") or [[]])[0]
-                    metas = (res.get("metadatas") or [[]])[0]
-                    for d, m in zip(docs, metas):
-                        citations.append({"text": d, "meta": m})
-                    break
-                except Exception as exc:
-                    logger.warning("chroma_query_failed", attempt=attempt, phase="word_snippets", error=str(exc))
-                    if attempt >= 2:
-                        break
+        if settings.rag_enabled and self.chroma and getattr(self.chroma, "get_or_create_collection", None):
+            res = chroma_query_with_policy(
+                self.chroma,
+                collection=COL_WORD_SNIPPETS,
+                query_text=lemma,
+                n_results=3,
+            )
+            if res:
+                docs = (res.get("documents") or [[]])[0]
+                metas = (res.get("metadatas") or [[]])[0]
+                for d, m in zip(docs, metas):
+                    citations.append({"text": d, "meta": m})
         return {"lemma": lemma, "citations": citations}
 
     def _synthesize(
