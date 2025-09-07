@@ -1,10 +1,16 @@
 import time
+import asyncio
 from fastapi import FastAPI, Request
 from starlette.middleware.cors import CORSMiddleware
 try:
     from starlette.middleware.timeout import TimeoutMiddleware  # type: ignore
 except Exception:  # Starlette が古い場合などに備えたフォールバック
     TimeoutMiddleware = None  # type: ignore[assignment]
+
+try:
+    from starlette.exceptions import TimeoutException  # type: ignore
+except Exception:
+    TimeoutException = None  # type: ignore[assignment]
 
 from .config import settings  # noqa: F401 - imported for side effects or future use
 from .logging import configure_logging, logger
@@ -39,6 +45,8 @@ async def access_log_and_metrics(request: Request, call_next):
         return response
     except Exception as exc:
         is_error = True
+        if (TimeoutException is not None and isinstance(exc, TimeoutException)) or isinstance(exc, asyncio.TimeoutError):
+            is_timeout = True
         raise exc
     finally:
         latency_ms = (time.time() - start) * 1000
