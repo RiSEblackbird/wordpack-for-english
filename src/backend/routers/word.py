@@ -1,25 +1,27 @@
 from fastapi import APIRouter
 
 from ..flows.word_pack import WordPackFlow
+from ..models.word import WordPackRequest, WordPack, WordLookupResponse
 
 router = APIRouter()
 
 
-@router.post("/pack")
-async def generate_word_pack() -> dict[str, str]:
-    """Generate a new word pack.
+@router.post("/pack", response_model=WordPack)
+async def generate_word_pack(req: WordPackRequest) -> WordPack:
+    """Generate a new word pack using LangGraph flow.
 
-    TODO: use ``WordPackFlow`` to create real packs.
+    指定した語について、発音・語義・共起・対比・例文・語源などを
+    まとめた学習パックを生成して返す（MVP はダミー）。
     """
     flow = WordPackFlow()
-    _ = flow  # placeholder to avoid unused variable
-    return {"detail": "word pack generation pending"}
+    return flow.run(req.lemma)
 
 
-@router.get("")
-async def get_word() -> dict[str, str]:
-    """Retrieve information about a word.
+@router.get("", response_model=WordLookupResponse)
+async def get_word() -> WordLookupResponse:
+    """Retrieve information about a word (placeholder).
 
-    TODO: implement word lookup logic.
+    単語の簡易参照エンドポイント（プレースホルダ）。
+    実装後は辞書検索やキャッシュからの取得を想定。
     """
-    return {"detail": "word lookup pending"}
+    return WordLookupResponse(definition=None, examples=[])

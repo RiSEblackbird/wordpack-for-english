@@ -171,3 +171,50 @@ pytest -q
 
 ## 8. ライセンス
 TBD
+
+---
+
+## 9. 付録: LangGraph ベースのAI処理フロー（Mermaid）
+
+### 9-1. WordPackFlow（語彙パック生成）
+```mermaid
+graph TD
+    A[Client: POST /api/word/pack] --> B[WordPackFlow]
+    B --> C[_retrieve(lemma) \n 将来: ChromaDB 近傍検索]
+    C --> D[_synthesize(lemma) \n 将来: LLM で整形]
+    D --> E[WordPack Response]
+
+    subgraph LangGraph StateGraph
+        C
+        D
+    end
+```
+
+### 9-2. ReadingAssistFlow（リーディング支援）
+```mermaid
+graph TD
+    A[Client: POST /api/text/assist] --> B[ReadingAssistFlow]
+    B --> C[_segment(paragraph) \n MVP: ピリオドで分割]
+    C --> D{for each sentence}
+    D --> E[_analyze(sentence) \n MVP: ダミー構文/用語/言い換え]
+    E --> F[AssistedSentence]
+    F --> G[TextAssistResponse \n sentences/summary/citations]
+
+    subgraph LangGraph StateGraph
+        C
+        E
+    end
+```
+
+### 9-3. FeedbackFlow（自作文フィードバック）
+```mermaid
+graph TD
+    A[Client: POST /api/sentence/check] --> B[FeedbackFlow]
+    B --> C[run(sentence)]
+    C --> D[issues / revisions / exercise \n MVP: ダミー生成]
+    D --> E[SentenceCheckResponse]
+
+    subgraph LangGraph StateGraph
+        C
+    end
+```

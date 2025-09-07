@@ -1,16 +1,17 @@
 from fastapi import APIRouter
 
 from ..flows.reading_assist import ReadingAssistFlow
+from ..models.text import TextAssistRequest, TextAssistResponse
 
 router = APIRouter()
 
 
-@router.post("/assist")
-async def assist_text() -> dict[str, str]:
-    """Provide reading assistance for a given text.
+@router.post("/assist", response_model=TextAssistResponse)
+async def assist_text(req: TextAssistRequest) -> TextAssistResponse:
+    """Provide reading assistance for a given paragraph using LangGraph flow.
 
-    TODO: hook into ``ReadingAssistFlow`` for real assistance.
+    段落テキストを入力として、文分割・用語注・パラフレーズ等の
+    リーディング支援情報を返す。MVP はダミー応答。
     """
     flow = ReadingAssistFlow()
-    _ = flow  # placeholder
-    return {"detail": "reading assistance pending"}
+    return flow.run(req.paragraph)
