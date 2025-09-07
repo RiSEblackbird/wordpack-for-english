@@ -104,7 +104,7 @@ FastAPI アプリは `src/backend/main.py`。
     { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
     ```
     - `pronunciation_enabled`: 発音情報の生成 ON/OFF（既定 true）
-    - `regenerate_scope`: `all` | `examples` | `collocations`（Enum）
+    - `regenerate_scope`: `all` | `examples` | `collocations`（Enum）。MVPでは全体生成しつつ、`examples` は例文のみ強化、`collocations` は共起のみダミー加筆。
   - レスポンス例（抜粋）:
     ```json
     {
@@ -121,9 +121,7 @@ FastAPI アプリは `src/backend/main.py`。
     }
     ```
 
-- `GET /api/word`
-  - 単語情報取得（プレースホルダ）。
-  - レスポンス例: `{ "definition": null, "examples": [] }`
+  
 
 - `POST /api/sentence/check`
   - 自作文チェック（MVP: issues/revisions/exercise をダミー生成）。
@@ -213,7 +211,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - `backend/indexing.py` で最小シードの投入が可能
 - SRS/発音
   - SRS: `src/backend/srs.py` に簡易SM-2のインメモリ実装を追加（`/api/review/*` が利用）
-  - 発音: `app/pronunciation.py` は今後実装
+  - 発音: `src/backend/pronunciation.py` に実装（cmudict/g2p-en 優先、規則フォールバック）。`WordPackRequest.pronunciation_enabled` で生成の ON/OFF が可能。
 - CORS/タイムアウト/メトリクス（M6）
   - `src/backend/main.py` に CORS/Timeout/アクセスログ（JSON, structlog）とメトリクス記録を実装
   - `/metrics` で p95/件数/エラー/タイムアウトのスナップショットを返却

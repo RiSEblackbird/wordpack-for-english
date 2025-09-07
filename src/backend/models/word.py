@@ -20,15 +20,22 @@ class WordPackRequest(BaseModel):
 
     model_config = ConfigDict(json_schema_extra={
         "examples": [
-            {"lemma": "converge", "pronunciation_enabled": True, "regenerate_scope": "all"}
-        ]
+            {"lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all"},
+            {"lemma": "converge", "pronunciation_enabled": false, "regenerate_scope": "examples"},
+            {"lemma": "converge", "regenerate_scope": "collocations"}
+        ],
+        "x-schema-version": "0.3.0"
     })
 
     lemma: str = Field(min_length=1, max_length=64, description="見出し語（1..64文字）")
     pos: Optional[str] = None
     pronunciation_enabled: bool = True
     regenerate_scope: RegenerateScope = Field(
-        default=RegenerateScope.all, description="再生成スコープ: all/examples/collocations"
+        default=RegenerateScope.all,
+        description=(
+            "再生成スコープ。MVPでは全体生成の上で、examples=例文セクション強化、"
+            "collocations=共起セクションのみダミー加筆。"
+        ),
     )
 
 
@@ -115,12 +122,7 @@ class WordPack(BaseModel):
     confidence: ConfidenceLevel = ConfidenceLevel.low
 
 
-class WordLookupResponse(BaseModel):
-    """Response model for word lookup (placeholder).
-
-    語義・用例などの簡易な参照結果を返すプレースホルダ。
-    本格実装では `WordPack` からの要約や辞書 API 連携を想定。
-    """
-
-    definition: Optional[str] = None
-    examples: List[str] = []
+"""
+GET /api/word プレースホルダは PR2 で廃止。
+必要になれば専用エンドポイント設計の上で別モデルを追加する。
+"""

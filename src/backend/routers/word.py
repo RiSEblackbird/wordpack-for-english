@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from ..flows.word_pack import WordPackFlow
 from ..providers import ChromaClientFactory
-from ..models.word import WordPackRequest, WordPack, WordLookupResponse
+from ..models.word import WordPackRequest, WordPack
 
 router = APIRouter(tags=["word"])
 
@@ -30,16 +30,3 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     )
 
 
-@router.get(
-    "",
-    response_model=WordLookupResponse,
-    summary="単語の簡易参照（プレースホルダ）",
-    response_description="語義や例文の最小情報を返します",
-)
-async def get_word() -> WordLookupResponse:
-    """Retrieve information about a word (placeholder).
-
-    単語の簡易参照エンドポイント（プレースホルダ）。
-    実装後は辞書検索やキャッシュからの取得を想定。
-    """
-    return WordLookupResponse(definition=None, examples=[])
