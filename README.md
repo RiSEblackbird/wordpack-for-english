@@ -86,20 +86,31 @@ FastAPI アプリは `src/backend/main.py`。
   - ヘルスチェック。レスポンス: `{ "status": "ok" }`
 
 - `POST /api/word/pack`
-  - 周辺知識パック生成（現在はプレースホルダ）。
-  - レスポンス例: `{ "detail": "word pack generation pending" }`
+  - 周辺知識パック生成（MVP: スキーマ準拠のダミーを返却）。
+  - レスポンス例（抜粋）:
+    ```json
+    { "lemma": "converge", "senses": [{"id":"s1","gloss_ja":"意味（暫定）"}], "etymology": {"note":"TBD","confidence":"low"} }
+    ```
 
 - `GET /api/word`
   - 単語情報取得（プレースホルダ）。
-  - レスポンス例: `{ "detail": "word lookup pending" }`
+  - レスポンス例: `{ "definition": null, "examples": [] }`
 
 - `POST /api/sentence/check`
-  - 自作文チェック（プレースホルダ）。
-  - レスポンス例: `{ "detail": "sentence checking pending" }`
+  - 自作文チェック（MVP: issues/revisions/exercise をダミー生成）。
+  - レスポンス例（抜粋）:
+    ```json
+    { "issues": [{"what":"語法","why":"対象語の使い分け不正確","fix":"共起に合わせて置換"}],
+      "revisions": [{"style":"natural","text":"..."}],
+      "exercise": {"q":"Fill the blank: ...","a":"..."} }
+    ```
 
 - `POST /api/text/assist`
-  - 段落注釈（プレースホルダ）。
-  - レスポンス例: `{ "detail": "reading assistance pending" }`
+  - 段落注釈（MVP: ピリオド分割 + 簡易構文/語注/パラフレーズ）。
+  - レスポンス例（抜粋）:
+    ```json
+    { "sentences": [{"raw":"Some text","terms":[{"lemma":"Some"}]}], "summary": null, "citations": [] }
+    ```
 
 - `GET /api/review/today`
   - 本日の復習アイテム取得（プレースホルダ）。
@@ -111,7 +122,7 @@ FastAPI アプリは `src/backend/main.py`。
 
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
-- `flows/*` は LangGraph 依存のプレースホルダ実装です。
+- `flows/*` は LangGraph 依存の最小実装（将来差し替え可能）です。
 
 ---
 
@@ -124,9 +135,11 @@ FastAPI アプリは `src/backend/main.py`。
 
 - 自作文（`SentencePanel.tsx`）
   - 文入力→`チェック`。使用API: `POST {apiBase}/sentence/check`
+  - 返却された `issues/revisions/exercise` を画面に表示
 
 - 段落注釈（`AssistPanel.tsx`）
   - 段落入力→`アシスト`。使用API: `POST {apiBase}/text/assist`
+  - 返却された `sentences/summary` を画面に表示
 
 - 設定（`SettingsPanel.tsx`）
   - API Base の入力のみ（デフォルト `/api`）。
@@ -156,12 +169,9 @@ pytest -q
 ---
 
 ## 7. 開発メモ（現状とTODO）
-- フロントエンドAPIパスの整合
-  - Sentence: `/sentence` → `/api/sentence/check` に合わせる
-  - Assist: `/assist` → `/api/text/assist` に合わせる
-  - Cards: バックエンドに `/cards/*` ルータ未実装 → 実装 or フロント側を `/api/review/*` 等に寄せる
+- フロントエンドAPIパスの整合: Sentence/Assist は `/api/*` に統一済み
 - LangGraph フロー実装
-  - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`
+  - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`（MVPダミー）
 - RAG(ChromaDB) と埋め込み/LLMプロバイダ
   - `backend/providers.py` のプロバイダ実装
 - SRS/発音

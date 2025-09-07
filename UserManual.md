@@ -74,7 +74,7 @@
 3) 「チェック」をクリック
 4) 結果: 簡易ダミーのフィードバック（issues/revisions/mini exercise）を表示
 
-ヒント: 現状のバックエンドは `POST /api/sentence/check` を提供しています。ベースURLが `/api` の場合、そのまま動作します。
+ヒント: バックエンドは `POST /api/sentence/check` を提供します。ベースURLが `/api` の場合、そのまま動作します。
 
 ### 2-4. アシスト（段落注釈）パネルの使い方
 1) 「アシスト」を選択
@@ -94,24 +94,21 @@
 ## 3. 使い方の流れ（例）
 1) 設定パネルで API ベースURL を入力
 2) 文パネルで英文を入力して「チェック」
-3) アシストパネルを使う場合は、ベースURLを `…/api/text` に切り替えて「アシスト」
+3) アシストパネルで段落を貼り付けて「アシスト」
 
 ---
 
 ## 4. 制約・既知の事項（MVP）
-- エンドポイント不整合（フロント→バック）
-  - 文パネル: OK（`/api/sentence/check`）
-  - アシスト: フロントは `/assist`、バックは `/api/text/assist`（要ベースURL切替 or フロント修正）
-  - カード: フロントは `/cards/*`、バックは `/api/review/*`（未接続）
+- エンドポイント整合は文/アシストとも `/api/*` に統一済み
 - LangGraph/RAG/LLM は最小ダミー実装
   - `WordPackFlow/ReadingAssistFlow/FeedbackFlow` は将来差し替え可能な最小の戻り値を返します
-- 日本語UIはMVP文言（今後用語の統一予定）
+- 日本語UIはMVP文言（用語は今後統一予定）
 
 ---
 
 ## 5. トラブルシュート
 - 404 が返る
-  - ベースURLとエンドポイントの組み合わせを確認（アシストは `…/api/text` ベースに切替）
+  - ベースURLとエンドポイントの組み合わせを確認（例: `…/api/sentence/check`, `…/api/text/assist`）
 - CORS エラー
   - ローカル開発時はフロントを `npm run dev`、バックエンドを `uvicorn … --reload` で起動し、`Settings` で `http://127.0.0.1:8000/api` を設定
 - 変更が反映されない
