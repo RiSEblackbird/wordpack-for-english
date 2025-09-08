@@ -37,10 +37,32 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     chroma_client = ChromaClientFactory().create_client() if settings.rag_enabled else None
     llm = get_llm_provider()
     flow = WordPackFlow(chroma_client=chroma_client, llm=llm)
-    return flow.run(
-        req.lemma,
-        pronunciation_enabled=req.pronunciation_enabled,
-        regenerate_scope=req.regenerate_scope,
-    )
+    try:
+        return flow.run(
+            req.lemma,
+            pronunciation_enabled=req.pronunciation_enabled,
+            regenerate_scope=req.regenerate_scope,
+        )
+    except RuntimeError as exc:
+        msg = str(exc)
+        # RAG が有効かつ strict で引用ゼロなど、依存不足に起因するエラーは 424 に変換
+        if (
+            settings.rag_enabled
+            and settings.strict_mode
+            and (
+                "no citations" in msg.lower()
+                or "chromadb module is required" in msg.lower()
+                or "failed to initialize chroma client" in msg.lower()
+            )
+        ):
+            raise HTTPException(
+                status_code=424,
+                detail={
+                    "message": "RAG dependency not ready or no citations (strict mode)",
+                    "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
+                },
+            ) from exc
+        # それ以外は既定のハンドリングへ委譲
+        raise
 
 

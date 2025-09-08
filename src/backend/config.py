@@ -60,6 +60,20 @@ class Settings(BaseSettings):
         description="Rate limit for RAG queries per minute / RAGクエリの毎分上限",
     )
 
+    # --- Auto seed on startup (optional) ---
+    auto_seed_on_startup: bool = Field(
+        default=False,
+        description="Automatically seed Chroma collections on API startup / 起動時に自動シード",
+    )
+    auto_seed_word_jsonl: str | None = Field(
+        default=None,
+        description="Optional JSONL path for word_snippets to seed on startup / 起動時シード用のword_snippets JSONL",
+    )
+    auto_seed_terms_jsonl: str | None = Field(
+        default=None,
+        description="Optional JSONL path for domain_terms to seed on startup / 起動時シード用のdomain_terms JSONL",
+    )
+
     # --- Chroma 設定（永続ディレクトリ or 将来のリモート URL） ---
     chroma_persist_dir: str = Field(
         default=".chroma",

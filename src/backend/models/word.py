@@ -67,8 +67,7 @@ class ContrastItem(BaseModel):
     with_: str = Field(alias="with")
     diff_ja: str
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class Examples(BaseModel):

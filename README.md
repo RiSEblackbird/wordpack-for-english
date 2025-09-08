@@ -50,6 +50,11 @@ docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
 ```
 ※ `STRICT_MODE=true` かつ `RAG_ENABLED=true` の場合、シード未投入だと引用0件で WordPack 生成が失敗します（意図的なFail-Fast）。先に上記のシードを実行してください。
 
+失敗時のHTTP応答（重要）:
+- RAG 依存が未準備（chromadb未導入/インデックス未投入 等）で WordPack 生成に必要な引用が得られない場合、APIは **424 Failed Dependency** を返します。
+- 例: `POST /api/word/pack` → 424, body: `{ "detail": { "message": "RAG dependency not ready or no citations (strict mode)", "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma" } }`
+- 対処: 上記のシーディングコマンドを実行し、再試行してください。
+
 ### 1-4. バックエンド起動
 ```bash
 # リポジトリルートで
@@ -78,6 +83,11 @@ docker compose up --build
   - backend: `uvicorn --reload` + ボリュームマウント `.:/app`
   - frontend: Vite dev サーバ + ボリュームマウント `src/frontend:/app`
 - フロントからの API 呼び出しは Vite のプロキシ設定で `http://backend:8000` に転送されます。
+
+起動時自動シード（新機能）:
+- 既定で `AUTO_SEED_ON_STARTUP=true`。バックエンド起動時に Chroma へ最小シードを自動投入します。
+- JSONL からの自動シードも可能: `AUTO_SEED_WORD_JSONL`, `AUTO_SEED_TERMS_JSONL` を設定。
+- 失敗してもAPIは起動し、WordPackは依存未満で 424 を返します（`/api/word/pack`）。
 
 Tips (Windows)：Vite のファイル監視が不安定な場合、`CHOKIDAR_USEPOLLING=1` を環境変数に設定してください（compose の service へ追加可能）。
 
@@ -349,6 +359,10 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - 新API: `state_schema` を要求 → 最小 `TypedDict` を自動指定
 - これにより、LangGraph の軽微な API 変更でも 500 を避けられます。
 - もし `POST /api/review/grade` などで 500 が出た場合は、コンテナログに `StateGraph.__init__() missing 1 required positional argument: 'state_schema'` がないか確認してください。最新版では修正済みです。
+
+### 更新履歴（短報）
+- 2025-09-08: WordPack 生成時の NameError（`CollocationLists` 未定義）を修正。`src/backend/flows/word_pack.py` に `CollocationLists`/`ContrastItem` をインポート追加。Docker/ローカルとも再起動・再ビルドで解消。
+- 2025-09-08: `ContrastItem` の Pydantic v2 エイリアス設定を修正（`model_config = ConfigDict(populate_by_name=True)`）。`contrast` の各要素は API では `{"with": string, "diff_ja": string}` として返り、内部モデルでは `with_` フィールドで受け付けます。
 
 ---
 

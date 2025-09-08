@@ -11,9 +11,11 @@ from ..models.word import (
     WordPack,
     Sense,
     Collocations,
+    CollocationLists,
     Etymology,
     Pronunciation,
     Examples,
+    ContrastItem,
     RegenerateScope,
 )
 from ..models.common import ConfidenceLevel, Citation

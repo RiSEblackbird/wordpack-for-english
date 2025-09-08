@@ -59,6 +59,17 @@ docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
 ```
 `STRICT_MODE=true` かつ `RAG_ENABLED=true` の場合、シード未投入だと WordPack 生成時に「RAGの引用が0件」でエラーになります。先に上記のシードを実行してください。
 
+失敗時の表示/対処（重要）:
+- WordPack 生成のバックエンド依存（Chroma/インデクス）が未準備のとき、フロントに 424 (Failed Dependency) が返ります。
+- 画面のエラーメッセージに従い、バックエンド側で以下を実行してください。
+  ```bash
+  # リポジトリルートで
+  python -m backend.indexing --persist .chroma
+  # Docker の場合
+  docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
+  ```
+- 実行後に再読み込みして、WordPack の生成を再度お試しください。
+
 
 ---
 
@@ -186,9 +197,16 @@ docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
     pip install -U -r requirements.txt
     docker compose build --no-cache && docker compose up
     ```
- - Docker 起動時に Pydantic の ValidationError（`Extra inputs are not permitted`）が出る
-   - `.env` に旧サンプルや別アプリのキー（例: `API_KEY`, `ALLOWED_ORIGINS`）が残っている可能性があります。
-   - 現行のバックエンド設定（`src/backend/config.py`）は未使用キーを無視するよう修正済みです（`extra="ignore"`）。再起動して問題が解消するか確認してください。
+- 500 Internal Server Error（WordPack 生成時）で `NameError: name 'CollocationLists' is not defined` と出る
+  - 原因: `src/backend/flows/word_pack.py` で `CollocationLists`（および `ContrastItem`）のインポート抜け。
+  - 対応: 最新版では修正済み。ローカルは `git pull` → 再起動、Docker は `docker compose build --no-cache && docker compose up` を実行してください。
+- Docker 起動時に Pydantic の ValidationError（`Extra inputs are not permitted`）が出る
+  - `.env` に旧サンプルや別アプリのキー（例: `API_KEY`, `ALLOWED_ORIGINS`）が残っている可能性があります。
+  - 現行のバックエンド設定（`src/backend/config.py`）は未使用キーを無視するよう修正済みです（`extra="ignore"`）。再起動して問題が解消するか確認してください。
+- 500 Internal Server Error で `ValidationError: 1 validation error for ContrastItem with Field required` が出る
+  - 原因: Pydantic v2 のエイリアス設定が未適用で、`contrast` 要素の `with` が内部フィールド `with_` にマッピングされず必須エラーになっていました。
+  - 対応: `src/backend/models/word.py` の `ContrastItem` を `model_config = ConfigDict(populate_by_name=True)` へ修正済み。最新版へ更新し再起動（Docker は `docker compose build --no-cache && docker compose up`）。
+  - 補足: API レスポンスの `contrast` は `[{"with": string, "diff_ja": string}]` の形で返ります。
 
 ---
 

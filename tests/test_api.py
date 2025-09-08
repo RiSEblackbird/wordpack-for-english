@@ -111,6 +111,24 @@ def test_review_stats(client):
     assert isinstance(j["recent"], list)
 
 
+def test_word_pack_returns_424_when_rag_strict_and_no_citations(monkeypatch):
+    # strict + RAG を有効化し、chromadb を外して依存未満を再現
+    import os, sys
+    monkeypatch.setenv("STRICT_MODE", "true")
+    monkeypatch.setenv("RAG_ENABLED", "true")
+    sys.modules.pop("chromadb", None)
+    # backend.config をリロードして settings を反映
+    sys.modules.pop("backend.config", None)
+    sys.modules.pop("backend.providers", None)
+    from backend.main import app
+    from fastapi.testclient import TestClient
+    client = TestClient(app)
+    r = client.post("/api/word/pack", json={"lemma": "nohit"})
+    assert r.status_code == 424
+    body = r.json()
+    assert "detail" in body
+
+
 def test_review_popular(client):
     resp = client.get("/api/review/popular?limit=5")
     assert resp.status_code == 200
