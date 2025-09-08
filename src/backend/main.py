@@ -16,6 +16,9 @@ from .config import settings  # noqa: F401 - imported for side effects or future
 from .logging import configure_logging, logger
 from .routers import health, review, sentence, text, word
 from .metrics import registry
+from .config import settings
+from .middleware import RequestIDMiddleware, RateLimitMiddleware
+from .providers import shutdown_providers
 
 configure_logging()
 app = FastAPI(title="WordPack API", version="0.3.0")
@@ -33,11 +36,25 @@ app.add_middleware(
 if TimeoutMiddleware is not None:
     app.add_middleware(TimeoutMiddleware, timeout=10)
 
+# リクエストID付与（全リクエスト）
+app.add_middleware(RequestIDMiddleware)
+
+# レート制限（IP/ユーザ, 429応答）。必要に応じて環境変数で閾値を調整
+app.add_middleware(
+    RateLimitMiddleware,
+    ip_capacity_per_minute=settings.rate_limit_per_min_ip,
+    user_capacity_per_minute=settings.rate_limit_per_min_user,
+)
+
 
 @app.middleware("http")
 async def access_log_and_metrics(request: Request, call_next):
     start = time.time()
     path = request.url.path
+    method = request.method
+    request_id = getattr(request.state, "request_id", None)
+    client_ip = request.client.host if request.client else "unknown"
+    ua = request.headers.get("user-agent", "-")
     is_error = False
     is_timeout = False
     try:
@@ -51,10 +68,26 @@ async def access_log_and_metrics(request: Request, call_next):
     finally:
         latency_ms = (time.time() - start) * 1000
         registry.record(path, latency_ms, is_error=is_error, is_timeout=is_timeout)
-        logger.info("request_complete", path=path, latency_ms=latency_ms)
+        logger.info(
+            "request_complete",
+            path=path,
+            method=method,
+            latency_ms=latency_ms,
+            is_error=is_error,
+            is_timeout=is_timeout,
+            request_id=request_id,
+            client_ip=client_ip,
+            user_agent=ua,
+        )
 
 app.include_router(word.router, prefix="/api/word")  # 語彙関連エンドポイント
 app.include_router(sentence.router, prefix="/api/sentence")  # 例文チェック関連
 app.include_router(text.router, prefix="/api/text")  # リーディング支援関連
 app.include_router(review.router, prefix="/api/review")  # 復習（SRS）関連
 app.include_router(health.router)  # ヘルスチェック
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    # 共有スレッドプールなどのリソースを解放
+    shutdown_providers()

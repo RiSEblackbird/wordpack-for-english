@@ -12,6 +12,7 @@ from ..models.review import (
     ReviewGradeByLemmaRequest,
     ReviewStatsResponse,
     ReviewCard,
+    ReviewCardMetaResponse,
 )
 
 router = APIRouter(tags=["review"])
@@ -41,6 +42,21 @@ async def review_grade_by_lemma(req: ReviewGradeByLemmaRequest) -> ReviewGradeRe
     - id 形式: "w:<lemma>"
     - front: lemma
     - back: WordPack.study_card
+
+    Request schema (pydantic): ReviewGradeByLemmaRequest
+      - lemma: str (1..64)
+      - grade: int (0|1|2)
+
+    Response schema: ReviewGradeResponse
+      - ok: bool
+      - next_due: ISO8601 datetime (UTC)
+
+    Errors:
+      - 422: validation error (e.g., empty lemma / grade out of range)
+      - 500: failed to grade newly created card
+
+    Example:
+      {"lemma": "converge", "grade": 2} -> {"ok": true, "next_due": "2025-01-01T12:34:56.000Z"}
     """
     card_id = f"w:{req.lemma}"
     # 既存カードがなければ WordPack を用いて back を用意し作成
@@ -76,3 +92,40 @@ async def review_popular(limit: int = 10) -> list[ReviewCard]:
     """Return popular cards ordered by number of reviews (desc)."""
     items = store.get_popular(limit=limit)
     return [ReviewCard(id=it.id, front=it.front, back=it.back) for it in items]
+
+
+@router.get("/card_by_lemma", response_model=ReviewCardMetaResponse, response_model_exclude_none=True, summary="レンマからSRSメタを取得（存在しない場合404）")
+async def review_card_by_lemma(lemma: str) -> ReviewCardMetaResponse:
+    """Return SRS meta for the lemma's card.
+
+    - id 形式: "w:<lemma>"
+    - 取得のみ。存在しなければ 404
+
+    Query parameters:
+      - lemma: str (required)
+
+    Response schema: ReviewCardMetaResponse
+      - repetitions: int
+      - interval_days: int
+      - due_at: ISO8601 datetime (UTC)
+
+    Errors:
+      - 422: if lemma is empty
+      - 404: if card not found
+
+    Example:
+      GET /api/review/card_by_lemma?lemma=converge ->
+      {"repetitions": 3, "interval_days": 6, "due_at": "2025-01-01T12:34:56.000Z"}
+    """
+    if not lemma or not lemma.strip():
+        raise HTTPException(status_code=422, detail="lemma is required")
+
+    card_id = f"w:{lemma.strip()}"
+    meta = store.get_card_meta(card_id)
+    if meta is None:
+        raise HTTPException(status_code=404, detail="card not found")
+    return ReviewCardMetaResponse(
+        repetitions=meta.repetitions,
+        interval_days=meta.interval_days,
+        due_at=meta.due_at,
+    )

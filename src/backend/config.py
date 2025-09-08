@@ -23,6 +23,24 @@ class Settings(BaseSettings):
         default="openai",
         description="Embedding service provider / 利用する埋め込みプロバイダ",
     )
+    llm_model: str = Field(
+        default="gpt-5-mini",
+        description="LLM model name or deployment / 利用するLLMモデル名（Azureではデプロイ名）",
+    )
+    embedding_model: str = Field(
+        default="text-embedding-3-small",
+        description="Embedding model name / 埋め込みモデル名",
+    )
+
+    # --- LLM 呼出しのタイムアウト/リトライ ---
+    llm_timeout_ms: int = Field(
+        default=8000,
+        description="Per-attempt timeout for LLM calls (ms) / LLM呼出しの試行毎タイムアウト(ms)",
+    )
+    llm_max_retries: int = Field(
+        default=2,
+        description="Max retries for LLM calls / LLM呼出しの最大リトライ回数",
+    )
 
     # --- RAG 制御（導入のみ・フラグで無効化可） ---
     rag_enabled: bool = Field(
@@ -52,10 +70,15 @@ class Settings(BaseSettings):
         description="Optional Chroma server URL / 任意の Chroma サーバURL（未指定ならローカル）",
     )
 
-    # --- API Keys（運用時に設定。未設定ならダミー動作） ---
+    # --- API Keys / Provider Specific ---
     openai_api_key: str | None = Field(default=None, description="OpenAI API Key")
     azure_openai_api_key: str | None = Field(default=None, description="Azure OpenAI API Key")
     voyage_api_key: str | None = Field(default=None, description="Voyage API Key")
+
+    # Azure OpenAI 用（エンドポイント/デプロイ/バージョン）
+    azure_openai_endpoint: str | None = Field(default=None, description="Azure OpenAI endpoint URL")
+    azure_openai_deployment: str | None = Field(default=None, description="Azure OpenAI deployment name (model)")
+    azure_openai_api_version: str = Field(default="2024-02-15-preview", description="Azure OpenAI API version")
 
     # --- SRS（復習）の永続化設定 ---
     srs_db_path: str = Field(
@@ -66,6 +89,17 @@ class Settings(BaseSettings):
         default=5,
         description="Max items to return for today's review / 本日の最大出題数",
     )
+
+    # --- Operations/Observability (PR4) ---
+    rate_limit_per_min_ip: int = Field(
+        default=240,
+        description="Per-IP API requests per minute / IP単位の毎分上限",
+    )
+    rate_limit_per_min_user: int = Field(
+        default=240,
+        description="Per-user API requests per minute / ユーザ単位の毎分上限（X-User-Id）",
+    )
+    sentry_dsn: str | None = Field(default=None, description="Sentry DSN (enable if set)")
 
     class Config:
         env_file = ".env"

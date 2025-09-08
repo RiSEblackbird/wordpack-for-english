@@ -281,6 +281,32 @@ class SRSSQLiteStore:
         finally:
             conn.close()
 
+    def get_card_meta(self, item_id: str) -> Optional[ReviewItem]:
+        """Return SRS metadata for a card if it exists.
+
+        Includes repetitions, interval_days, and due_at. Returns None if not found.
+        """
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                "SELECT id, front, back, repetitions, interval_days, ease, due_at FROM cards WHERE id = ?;",
+                (item_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return ReviewItem(
+                id=row["id"],
+                front=row["front"],
+                back=row["back"],
+                repetitions=int(row["repetitions"]),
+                interval_days=int(row["interval_days"]),
+                ease=float(row["ease"]),
+                due_at=datetime.fromisoformat(row["due_at"]),
+            )
+        finally:
+            conn.close()
+
     # --- stats & history ---
     def get_stats(self) -> Tuple[int, int]:
         """Return (due_now_count, reviewed_today_count).

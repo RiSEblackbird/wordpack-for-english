@@ -51,6 +51,7 @@ python -m uvicorn backend.main:app --reload --app-dir src
 ```
 - 既定ポート: `http://127.0.0.1:8000`
 - ヘルスチェック: `GET /healthz`
+- ヘルスチェックは Docker Compose の `healthcheck` でも監視されます（PR4）。
 
 ### 1-5. フロントエンド起動
 ```bash
@@ -103,6 +104,8 @@ FastAPI アプリは `src/backend/main.py`。
 
 - `GET /metrics`
   - 運用メトリクスのスナップショット。パス別に `p95_ms`, `count`, `errors`, `timeouts` を返す（M6）。
+  - 併せてアクセスログは JSON 構造化で出力され、`request_complete` に以下フィールドを含みます（PR4）:
+    - `request_id`, `path`, `method`, `latency_ms`, `is_error`, `is_timeout`, `client_ip`, `user_agent`
 
 - `POST /api/word/pack`
   - 周辺知識パック生成（RAG: Chroma から近傍を取得し `citations` と `confidence` を付与）。
@@ -132,7 +135,8 @@ FastAPI アプリは `src/backend/main.py`。
   
 
 - `POST /api/sentence/check`
-  - 自作文チェック（RAG 引用と `confidence` を付与、将来LLM統合）。
+  - 自作文チェック（RAG 引用と `confidence` を付与）。
+  - LLM が有効な場合、issues/revisions/mini exercise を安全に補強します（失敗時はフォールバック）。
   - レスポンス例（抜粋）:
     ```json
     { "issues": [{"what":"語法","why":"対象語の使い分け不正確","fix":"共起に合わせて置換"}],
@@ -141,7 +145,8 @@ FastAPI アプリは `src/backend/main.py`。
     ```
 
 - `POST /api/text/assist`
-  - 段落注釈（RAG: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。簡易要約を返却。
+  - 段落注釈（RAG: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。
+  - LLM が有効なら各文の簡易パラフレーズを生成し、総合 `confidence` を調整します。
   - レスポンス例（抜粋）:
     ```json
     { "sentences": [{"raw":"Some text","terms":[{"lemma":"Some"}]}], "summary": null, "citations": [] }
@@ -183,6 +188,23 @@ FastAPI アプリは `src/backend/main.py`。
     [ { "id": "w:converge", "front": "converge", "back": "to come together" } ]
     ```
 
+- `GET /api/review/card_by_lemma`
+  - レンマからカードの SRS メタ（登録済みなら）を返します。未登録なら 404。
+  - クエリ: `?lemma=<string>`（例: `?lemma=converge`）
+  - レスポンス例:
+    ```json
+    { "repetitions": 3, "interval_days": 6, "due_at": "2025-01-01T12:34:56.000Z" }
+    ```
+
+### 3-1. 引用と確度（citations/confidence）の読み方（PR5）
+- citations（引用）:
+  - **意味**: RAG が返す参照元（抜粋テキスト/ソース）。
+  - **使い方**: 生成内容の根拠をたどる用途。空配列の場合は根拠の提示が無い（またはシード未投入）ことを示します。
+- confidence（確度）:
+  - **値**: `low | medium | high`（Enum）
+  - **方針**: RAG の一致度や LLM の整合性ヒューリスティクスに基づき調整。UI ではバッジで表示します。
+  - **読み方**: `high` は引用が十分かつ整合が取れている状態、`low` は引用不十分/曖昧さが高い状態を示します。
+
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
 `flows/*` は LangGraph による処理で、RAG（Chroma）と `citations`/`confidence` の一貫管理を導入済みです。`ReadingAssistFlow` は簡易要約を返し、`FeedbackFlow` はRAG引用を付与します。各ルータにはタグ/summaryが付与され、OpenAPI の可読性を向上しています。
@@ -209,6 +231,7 @@ FastAPI アプリは `src/backend/main.py`。
   - 1画面で「発音/語義/共起/対比/例文/語源/引用/信頼度/学習カード要点」を表示。
   - セルフチェック: 初期は学習カード要点に3秒のぼかしが入り、クリックで即解除可能。
   - SRS連携: 画面上で ×/△/○ の3段階採点が可能。`POST /api/review/grade_by_lemma` を呼び出し、未登録なら自動でカードを作成。
+  - SRSメタ: `GET /api/review/card_by_lemma` で登録状況と `repetitions/interval_days/due_at` を表示（未登録時は「未登録」）。採点後は進捗/インデックス（最近/よく見る）と併せて自動更新。
   - ショートカット: `1/J = ×`, `2/K = △`, `3/L = ○`。設定で「採点後に自動で次へ」を切替可能。
   - 進捗の見える化（PR4）: 画面上部に「今日のレビュー済/残り」「最近見た語（直近5）」、セッション完了時の簡易サマリ（件数/所要時間）を表示。
   - 単語アクセス導線（PR5）: 「対比」や「共起」から横展開リンクで他語へ移動。画面下部に「インデックス（最近/よく見る）」を表示。
@@ -238,30 +261,53 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - `tests/test_integration_rag.py` … LangGraph/Chroma 統合（最小シードで近傍と `citations`/`confidence` を検証）
   - `tests/test_e2e_backend_frontend.py` … フロント→バックE2E相当のAPIフロー（正常/異常系の健全性）
   - `tests/test_load_and_regression.py` … 軽負荷スモークとスキーマ回帰チェック
+    - PR4 追加: RAG 有効/無効の双方で基本SLA（少数リクエストで5秒以内）を検証。`X-Request-ID` ヘッダの付与も確認。
 
 注意:
 - 統合テストはローカルの Chroma クライアント（`chromadb`）を利用し、フィクスチャでテスト専用ディレクトリに最小シードを投入します（環境変数 `CHROMA_PERSIST_DIR` を内部使用）。
 - RAG は `settings.rag_enabled` に従います。既定 `True`。
+- LLM プロバイダはアプリ内でシングルトンとしてキャッシュされ、タイムアウト/リトライの実行には共有スレッドプールを使用します。FastAPI のシャットダウンイベントで安全に解放されます。
 
 ---
 
 ## 6. 設定/環境変数
 - `src/backend/config.py`
-  - `environment`, `llm_provider`, `embedding_provider`
-  - RAG/Chroma 関連（PR3）:
-    - `rag_enabled` … RAG の有効/無効（既定 true）
-    - `rag_timeout_ms` … 近傍クエリの試行毎タイムアウト（ms）
-    - `rag_max_retries` … 近傍クエリの最大リトライ回数
-    - `rag_rate_limit_per_min` … RAG クエリの毎分レート上限
-    - `chroma_persist_dir` … Chroma 永続ディレクトリ
-    - `chroma_server_url` … 任意の Chroma サーバURL（未指定時はローカル）
-    - APIキー類（必要に応じて）: `openai_api_key`, `azure_openai_api_key`, `voyage_api_key`
+  - 共通:
+    - `environment`
+    - `llm_provider` … `openai` | `azure-openai` | `local`
+    - `llm_model` … 既定 `gpt-5-mini`（OpenAIを使う場合は実在モデルに置換推奨: 例 `gpt-4o-mini`）
+    - `llm_timeout_ms` / `llm_max_retries`
+    - `embedding_provider` … 既定 `openai`
+    - `embedding_model` … 既定 `text-embedding-3-small`
+  - RAG/Chroma:
+    - `rag_enabled`, `rag_timeout_ms`, `rag_max_retries`, `rag_rate_limit_per_min`
+    - `chroma_persist_dir`, `chroma_server_url`
+  - APIキー/プロバイダ:
+    - `openai_api_key`
+    - `azure_openai_api_key`, `azure_openai_endpoint`, `azure_openai_deployment`, `azure_openai_api_version`
+    - `voyage_api_key`（将来）
   - SRS（SQLite）
-    - `srs_db_path` … SRS 用 SQLite ファイルのパス（既定 `.data/srs.sqlite3`）
-    - `srs_max_today` … `GET /api/review/today` の最大件数（既定 5）
-  - `.env` を読み込みます。
-- `app/config.py`
-  - `api_key`, `allowed_origins`（カンマ区切り対応）
+    - `srs_db_path`, `srs_max_today`
+  - `.env` を読み込みます。サンプル: `env.example`
+  - 運用/監視（PR4）
+    - `rate_limit_per_min_ip`, `rate_limit_per_min_user` … API レート制限（IP/ユーザ毎・毎分）
+    - `sentry_dsn` … Sentry DSN（設定すると例外を自動送信）
+
+### 6-1. env.example（サンプル）
+`env.example` を参考に `.env` を作成してください。
+
+### 6-2. SRS データ移行の注意点（PR5）
+- 既定のDBパス: `SRS_DB_PATH=.data/srs.sqlite3`
+- 権限: 実行ユーザに `.data/` ディレクトリの作成/書込権限が必要です。
+- バックアップ: 重要データのため変更前にバックアップを取得してください。
+  - 例（Windows PowerShell）: `Copy-Item .data/srs.sqlite3 .data/srs.backup.sqlite3`
+- パス変更: `.env` の `SRS_DB_PATH` を新パスに設定し、アプリを再起動します。
+- スキーマ変更（将来）: 互換が壊れる場合はマイグレーション手順をREADMEに追記します。暫定実装では互換維持・自動作成（存在しない場合）です。
+
+補足（PR4: レート制限/ログ/SLA）:
+- API リクエストには自動で `X-Request-ID` が割り当てられ、レスポンスヘッダにも付与されます。
+- レート制限は簡易トークンバケットで、IP と `X-User-Id`（任意ヘッダ）単位に毎分の上限を適用します。超過時は `429 Too Many Requests` を返します。
+- Sentry DSN を設定すると、ERROR 以上のログ/例外が送信されます（依存: `sentry-sdk`）。
 
 ---
 
@@ -273,7 +319,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - コレクション設計: `word_snippets`, `domain_terms`
   - 近傍クエリは共通ポリシーで標準化（レート制御/タイムアウト/リトライ/フォールバック）
   - `backend/providers.py` に Chroma クライアントファクトリ・共通クエリ関数を実装
-  - `backend/indexing.py` で JSONL/最小シードからの投入に対応
+  - `backend/indexing.py` で JSONL/最小シードからの投入に対応（重複除去/件数ログ/再試行追加）
 - SRS/発音
   - SRS: `src/backend/srs.py` に簡易SM-2のインメモリ実装を追加（`/api/review/*` が利用）
   - 発音: `src/backend/pronunciation.py` に実装（cmudict/g2p-en 優先、例外辞書/辞書キャッシュ/タイムアウト付きフォールバック）。`WordPackRequest.pronunciation_enabled` で生成の ON/OFF が可能。
