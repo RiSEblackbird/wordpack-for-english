@@ -262,6 +262,26 @@ class SRSSQLiteStore:
             conn.close()
 
 
+    def ensure_card(self, item_id: str, front: str, back: str) -> None:
+        """Ensure a card exists; create if missing with defaults.
+
+        Newly created cards are due immediately (due_at=now) so they can be graded at once.
+        """
+        now = datetime.utcnow()
+        conn = self._connect()
+        try:
+            cur = conn.execute("SELECT 1 FROM cards WHERE id = ?;", (item_id,))
+            if cur.fetchone() is not None:
+                return
+            with conn:
+                conn.execute(
+                    "INSERT INTO cards(id, deck_id, front, back, repetitions, interval_days, ease, due_at, created_at) VALUES (?, ?, ?, ?, 0, 0, 2.5, ?, ?);",
+                    (item_id, self.default_deck_id, front, back, now.isoformat(), now.isoformat()),
+                )
+        finally:
+            conn.close()
+
+
 # module-level singleton store (wired to settings)
 store = SRSSQLiteStore(db_path=settings.srs_db_path)
 

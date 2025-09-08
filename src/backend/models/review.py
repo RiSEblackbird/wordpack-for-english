@@ -1,5 +1,6 @@
 from datetime import datetime
 from pydantic import BaseModel
+from pydantic import Field
 
 
 class ReviewCard(BaseModel):
@@ -32,3 +33,14 @@ class ReviewGradeRequest(BaseModel):
 class ReviewGradeResponse(BaseModel):
     ok: bool
     next_due: datetime
+
+
+class ReviewGradeByLemmaRequest(BaseModel):
+    """レンマ直採点のリクエストモデル。
+
+    - lemma: 学習語の見出し
+    - grade: 0|1|2 の三段階
+    """
+
+    lemma: str = Field(min_length=1, max_length=64)
+    grade: int = Field(ge=0, le=2)

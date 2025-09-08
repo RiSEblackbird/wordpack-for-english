@@ -80,3 +80,14 @@ def test_review_grade(client):
     assert resp.status_code == 200
     j = resp.json()
     assert j.get("ok") is True and "next_due" in j
+
+
+def test_review_grade_by_lemma(client):
+    resp = client.post("/api/review/grade_by_lemma", json={"lemma": "foobar", "grade": 2})
+    assert resp.status_code == 200
+    j = resp.json()
+    assert j.get("ok") is True and "next_due" in j
+
+    # invalid grade should be rejected by validation
+    resp2 = client.post("/api/review/grade_by_lemma", json={"lemma": "foobar", "grade": 3})
+    assert resp2.status_code == 422

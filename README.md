@@ -159,6 +159,12 @@ FastAPI アプリは `src/backend/main.py`。
   - レスポンス例: `{ "ok": true, "next_due": "2025-01-01T12:34:56.000Z" }`
   - 実装: `src/backend/srs.py`（SQLite 永続化）。復習履歴は `reviews` テーブルに保存され、同時実行はトランザクションで保護されます。
 
+- `POST /api/review/grade_by_lemma`
+  - レンマ（例: `"converge"`）を指定して採点。カード未存在時は自動作成。
+  - 自動作成の仕様: `id = "w:<lemma>"`, `front = lemma`, `back = WordPack.study_card`。
+  - リクエスト例: `{ "lemma": "converge", "grade": 0 }`（0|1|2）
+  - レスポンス例: `{ "ok": true, "next_due": "2025-01-01T12:34:56.000Z" }`
+
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
 `flows/*` は LangGraph による処理で、RAG（Chroma）と `citations`/`confidence` の一貫管理を導入済みです。`ReadingAssistFlow` は簡易要約を返し、`FeedbackFlow` はRAG引用を付与します。各ルータにはタグ/summaryが付与され、OpenAPI の可読性を向上しています。
