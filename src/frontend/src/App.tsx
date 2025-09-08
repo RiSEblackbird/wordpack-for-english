@@ -3,9 +3,10 @@ import { CardPanel } from './components/CardPanel';
 import { SentencePanel } from './components/SentencePanel';
 import { AssistPanel } from './components/AssistPanel';
 import { SettingsPanel } from './components/SettingsPanel';
+import { WordPackPanel } from './components/WordPackPanel';
 import { SettingsProvider } from './SettingsContext';
 
-type Tab = 'card' | 'sentence' | 'assist' | 'settings';
+type Tab = 'card' | 'sentence' | 'assist' | 'wordpack' | 'settings';
 
 export const App: React.FC = () => {
   const [tab, setTab] = useState<Tab>('card');
@@ -17,7 +18,8 @@ export const App: React.FC = () => {
         if (e.key === '1') setTab('card');
         if (e.key === '2') setTab('sentence');
         if (e.key === '3') setTab('assist');
-        if (e.key === '4') setTab('settings');
+        if (e.key === '4') setTab('wordpack');
+        if (e.key === '5') setTab('settings');
       } else if (e.key === '/') {
         e.preventDefault();
         if (tab === 'card') {
@@ -54,12 +56,14 @@ export const App: React.FC = () => {
           <button onClick={() => setTab('card')} aria-selected={tab === 'card'}>カード</button>
           <button onClick={() => setTab('sentence')} aria-selected={tab === 'sentence'}>文</button>
           <button onClick={() => setTab('assist')} aria-selected={tab === 'assist'}>アシスト</button>
+          <button onClick={() => setTab('wordpack')} aria-selected={tab === 'wordpack'}>WordPack</button>
           <button onClick={() => setTab('settings')} aria-selected={tab === 'settings'}>設定</button>
         </nav>
         <main>
           {tab === 'card' && <CardPanel focusRef={focusRef} />}
           {tab === 'sentence' && <SentencePanel focusRef={focusRef} />}
           {tab === 'assist' && <AssistPanel focusRef={focusRef} />}
+          {tab === 'wordpack' && <WordPackPanel focusRef={focusRef} />}
           {tab === 'settings' && <SettingsPanel focusRef={focusRef} />}
         </main>
         <footer>
