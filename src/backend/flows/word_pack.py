@@ -1,17 +1,6 @@
 from typing import Any, Dict, List
 
-# LangGraph は必須
-# 正式 import を試し、失敗時は tests スタブ互換のフォールバック。
-try:
-    from langgraph.graph import StateGraph  # type: ignore
-except Exception:
-    try:
-        import langgraph  # type: ignore
-        StateGraph = langgraph.graph.StateGraph  # type: ignore[attr-defined]
-    except Exception as exc:  # pragma: no cover - library required
-        raise ImportError(
-            "WordPackFlow requires the 'langgraph' package (expected langgraph.graph.StateGraph)."
-        ) from exc
+from . import create_state_graph
 
 try:
     import chromadb
@@ -52,7 +41,7 @@ class WordPackFlow:
         """
         self.chroma = chroma_client
         self.llm = llm
-        self.graph = StateGraph()
+        self.graph = create_state_graph()
 
     # --- 発音推定（cmudict/g2p-en 利用、フォールバック付き） ---
     def _generate_pronunciation(self, lemma: str) -> Pronunciation:

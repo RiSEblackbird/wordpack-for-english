@@ -1,19 +1,6 @@
 from typing import Any, List, Dict, Any as AnyType
 
-# LangGraph は必須。未導入やAPI不一致なら起動失敗とする。
-# まずは正式な import（サブモジュールからの直接 import）を試み、
-# 失敗した場合は tests のスタブ（sys.modules["langgraph"] に SimpleNamespace を入れる）
-# に対応するためのフォールバックを行う。
-try:
-    from langgraph.graph import StateGraph  # type: ignore
-except Exception:
-    try:
-        import langgraph  # type: ignore
-        StateGraph = langgraph.graph.StateGraph  # type: ignore[attr-defined]
-    except Exception as exc:  # pragma: no cover - library required
-        raise ImportError(
-            "FeedbackFlow requires the 'langgraph' package (expected langgraph.graph.StateGraph)."
-        ) from exc
+from . import create_state_graph
 
 from ..models.sentence import SentenceCheckResponse, Issue, Revision, MiniExercise
 from ..models.common import Citation, ConfidenceLevel
@@ -40,7 +27,7 @@ class FeedbackFlow:
         """
         self.llm = llm
         self.chroma = chroma_client
-        self.graph = StateGraph()
+        self.graph = create_state_graph()
 
     def run(self, sentence: str) -> SentenceCheckResponse:
         """与えられた文を解析し、フィードバックを返す（MVP ダミー）。

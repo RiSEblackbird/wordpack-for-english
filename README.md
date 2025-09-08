@@ -247,6 +247,14 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - `/metrics` で p95/件数/エラー/タイムアウトのスナップショットを返却
   - Chroma 近傍クエリは2回まで軽量リトライ
 
+### LangGraph 互換性メモ（重要）
+- `flows/*` は LangGraph の `StateGraph` を内部的に利用します。
+- バージョンにより `StateGraph()` の引数仕様が異なるため、共通ヘルパ `backend.flows.create_state_graph()` で生成しています。
+  - 旧API: 引数なしで生成
+  - 新API: `state_schema` を要求 → 最小 `TypedDict` を自動指定
+- これにより、LangGraph の軽微な API 変更でも 500 を避けられます。
+- もし `POST /api/review/grade` などで 500 が出た場合は、コンテナログに `StateGraph.__init__() missing 1 required positional argument: 'state_schema'` がないか確認してください。最新版では修正済みです。
+
 ---
 
 ## 8. ライセンス

@@ -1,17 +1,6 @@
 from typing import Any, Dict, List
 
-# LangGraph は必須
-# 正式 import を試し、失敗時は tests スタブ互換のフォールバック。
-try:
-    from langgraph.graph import StateGraph  # type: ignore
-except Exception:
-    try:
-        import langgraph  # type: ignore
-        StateGraph = langgraph.graph.StateGraph  # type: ignore[attr-defined]
-    except Exception as exc:  # pragma: no cover - library required
-        raise ImportError(
-            "ReadingAssistFlow requires the 'langgraph' package (expected langgraph.graph.StateGraph)."
-        ) from exc
+from . import create_state_graph
 
 try:
     import chromadb
@@ -48,7 +37,7 @@ class ReadingAssistFlow:
             用語サーチ/RAG に用いるベクトルDB クライアント（任意）。
         """
         self.chroma = chroma_client
-        self.graph = StateGraph()
+        self.graph = create_state_graph()
 
     def _segment(self, paragraph: str) -> List[str]:
         """段落を単純なピリオド分割で文リストに変換（MVP）。"""

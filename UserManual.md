@@ -126,6 +126,13 @@
 - 変更が反映されない
   - Docker利用時: `docker compose build --no-cache` を実行
   - Vite 監視が不安定: Windows では `CHOKIDAR_USEPOLLING=1` を検討（`docker-compose.yml` に環境変数追加可）
+- 500 Internal Server Error（採点ボタン押下時など）
+  - バックエンドログに `StateGraph.__init__() missing 1 required positional argument: 'state_schema'` と出る場合、LangGraph の API 差分が原因です。
+  - 現行実装では `flows.create_state_graph()` により互換化済みです。最新に更新後も再発する場合は依存を再インストールしてください。
+    ```bash
+    pip install -U -r requirements.txt
+    docker compose build --no-cache && docker compose up
+    ```
 
 ---
 

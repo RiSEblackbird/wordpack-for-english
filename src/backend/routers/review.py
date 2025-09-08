@@ -23,7 +23,6 @@ async def review_today() -> ReviewTodayResponse:
 @router.post("/grade", response_model=ReviewGradeResponse, response_model_exclude_none=True, summary="採点して次回出題時刻を更新")
 async def review_grade(req: ReviewGradeRequest) -> ReviewGradeResponse:
     """Grade a review item using simplified SM-2 and return next due time."""
-    _ = FeedbackFlow()  # kept for future linkage
     updated = store.grade(item_id=req.item_id, grade=req.grade)
     if updated is None:
         raise HTTPException(status_code=404, detail="item not found")
