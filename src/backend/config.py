@@ -24,7 +24,7 @@ class Settings(BaseSettings):
         description="Embedding service provider / 利用する埋め込みプロバイダ",
     )
     llm_model: str = Field(
-        default="gpt-5-mini",
+        default="gpt-4o-mini",
         description="LLM model name / 利用するLLMモデル名",
     )
     embedding_model: str = Field(
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
     # --- RAG 制御（導入のみ・フラグで無効化可） ---
     rag_enabled: bool = Field(
-        default=True,
+        default=False,
         description="Enable RAG pipeline / RAG 機能の有効化スイッチ",
     )
     rag_timeout_ms: int = Field(
@@ -58,6 +58,20 @@ class Settings(BaseSettings):
     rag_rate_limit_per_min: int = Field(
         default=120,
         description="Rate limit for RAG queries per minute / RAGクエリの毎分上限",
+    )
+
+    # --- Auto seed on startup (optional) ---
+    auto_seed_on_startup: bool = Field(
+        default=False,
+        description="Automatically seed Chroma collections on API startup / 起動時に自動シード",
+    )
+    auto_seed_word_jsonl: str | None = Field(
+        default=None,
+        description="Optional JSONL path for word_snippets to seed on startup / 起動時シード用のword_snippets JSONL",
+    )
+    auto_seed_terms_jsonl: str | None = Field(
+        default=None,
+        description="Optional JSONL path for domain_terms to seed on startup / 起動時シード用のdomain_terms JSONL",
     )
 
     # --- Chroma 設定（永続ディレクトリ or 将来のリモート URL） ---

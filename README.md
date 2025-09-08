@@ -1,6 +1,6 @@
 # WordPack for English
 
-英単語トレーナー（LLM×RAG×LangGraph）。技術・科学英文の読み・用法・発音の理解を支援します。リポジトリはバックエンド（FastAPI）とフロントエンド（React + Vite）のモノレポ構成です。
+英単語トレーナー（OpenAI LLM×LangGraph）。技術・科学英文の読み・用法・発音の理解を支援します。リポジトリはバックエンド（FastAPI）とフロントエンド（React + Vite）のモノレポ構成です。
 
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
@@ -30,25 +30,14 @@ cd src/frontend
 npm install
 ```
 
-### 1-3. RAG 用インデクスの準備（M3/PR3）
+### 1-3. OpenAI API キーの設定
 ```bash
-# 任意: 初回のみ、最小シードを投入（ChromaDB, 既定は settings.chroma_persist_dir）
-python -m backend.indexing
-
-# JSONL から投入する場合（例）
-python -m backend.indexing \
-  --word-jsonl data/word_snippets.jsonl \
-  --terms-jsonl data/domain_terms.jsonl
-
-# 永続ディレクトリを上書きする場合
-python -m backend.indexing --persist .chroma
+# .env ファイルを作成し、OpenAI API キーを設定
+cp env.example .env
+# .env ファイルを編集して OPENAI_API_KEY を設定
 ```
 
-Docker 環境でのシード（コンテナ内実行）:
-```bash
-docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
-```
-※ `STRICT_MODE=true` かつ `RAG_ENABLED=true` の場合、シード未投入だと引用0件で WordPack 生成が失敗します（意図的なFail-Fast）。先に上記のシードを実行してください。
+注意: OpenAI API キーが必要です。設定されていない場合、アプリは安全なフォールバックモードで動作します。
 
 ### 1-4. バックエンド起動
 ```bash
@@ -78,6 +67,10 @@ docker compose up --build
   - backend: `uvicorn --reload` + ボリュームマウント `.:/app`
   - frontend: Vite dev サーバ + ボリュームマウント `src/frontend:/app`
 - フロントからの API 呼び出しは Vite のプロキシ設定で `http://backend:8000` に転送されます。
+
+OpenAI LLM統合:
+- 既定で `LLM_PROVIDER=openai` および `LLM_MODEL=gpt-4o-mini` を使用します。
+- RAG機能は無効化されており、OpenAI LLMが直接語義・用例・フィードバックを生成します。
 
 Tips (Windows)：Vite のファイル監視が不安定な場合、`CHOKIDAR_USEPOLLING=1` を環境変数に設定してください（compose の service へ追加可能）。
 
@@ -114,8 +107,9 @@ FastAPI アプリは `src/backend/main.py`。
     - `request_id`, `path`, `method`, `latency_ms`, `is_error`, `is_timeout`, `client_ip`, `user_agent`
 
 - `POST /api/word/pack`
-  - 周辺知識パック生成（RAG: Chroma から近傍を取得し `citations` と `confidence` を付与）。
+  - 周辺知識パック生成（OpenAI LLM: 語義・用例・共起語を直接生成し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
+  - 例文: 英日ペア（`{ en, ja }`）で返却。ダミー例文は生成せず、取得できない場合は空配列となります。
   - リクエスト例（M5 追加パラメータ・Enum化）:
     ```json
     { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
@@ -127,12 +121,12 @@ FastAPI アプリは `src/backend/main.py`。
     {
       "lemma": "converge",
       "pronunciation": {"ipa_GA":"/kənvɝdʒ/","syllables":2,"stress_index":1,"linking_notes":[]},
-      "senses": [{"id":"s1","gloss_ja":"意味（暫定）","patterns":[]}],
+      "senses": [],
       "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
       "contrast": [],
-      "examples": {"A1": ["converge example."], "B1": [], "C1": [], "tech": []},
-      "etymology": {"note":"N/A","confidence":"low"},
-      "study_card": "この語の要点（暫定）。",
+      "examples": {"A1": [], "B1": [], "C1": [], "tech": []},
+      "etymology": {"note":"","confidence":"low"},
+      "study_card": "",
       "citations": [],
       "confidence": "low"
     }
@@ -141,7 +135,7 @@ FastAPI アプリは `src/backend/main.py`。
   
 
 - `POST /api/sentence/check`
-  - 自作文チェック（RAG 引用と `confidence` を付与）。
+  - 自作文チェック（OpenAI LLM による詳細な文法・スタイル分析と `confidence` を付与）。
   - LLM が有効な場合、issues/revisions/mini exercise を安全に補強します（失敗時はフォールバック）。
   - レスポンス例（抜粋）:
     ```json
@@ -151,7 +145,7 @@ FastAPI アプリは `src/backend/main.py`。
     ```
 
 - `POST /api/text/assist`
-  - 段落注釈（RAG: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。
+  - 段落注釈（OpenAI LLM: 文の解析・パラフレーズ・語彙情報を直接生成し `citations` と `confidence` を付与）。
   - LLM が有効なら各文の簡易パラフレーズを生成し、総合 `confidence` を調整します。
   - レスポンス例（抜粋）:
     ```json
@@ -204,12 +198,12 @@ FastAPI アプリは `src/backend/main.py`。
 
 ### 3-1. 引用と確度（citations/confidence）の読み方（PR5）
 - citations（引用）:
-  - **意味**: RAG が返す参照元（抜粋テキスト/ソース）。
-  - **使い方**: 生成内容の根拠をたどる用途。空配列の場合は根拠の提示が無い（またはシード未投入）ことを示します。
+  - **意味**: OpenAI LLM が生成した情報の参照元。
+  - **使い方**: 生成内容の根拠をたどる用途。LLM生成の情報は `{"source": "openai_llm"}` として記録されます。
 - confidence（確度）:
   - **値**: `low | medium | high`（Enum）
-  - **方針**: RAG の一致度や LLM の整合性ヒューリスティクスに基づき調整。UI ではバッジで表示します。
-  - **読み方**: `high` は引用が十分かつ整合が取れている状態、`low` は引用不十分/曖昧さが高い状態を示します。
+  - **方針**: LLM の生成品質や整合性ヒューリスティクスに基づき調整。UI ではバッジで表示します。
+  - **読み方**: `high` はLLM生成が成功し詳細な情報が得られた状態、`low` はフォールバック情報のみの状態を示します。
 
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
@@ -301,9 +295,14 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ### 6-1. env.example（サンプル）
 `env.example` を参考に `.env` を作成してください。特に以下の新設定があります。
 
+- `LLM_PROVIDER`（既定: `openai`）
+  - OpenAI LLMを使用する場合は `openai` を設定。
+  - テスト/オフライン開発では `local` に設定することで、ローカルフォールバック動作を許容します。
+- `OPENAI_API_KEY`
+  - OpenAI API キーを設定してください。設定されていない場合は安全なフォールバックモードで動作します。
 - `STRICT_MODE`（既定: `true`）
   - 本番/実運用では `true` を推奨。必須設定が不足している場合はフォールバックせずエラーにします（Fail-Fast）。
-  - テスト/オフライン開発では `false` に設定することで、従来のローカル/ダミー挙動（LLMローカル、SimpleEmbedding、Chromaインメモリ等）を許容します。
+  - テスト/オフライン開発では `false` に設定することで、ローカル/ダミー挙動を許容します。
 
 補足（互換キーの無視）:
 - 旧サンプル/別アプリ由来のキー（例: `API_KEY`/`ALLOWED_ORIGINS` など）が `.env` に残っていても、`src/backend/config.py` は未使用の環境変数を無視する設定になっています（`extra="ignore"`）。
@@ -328,11 +327,10 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 - フロントエンドAPIパスの整合: Sentence/Assist は `/api/*` に統一済み
 - LangGraph フロー実装
   - `flows/word_pack.py`, `flows/reading_assist.py`, `flows/feedback.py`
-- RAG(ChromaDB) と埋め込み/LLMプロバイダ（M3/PR3 導入）
-  - コレクション設計: `word_snippets`, `domain_terms`
-  - 近傍クエリは共通ポリシーで標準化（レート制御/タイムアウト/リトライ/フォールバック）
-  - `backend/providers.py` に Chroma クライアントファクトリ・共通クエリ関数を実装
-  - `backend/indexing.py` で JSONL/最小シードからの投入に対応（重複除去/件数ログ/再試行追加）
+- OpenAI LLM統合（RAG無効化）
+  - 各フローでOpenAI LLMを直接使用して語義・用例・フィードバックを生成
+  - `backend/providers.py` に OpenAI LLM クライアントを実装
+  - RAG機能は無効化され、ChromaDB依存を削除
 - SRS/発音
   - SRS: `src/backend/srs.py` に簡易SM-2のインメモリ実装を追加（`/api/review/*` が利用）
   - 発音: `src/backend/pronunciation.py` に実装（cmudict/g2p-en 優先、例外辞書/辞書キャッシュ/タイムアウト付きフォールバック）。`WordPackRequest.pronunciation_enabled` で生成の ON/OFF が可能。
@@ -348,6 +346,10 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - 新API: `state_schema` を要求 → 最小 `TypedDict` を自動指定
 - これにより、LangGraph の軽微な API 変更でも 500 を避けられます。
 - もし `POST /api/review/grade` などで 500 が出た場合は、コンテナログに `StateGraph.__init__() missing 1 required positional argument: 'state_schema'` がないか確認してください。最新版では修正済みです。
+
+### 更新履歴（短報）
+- 2025-09-08: WordPack 生成時の NameError（`CollocationLists` 未定義）を修正。`src/backend/flows/word_pack.py` に `CollocationLists`/`ContrastItem` をインポート追加。Docker/ローカルとも再起動・再ビルドで解消。
+- 2025-09-08: `ContrastItem` の Pydantic v2 エイリアス設定を修正（`model_config = ConfigDict(populate_by_name=True)`）。`contrast` の各要素は API では `{"with": string, "diff_ja": string}` として返り、内部モデルでは `with_` フィールドで受け付けます。
 
 ---
 

@@ -18,7 +18,9 @@ from .routers import health, review, sentence, text, word
 from .metrics import registry
 from .config import settings
 from .middleware import RequestIDMiddleware, RateLimitMiddleware
-from .providers import shutdown_providers
+from .providers import shutdown_providers, ChromaClientFactory
+from .indexing import seed_word_snippets, seed_domain_terms, seed_from_jsonl
+from pathlib import Path
 
 configure_logging()
 app = FastAPI(title="WordPack API", version="0.3.0")
@@ -91,3 +93,25 @@ app.include_router(health.router)  # ヘルスチェック
 async def _on_shutdown() -> None:
     # 共有スレッドプールなどのリソースを解放
     shutdown_providers()
+
+
+@app.on_event("startup")
+async def _on_startup_seed() -> None:
+    # 起動時自動シード（任意）: STRICT_MODE=true でも、明示フラグがtrueなら最小シードを投入
+    try:
+        if settings.auto_seed_on_startup and settings.rag_enabled:
+            client = ChromaClientFactory().create_client()
+            if client is None:
+                return
+            wj = Path(settings.auto_seed_word_jsonl) if settings.auto_seed_word_jsonl else None
+            tj = Path(settings.auto_seed_terms_jsonl) if settings.auto_seed_terms_jsonl else None
+            if (wj and wj.exists()) or (tj and tj.exists()):
+                seed_from_jsonl(client, word_snippets_path=wj, domain_terms_path=tj)
+                logger.info("auto_seed", mode="jsonl", word_jsonl=str(wj) if wj else None, terms_jsonl=str(tj) if tj else None)
+            else:
+                seed_word_snippets(client)
+                seed_domain_terms(client)
+                logger.info("auto_seed", mode="minimal")
+    except Exception as exc:
+        # strict モードでも起動継続。RAG は依存未満で424が返るため、API全体の起動は止めない
+        logger.warning("auto_seed_failed", error=repr(exc))
