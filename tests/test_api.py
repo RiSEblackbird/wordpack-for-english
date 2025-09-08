@@ -102,3 +102,13 @@ def test_review_stats(client):
     assert isinstance(j["due_now"], int)
     assert isinstance(j["reviewed_today"], int)
     assert isinstance(j["recent"], list)
+
+
+def test_review_popular(client):
+    resp = client.get("/api/review/popular?limit=5")
+    assert resp.status_code == 200
+    arr = resp.json()
+    assert isinstance(arr, list)
+    if arr:
+        first = arr[0]
+        assert set(["id", "front", "back"]).issubset(first.keys())

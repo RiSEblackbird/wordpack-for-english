@@ -69,3 +69,10 @@ async def review_stats() -> ReviewStatsResponse:
     recent_items = store.get_recent_reviewed(limit=5)
     recent_cards = [ReviewCard(id=it.id, front=it.front, back=it.back) for it in recent_items]
     return ReviewStatsResponse(due_now=due_now, reviewed_today=reviewed_today, recent=recent_cards)
+
+
+@router.get("/popular", summary="よく見る順（人気）カード一覧（最大10件）")
+async def review_popular(limit: int = 10) -> list[ReviewCard]:
+    """Return popular cards ordered by number of reviews (desc)."""
+    items = store.get_popular(limit=limit)
+    return [ReviewCard(id=it.id, front=it.front, back=it.back) for it in items]

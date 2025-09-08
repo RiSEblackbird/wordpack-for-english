@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
+import { fetchJson, ApiError } from '../lib/fetcher';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -49,6 +50,8 @@ interface ReviewStatsResponse {
   recent: { id: string; front: string; back: string }[];
 }
 
+type PopularCard = { id: string; front: string; back: string };
+
 export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
   const { settings } = useSettings();
   const [lemma, setLemma] = useState('');
@@ -61,6 +64,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
   const [stats, setStats] = useState<ReviewStatsResponse | null>(null);
   const [sessionStartAt] = useState<Date>(new Date());
   const [sessionReviewed, setSessionReviewed] = useState<number>(0);
+  const [popular, setPopular] = useState<PopularCard[] | null>(null);
 
   const sectionIds = useMemo(
     () => [
@@ -148,8 +152,18 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
     }
   };
 
+  const refreshPopular = async () => {
+    try {
+      const res = await fetchJson<PopularCard[]>(`${settings.apiBase}/review/popular?limit=10`);
+      setPopular(res);
+    } catch (e) {
+      // 補助情報なので黙ってスキップ
+    }
+  };
+
   useEffect(() => {
     refreshStats();
+    refreshPopular();
   }, []);
 
   // 3秒セルフチェック: カウントダウン後に自動解除（クリックで即解除）
@@ -326,15 +340,39 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
               <h3>共起</h3>
               <div>
                 <h4>一般</h4>
-                <div className="mono">VO: {data.collocations?.general?.verb_object?.join(', ') || '-'}</div>
-                <div className="mono">Adj+N: {data.collocations?.general?.adj_noun?.join(', ') || '-'}</div>
-                <div className="mono">Prep+N: {data.collocations?.general?.prep_noun?.join(', ') || '-'}</div>
+                <div className="mono">VO: {data.collocations?.general?.verb_object?.length ? data.collocations.general.verb_object.map((t,i) => (
+                  <React.Fragment key={i}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.general.verb_object.length - 1 ? ', ' : ''}
+                  </React.Fragment>
+                )) : '-'}</div>
+                <div className="mono">Adj+N: {data.collocations?.general?.adj_noun?.length ? data.collocations.general.adj_noun.map((t,i) => (
+                  <React.Fragment key={i}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.general.adj_noun.length - 1 ? ', ' : ''}
+                  </React.Fragment>
+                )) : '-'}</div>
+                <div className="mono">Prep+N: {data.collocations?.general?.prep_noun?.length ? data.collocations.general.prep_noun.map((t,i) => (
+                  <React.Fragment key={i}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.general.prep_noun.length - 1 ? ', ' : ''}
+                  </React.Fragment>
+                )) : '-'}</div>
               </div>
               <div>
                 <h4>アカデミック</h4>
-                <div className="mono">VO: {data.collocations?.academic?.verb_object?.join(', ') || '-'}</div>
-                <div className="mono">Adj+N: {data.collocations?.academic?.adj_noun?.join(', ') || '-'}</div>
-                <div className="mono">Prep+N: {data.collocations?.academic?.prep_noun?.join(', ') || '-'}</div>
+                <div className="mono">VO: {data.collocations?.academic?.verb_object?.length ? data.collocations.academic.verb_object.map((t,i) => (
+                  <React.Fragment key={i}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.academic.verb_object.length - 1 ? ', ' : ''}
+                  </React.Fragment>
+                )) : '-'}</div>
+                <div className="mono">Adj+N: {data.collocations?.academic?.adj_noun?.length ? data.collocations.academic.adj_noun.map((t,i) => (
+                  <React.Fragment key={i}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.academic.adj_noun.length - 1 ? ', ' : ''}
+                  </React.Fragment>
+                )) : '-'}</div>
+                <div className="mono">Prep+N: {data.collocations?.academic?.prep_noun?.length ? data.collocations.academic.prep_noun.map((t,i) => (
+                  <React.Fragment key={i}>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.academic.prep_noun.length - 1 ? ', ' : ''}
+                  </React.Fragment>
+                )) : '-'}</div>
               </div>
             </section>
 
@@ -344,13 +382,38 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
                 <ul>
                   {data.contrast.map((c, i) => (
                     <li key={i}>
-                      <span className="mono">{c.with}</span> — {c.diff_ja}
+                      <a href="#" onClick={(e) => { e.preventDefault(); setLemma(c.with); }} className="mono">{c.with}</a> — {c.diff_ja}
                     </li>
                   ))}
                 </ul>
               ) : (
                 <p>なし</p>
               )}
+            </section>
+
+            {/* 簡易インデックス（最近/よく見る順） */}
+            <section className="wp-section">
+              <h3>インデックス</h3>
+              <div>
+                <h4>最近</h4>
+                {stats?.recent?.length ? (
+                  <ul style={{ display: 'inline-flex', listStyle: 'none', gap: '0.75rem', padding: 0 }}>
+                    {stats.recent.map((c) => (
+                      <li key={c.id}><a href="#" onClick={(e) => { e.preventDefault(); setLemma(c.front); }}>{c.front}</a></li>
+                    ))}
+                  </ul>
+                ) : <p>なし</p>}
+              </div>
+              <div>
+                <h4>よく見る</h4>
+                {popular?.length ? (
+                  <ul style={{ display: 'inline-flex', listStyle: 'none', gap: '0.75rem', padding: 0 }}>
+                    {popular.map((c) => (
+                      <li key={c.id}><a href="#" onClick={(e) => { e.preventDefault(); setLemma(c.front); }}>{c.front}</a></li>
+                    ))}
+                  </ul>
+                ) : <p>なし</p>}
+              </div>
             </section>
 
             <section id="examples" className="wp-section">

@@ -331,6 +331,45 @@ class SRSSQLiteStore:
         finally:
             conn.close()
 
+    def get_popular(self, limit: int = 10) -> List[ReviewItem]:
+        """よく見る順（レビュー件数の多い順）にカードを返す。
+
+        - reviews の件数で降順ソート
+        - 同数の場合は cards.created_at の昇順で安定化
+        """
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                """
+                SELECT c.id, c.front, c.back, c.repetitions, c.interval_days, c.ease, c.due_at
+                FROM cards c
+                LEFT JOIN (
+                    SELECT card_id, COUNT(1) AS rc
+                    FROM reviews
+                    GROUP BY card_id
+                ) r ON r.card_id = c.id
+                ORDER BY COALESCE(r.rc, 0) DESC, c.created_at ASC, c.id ASC
+                LIMIT ?;
+                """,
+                (limit,),
+            )
+            items: List[ReviewItem] = []
+            for row in cur.fetchall():
+                items.append(
+                    ReviewItem(
+                        id=row["id"],
+                        front=row["front"],
+                        back=row["back"],
+                        repetitions=int(row["repetitions"]),
+                        interval_days=int(row["interval_days"]),
+                        ease=float(row["ease"]),
+                        due_at=datetime.fromisoformat(row["due_at"]),
+                    )
+                )
+            return items
+        finally:
+            conn.close()
+
 
 # module-level singleton store (wired to settings)
 store = SRSSQLiteStore(db_path=settings.srs_db_path)
