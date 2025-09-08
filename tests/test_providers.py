@@ -30,6 +30,21 @@ def test_get_llm_provider_without_keys_returns_safe_client(monkeypatch):
     assert isinstance(out, str)
 
 
+def test_get_llm_provider_is_singleton(monkeypatch):
+    # LLM プロバイダはモジュール内でキャッシュされ、同一インスタンスが返る
+    monkeypatch.setenv("LLM_PROVIDER", "local")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
+
+    from importlib import reload
+    from backend import providers
+
+    reload(providers)
+    llm1 = providers.get_llm_provider()
+    llm2 = providers.get_llm_provider()
+    assert llm1 is llm2
+
+
 def test_chroma_client_fallback_when_module_missing(monkeypatch):
     # remove chromadb module to trigger in-memory fallback
     sys.modules.pop("chromadb", None)

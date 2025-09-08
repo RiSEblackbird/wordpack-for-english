@@ -266,6 +266,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 注意:
 - 統合テストはローカルの Chroma クライアント（`chromadb`）を利用し、フィクスチャでテスト専用ディレクトリに最小シードを投入します（環境変数 `CHROMA_PERSIST_DIR` を内部使用）。
 - RAG は `settings.rag_enabled` に従います。既定 `True`。
+- LLM プロバイダはアプリ内でシングルトンとしてキャッシュされ、タイムアウト/リトライの実行には共有スレッドプールを使用します。FastAPI のシャットダウンイベントで安全に解放されます。
 
 ---
 

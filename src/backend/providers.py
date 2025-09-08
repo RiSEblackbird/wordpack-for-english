@@ -19,6 +19,10 @@ except Exception:  # pragma: no cover - optional dependency
 # クライアントのシングルトンキャッシュ（persist path / server URL 単位）
 _CLIENT_CACHE: dict[str, Any] = {}
 
+# LLM インスタンスと実行エグゼキュータ（共有）
+_LLM_INSTANCE: Any | None = None
+_llm_executor: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=4)
+
 
 class SimpleEmbeddingFunction:
     """超軽量のダミー埋め込み関数（決定的）。
@@ -89,15 +93,14 @@ class _LocalEchoLLM(_LLMBase):
 
 
 def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
-    # タイムアウト/リトライ/バックオフ付与の薄いラッパ
-    executor = ThreadPoolExecutor(max_workers=2)
+    # タイムアウト/リトライ/バックオフ付与の薄いラッパ（共有エグゼキュータ使用）
 
     class _Wrapped(_LLMBase):
         def complete(self, prompt: str) -> str:
             last_exc: Exception | None = None
             for attempt in range(1, max(1, settings.llm_max_retries) + 1):
                 try:
-                    future = executor.submit(llm.complete, prompt)
+                    future = _llm_executor.submit(llm.complete, prompt)
                     return future.result(timeout=settings.llm_timeout_ms / 1000.0)
                 except Exception as exc:
                     last_exc = exc
@@ -119,13 +122,17 @@ def get_llm_provider() -> Any:
     - local: ローカルフォールバック（固定応答）
     失敗時は None ではなく安全なローカルフォールバックを返却。
     """
+    global _LLM_INSTANCE
+    if _LLM_INSTANCE is not None:
+        return _LLM_INSTANCE
     provider = (settings.llm_provider or "").lower()
     try:
         if provider == "openai" and settings.openai_api_key:
-            return _llm_with_policy(_OpenAILLM(api_key=settings.openai_api_key, model=settings.llm_model))
+            _LLM_INSTANCE = _llm_with_policy(_OpenAILLM(api_key=settings.openai_api_key, model=settings.llm_model))
+            return _LLM_INSTANCE
         if provider in {"azure", "azure-openai"} and settings.azure_openai_api_key and settings.azure_openai_endpoint:
             deployment = settings.azure_openai_deployment or settings.llm_model
-            return _llm_with_policy(
+            _LLM_INSTANCE = _llm_with_policy(
                 _AzureOpenAILLM(
                     api_key=settings.azure_openai_api_key,
                     endpoint=settings.azure_openai_endpoint,
@@ -133,11 +140,14 @@ def get_llm_provider() -> Any:
                     api_version=settings.azure_openai_api_version,
                 )
             )
+            return _LLM_INSTANCE
         # local / その他: フォールバック
-        return _llm_with_policy(_LocalEchoLLM())
+        _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
+        return _LLM_INSTANCE
     except Exception:
         # 例外時もフォールバック
-        return _llm_with_policy(_LocalEchoLLM())
+        _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
+        return _LLM_INSTANCE
 
 
 # --- Embedding Provider 実装 ---
@@ -343,16 +353,30 @@ class TokenBucketRateLimiter:
 
 
 _rag_rate_limiter = TokenBucketRateLimiter(settings.rag_rate_limit_per_min)
-_executor = ThreadPoolExecutor(max_workers=4)
+_rag_executor = ThreadPoolExecutor(max_workers=4)
 
 
 def _with_timeout(func: Callable[[], Any], timeout_ms: int) -> Any:
     """別スレッドで実行してタイムアウトを適用。"""
-    future = _executor.submit(func)
+    future = _rag_executor.submit(func)
     try:
         return future.result(timeout=timeout_ms / 1000.0)
     except FuturesTimeout:
         raise TimeoutError("RAG query timed out")
+
+
+def shutdown_providers() -> None:
+    """アプリ終了時に共有エグゼキュータを停止し、キャッシュを解放する。"""
+    global _LLM_INSTANCE
+    try:
+        _llm_executor.shutdown(wait=False, cancel_futures=True)  # type: ignore[call-arg]
+    except Exception:
+        pass
+    try:
+        _rag_executor.shutdown(wait=False, cancel_futures=True)  # type: ignore[call-arg]
+    except Exception:
+        pass
+    _LLM_INSTANCE = None
 
 
 def chroma_query_with_policy(

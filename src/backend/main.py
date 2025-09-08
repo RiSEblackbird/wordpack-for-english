@@ -18,6 +18,7 @@ from .routers import health, review, sentence, text, word
 from .metrics import registry
 from .config import settings
 from .middleware import RequestIDMiddleware, RateLimitMiddleware
+from .providers import shutdown_providers
 
 configure_logging()
 app = FastAPI(title="WordPack API", version="0.3.0")
@@ -84,3 +85,9 @@ app.include_router(sentence.router, prefix="/api/sentence")  # 例文チェッ�
 app.include_router(text.router, prefix="/api/text")  # リーディング支援関連
 app.include_router(review.router, prefix="/api/review")  # 復習（SRS）関連
 app.include_router(health.router)  # ヘルスチェック
+
+
+@app.on_event("shutdown")
+async def _on_shutdown() -> None:
+    # 共有スレッドプールなどのリソースを解放
+    shutdown_providers()
