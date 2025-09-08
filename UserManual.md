@@ -49,6 +49,10 @@
   cd src/frontend
   npm run dev
   ```
+ヒント（strict モード）:
+- 本番/実運用では `STRICT_MODE=true` を推奨（既定）。必須設定が不足している場合はエラーとなり早期に検出できます。
+- テスト/オフライン開発では `STRICT_MODE=false` を設定すると、LLM/Embeddings/RAG のダミー/インメモリ挙動を許容します。
+
 
 ---
 

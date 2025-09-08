@@ -86,7 +86,9 @@ class FeedbackFlow:
                         a = str(ex.get("a", "..."))
                         exercise = MiniExercise(q=q, a=a)
         except Exception:
-            # 例外はフォールバックで吸収
+            if settings.strict_mode:
+                raise
+            # 例外はフォールバックで吸収（非 strict）
             pass
         # 可能ならRAGの引用を付与
         citations: List[Citation] = []
@@ -102,6 +104,9 @@ class FeedbackFlow:
                 metas = (res.get("metadatas") or [[]])[0]
                 for d, m in zip(docs, metas):
                     citations.append(Citation(text=d, meta=m))
+            elif settings.strict_mode:
+                # strict: RAGを期待しているのに取得できない
+                raise RuntimeError("RAG is enabled but no citations were retrieved (strict mode)")
         # 確度: RAG 引用があれば medium、LLM 補強も効いていれば high に近い扱い
         if citations and revisions and issues:
             confidence = ConfidenceLevel.medium

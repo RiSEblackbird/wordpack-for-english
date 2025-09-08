@@ -12,6 +12,7 @@ def client_with_chroma(tmp_path_factory):
     # テスト専用の Chroma 永続ディレクトリ
     persist_dir = tmp_path_factory.mktemp("chroma")
     os.environ["CHROMA_PERSIST_DIR"] = str(persist_dir)
+    os.environ["STRICT_MODE"] = "false"
 
     # 先にスタブが注入されている可能性をクリア
     for mod in ["chromadb", "langgraph", "langgraph.graph"]:

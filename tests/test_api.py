@@ -9,6 +9,9 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def client():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    # tests: strict を無効化（ダミー・フォールバック許可）
+    import os
+    os.environ["STRICT_MODE"] = "false"
     # langgraph を本物のモジュールとしてスタブ（パッケージ/サブモジュール両方）
     lg_mod = types.ModuleType("langgraph")
     graph_mod = types.ModuleType("langgraph.graph")

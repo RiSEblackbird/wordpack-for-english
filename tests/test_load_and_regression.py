@@ -9,6 +9,8 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def client():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    import os
+    os.environ["STRICT_MODE"] = "false"
     from backend.main import app
     return TestClient(app)
 
