@@ -18,7 +18,6 @@ def test_get_llm_provider_without_keys_returns_safe_client(monkeypatch):
     monkeypatch.setenv("STRICT_MODE", "false")
     monkeypatch.setenv("LLM_PROVIDER", "local")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
 
     # Reload settings to pick env
     from importlib import reload
@@ -36,7 +35,6 @@ def test_get_llm_provider_is_singleton(monkeypatch):
     monkeypatch.setenv("STRICT_MODE", "false")
     monkeypatch.setenv("LLM_PROVIDER", "local")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
 
     from importlib import reload
     from backend import providers

@@ -274,7 +274,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 - `src/backend/config.py`
   - 共通:
     - `environment`
-    - `llm_provider` … `openai` | `azure-openai` | `local`
+    - `llm_provider` … `openai` | `local`
     - `llm_model` … 既定 `gpt-5-mini`（OpenAIを使う場合は実在モデルに置換推奨: 例 `gpt-4o-mini`）
     - `llm_timeout_ms` / `llm_max_retries`
     - `embedding_provider` … 既定 `openai`
@@ -282,9 +282,8 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - RAG/Chroma:
     - `rag_enabled`, `rag_timeout_ms`, `rag_max_retries`, `rag_rate_limit_per_min`
     - `chroma_persist_dir`, `chroma_server_url`
-  - APIキー/プロバイダ:
+  - APIキー:
     - `openai_api_key`
-    - `azure_openai_api_key`, `azure_openai_endpoint`, `azure_openai_deployment`, `azure_openai_api_version`
     - `voyage_api_key`（将来）
   - SRS（SQLite）
     - `srs_db_path`, `srs_max_today`

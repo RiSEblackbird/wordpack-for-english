@@ -11,10 +11,9 @@ except Exception:  # pragma: no cover - optional during tests
 
 # OpenAI SDK (optional)
 try:  # pragma: no cover - network disabled in tests
-    from openai import OpenAI, AzureOpenAI  # type: ignore
+    from openai import OpenAI  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
     OpenAI = None  # type: ignore
-    AzureOpenAI = None  # type: ignore
 
 # クライアントのシングルトンキャッシュ（persist path / server URL 単位）
 _CLIENT_CACHE: dict[str, Any] = {}
@@ -69,22 +68,6 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
         return (resp.choices[0].message.content or "").strip()
 
 
-class _AzureOpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
-    def __init__(self, *, api_key: str, endpoint: str, deployment: str, api_version: str) -> None:
-        if AzureOpenAI is None:
-            raise RuntimeError("openai package (AzureOpenAI) not installed")
-        self._client = AzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version=api_version)
-        self._deployment = deployment
-
-    def complete(self, prompt: str) -> str:
-        resp = self._client.chat.completions.create(
-            model=self._deployment,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=64,
-        )
-        return (resp.choices[0].message.content or "").strip()
-
 
 class _LocalEchoLLM(_LLMBase):
     def complete(self, prompt: str) -> str:
@@ -118,7 +101,6 @@ def get_llm_provider() -> Any:
 
     設定値 ``settings.llm_provider`` に応じて、実際の LLM クライアントを返す。
     - openai: OpenAI SDK のクライアント
-    - azure-openai: Azure OpenAI (endpoint/deployment)
     - local: ローカルフォールバック（固定応答）
     失敗時は None ではなく安全なローカルフォールバックを返却。
     """
@@ -130,7 +112,7 @@ def get_llm_provider() -> Any:
         # 明示的に local を指定した場合
         if provider in {"", "local"}:
             if settings.strict_mode:
-                raise RuntimeError("LLM_PROVIDER must be 'openai' or 'azure-openai' in strict mode")
+                raise RuntimeError("LLM_PROVIDER must be 'openai' in strict mode")
             _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
             return _LLM_INSTANCE
         if provider == "openai":
@@ -142,22 +124,7 @@ def get_llm_provider() -> Any:
                 return _LLM_INSTANCE
             _LLM_INSTANCE = _llm_with_policy(_OpenAILLM(api_key=settings.openai_api_key, model=settings.llm_model))
             return _LLM_INSTANCE
-        if provider in {"azure", "azure-openai"}:
-            if not (settings.azure_openai_api_key and settings.azure_openai_endpoint):
-                if settings.strict_mode:
-                    raise RuntimeError("AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT are required for LLM_PROVIDER=azure-openai (strict mode)")
-                _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
-                return _LLM_INSTANCE
-            deployment = settings.azure_openai_deployment or settings.llm_model
-            _LLM_INSTANCE = _llm_with_policy(
-                _AzureOpenAILLM(
-                    api_key=settings.azure_openai_api_key,
-                    endpoint=settings.azure_openai_endpoint,
-                    deployment=deployment,
-                    api_version=settings.azure_openai_api_version,
-                )
-            )
-            return _LLM_INSTANCE
+        # 未対応プロバイダ
         # 未知のプロバイダ
         if settings.strict_mode:
             raise RuntimeError(f"Unknown LLM provider: {provider}")
