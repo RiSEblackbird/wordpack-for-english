@@ -51,7 +51,7 @@
   ```
 ヒント（strict モード）:
 - 本番/実運用では `STRICT_MODE=true` を推奨（既定）。必須設定が不足している場合はエラーとなり早期に検出できます。
-- テスト/オフライン開発では `STRICT_MODE=false` を設定すると、LLM/Embeddings/RAG のダミー/インメモリ挙動を許容します。
+- テスト/オフライン開発では `STRICT_MODE=false` を設定すると、LLM/Embeddings/RAG のインメモリ挙動を許容します（APIの応答はダミーではなく、取得不能な情報は空として返ります）。
 
 Docker での RAG シード:
 ```bash

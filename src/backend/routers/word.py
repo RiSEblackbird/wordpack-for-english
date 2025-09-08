@@ -31,7 +31,8 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     """Generate a new word pack using LangGraph flow.
 
     指定した語について、発音・語義・共起・対比・例文・語源などを
-    まとめた学習パックを生成して返す（MVP はダミー）。
+    まとめた学習パックを生成して返す。ダミーは生成せず、取得できない
+    情報は空値で返す（RAG 有効かつ strict のときは引用不足で失敗）。
     """
     # RAG が有効なときのみ Chroma を接続（初期化失敗は後段で 424 にマップ）
     try:

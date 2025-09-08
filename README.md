@@ -126,7 +126,7 @@ FastAPI アプリは `src/backend/main.py`。
 - `POST /api/word/pack`
   - 周辺知識パック生成（RAG: Chroma から近傍を取得し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - 例文: 英日ペア（`{ en, ja }`）で返却。MVPでは `A1` に最大5件の簡易例文を含みます。
+  - 例文: 英日ペア（`{ en, ja }`）で返却。ダミー例文は生成せず、取得できない場合は空配列となります。
   - リクエスト例（M5 追加パラメータ・Enum化）:
     ```json
     { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
@@ -138,12 +138,12 @@ FastAPI アプリは `src/backend/main.py`。
     {
       "lemma": "converge",
       "pronunciation": {"ipa_GA":"/kənvɝdʒ/","syllables":2,"stress_index":1,"linking_notes":[]},
-      "senses": [{"id":"s1","gloss_ja":"意味（暫定）","patterns":[]}],
+      "senses": [],
       "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
       "contrast": [],
-      "examples": {"A1": [{"en": "converge example.", "ja": "converge の例文"}], "B1": [], "C1": [], "tech": []},
-      "etymology": {"note":"N/A","confidence":"low"},
-      "study_card": "この語の要点（暫定）。",
+      "examples": {"A1": [], "B1": [], "C1": [], "tech": []},
+      "etymology": {"note":"","confidence":"low"},
+      "study_card": "",
       "citations": [],
       "confidence": "low"
     }
