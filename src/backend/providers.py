@@ -30,7 +30,10 @@ class SimpleEmbeddingFunction:
     次元は 8。各文字のコードポイントの和などから簡易に計算。
     """
 
-    def __call__(self, texts: List[str]) -> List[List[float]]:  # type: ignore[override]
+    def __call__(self, input: Any) -> List[List[float]]:  # type: ignore[override]
+        # Chroma EmbeddingFunction インターフェース: __call__(input=...)
+        texts: List[str] = input if isinstance(input, list) else [str(input)]
+
         def embed_one(t: str) -> List[float]:
             dims = 8
             vec = [0.0] * dims
@@ -41,6 +44,10 @@ class SimpleEmbeddingFunction:
             return [v / norm for v in vec]
 
         return [embed_one(t) for t in texts]
+
+    # Chroma 互換: 検証で参照される識別名を提供
+    def name(self) -> str:  # pragma: no cover
+        return "simple"
 
 
 # --- LLM Provider 実装 ---
@@ -157,15 +164,20 @@ def get_embedding_provider() -> Any:
         model = settings.embedding_model
 
         class _OpenAIEmbedding:
-            def __call__(self, texts: List[str]) -> List[List[float]]:
+            def __call__(self, input: Any) -> List[List[float]]:
                 # OpenAI embeddings API は最大バッチ数の制限があるため小分割
                 out: List[List[float]] = []
                 batch = 64
+                texts: List[str] = input if isinstance(input, list) else [str(input)]
                 for i in range(0, len(texts), batch):
                     chunk = texts[i : i + batch]
                     resp = client.embeddings.create(model=model, input=chunk)
                     out.extend([d.embedding for d in resp.data])
                 return out
+
+            # Chroma 互換: 検証で参照される識別名を提供
+            def name(self) -> str:  # pragma: no cover
+                return f"openai:{model}"
 
         return _OpenAIEmbedding()
     # strict モードでは openai 以外の埋め込みプロバイダ（=ダミー）は不許可

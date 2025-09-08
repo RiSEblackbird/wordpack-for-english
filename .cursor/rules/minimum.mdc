@@ -4,6 +4,6 @@ globs:
 alwaysApply: true
 ---
 
-- 修正が実施された場合、"README.md", "UserManual.md", 各テストも合わせて修正されるようにしてください。
+- 修正が実施された場合、"README.md", "UserManual.md", ".gitignore", 各テストコードも合わせてアップデートしてください。
 - git に危ういものがcommitされないように注意してください。
 - frontend, backend の対応が正しいか注意してください。

@@ -34,3 +34,6 @@ __pycache__/
 .data/
 
 *.sqlite3
+
+# Vector DB (Chroma) persistence - do not commit generated index data
+.chroma/
