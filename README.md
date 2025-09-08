@@ -247,21 +247,26 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 
 ## 6. 設定/環境変数
 - `src/backend/config.py`
-  - `environment`, `llm_provider`, `embedding_provider`
-  - RAG/Chroma 関連（PR3）:
-    - `rag_enabled` … RAG の有効/無効（既定 true）
-    - `rag_timeout_ms` … 近傍クエリの試行毎タイムアウト（ms）
-    - `rag_max_retries` … 近傍クエリの最大リトライ回数
-    - `rag_rate_limit_per_min` … RAG クエリの毎分レート上限
-    - `chroma_persist_dir` … Chroma 永続ディレクトリ
-    - `chroma_server_url` … 任意の Chroma サーバURL（未指定時はローカル）
-    - APIキー類（必要に応じて）: `openai_api_key`, `azure_openai_api_key`, `voyage_api_key`
+  - 共通:
+    - `environment`
+    - `llm_provider` … `openai` | `azure-openai` | `local`
+    - `llm_model` … 既定 `gpt-5-mini`（OpenAIを使う場合は実在モデルに置換推奨: 例 `gpt-4o-mini`）
+    - `llm_timeout_ms` / `llm_max_retries`
+    - `embedding_provider` … 既定 `openai`
+    - `embedding_model` … 既定 `text-embedding-3-small`
+  - RAG/Chroma:
+    - `rag_enabled`, `rag_timeout_ms`, `rag_max_retries`, `rag_rate_limit_per_min`
+    - `chroma_persist_dir`, `chroma_server_url`
+  - APIキー/プロバイダ:
+    - `openai_api_key`
+    - `azure_openai_api_key`, `azure_openai_endpoint`, `azure_openai_deployment`, `azure_openai_api_version`
+    - `voyage_api_key`（将来）
   - SRS（SQLite）
-    - `srs_db_path` … SRS 用 SQLite ファイルのパス（既定 `.data/srs.sqlite3`）
-    - `srs_max_today` … `GET /api/review/today` の最大件数（既定 5）
-  - `.env` を読み込みます。
-- `app/config.py`
-  - `api_key`, `allowed_origins`（カンマ区切り対応）
+    - `srs_db_path`, `srs_max_today`
+  - `.env` を読み込みます。サンプル: `env.example`
+
+### 6-1. env.example（サンプル）
+`env.example` を参考に `.env` を作成してください。
 
 ---
 
@@ -273,7 +278,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - コレクション設計: `word_snippets`, `domain_terms`
   - 近傍クエリは共通ポリシーで標準化（レート制御/タイムアウト/リトライ/フォールバック）
   - `backend/providers.py` に Chroma クライアントファクトリ・共通クエリ関数を実装
-  - `backend/indexing.py` で JSONL/最小シードからの投入に対応
+  - `backend/indexing.py` で JSONL/最小シードからの投入に対応（重複除去/件数ログ/再試行追加）
 - SRS/発音
   - SRS: `src/backend/srs.py` に簡易SM-2のインメモリ実装を追加（`/api/review/*` が利用）
   - 発音: `src/backend/pronunciation.py` に実装（cmudict/g2p-en 優先、例外辞書/辞書キャッシュ/タイムアウト付きフォールバック）。`WordPackRequest.pronunciation_enabled` で生成の ON/OFF が可能。

@@ -10,15 +10,38 @@ from .config import settings
 
 
 def _ensure_docs(col: Any, ids: List[str], docs: List[str], metadatas: List[Dict[str, Any]]) -> None:
-    try:
-        # Upsert is supported in chromadb>=0.4; add() is fine for MVP since ids are unique
-        if hasattr(col, "upsert"):
-            col.upsert(ids=ids, documents=docs, metadatas=metadatas)  # type: ignore[attr-defined]
-        else:
-            col.add(ids=ids, documents=docs, metadatas=metadatas)  # type: ignore[attr-defined]
-    except Exception:
-        # best-effort for MVP
-        pass
+    # ローカル重複除去（入力内の重複ID/空文字列を除く）
+    filtered: list[tuple[str, str, Dict[str, Any]]] = []
+    seen: set[str] = set()
+    for i, d, m in zip(ids, docs, metadatas):
+        if not i or not isinstance(i, str):
+            continue
+        if i in seen:
+            continue
+        seen.add(i)
+        filtered.append((i, d, m))
+    if not filtered:
+        return
+    f_ids = [i for i, _, _ in filtered]
+    f_docs = [d for _, d, _ in filtered]
+    f_metas = [m for _, _, m in filtered]
+
+    # 失敗時の軽量リトライ
+    max_retries = 2
+    last_exc: Exception | None = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            if hasattr(col, "upsert"):
+                col.upsert(ids=f_ids, documents=f_docs, metadatas=f_metas)  # type: ignore[attr-defined]
+            else:
+                col.add(ids=f_ids, documents=f_docs, metadatas=f_metas)  # type: ignore[attr-defined]
+            return
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= max_retries:
+                break
+    # ベストエフォート（失敗は握りつぶし）
+    return
 
 
 def seed_word_snippets(client: Any) -> None:
@@ -38,7 +61,9 @@ def seed_word_snippets(client: Any) -> None:
         {"source": "mini-seed", "tag": "definition"},
         {"source": "mini-seed", "tag": "term"},
     ]
+    before = len(ids)
     _ensure_docs(col, ids, docs, metas)
+    print(f"Seeded word_snippets: requested={before}")
 
 
 def seed_domain_terms(client: Any) -> None:
@@ -58,7 +83,9 @@ def seed_domain_terms(client: Any) -> None:
         {"domain": "math", "level": "intro"},
         {"domain": "logic", "level": "intro"},
     ]
+    before = len(ids)
     _ensure_docs(col, ids, docs, metas)
+    print(f"Seeded domain_terms: requested={before}")
 
 
 def _load_jsonl(path: Path) -> Iterable[dict[str, Any]]:
@@ -74,6 +101,8 @@ def _load_jsonl(path: Path) -> Iterable[dict[str, Any]]:
 
 
 def seed_from_jsonl(client: Any, *, word_snippets_path: Path | None = None, domain_terms_path: Path | None = None) -> None:
+    total_ws = 0
+    total_dt = 0
     if word_snippets_path and word_snippets_path.exists():
         col = client.get_or_create_collection(name=COL_WORD_SNIPPETS)
         ids: List[str] = []
@@ -84,6 +113,7 @@ def seed_from_jsonl(client: Any, *, word_snippets_path: Path | None = None, doma
             docs.append(row.get("text") or "")
             m = {k: v for k, v in row.items() if k not in {"id", "text"}}
             metas.append(m)
+        total_ws = len(ids)
         if ids:
             _ensure_docs(col, ids, docs, metas)
     if domain_terms_path and domain_terms_path.exists():
@@ -96,8 +126,10 @@ def seed_from_jsonl(client: Any, *, word_snippets_path: Path | None = None, doma
             docs.append(row.get("text") or "")
             m = {k: v for k, v in row.items() if k not in {"id", "text"}}
             metas.append(m)
+        total_dt = len(ids)
         if ids:
             _ensure_docs(col, ids, docs, metas)
+    print(f"Seeded from JSONL: word_snippets={total_ws}, domain_terms={total_dt}")
 
 
 def main() -> int:

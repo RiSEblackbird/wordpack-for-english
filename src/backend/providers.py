@@ -9,6 +9,13 @@ try:
 except Exception:  # pragma: no cover - optional during tests
     chromadb = None  # type: ignore
 
+# OpenAI SDK (optional)
+try:  # pragma: no cover - network disabled in tests
+    from openai import OpenAI, AzureOpenAI  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    OpenAI = None  # type: ignore
+    AzureOpenAI = None  # type: ignore
+
 # クライアントのシングルトンキャッシュ（persist path / server URL 単位）
 _CLIENT_CACHE: dict[str, Any] = {}
 
@@ -33,33 +40,133 @@ class SimpleEmbeddingFunction:
         return [embed_one(t) for t in texts]
 
 
+# --- LLM Provider 実装 ---
+
+class _LLMBase:
+    def complete(self, prompt: str) -> str:  # pragma: no cover - interface only
+        raise NotImplementedError
+
+
+class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
+    def __init__(self, *, api_key: str, model: str) -> None:
+        if OpenAI is None:
+            raise RuntimeError("openai package not installed")
+        self._client = OpenAI(api_key=api_key)
+        self._model = model
+
+    def complete(self, prompt: str) -> str:
+        # 最小実装（Chat Completions）
+        resp = self._client.chat.completions.create(
+            model=self._model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=64,
+        )
+        return (resp.choices[0].message.content or "").strip()
+
+
+class _AzureOpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
+    def __init__(self, *, api_key: str, endpoint: str, deployment: str, api_version: str) -> None:
+        if AzureOpenAI is None:
+            raise RuntimeError("openai package (AzureOpenAI) not installed")
+        self._client = AzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version=api_version)
+        self._deployment = deployment
+
+    def complete(self, prompt: str) -> str:
+        resp = self._client.chat.completions.create(
+            model=self._deployment,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=64,
+        )
+        return (resp.choices[0].message.content or "").strip()
+
+
+class _LocalEchoLLM(_LLMBase):
+    def complete(self, prompt: str) -> str:
+        # ネットワーク不要のフォールバック。安全な固定応答。
+        return ""
+
+
+def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
+    # タイムアウト/リトライ/バックオフ付与の薄いラッパ
+    executor = ThreadPoolExecutor(max_workers=2)
+
+    class _Wrapped(_LLMBase):
+        def complete(self, prompt: str) -> str:
+            last_exc: Exception | None = None
+            for attempt in range(1, max(1, settings.llm_max_retries) + 1):
+                try:
+                    future = executor.submit(llm.complete, prompt)
+                    return future.result(timeout=settings.llm_timeout_ms / 1000.0)
+                except Exception as exc:
+                    last_exc = exc
+                    if attempt >= max(1, settings.llm_max_retries):
+                        break
+                    time.sleep(0.1 * attempt)
+            # 最終失敗は空文字を返す（上位でフォールバック可能）
+            return ""
+
+    return _Wrapped()
+
+
 def get_llm_provider() -> Any:
     """Return an LLM client based on the configured provider.
 
-    設定値 ``settings.llm_provider`` に応じて、実際の LLM クライアント
-    （例: OpenAI, Azure OpenAI, Anthropic など）を返す想定のファクトリ関数。
-    現時点ではプレースホルダとして ``None`` を返す。
-    実装時の例:
-    - openai: OpenAI SDK のクライアントを初期化して返却
-    - azure-openai: 接続先エンドポイント/デプロイ名を指定
-    - local: ローカル推論サーバへのクライアント
+    設定値 ``settings.llm_provider`` に応じて、実際の LLM クライアントを返す。
+    - openai: OpenAI SDK のクライアント
+    - azure-openai: Azure OpenAI (endpoint/deployment)
+    - local: ローカルフォールバック（固定応答）
+    失敗時は None ではなく安全なローカルフォールバックを返却。
     """
-    # Placeholder implementation.
-    return None
+    provider = (settings.llm_provider or "").lower()
+    try:
+        if provider == "openai" and settings.openai_api_key:
+            return _llm_with_policy(_OpenAILLM(api_key=settings.openai_api_key, model=settings.llm_model))
+        if provider in {"azure", "azure-openai"} and settings.azure_openai_api_key and settings.azure_openai_endpoint:
+            deployment = settings.azure_openai_deployment or settings.llm_model
+            return _llm_with_policy(
+                _AzureOpenAILLM(
+                    api_key=settings.azure_openai_api_key,
+                    endpoint=settings.azure_openai_endpoint,
+                    deployment=deployment,
+                    api_version=settings.azure_openai_api_version,
+                )
+            )
+        # local / その他: フォールバック
+        return _llm_with_policy(_LocalEchoLLM())
+    except Exception:
+        # 例外時もフォールバック
+        return _llm_with_policy(_LocalEchoLLM())
 
+
+# --- Embedding Provider 実装 ---
 
 def get_embedding_provider() -> Any:
     """Return an embedding client based on the configured provider.
 
-    設定値 ``settings.embedding_provider`` に応じて、ベクトル埋め込み用の
-    クライアントを返すファクトリ関数。検索/RAG 用に使用される想定。
-    現時点ではプレースホルダとして ``None`` を返す。
-    実装時の例:
-    - openai: text-embedding-3 系のエンドポイント
-    - voyage, jina, nvidia などの各種埋め込みモデル
-    - 自前ベクトル化 API
+    設定値 ``settings.embedding_provider`` に応じて、ベクトル埋め込み用クライアントを返す。
+    - openai: OpenAI Embeddings
+    - その他: SimpleEmbeddingFunction（決定的フォールバック）
     """
-    # 現状はダミーの決定的埋め込みを返す（運用導入時に差し替え）
+    provider = (settings.embedding_provider or "").lower()
+    if provider == "openai" and settings.openai_api_key and OpenAI is not None:  # pragma: no cover - network disabled in tests
+        client = OpenAI(api_key=settings.openai_api_key)
+        model = settings.embedding_model
+
+        class _OpenAIEmbedding:
+            def __call__(self, texts: List[str]) -> List[List[float]]:
+                # OpenAI embeddings API は最大バッチ数の制限があるため小分割
+                out: List[List[float]] = []
+                batch = 64
+                for i in range(0, len(texts), batch):
+                    chunk = texts[i : i + batch]
+                    resp = client.embeddings.create(model=model, input=chunk)
+                    out.extend([d.embedding for d in resp.data])
+                return out
+
+        return _OpenAIEmbedding()
+    # デフォルトはダミー
     return SimpleEmbeddingFunction()
 
 
@@ -79,7 +186,7 @@ class ChromaClientFactory:
             return _CLIENT_CACHE[key]
         if chromadb is None:  # pragma: no cover - tests may stub
             # フォールバック：インメモリ互換クライアント
-            client = _InMemoryChromaClient(SimpleEmbeddingFunction())
+            client = _InMemoryChromaClient(get_embedding_provider())
             _CLIENT_CACHE[key] = client
             return client
         # サーバURLが指定されていれば優先（利用可能な場合）
@@ -100,11 +207,11 @@ class ChromaClientFactory:
                     underlying = None
         if underlying is None:
             # フォールバック：インメモリ互換クライアント
-            client = _InMemoryChromaClient(SimpleEmbeddingFunction())
+            client = _InMemoryChromaClient(get_embedding_provider())
             _CLIENT_CACHE[key] = client
             return client
         # ラッパーを返し、コレクション作成時に埋め込み関数を注入
-        client = _ChromaClientAdapter(underlying, SimpleEmbeddingFunction())
+        client = _ChromaClientAdapter(underlying, get_embedding_provider())
         _CLIENT_CACHE[key] = client
         return client
 

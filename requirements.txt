@@ -9,3 +9,4 @@ langgraph
 chromadb
 cmudict
 g2p_en
+openai>=1.0.0
