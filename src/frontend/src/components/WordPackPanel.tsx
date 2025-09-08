@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
-import { fetchJson, ApiError } from '../lib/fetcher';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
