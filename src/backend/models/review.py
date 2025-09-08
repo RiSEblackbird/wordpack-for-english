@@ -44,3 +44,16 @@ class ReviewGradeByLemmaRequest(BaseModel):
 
     lemma: str = Field(min_length=1, max_length=64)
     grade: int = Field(ge=0, le=2)
+
+
+class ReviewStatsResponse(BaseModel):
+    """進捗の見える化 用の統計レスポンス。
+
+    - due_now: 現在時点で出題すべき件数（残数）
+    - reviewed_today: 今日レビュー済み件数
+    - recent: 直近レビューした最大5件
+    """
+
+    due_now: int
+    reviewed_today: int
+    recent: list[ReviewCard] = []

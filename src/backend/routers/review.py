@@ -10,6 +10,7 @@ from ..models.review import (
     ReviewGradeRequest,
     ReviewGradeResponse,
     ReviewGradeByLemmaRequest,
+    ReviewStatsResponse,
     ReviewCard,
 )
 
@@ -54,3 +55,17 @@ async def review_grade_by_lemma(req: ReviewGradeByLemmaRequest) -> ReviewGradeRe
     if updated is None:
         raise HTTPException(status_code=500, detail="failed to grade newly created card")
     return ReviewGradeResponse(ok=True, next_due=updated.due_at)
+
+
+@router.get("/stats", response_model=ReviewStatsResponse, response_model_exclude_none=True, summary="進捗統計（今日の提案数/残数、直近レビュー）")
+async def review_stats() -> ReviewStatsResponse:
+    """Return progress stats for the session experience.
+
+    - due_now: due <= now のカード件数
+    - reviewed_today: 当日レビュー済み数
+    - recent: 直近レビュー（最大5件）
+    """
+    due_now, reviewed_today = store.get_stats()
+    recent_items = store.get_recent_reviewed(limit=5)
+    recent_cards = [ReviewCard(id=it.id, front=it.front, back=it.back) for it in recent_items]
+    return ReviewStatsResponse(due_now=due_now, reviewed_today=reviewed_today, recent=recent_cards)

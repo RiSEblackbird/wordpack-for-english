@@ -5,7 +5,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Tuple
 
 from .config import settings
 
@@ -278,6 +278,56 @@ class SRSSQLiteStore:
                     "INSERT INTO cards(id, deck_id, front, back, repetitions, interval_days, ease, due_at, created_at) VALUES (?, ?, ?, ?, 0, 0, 2.5, ?, ?);",
                     (item_id, self.default_deck_id, front, back, now.isoformat(), now.isoformat()),
                 )
+        finally:
+            conn.close()
+
+    # --- stats & history ---
+    def get_stats(self) -> Tuple[int, int]:
+        """Return (due_now_count, reviewed_today_count).
+
+        - due_now_count: 現在時刻までに due のカード件数
+        - reviewed_today_count: 当日 00:00 UTC 以降にレビューされた件数
+        """
+        now = datetime.utcnow()
+        today_start = datetime(now.year, now.month, now.day)
+        conn = self._connect()
+        try:
+            cur1 = conn.execute("SELECT COUNT(1) AS c FROM cards WHERE due_at <= ?;", (now.isoformat(),))
+            due_now = int(cur1.fetchone()["c"])
+            cur2 = conn.execute("SELECT COUNT(1) AS c FROM reviews WHERE reviewed_at >= ?;", (today_start.isoformat(),))
+            reviewed_today = int(cur2.fetchone()["c"])
+            return due_now, reviewed_today
+        finally:
+            conn.close()
+
+    def get_recent_reviewed(self, limit: int = 5) -> List[ReviewItem]:
+        """直近レビューのカードを新しい順に最大 limit 件返す。"""
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                """
+                SELECT c.id, c.front, c.back, c.repetitions, c.interval_days, c.ease, c.due_at
+                FROM reviews r
+                JOIN cards c ON c.id = r.card_id
+                ORDER BY r.reviewed_at DESC
+                LIMIT ?;
+                """,
+                (limit,),
+            )
+            items: List[ReviewItem] = []
+            for row in cur.fetchall():
+                items.append(
+                    ReviewItem(
+                        id=row["id"],
+                        front=row["front"],
+                        back=row["back"],
+                        repetitions=int(row["repetitions"]),
+                        interval_days=int(row["interval_days"]),
+                        ease=float(row["ease"]),
+                        due_at=datetime.fromisoformat(row["due_at"]),
+                    )
+                )
+            return items
         finally:
             conn.close()
 

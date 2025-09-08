@@ -91,3 +91,14 @@ def test_review_grade_by_lemma(client):
     # invalid grade should be rejected by validation
     resp2 = client.post("/api/review/grade_by_lemma", json={"lemma": "foobar", "grade": 3})
     assert resp2.status_code == 422
+
+
+def test_review_stats(client):
+    # 基本的に 200 が返り、必須キーがあること
+    resp = client.get("/api/review/stats")
+    assert resp.status_code == 200
+    j = resp.json()
+    assert set(["due_now", "reviewed_today", "recent"]).issubset(j.keys())
+    assert isinstance(j["due_now"], int)
+    assert isinstance(j["reviewed_today"], int)
+    assert isinstance(j["recent"], list)

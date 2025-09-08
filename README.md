@@ -5,7 +5,7 @@
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
 - フロントエンド: React + TypeScript + Vite、単一ページ/5パネル構成（カード/自作文/段落注釈/WordPack/設定）
-- SRS（簡易SM-2, SQLite 永続化）: 今日のカード取得・3段階採点に対応（M6）
+- SRS（簡易SM-2, SQLite 永続化）: 今日のカード取得・3段階採点・進捗統計（今日の提案数/残数・最近5件）に対応（M6）
 - 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（例外辞書・辞書キャッシュ・タイムアウト付きフォールバック）
 - WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
 
@@ -165,6 +165,13 @@ FastAPI アプリは `src/backend/main.py`。
   - リクエスト例: `{ "lemma": "converge", "grade": 0 }`（0|1|2）
   - レスポンス例: `{ "ok": true, "next_due": "2025-01-01T12:34:56.000Z" }`
 
+- `GET /api/review/stats`
+  - 進捗統計（セッション体験用）
+  - レスポンス例:
+    ```json
+    { "due_now": 3, "reviewed_today": 7, "recent": [ {"id":"w:converge","front":"converge","back":"to come together"} ] }
+    ```
+
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
 `flows/*` は LangGraph による処理で、RAG（Chroma）と `citations`/`confidence` の一貫管理を導入済みです。`ReadingAssistFlow` は簡易要約を返し、`FeedbackFlow` はRAG引用を付与します。各ルータにはタグ/summaryが付与され、OpenAPI の可読性を向上しています。
@@ -192,6 +199,7 @@ FastAPI アプリは `src/backend/main.py`。
   - セルフチェック: 初期は学習カード要点に3秒のぼかしが入り、クリックで即解除可能。
   - SRS連携: 画面上で ×/△/○ の3段階採点が可能。`POST /api/review/grade_by_lemma` を呼び出し、未登録なら自動でカードを作成。
   - ショートカット: `1/J = ×`, `2/K = △`, `3/L = ○`。設定で「採点後に自動で次へ」を切替可能。
+  - 進捗の見える化（PR4）: 画面上部に「今日のレビュー済/残り」「最近見た語（直近5）」、セッション完了時の簡易サマリ（件数/所要時間）を表示。
 
 - 設定（`SettingsPanel.tsx`）
   - 発音の有効/無効トグル（M5）

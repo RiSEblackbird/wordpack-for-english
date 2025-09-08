@@ -43,6 +43,12 @@ interface WordPack {
 
 interface GradeResponse { ok: boolean; next_due: string }
 
+interface ReviewStatsResponse {
+  due_now: number;
+  reviewed_today: number;
+  recent: { id: string; front: string; back: string }[];
+}
+
 export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
   const { settings } = useSettings();
   const [lemma, setLemma] = useState('');
@@ -52,6 +58,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
   const [reveal, setReveal] = useState(false);
   const [count, setCount] = useState(3);
   const abortRef = useRef<AbortController | null>(null);
+  const [stats, setStats] = useState<ReviewStatsResponse | null>(null);
+  const [sessionStartAt] = useState<Date>(new Date());
+  const [sessionReviewed, setSessionReviewed] = useState<number>(0);
 
   const sectionIds = useMemo(
     () => [
@@ -114,6 +123,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
       });
       const due = new Date(res.next_due);
       setMsg({ kind: 'status', text: `採点しました（次回: ${due.toLocaleString()}）` });
+      // 採点後に進捗を再取得
+      refreshStats();
+      setSessionReviewed((v) => v + 1);
       if (settings.autoAdvanceAfterGrade) {
         setData(null);
         setLemma('');
@@ -126,6 +138,19 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
       setLoading(false);
     }
   };
+
+  const refreshStats = async () => {
+    try {
+      const res = await fetchJson<ReviewStatsResponse>(`${settings.apiBase}/review/stats`);
+      setStats(res);
+    } catch (e) {
+      // 進捗はUX補助なので黙ってスキップ
+    }
+  };
+
+  useEffect(() => {
+    refreshStats();
+  }, []);
 
   // 3秒セルフチェック: カウントダウン後に自動解除（クリックで即解除）
   useEffect(() => {
@@ -191,6 +216,48 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
         />
         <button onClick={generate} disabled={loading || !lemma.trim()}>生成</button>
       </div>
+
+      {/* 進捗ヘッダー */}
+      <div style={{ display: 'flex', gap: '1rem', alignItems: 'baseline', marginBottom: '0.5rem' }}>
+        <div>
+          <strong>今日</strong>:
+          <span style={{ marginLeft: 6 }}>レビュー済 {stats?.reviewed_today ?? '-'} 件</span>
+          <span style={{ marginLeft: 6 }}>残り {stats ? Math.max(stats.due_now, 0) : '-'} 件</span>
+        </div>
+        <div style={{ marginLeft: 'auto' }}>
+          <small>
+            本セッション: {sessionReviewed} 件 / 経過 {(() => {
+              const ms = Date.now() - sessionStartAt.getTime();
+              const m = Math.floor(ms / 60000);
+              const s = Math.floor((ms % 60000) / 1000);
+              return `${m}:${String(s).padStart(2, '0')}`;
+            })()}
+          </small>
+        </div>
+        <button onClick={refreshStats} disabled={loading}>進捗更新</button>
+      </div>
+      {stats?.recent?.length ? (
+        <div style={{ marginBottom: '0.5rem' }}>
+          <small>最近見た語:</small>
+          <ul style={{ display: 'inline-flex', listStyle: 'none', gap: '0.75rem', padding: 0, marginLeft: 8 }}>
+            {stats.recent.slice(0, 5).map((c) => (
+              <li key={c.id}>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLemma(c.front); }} title={c.back}>{c.front}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {stats && stats.due_now === 0 && (
+        <div role="status" style={{ marginBottom: '0.5rem' }}>
+          セッション完了。お疲れさまでした！ 本セッション {sessionReviewed} 件 / 所要時間 {(() => {
+            const ms = Date.now() - sessionStartAt.getTime();
+            const m = Math.floor(ms / 60000);
+            const s = Math.floor((ms % 60000) / 1000);
+            return `${m}分${s}秒`;
+          })()}
+        </div>
+      )}
 
       {loading && <div role="status">読み込み中…</div>}
       {msg && <div role={msg.kind}>{msg.text}</div>}
