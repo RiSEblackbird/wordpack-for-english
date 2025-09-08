@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     )
     llm_model: str = Field(
         default="gpt-5-mini",
-        description="LLM model name or deployment / 利用するLLMモデル名（Azureではデプロイ名）",
+        description="LLM model name / 利用するLLMモデル名",
     )
     embedding_model: str = Field(
         default="text-embedding-3-small",
@@ -70,15 +70,9 @@ class Settings(BaseSettings):
         description="Optional Chroma server URL / 任意の Chroma サーバURL（未指定ならローカル）",
     )
 
-    # --- API Keys / Provider Specific ---
+    # --- API Keys ---
     openai_api_key: str | None = Field(default=None, description="OpenAI API Key")
-    azure_openai_api_key: str | None = Field(default=None, description="Azure OpenAI API Key")
     voyage_api_key: str | None = Field(default=None, description="Voyage API Key")
-
-    # Azure OpenAI 用（エンドポイント/デプロイ/バージョン）
-    azure_openai_endpoint: str | None = Field(default=None, description="Azure OpenAI endpoint URL")
-    azure_openai_deployment: str | None = Field(default=None, description="Azure OpenAI deployment name (model)")
-    azure_openai_api_version: str = Field(default="2024-02-15-preview", description="Azure OpenAI API version")
 
     # --- SRS（復習）の永続化設定 ---
     srs_db_path: str = Field(
