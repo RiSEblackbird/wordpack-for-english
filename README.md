@@ -165,6 +165,9 @@ FastAPI アプリは `src/backend/main.py`。
   - 自動作成の仕様: `id = "w:<lemma>"`, `front = lemma`, `back = WordPack.study_card`。
   - リクエスト例: `{ "lemma": "converge", "grade": 0 }`（0|1|2）
   - レスポンス例: `{ "ok": true, "next_due": "2025-01-01T12:34:56.000Z" }`
+  - OpenAPI補足（スキーマ）:
+    - Request: `ReviewGradeByLemmaRequest` … `lemma: str (1..64)`, `grade: int (0..2)`
+    - Response: `ReviewGradeResponse` … `ok: bool`, `next_due: datetime`
 
 - `GET /api/review/stats`
   - 進捗統計（セッション体験用）

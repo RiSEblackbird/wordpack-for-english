@@ -1,6 +1,7 @@
 from datetime import datetime
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import ConfigDict
 
 
 class ReviewCard(BaseModel):
@@ -33,6 +34,13 @@ class ReviewGradeRequest(BaseModel):
 class ReviewGradeResponse(BaseModel):
     ok: bool
     next_due: datetime
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"ok": True, "next_due": "2025-01-01T12:34:56Z"}
+            ]
+        }
+    )
 
 
 class ReviewGradeByLemmaRequest(BaseModel):
@@ -44,6 +52,13 @@ class ReviewGradeByLemmaRequest(BaseModel):
 
     lemma: str = Field(min_length=1, max_length=64)
     grade: int = Field(ge=0, le=2)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"lemma": "converge", "grade": 2}
+            ]
+        }
+    )
 
 
 class ReviewStatsResponse(BaseModel):
