@@ -41,6 +41,8 @@ interface WordPack {
   confidence: 'low' | 'medium' | 'high';
 }
 
+interface GradeResponse { ok: boolean; next_due: string }
+
 export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
   const { settings } = useSettings();
   const [lemma, setLemma] = useState('');
@@ -97,6 +99,34 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
     }
   };
 
+  const grade = async (g: 0 | 1 | 2) => {
+    if (!data?.lemma) return;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(true);
+    setMsg(null);
+    try {
+      const res = await fetchJson<GradeResponse>(`${settings.apiBase}/review/grade_by_lemma`, {
+        method: 'POST',
+        body: { lemma: data.lemma, grade: g },
+        signal: ctrl.signal,
+      });
+      const due = new Date(res.next_due);
+      setMsg({ kind: 'status', text: `採点しました（次回: ${due.toLocaleString()}）` });
+      if (settings.autoAdvanceAfterGrade) {
+        setData(null);
+        setLemma('');
+      }
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      const m = e instanceof ApiError ? e.message : '採点に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // 3秒セルフチェック: カウントダウン後に自動解除（クリックで即解除）
   useEffect(() => {
     if (!data) return;
@@ -113,6 +143,28 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
   }, [data, reveal]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // キーボードショートカット: 1/2/3 または J/K/L で ×/△/○
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!data) return;
+      if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
+      if (e.target && (e.target as HTMLElement).tagName === 'TEXTAREA') return;
+      const key = e.key.toLowerCase();
+      if (key === '1' || key === 'j') {
+        e.preventDefault();
+        grade(0);
+      } else if (key === '2' || key === 'k') {
+        e.preventDefault();
+        grade(1);
+      } else if (key === '3' || key === 'l') {
+        e.preventDefault();
+        grade(2);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [data]);
 
   return (
     <section>
@@ -157,6 +209,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
               <div className="kv">
                 <div>見出し語</div>
                 <div><strong>{data.lemma}</strong></div>
+              </div>
+              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+                <button onClick={() => grade(0)} disabled={loading}>× わからない (1)</button>
+                <button onClick={() => grade(1)} disabled={loading}>△ あいまい (2)</button>
+                <button onClick={() => grade(2)} disabled={loading}>○ できた (3)</button>
               </div>
               <div className="selfcheck" style={{ marginTop: '0.5rem' }}>
                 <div className={!reveal ? 'blurred' : ''}>
