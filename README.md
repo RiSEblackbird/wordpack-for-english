@@ -57,9 +57,7 @@ cd src/frontend
 npm run dev
 ```
 - 既定ポート: `http://127.0.0.1:5173`
-- 開発時（別ポート）の呼び分け:
-  - 方法A: `Settings` パネルの API Base を `http://127.0.0.1:8000/api` に設定
-  - 方法B: Viteのプロキシ（既定）を利用し、API Base はデフォルトの `/api` のまま
+- 開発時（別ポート）の呼び分け: Vite のプロキシ（既定）により接続設定は不要です。フロントからは相対パス `/api` で呼び出します。
 
 ### 1-6. Docker で一括起動（推奨・ホットリロード対応）
 ```bash
@@ -179,11 +177,10 @@ FastAPI アプリは `src/backend/main.py`。
   - 返却された `issues/revisions/exercise` を画面に表示
 
 - 段落注釈（`AssistPanel.tsx`）
-  - 段落入力→`アシスト`。使用API: `POST {apiBase}/text/assist`
+  - 段落入力→`アシスト`。使用API: `POST /api/text/assist`
   - 返却された `sentences/summary` を画面に表示
 
 - 設定（`SettingsPanel.tsx`）
-  - API Base（デフォルト `/api`）
   - 発音の有効/無効トグル（M5）
   - 再生成スコープ選択（`全体/例文のみ/コロケのみ`）（M5, Enum）
 
