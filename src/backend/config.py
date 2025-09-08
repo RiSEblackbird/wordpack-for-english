@@ -90,6 +90,17 @@ class Settings(BaseSettings):
         description="Max items to return for today's review / 本日の最大出題数",
     )
 
+    # --- Operations/Observability (PR4) ---
+    rate_limit_per_min_ip: int = Field(
+        default=240,
+        description="Per-IP API requests per minute / IP単位の毎分上限",
+    )
+    rate_limit_per_min_user: int = Field(
+        default=240,
+        description="Per-user API requests per minute / ユーザ単位の毎分上限（X-User-Id）",
+    )
+    sentry_dsn: str | None = Field(default=None, description="Sentry DSN (enable if set)")
+
     class Config:
         env_file = ".env"
 

@@ -18,6 +18,8 @@ def test_simple_load_smoke(client):
     start = time.time()
     for _ in range(10):
         r1 = client.get("/healthz")
+        # Request ID が付与されている（運用: トレース用）
+        assert r1.headers.get("X-Request-ID")
         assert r1.status_code == 200
         r2 = client.post("/api/sentence/check", json={"sentence": "Hello"})
         assert r2.status_code == 200
@@ -48,5 +50,26 @@ def test_progress_and_grade_lemma_regression(client):
     assert r2.status_code == 200
     j2 = r2.json()
     assert j2.get("ok") is True and "next_due" in j2
+
+
+def test_sla_with_and_without_rag(client):
+    """RAG有効/無効の両モードで、基本SLA(少数リクエストで5秒以内)を満たす。"""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    # RAG 有効
+    import backend.config as cfg
+    cfg.settings.rag_enabled = True
+    start = time.time()
+    for _ in range(5):
+        assert client.post("/api/word/pack", json={"lemma": "sla"}).status_code == 200
+    elapsed_on = time.time() - start
+    assert elapsed_on < 5.0
+
+    # RAG 無効
+    cfg.settings.rag_enabled = False
+    start = time.time()
+    for _ in range(5):
+        assert client.post("/api/word/pack", json={"lemma": "sla"}).status_code == 200
+    elapsed_off = time.time() - start
+    assert elapsed_off < 5.0
 
 

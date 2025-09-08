@@ -51,6 +51,7 @@ python -m uvicorn backend.main:app --reload --app-dir src
 ```
 - 既定ポート: `http://127.0.0.1:8000`
 - ヘルスチェック: `GET /healthz`
+- ヘルスチェックは Docker Compose の `healthcheck` でも監視されます（PR4）。
 
 ### 1-5. フロントエンド起動
 ```bash
@@ -103,6 +104,8 @@ FastAPI アプリは `src/backend/main.py`。
 
 - `GET /metrics`
   - 運用メトリクスのスナップショット。パス別に `p95_ms`, `count`, `errors`, `timeouts` を返す（M6）。
+  - 併せてアクセスログは JSON 構造化で出力され、`request_complete` に以下フィールドを含みます（PR4）:
+    - `request_id`, `path`, `method`, `latency_ms`, `is_error`, `is_timeout`, `client_ip`, `user_agent`
 
 - `POST /api/word/pack`
   - 周辺知識パック生成（RAG: Chroma から近傍を取得し `citations` と `confidence` を付与）。
@@ -249,6 +252,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - `tests/test_integration_rag.py` … LangGraph/Chroma 統合（最小シードで近傍と `citations`/`confidence` を検証）
   - `tests/test_e2e_backend_frontend.py` … フロント→バックE2E相当のAPIフロー（正常/異常系の健全性）
   - `tests/test_load_and_regression.py` … 軽負荷スモークとスキーマ回帰チェック
+    - PR4 追加: RAG 有効/無効の双方で基本SLA（少数リクエストで5秒以内）を検証。`X-Request-ID` ヘッダの付与も確認。
 
 注意:
 - 統合テストはローカルの Chroma クライアント（`chromadb`）を利用し、フィクスチャでテスト専用ディレクトリに最小シードを投入します（環境変数 `CHROMA_PERSIST_DIR` を内部使用）。
@@ -275,9 +279,17 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - SRS（SQLite）
     - `srs_db_path`, `srs_max_today`
   - `.env` を読み込みます。サンプル: `env.example`
+  - 運用/監視（PR4）
+    - `rate_limit_per_min_ip`, `rate_limit_per_min_user` … API レート制限（IP/ユーザ毎・毎分）
+    - `sentry_dsn` … Sentry DSN（設定すると例外を自動送信）
 
 ### 6-1. env.example（サンプル）
 `env.example` を参考に `.env` を作成してください。
+
+補足（PR4: レート制限/ログ/SLA）:
+- API リクエストには自動で `X-Request-ID` が割り当てられ、レスポンスヘッダにも付与されます。
+- レート制限は簡易トークンバケットで、IP と `X-User-Id`（任意ヘッダ）単位に毎分の上限を適用します。超過時は `429 Too Many Requests` を返します。
+- Sentry DSN を設定すると、ERROR 以上のログ/例外が送信されます（依存: `sentry-sdk`）。
 
 ---
 

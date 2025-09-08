@@ -183,23 +183,10 @@
 
 ---
 
-## 7. 開発メモ（導入・検証のヒント）
-- テスト実行:
-  ```bash
-  pytest
-  # または従来の明示オプション
-  pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
-  ```
-- 追加テスト（PR7）:
-  - `tests/test_integration_rag.py` … Chroma に最小シード投入→ `citations`/`confidence` を統合検証
-  - `tests/test_e2e_backend_frontend.py` … APIフローのE2E相当（正常/タイムアウト周辺の健全性）
-  - `tests/test_load_and_regression.py` … 軽負荷スモーク（10リクエスト）とスキーマ回帰
-- コード配置（抜粋）:
-  - バックエンド: `src/backend`（`routers/*`, `flows/*`, `models/*`, `metrics.py`）
-  - フロントエンド: `src/frontend`（React + Vite）
-- 実装差し替えポイント:
-  - `src/backend/providers.py` … LLM/Embedding クライアントの実体
-  - `flows/*` … LangGraph ノードを本実装へ置換
-  - 運用: `/metrics` で p95/件数/エラー/タイムアウトを確認可能（M6）
+## 7. 運用のヒント（PR4）
+- レート制限: 1分あたりの上限を IP と `X-User-Id`（任意ヘッダ）ごとに適用します。超過時は `429` が返ります。時間を開けて再試行してください。
+- リクエストID: すべての応答に `X-Request-ID` が付きます。問題報告時に併記いただくと調査が容易です。
+- 監視: `/metrics` でパス別の p95/件数/エラー/タイムアウトを確認できます。
+- 例外監視（任意）: 管理者が Sentry DSN を設定している場合、重大なエラーは自動送信されます。
 
 
