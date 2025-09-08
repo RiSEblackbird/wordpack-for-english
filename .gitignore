@@ -29,3 +29,6 @@ __pycache__/
 
 # Test artifacts
 .coverage
+
+# App runtime data
+.data/
