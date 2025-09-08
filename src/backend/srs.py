@@ -5,7 +5,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Iterable, List, Optional, Tuple
 
 from .config import settings
 
@@ -258,6 +258,115 @@ class SRSSQLiteStore:
             except Exception:
                 pass
             raise
+        finally:
+            conn.close()
+
+
+    def ensure_card(self, item_id: str, front: str, back: str) -> None:
+        """Ensure a card exists; create if missing with defaults.
+
+        Newly created cards are due immediately (due_at=now) so they can be graded at once.
+        """
+        now = datetime.utcnow()
+        conn = self._connect()
+        try:
+            cur = conn.execute("SELECT 1 FROM cards WHERE id = ?;", (item_id,))
+            if cur.fetchone() is not None:
+                return
+            with conn:
+                conn.execute(
+                    "INSERT INTO cards(id, deck_id, front, back, repetitions, interval_days, ease, due_at, created_at) VALUES (?, ?, ?, ?, 0, 0, 2.5, ?, ?);",
+                    (item_id, self.default_deck_id, front, back, now.isoformat(), now.isoformat()),
+                )
+        finally:
+            conn.close()
+
+    # --- stats & history ---
+    def get_stats(self) -> Tuple[int, int]:
+        """Return (due_now_count, reviewed_today_count).
+
+        - due_now_count: 現在時刻までに due のカード件数
+        - reviewed_today_count: 当日 00:00 UTC 以降にレビューされた件数
+        """
+        now = datetime.utcnow()
+        today_start = datetime(now.year, now.month, now.day)
+        conn = self._connect()
+        try:
+            cur1 = conn.execute("SELECT COUNT(1) AS c FROM cards WHERE due_at <= ?;", (now.isoformat(),))
+            due_now = int(cur1.fetchone()["c"])
+            cur2 = conn.execute("SELECT COUNT(1) AS c FROM reviews WHERE reviewed_at >= ?;", (today_start.isoformat(),))
+            reviewed_today = int(cur2.fetchone()["c"])
+            return due_now, reviewed_today
+        finally:
+            conn.close()
+
+    def get_recent_reviewed(self, limit: int = 5) -> List[ReviewItem]:
+        """直近レビューのカードを新しい順に最大 limit 件返す。"""
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                """
+                SELECT c.id, c.front, c.back, c.repetitions, c.interval_days, c.ease, c.due_at
+                FROM reviews r
+                JOIN cards c ON c.id = r.card_id
+                ORDER BY r.reviewed_at DESC
+                LIMIT ?;
+                """,
+                (limit,),
+            )
+            items: List[ReviewItem] = []
+            for row in cur.fetchall():
+                items.append(
+                    ReviewItem(
+                        id=row["id"],
+                        front=row["front"],
+                        back=row["back"],
+                        repetitions=int(row["repetitions"]),
+                        interval_days=int(row["interval_days"]),
+                        ease=float(row["ease"]),
+                        due_at=datetime.fromisoformat(row["due_at"]),
+                    )
+                )
+            return items
+        finally:
+            conn.close()
+
+    def get_popular(self, limit: int = 10) -> List[ReviewItem]:
+        """よく見る順（レビュー件数の多い順）にカードを返す。
+
+        - reviews の件数で降順ソート
+        - 同数の場合は cards.created_at の昇順で安定化
+        """
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                """
+                SELECT c.id, c.front, c.back, c.repetitions, c.interval_days, c.ease, c.due_at
+                FROM cards c
+                LEFT JOIN (
+                    SELECT card_id, COUNT(1) AS rc
+                    FROM reviews
+                    GROUP BY card_id
+                ) r ON r.card_id = c.id
+                ORDER BY COALESCE(r.rc, 0) DESC, c.created_at ASC, c.id ASC
+                LIMIT ?;
+                """,
+                (limit,),
+            )
+            items: List[ReviewItem] = []
+            for row in cur.fetchall():
+                items.append(
+                    ReviewItem(
+                        id=row["id"],
+                        front=row["front"],
+                        back=row["back"],
+                        repetitions=int(row["repetitions"]),
+                        interval_days=int(row["interval_days"]),
+                        ease=float(row["ease"]),
+                        due_at=datetime.fromisoformat(row["due_at"]),
+                    )
+                )
+            return items
         finally:
             conn.close()
 

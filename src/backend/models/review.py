@@ -1,5 +1,7 @@
 from datetime import datetime
 from pydantic import BaseModel
+from pydantic import Field
+from pydantic import ConfigDict
 
 
 class ReviewCard(BaseModel):
@@ -32,3 +34,41 @@ class ReviewGradeRequest(BaseModel):
 class ReviewGradeResponse(BaseModel):
     ok: bool
     next_due: datetime
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"ok": True, "next_due": "2025-01-01T12:34:56Z"}
+            ]
+        }
+    )
+
+
+class ReviewGradeByLemmaRequest(BaseModel):
+    """レンマ直採点のリクエストモデル。
+
+    - lemma: 学習語の見出し
+    - grade: 0|1|2 の三段階
+    """
+
+    lemma: str = Field(min_length=1, max_length=64)
+    grade: int = Field(ge=0, le=2)
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"lemma": "converge", "grade": 2}
+            ]
+        }
+    )
+
+
+class ReviewStatsResponse(BaseModel):
+    """進捗の見える化 用の統計レスポンス。
+
+    - due_now: 現在時点で出題すべき件数（残数）
+    - reviewed_today: 今日レビュー済み件数
+    - recent: 直近レビューした最大5件
+    """
+
+    due_now: int
+    reviewed_today: int
+    recent: list[ReviewCard] = []

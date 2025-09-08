@@ -80,3 +80,39 @@ def test_review_grade(client):
     assert resp.status_code == 200
     j = resp.json()
     assert j.get("ok") is True and "next_due" in j
+
+
+def test_review_grade_by_lemma(client):
+    resp = client.post("/api/review/grade_by_lemma", json={"lemma": "foobar", "grade": 2})
+    assert resp.status_code == 200
+    j = resp.json()
+    assert j.get("ok") is True and "next_due" in j
+
+    # invalid grade should be rejected by validation
+    resp2 = client.post("/api/review/grade_by_lemma", json={"lemma": "foobar", "grade": 3})
+    assert resp2.status_code == 422
+
+    # invalid lemma should be rejected by validation
+    resp3 = client.post("/api/review/grade_by_lemma", json={"lemma": "", "grade": 1})
+    assert resp3.status_code == 422
+
+
+def test_review_stats(client):
+    # 基本的に 200 が返り、必須キーがあること
+    resp = client.get("/api/review/stats")
+    assert resp.status_code == 200
+    j = resp.json()
+    assert set(["due_now", "reviewed_today", "recent"]).issubset(j.keys())
+    assert isinstance(j["due_now"], int)
+    assert isinstance(j["reviewed_today"], int)
+    assert isinstance(j["recent"], list)
+
+
+def test_review_popular(client):
+    resp = client.get("/api/review/popular?limit=5")
+    assert resp.status_code == 200
+    arr = resp.json()
+    assert isinstance(arr, list)
+    if arr:
+        first = arr[0]
+        assert set(["id", "front", "back"]).issubset(first.keys())

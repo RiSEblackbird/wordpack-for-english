@@ -33,6 +33,16 @@ export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
           </select>
         </label>
       </div>
+      <div>
+        <label>
+          採点後に自動で次へ
+          <input
+            type="checkbox"
+            checked={settings.autoAdvanceAfterGrade}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSettings({ ...settings, autoAdvanceAfterGrade: e.target.checked })}
+          />
+        </label>
+      </div>
     </section>
   );
 };
