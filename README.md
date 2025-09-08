@@ -196,6 +196,15 @@ FastAPI アプリは `src/backend/main.py`。
     { "repetitions": 3, "interval_days": 6, "due_at": "2025-01-01T12:34:56.000Z" }
     ```
 
+### 3-1. 引用と確度（citations/confidence）の読み方（PR5）
+- citations（引用）:
+  - **意味**: RAG が返す参照元（抜粋テキスト/ソース）。
+  - **使い方**: 生成内容の根拠をたどる用途。空配列の場合は根拠の提示が無い（またはシード未投入）ことを示します。
+- confidence（確度）:
+  - **値**: `low | medium | high`（Enum）
+  - **方針**: RAG の一致度や LLM の整合性ヒューリスティクスに基づき調整。UI ではバッジで表示します。
+  - **読み方**: `high` は引用が十分かつ整合が取れている状態、`low` は引用不十分/曖昧さが高い状態を示します。
+
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
 `flows/*` は LangGraph による処理で、RAG（Chroma）と `citations`/`confidence` の一貫管理を導入済みです。`ReadingAssistFlow` は簡易要約を返し、`FeedbackFlow` はRAG引用を付与します。各ルータにはタグ/summaryが付与され、OpenAPI の可読性を向上しています。
@@ -285,6 +294,14 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 
 ### 6-1. env.example（サンプル）
 `env.example` を参考に `.env` を作成してください。
+
+### 6-2. SRS データ移行の注意点（PR5）
+- 既定のDBパス: `SRS_DB_PATH=.data/srs.sqlite3`
+- 権限: 実行ユーザに `.data/` ディレクトリの作成/書込権限が必要です。
+- バックアップ: 重要データのため変更前にバックアップを取得してください。
+  - 例（Windows PowerShell）: `Copy-Item .data/srs.sqlite3 .data/srs.backup.sqlite3`
+- パス変更: `.env` の `SRS_DB_PATH` を新パスに設定し、アプリを再起動します。
+- スキーマ変更（将来）: 互換が壊れる場合はマイグレーション手順をREADMEに追記します。暫定実装では互換維持・自動作成（存在しない場合）です。
 
 補足（PR4: レート制限/ログ/SLA）:
 - API リクエストには自動で `X-Request-ID` が割り当てられ、レスポンスヘッダにも付与されます。

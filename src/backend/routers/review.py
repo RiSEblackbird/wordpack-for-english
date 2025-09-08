@@ -42,6 +42,21 @@ async def review_grade_by_lemma(req: ReviewGradeByLemmaRequest) -> ReviewGradeRe
     - id 形式: "w:<lemma>"
     - front: lemma
     - back: WordPack.study_card
+
+    Request schema (pydantic): ReviewGradeByLemmaRequest
+      - lemma: str (1..64)
+      - grade: int (0|1|2)
+
+    Response schema: ReviewGradeResponse
+      - ok: bool
+      - next_due: ISO8601 datetime (UTC)
+
+    Errors:
+      - 422: validation error (e.g., empty lemma / grade out of range)
+      - 500: failed to grade newly created card
+
+    Example:
+      {"lemma": "converge", "grade": 2} -> {"ok": true, "next_due": "2025-01-01T12:34:56.000Z"}
     """
     card_id = f"w:{req.lemma}"
     # 既存カードがなければ WordPack を用いて back を用意し作成
@@ -85,6 +100,22 @@ async def review_card_by_lemma(lemma: str) -> ReviewCardMetaResponse:
 
     - id 形式: "w:<lemma>"
     - 取得のみ。存在しなければ 404
+
+    Query parameters:
+      - lemma: str (required)
+
+    Response schema: ReviewCardMetaResponse
+      - repetitions: int
+      - interval_days: int
+      - due_at: ISO8601 datetime (UTC)
+
+    Errors:
+      - 422: if lemma is empty
+      - 404: if card not found
+
+    Example:
+      GET /api/review/card_by_lemma?lemma=converge ->
+      {"repetitions": 3, "interval_days": 6, "due_at": "2025-01-01T12:34:56.000Z"}
     """
     if not lemma or not lemma.strip():
         raise HTTPException(status_code=422, detail="lemma is required")
