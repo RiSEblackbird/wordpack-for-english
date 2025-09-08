@@ -28,7 +28,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
             senses: [{ id: 's1', gloss_ja: '意味', patterns: [] }],
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
             contrast: [],
-            examples: { A1: [`${lemma} example.`], B1: [], C1: [], tech: [] },
+            examples: { A1: [{ en: `${lemma} example.`, ja: `${lemma} の例文` }], B1: [], C1: [], tech: [] },
             etymology: { note: '-', confidence: 'low' },
             study_card: `study of ${lemma}`,
             citations: [{ text: 'citation' }],

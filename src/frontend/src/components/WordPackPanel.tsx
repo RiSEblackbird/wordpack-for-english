@@ -22,7 +22,8 @@ interface Collocations { general: CollocationLists; academic: CollocationLists }
 
 interface ContrastItem { with: string; diff_ja: string }
 
-interface Examples { A1: string[]; B1: string[]; C1: string[]; tech: string[] }
+interface ExampleItem { en: string; ja: string }
+interface Examples { A1: ExampleItem[]; B1: ExampleItem[]; C1: ExampleItem[]; tech: ExampleItem[] }
 
 interface Etymology { note: string; confidence: 'low' | 'medium' | 'high' }
 
@@ -444,7 +445,12 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
                   <h4>{k}</h4>
                   {data.examples?.[k]?.length ? (
                     <ul>
-                      {data.examples[k].map((ex, i) => <li key={i}>{ex}</li>)}
+                      {(data.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
+                        <li key={i}>
+                          <div>{ex.en}</div>
+                          <div style={{ color: '#555' }}>{ex.ja}</div>
+                        </li>
+                      ))}
                     </ul>
                   ) : <p>なし</p>}
                 </div>
