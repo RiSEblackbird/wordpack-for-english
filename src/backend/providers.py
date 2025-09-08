@@ -1,4 +1,5 @@
 from typing import Any, Optional, List, Callable
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
@@ -201,10 +202,17 @@ class ChromaClientFactory:
         key = f"url:{getattr(settings, 'chroma_server_url', None) or ''}|persist:{self.persist_directory}"
         if key in _CLIENT_CACHE:
             return _CLIENT_CACHE[key]
-        if chromadb is None:  # pragma: no cover - tests may stub
+        # テスト/開発（非 strict）では常にインメモリ互換クライアントを返す
+        if not settings.strict_mode:
+            client = _InMemoryChromaClient(get_embedding_provider())
+            _CLIENT_CACHE[key] = client
+            return client
+        # ランタイムで chromadb が利用不可（モジュール未登録/未インストール）ならフォールバック
+        if chromadb is None or "chromadb" not in sys.modules:  # pragma: no cover - tests may stub
             if settings.strict_mode and settings.rag_enabled:
+                # strict ではライブラリ欠如を許容しない
                 raise RuntimeError("chromadb module is required when RAG is enabled (strict mode)")
-            # フォールバック：インメモリ互換クライアント
+            # 非 strict: フォールバックとして常にメモリ内クライアントを返す
             client = _InMemoryChromaClient(get_embedding_provider())
             _CLIENT_CACHE[key] = client
             return client
@@ -226,8 +234,9 @@ class ChromaClientFactory:
                     underlying = None
         if underlying is None:
             if settings.strict_mode and settings.rag_enabled:
+                # strict では初期化失敗も許容しない
                 raise RuntimeError("Failed to initialize Chroma client (strict mode)")
-            # フォールバック：インメモリ互換クライアント
+            # 非 strict: フォールバックで進行
             client = _InMemoryChromaClient(get_embedding_provider())
             _CLIENT_CACHE[key] = client
             return client

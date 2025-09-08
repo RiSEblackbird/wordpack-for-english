@@ -33,8 +33,28 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     指定した語について、発音・語義・共起・対比・例文・語源などを
     まとめた学習パックを生成して返す（MVP はダミー）。
     """
-    # RAG が有効なときのみ Chroma を接続
-    chroma_client = ChromaClientFactory().create_client() if settings.rag_enabled else None
+    # RAG が有効なときのみ Chroma を接続（初期化失敗は後段で 424 にマップ）
+    try:
+        chroma_client = ChromaClientFactory().create_client() if settings.rag_enabled else None
+    except RuntimeError as exc:
+        msg = str(exc)
+        if (
+            settings.rag_enabled
+            and settings.strict_mode
+            and (
+                "chromadb module is required" in msg.lower()
+                or "failed to initialize chroma client" in msg.lower()
+            )
+        ):
+            raise HTTPException(
+                status_code=424,
+                detail={
+                    "message": "RAG dependency not ready or no citations (strict mode)",
+                    "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
+                },
+            ) from exc
+        # それ以外は再送出
+        raise
     llm = get_llm_provider()
     flow = WordPackFlow(chroma_client=chroma_client, llm=llm)
     try:
