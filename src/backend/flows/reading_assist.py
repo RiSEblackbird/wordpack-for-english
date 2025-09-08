@@ -28,7 +28,7 @@ class ReadingAssistFlow:
     文意のパラフレーズ生成、引用元提示等を追加する想定。
     """
 
-    def __init__(self, chroma_client: Any | None = None) -> None:
+    def __init__(self, chroma_client: Any | None = None, *, llm: Any | None = None) -> None:
         """ChromaDB クライアント等を受け取り、LangGraph を初期化。
 
         Parameters
@@ -37,19 +37,39 @@ class ReadingAssistFlow:
             用語サーチ/RAG に用いるベクトルDB クライアント（任意）。
         """
         self.chroma = chroma_client
+        self.llm = llm
         self.graph = create_state_graph()
 
     def _segment(self, paragraph: str) -> List[str]:
-        """段落を単純なピリオド分割で文リストに変換（MVP）。"""
-        return [s.strip() for s in paragraph.replace("\n", " ").split(".") if s.strip()]
+        """簡易な文分割（., !, ? を区切り）。連続空白・改行を正規化。"""
+        import re
+        normalized = " ".join(paragraph.replace("\n", " ").split())
+        parts = re.split(r"(?<=[.!?])\s+", normalized)
+        return [s.strip().rstrip(".?!") for s in parts if s.strip()]
 
     def _analyze(self, sentence: str) -> AssistedSentence:
-        """文を解析し、構文情報・用語注・パラフレーズを付与（MVP）。"""
+        """文を解析し、構文情報・用語注・パラフレーズを付与。LLM があれば簡易言い換え。"""
+        # 最小の用語抽出: 先頭語を代表語として抽出
+        terms = [TermInfo(lemma=w, gloss_ja=None, ipa=None) for w in sentence.split()[:1]]
+        paraphrase = sentence
+        # LLM が使えれば、非常に短い指示でパラフレーズを試みる（失敗時は無視）
+        try:
+            if self.llm is not None and hasattr(self.llm, "complete"):
+                prompt = (
+                    "Paraphrase the following English sentence in simple words (10-18 words).\n" 
+                    f"Sentence: {sentence}"
+                )
+                out = self.llm.complete(prompt)  # type: ignore[attr-defined]
+                if isinstance(out, str) and out.strip():
+                    paraphrase = out.strip()
+        except Exception:
+            pass
+
         return AssistedSentence(
             raw=sentence,
             syntax=SyntaxInfo(subject=None, predicate=None, mods=[]),
-            terms=[TermInfo(lemma=w, gloss_ja=None, ipa=None) for w in sentence.split()[:1]],
-            paraphrase=sentence,
+            terms=terms,
+            paraphrase=paraphrase,
         )
 
     def run(self, paragraph: str) -> TextAssistResponse:
@@ -71,6 +91,13 @@ class ReadingAssistFlow:
                     metas = (res.get("metadatas") or [[]])[0]
                     for d, m in zip(docs, metas):
                         citations.append(Citation(text=d, meta=m))
-        confidence = ConfidenceLevel.medium if citations else ConfidenceLevel.low
+        # 確度ヒューリスティクス: RAG あり + LLM パラフレーズ成功で high / 片方で medium
+        used_llm = any(s.paraphrase and s.paraphrase != s.raw for s in sentences)
+        if citations and used_llm:
+            confidence = ConfidenceLevel.high
+        elif citations or used_llm:
+            confidence = ConfidenceLevel.medium
+        else:
+            confidence = ConfidenceLevel.low
         summary = sentences[0].paraphrase if sentences else None
         return TextAssistResponse(sentences=sentences, summary=summary, citations=citations, confidence=confidence)

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from ..flows.reading_assist import ReadingAssistFlow
-from ..providers import ChromaClientFactory
+from ..providers import ChromaClientFactory, get_llm_provider
 from ..config import settings
 from ..models.text import TextAssistRequest, TextAssistResponse
 
@@ -16,5 +16,6 @@ async def assist_text(req: TextAssistRequest) -> TextAssistResponse:
     リーディング支援情報を返す。MVP はダミー応答。
     """
     chroma_client = ChromaClientFactory().create_client() if settings.rag_enabled else None
-    flow = ReadingAssistFlow(chroma_client=chroma_client)
+    llm = get_llm_provider()
+    flow = ReadingAssistFlow(chroma_client=chroma_client, llm=llm)
     return flow.run(req.paragraph)

@@ -132,7 +132,8 @@ FastAPI アプリは `src/backend/main.py`。
   
 
 - `POST /api/sentence/check`
-  - 自作文チェック（RAG 引用と `confidence` を付与、将来LLM統合）。
+  - 自作文チェック（RAG 引用と `confidence` を付与）。
+  - LLM が有効な場合、issues/revisions/mini exercise を安全に補強します（失敗時はフォールバック）。
   - レスポンス例（抜粋）:
     ```json
     { "issues": [{"what":"語法","why":"対象語の使い分け不正確","fix":"共起に合わせて置換"}],
@@ -141,7 +142,8 @@ FastAPI アプリは `src/backend/main.py`。
     ```
 
 - `POST /api/text/assist`
-  - 段落注釈（RAG: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。簡易要約を返却。
+  - 段落注釈（RAG: 先頭語で `domain_terms` を近傍検索し `citations` と `confidence` を付与）。
+  - LLM が有効なら各文の簡易パラフレーズを生成し、総合 `confidence` を調整します。
   - レスポンス例（抜粋）:
     ```json
     { "sentences": [{"raw":"Some text","terms":[{"lemma":"Some"}]}], "summary": null, "citations": [] }
