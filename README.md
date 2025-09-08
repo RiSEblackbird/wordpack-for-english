@@ -296,6 +296,10 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ### 6-1. env.example（サンプル）
 `env.example` を参考に `.env` を作成してください。
 
+補足（互換キーの無視）:
+- 旧サンプル/別アプリ由来のキー（例: `API_KEY`/`ALLOWED_ORIGINS` など）が `.env` に残っていても、`src/backend/config.py` は未使用の環境変数を無視する設定になっています（`extra="ignore"`）。
+- そのため Docker 環境でも、未使用キーが存在して起動が失敗することはありません。
+
 ### 6-2. SRS データ移行の注意点（PR5）
 - 既定のDBパス: `SRS_DB_PATH=.data/srs.sqlite3`
 - 権限: 実行ユーザに `.data/` ディレクトリの作成/書込権限が必要です。

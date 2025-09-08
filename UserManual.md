@@ -176,6 +176,9 @@
     pip install -U -r requirements.txt
     docker compose build --no-cache && docker compose up
     ```
+ - Docker 起動時に Pydantic の ValidationError（`Extra inputs are not permitted`）が出る
+   - `.env` に旧サンプルや別アプリのキー（例: `API_KEY`, `ALLOWED_ORIGINS`）が残っている可能性があります。
+   - 現行のバックエンド設定（`src/backend/config.py`）は未使用キーを無視するよう修正済みです（`extra="ignore"`）。再起動して問題が解消するか確認してください。
 
 ---
 

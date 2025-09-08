@@ -1,5 +1,5 @@
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -101,8 +101,15 @@ class Settings(BaseSettings):
     )
     sentry_dsn: str | None = Field(default=None, description="Sentry DSN (enable if set)")
 
-    class Config:
-        env_file = ".env"
+    # Pydantic v2 settings config
+    # - env_file: .env を読み込む
+    # - extra: .env に存在する未使用キー（例: api_key/allowed_origins など）を無視
+    # - case_sensitive: 環境変数キーの大小文字を区別しない
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+        case_sensitive=False,
+    )
 
 
 settings = Settings()
