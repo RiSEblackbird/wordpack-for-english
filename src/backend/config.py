@@ -101,6 +101,12 @@ class Settings(BaseSettings):
     )
     sentry_dsn: str | None = Field(default=None, description="Sentry DSN (enable if set)")
 
+    # --- Strict mode ---
+    strict_mode: bool = Field(
+        default=True,
+        description="Fail fast on missing/invalid configuration (disable only for tests)",
+    )
+
     # Pydantic v2 settings config
     # - env_file: .env を読み込む
     # - extra: .env に存在する未使用キー（例: api_key/allowed_origins など）を無視

@@ -63,6 +63,8 @@ class ReadingAssistFlow:
                 if isinstance(out, str) and out.strip():
                     paraphrase = out.strip()
         except Exception:
+            if settings.strict_mode:
+                raise
             pass
 
         return AssistedSentence(
@@ -91,6 +93,8 @@ class ReadingAssistFlow:
                     metas = (res.get("metadatas") or [[]])[0]
                     for d, m in zip(docs, metas):
                         citations.append(Citation(text=d, meta=m))
+                elif settings.strict_mode:
+                    raise RuntimeError("RAG is enabled but no citations were retrieved (strict mode)")
         # 確度ヒューリスティクス: RAG あり + LLM パラフレーズ成功で high / 片方で medium
         used_llm = any(s.paraphrase and s.paraphrase != s.raw for s in sentences)
         if citations and used_llm:

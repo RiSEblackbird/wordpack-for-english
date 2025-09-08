@@ -15,6 +15,7 @@ def test_get_llm_provider_without_keys_returns_safe_client(monkeypatch):
     from backend import providers
 
     # Force provider to local or unset keys
+    monkeypatch.setenv("STRICT_MODE", "false")
     monkeypatch.setenv("LLM_PROVIDER", "local")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
@@ -32,6 +33,7 @@ def test_get_llm_provider_without_keys_returns_safe_client(monkeypatch):
 
 def test_get_llm_provider_is_singleton(monkeypatch):
     # LLM プロバイダはモジュール内でキャッシュされ、同一インスタンスが返る
+    monkeypatch.setenv("STRICT_MODE", "false")
     monkeypatch.setenv("LLM_PROVIDER", "local")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
@@ -48,6 +50,7 @@ def test_get_llm_provider_is_singleton(monkeypatch):
 def test_chroma_client_fallback_when_module_missing(monkeypatch):
     # remove chromadb module to trigger in-memory fallback
     sys.modules.pop("chromadb", None)
+    monkeypatch.setenv("STRICT_MODE", "false")
     from backend.providers import ChromaClientFactory
 
     client = ChromaClientFactory().create_client()
@@ -60,6 +63,7 @@ def test_chroma_client_fallback_when_module_missing(monkeypatch):
 
 def test_embedding_provider_default_is_callable(monkeypatch):
     # Ensure no OpenAI key -> fallback SimpleEmbeddingFunction
+    monkeypatch.setenv("STRICT_MODE", "false")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     from backend.providers import get_embedding_provider
 

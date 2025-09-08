@@ -10,6 +10,8 @@ from fastapi.testclient import TestClient
 def app_client():
     # src を import パスに追加
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    import os
+    os.environ["STRICT_MODE"] = "false"
     # langgraph を最小スタブ化（バックエンドのみのE2Eに留める）
     lg_mod = types.ModuleType("langgraph")
     graph_mod = types.ModuleType("langgraph.graph")

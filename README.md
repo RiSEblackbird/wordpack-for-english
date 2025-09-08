@@ -294,7 +294,11 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
     - `sentry_dsn` … Sentry DSN（設定すると例外を自動送信）
 
 ### 6-1. env.example（サンプル）
-`env.example` を参考に `.env` を作成してください。
+`env.example` を参考に `.env` を作成してください。特に以下の新設定があります。
+
+- `STRICT_MODE`（既定: `true`）
+  - 本番/実運用では `true` を推奨。必須設定が不足している場合はフォールバックせずエラーにします（Fail-Fast）。
+  - テスト/オフライン開発では `false` に設定することで、従来のローカル/ダミー挙動（LLMローカル、SimpleEmbedding、Chromaインメモリ等）を許容します。
 
 補足（互換キーの無視）:
 - 旧サンプル/別アプリ由来のキー（例: `API_KEY`/`ALLOWED_ORIGINS` など）が `.env` に残っていても、`src/backend/config.py` は未使用の環境変数を無視する設定になっています（`extra="ignore"`）。

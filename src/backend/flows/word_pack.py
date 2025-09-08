@@ -62,8 +62,11 @@ class WordPackFlow:
                 metas = (res.get("metadatas") or [[]])[0]
                 for d, m in zip(docs, metas):
                     citations.append(Citation(text=d, meta=m))
-        # 最低限のフォールバック: 近傍が空でも citations を1件返す（テスト要件を満たす）
+        # strict_mode の場合、RAG 有効で引用が得られなければエラーで早期に気付けるようにする
         if settings.rag_enabled and not citations:
+            if settings.strict_mode:
+                raise RuntimeError("RAG is enabled but no citations were retrieved (strict mode)")
+            # 非 strict: 最低限のフォールバック（テスト/開発用途）
             citations.append(Citation(text=f"{lemma}: example snippet (fallback).", meta={"source": "fallback"}))
         return {"lemma": lemma, "citations": citations}
 

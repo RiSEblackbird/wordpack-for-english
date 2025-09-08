@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from ..flows.word_pack import WordPackFlow
 from ..providers import ChromaClientFactory, get_llm_provider
@@ -12,8 +12,11 @@ router = APIRouter(tags=["word"])
 async def lookup_word() -> dict[str, object]:
     """暫定の語義参照（プレースホルダ）。
 
-    tests/test_api.py の互換用: {"definition": None, "examples": []}
+    strict_mode の場合は未実装として 501 を返す。テスト互換のため非 strict では固定応答。
     """
+    from ..config import settings
+    if settings.strict_mode:
+        raise HTTPException(status_code=501, detail="Not Implemented: /api/word in strict mode")
     return {"definition": None, "examples": []}
 
 

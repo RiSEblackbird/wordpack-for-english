@@ -127,10 +127,27 @@ def get_llm_provider() -> Any:
         return _LLM_INSTANCE
     provider = (settings.llm_provider or "").lower()
     try:
-        if provider == "openai" and settings.openai_api_key:
+        # 明示的に local を指定した場合
+        if provider in {"", "local"}:
+            if settings.strict_mode:
+                raise RuntimeError("LLM_PROVIDER must be 'openai' or 'azure-openai' in strict mode")
+            _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
+            return _LLM_INSTANCE
+        if provider == "openai":
+            if not settings.openai_api_key:
+                if settings.strict_mode:
+                    raise RuntimeError("OPENAI_API_KEY is required for LLM_PROVIDER=openai (strict mode)")
+                # 非 strict: ローカルフォールバック
+                _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
+                return _LLM_INSTANCE
             _LLM_INSTANCE = _llm_with_policy(_OpenAILLM(api_key=settings.openai_api_key, model=settings.llm_model))
             return _LLM_INSTANCE
-        if provider in {"azure", "azure-openai"} and settings.azure_openai_api_key and settings.azure_openai_endpoint:
+        if provider in {"azure", "azure-openai"}:
+            if not (settings.azure_openai_api_key and settings.azure_openai_endpoint):
+                if settings.strict_mode:
+                    raise RuntimeError("AZURE_OPENAI_API_KEY and AZURE_OPENAI_ENDPOINT are required for LLM_PROVIDER=azure-openai (strict mode)")
+                _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
+                return _LLM_INSTANCE
             deployment = settings.azure_openai_deployment or settings.llm_model
             _LLM_INSTANCE = _llm_with_policy(
                 _AzureOpenAILLM(
@@ -141,11 +158,15 @@ def get_llm_provider() -> Any:
                 )
             )
             return _LLM_INSTANCE
-        # local / その他: フォールバック
+        # 未知のプロバイダ
+        if settings.strict_mode:
+            raise RuntimeError(f"Unknown LLM provider: {provider}")
         _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
         return _LLM_INSTANCE
     except Exception:
-        # 例外時もフォールバック
+        # 例外時の扱い: strict では再送出、非 strict ではローカルフォールバック
+        if settings.strict_mode:
+            raise
         _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
         return _LLM_INSTANCE
 
@@ -160,7 +181,11 @@ def get_embedding_provider() -> Any:
     - その他: SimpleEmbeddingFunction（決定的フォールバック）
     """
     provider = (settings.embedding_provider or "").lower()
-    if provider == "openai" and settings.openai_api_key and OpenAI is not None:  # pragma: no cover - network disabled in tests
+    if provider == "openai":
+        if not (settings.openai_api_key and OpenAI is not None):  # pragma: no cover - network disabled in tests
+            if settings.strict_mode:
+                raise RuntimeError("OPENAI_API_KEY and openai package are required for EMBEDDING_PROVIDER=openai (strict mode)")
+            return SimpleEmbeddingFunction()
         client = OpenAI(api_key=settings.openai_api_key)
         model = settings.embedding_model
 
@@ -176,7 +201,10 @@ def get_embedding_provider() -> Any:
                 return out
 
         return _OpenAIEmbedding()
-    # デフォルトはダミー
+    # strict モードでは openai 以外の埋め込みプロバイダ（=ダミー）は不許可
+    if settings.strict_mode:
+        raise RuntimeError(f"Unsupported embedding provider in strict mode: {provider}")
+    # 非 strict: デフォルトはダミー
     return SimpleEmbeddingFunction()
 
 
@@ -195,6 +223,8 @@ class ChromaClientFactory:
         if key in _CLIENT_CACHE:
             return _CLIENT_CACHE[key]
         if chromadb is None:  # pragma: no cover - tests may stub
+            if settings.strict_mode and settings.rag_enabled:
+                raise RuntimeError("chromadb module is required when RAG is enabled (strict mode)")
             # フォールバック：インメモリ互換クライアント
             client = _InMemoryChromaClient(get_embedding_provider())
             _CLIENT_CACHE[key] = client
@@ -216,6 +246,8 @@ class ChromaClientFactory:
                 except Exception:
                     underlying = None
         if underlying is None:
+            if settings.strict_mode and settings.rag_enabled:
+                raise RuntimeError("Failed to initialize Chroma client (strict mode)")
             # フォールバック：インメモリ互換クライアント
             client = _InMemoryChromaClient(get_embedding_provider())
             _CLIENT_CACHE[key] = client
