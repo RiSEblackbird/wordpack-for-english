@@ -30,6 +30,27 @@ def test_get_llm_provider_without_keys_returns_safe_client(monkeypatch):
     assert isinstance(out, str)
 
 
+def test_get_llm_provider_openai_with_key(monkeypatch):
+    """OpenAI APIキーが設定されている場合のテスト"""
+    from backend import providers
+
+    # OpenAI provider with test key
+    monkeypatch.setenv("STRICT_MODE", "false")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    # Reload settings to pick env
+    from importlib import reload
+    reload(providers)
+
+    llm = providers.get_llm_provider()
+    assert llm is not None
+    # complete should not raise and return str
+    out = llm.complete("ping")
+    assert isinstance(out, str)
+
+
 def test_get_llm_provider_is_singleton(monkeypatch):
     # LLM プロバイダはモジュール内でキャッシュされ、同一インスタンスが返る
     monkeypatch.setenv("STRICT_MODE", "false")

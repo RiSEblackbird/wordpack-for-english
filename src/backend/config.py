@@ -24,7 +24,7 @@ class Settings(BaseSettings):
         description="Embedding service provider / 利用する埋め込みプロバイダ",
     )
     llm_model: str = Field(
-        default="gpt-5-mini",
+        default="gpt-4o-mini",
         description="LLM model name / 利用するLLMモデル名",
     )
     embedding_model: str = Field(
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
     # --- RAG 制御（導入のみ・フラグで無効化可） ---
     rag_enabled: bool = Field(
-        default=True,
+        default=False,
         description="Enable RAG pipeline / RAG 機能の有効化スイッチ",
     )
     rag_timeout_ms: int = Field(

@@ -40,35 +40,17 @@
 - サービス起動（別ターミナルで）:
   ```bash
   # Backend（リポジトリルートで）
-  # 任意（初回のみ）RAGインデクスを投入できます（JSONL対応）:
-  #   python -m backend.indexing
-  #   python -m backend.indexing --word-jsonl data/word_snippets.jsonl --terms-jsonl data/domain_terms.jsonl
+  # OpenAI API キーを設定してください（.env ファイルに OPENAI_API_KEY を追加）
   python -m uvicorn backend.main:app --reload --app-dir src
 
   # Frontend
   cd src/frontend
   npm run dev
   ```
-ヒント（strict モード）:
+ヒント（OpenAI API キー）:
+- OpenAI API キーが設定されていない場合、アプリは安全なフォールバックモードで動作します。
 - 本番/実運用では `STRICT_MODE=true` を推奨（既定）。必須設定が不足している場合はエラーとなり早期に検出できます。
-- テスト/オフライン開発では `STRICT_MODE=false` を設定すると、LLM/Embeddings/RAG のインメモリ挙動を許容します（APIの応答はダミーではなく、取得不能な情報は空として返ります）。
-
-Docker での RAG シード:
-```bash
-docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
-```
-`STRICT_MODE=true` かつ `RAG_ENABLED=true` の場合、シード未投入だと WordPack 生成時に「RAGの引用が0件」でエラーになります。先に上記のシードを実行してください。
-
-失敗時の表示/対処（重要）:
-- WordPack 生成のバックエンド依存（Chroma/インデクス）が未準備のとき、フロントに 424 (Failed Dependency) が返ります。
-- 画面のエラーメッセージに従い、バックエンド側で以下を実行してください。
-  ```bash
-  # リポジトリルートで
-  python -m backend.indexing --persist .chroma
-  # Docker の場合
-  docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
-  ```
-- 実行後に再読み込みして、WordPack の生成を再度お試しください。
+- テスト/オフライン開発では `STRICT_MODE=false` を設定すると、ローカルフォールバック動作を許容します。
 
 
 ---
@@ -104,9 +86,9 @@ docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
 1) 「アシスト」を選択
 2) 英文の段落を貼り付け（例: `Our algorithm converges under mild assumptions.`）
 3) 「アシスト」をクリック
-4) 結果: 文分割＋構文情報＋語注＋パラフレーズ（LLMが有効なら簡易言い換え）を表示
+4) 結果: 文分割＋構文情報＋語注＋パラフレーズ（OpenAI LLMによる詳細な解析）を表示
 
-使用APIは `POST /api/text/assist` に統一済みです。接続設定は不要で、そのまま動作します。LLM が有効な場合、各文に簡易なパラフレーズが付与されます（失敗時は原文のまま）。
+使用APIは `POST /api/text/assist` に統一済みです。接続設定は不要で、そのまま動作します。OpenAI LLM が有効な場合、各文に詳細なパラフレーズと語彙情報が付与されます。
 
 ### 2-5. カード/WordPack パネルの使い方（SRS 連携）
 1) 「WordPack」を選択
@@ -153,8 +135,8 @@ docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
 - インデックス: 画面下部に `インデックス` を追加し、`最近`（直近5件）と `よく見る`（レビュー回数上位、`GET /api/review/popular`）を表示します。クリックで入力欄に反映されます。
 
 引用と確度（citations/confidence）の読み方（PR5）:
-- 引用（citations）: 生成の根拠となるテキスト/ソース。空のときは根拠が提示されていない（もしくはシード未投入）。
-- 確度（confidence）: `low / medium / high`。RAG の一致度やヒューリスティクスで調整。`high` は信頼性が高い状態、`low` は参考程度。
+- 引用（citations）: OpenAI LLM が生成した情報の参照元。LLM生成の情報は `{"source": "openai_llm"}` として記録されます。
+- 確度（confidence）: `low / medium / high`。LLM の生成品質や整合性ヒューリスティクスで調整。`high` はLLM生成が成功し詳細な情報が得られた状態、`low` はフォールバック情報のみの状態。
 
 ---
 
@@ -167,10 +149,9 @@ docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
 
 ## 4. 制約・既知の事項
 - エンドポイント整合は文/アシストとも `/api/*` に統一済み
-- LangGraph/RAG/LLM は M3/PR3 で RAG を導入
-  - `WordPackFlow` と `ReadingAssistFlow` は ChromaDB からの近傍取得により `citations`/`confidence`（low/medium/high, Enum）を付与します（シード未投入時は空/low）
-  - RAG は `rag_enabled` フラグで無効化可能。近傍クエリはレート制御/タイムアウト/リトライ/フォールバックを標準化しています。
-  - `FeedbackFlow` は将来RAG/LLM統合を予定
+- LangGraph/OpenAI LLM統合（RAG無効化）
+  - `WordPackFlow`、`ReadingAssistFlow`、`FeedbackFlow` は OpenAI LLM を直接使用して `citations`/`confidence`（low/medium/high, Enum）を付与します
+  - RAG機能は無効化され、ChromaDB依存を削除。OpenAI LLM が直接語義・用例・フィードバックを生成します
 - 日本語UIの文言は暫定で、今後統一予定
 - 発音生成は `src/backend/pronunciation.py` に統一。cmudict/g2p-en が使用可能な環境で精度が向上し、未導入時は例外辞書と規則フォールバック（タイムアウト制御あり）となります（M5）。`設定` パネルの「発音を有効化」で ON/OFF 可能です。
 - 復習（SRS）は SQLite で永続化されます（ファイル既定: `.data/srs.sqlite3`）。初回起動時に数枚のカードがシードされます。
@@ -211,9 +192,9 @@ docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
 ---
 
 ## 6. 参考（現状のAPI）
-- `POST /api/sentence/check` … 自作文チェック（RAG 引用と `confidence` を付与）
-- `POST /api/text/assist` … 段落注釈（RAG: 近傍取得で `citations`/`confidence` を付与、簡易要約を返却）
-- `POST /api/word/pack` … WordPack 生成（RAG: 近傍取得で `citations`/`confidence` を付与。`pronunciation_enabled`, `regenerate_scope`(Enum) をサポート）
+- `POST /api/sentence/check` … 自作文チェック（OpenAI LLM による詳細な文法・スタイル分析と `confidence` を付与）
+- `POST /api/text/assist` … 段落注釈（OpenAI LLM: 文の解析・パラフレーズ・語彙情報を直接生成し `citations`/`confidence` を付与）
+- `POST /api/word/pack` … WordPack 生成（OpenAI LLM: 語義・用例・共起語を直接生成し `citations`/`confidence` を付与。`pronunciation_enabled`, `regenerate_scope`(Enum) をサポート）
 - `GET  /api/review/today` … 本日のカード（最大5枚）
 - `POST /api/review/grade` … 採点（0/1/2）と次回時刻の更新
 

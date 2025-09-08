@@ -4,7 +4,7 @@ from . import create_state_graph
 
 from ..models.sentence import SentenceCheckResponse, Issue, Revision, MiniExercise
 from ..models.common import Citation, ConfidenceLevel
-from ..providers import chroma_query_with_policy, COL_DOMAIN_TERMS
+# RAG imports removed - functionality disabled
 from ..config import settings
 
 
@@ -30,11 +30,10 @@ class FeedbackFlow:
         self.graph = create_state_graph()
 
     def run(self, sentence: str) -> SentenceCheckResponse:
-        """与えられた文を解析し、フィードバックを返す。
+        """与えられた文を解析し、フィードバックを返す。OpenAI LLM を使用。
 
-        - LLM があれば軽量プロンプトで issues/revisions/mini exercise を補強
-        - LLM が無い/失敗時は安全なダミー
-        - RAG があれば citations を付与
+        - OpenAI LLM で issues/revisions/mini exercise を生成
+        - 失敗時は安全なフォールバック
         """
         # 安全な初期値（LLM 失敗時のフォールバック）
         issues = [Issue(what="語法", why="対象語の使い分け不正確", fix="共起に合わせて置換")]  # type: ignore[arg-type]
@@ -43,24 +42,47 @@ class FeedbackFlow:
             Revision(style="formal", text=sentence),
         ]
         exercise = MiniExercise(q="Fill the blank: ...", a="...")
+        citations: List[Citation] = []
 
-        # LLM による簡易補強
+        # OpenAI LLM による詳細な分析
         try:
             if self.llm is not None and hasattr(self.llm, "complete"):
-                prompt = (
-                    "Analyze the sentence and return three parts as JSON keys: "
-                    "issues (array of {what, why, fix}), revisions (array of {style, text}), "
-                    "and exercise ({q,a}). Keep outputs short and safe.\n"
-                    f"Sentence: {sentence}"
-                )
+                prompt = f"""Analyze this English sentence for grammar, style, and provide learning feedback.
+
+Sentence: {sentence}
+
+Respond in JSON format:
+{{
+  "issues": [
+    {{
+      "what": "grammar issue type",
+      "why": "explanation of the problem",
+      "fix": "suggested correction"
+    }}
+  ],
+  "revisions": [
+    {{
+      "style": "natural",
+      "text": "more natural version"
+    }},
+    {{
+      "style": "formal", 
+      "text": "formal version"
+    }}
+  ],
+  "exercise": {{
+    "q": "fill-in-the-blank question",
+    "a": "answer"
+  }}
+}}"""
+                
                 out = self.llm.complete(prompt)  # type: ignore[attr-defined]
                 if isinstance(out, str) and out.strip().startswith("{"):
                     import json
                     data = json.loads(out)
+                    
+                    # 問題点の解析
                     iss = data.get("issues") or []
-                    revs = data.get("revisions") or []
-                    ex = data.get("exercise") or None
-                    # 型安全に最小限取り込む
                     if isinstance(iss, list):
                         tmp: List[Issue] = []
                         for it in iss[:3]:
@@ -72,6 +94,9 @@ class FeedbackFlow:
                                     tmp.append(Issue(what=w, why=y, fix=f))
                         if tmp:
                             issues = tmp
+                    
+                    # 修正案の解析
+                    revs = data.get("revisions") or []
                     if isinstance(revs, list):
                         tmp2: List[Revision] = []
                         for rv in revs[:2]:
@@ -81,35 +106,31 @@ class FeedbackFlow:
                                 tmp2.append(Revision(style=st, text=tx))
                         if tmp2:
                             revisions = tmp2
+                    
+                    # 演習問題の解析
+                    ex = data.get("exercise") or None
                     if isinstance(ex, dict):
                         q = str(ex.get("q", "Fill the blank: ..."))
                         a = str(ex.get("a", "..."))
                         exercise = MiniExercise(q=q, a=a)
+                    
+                    # LLM生成の情報を引用として保存
+                    citations.append(Citation(
+                        text=f"LLM-generated feedback for: {sentence}",
+                        meta={"source": "openai_llm", "sentence": sentence}
+                    ))
         except Exception:
             if settings.strict_mode:
                 raise
             # 例外はフォールバックで吸収（非 strict）
             pass
-        # 可能ならRAGの引用を付与
-        citations: List[Citation] = []
-        if settings.rag_enabled and self.chroma and getattr(self.chroma, "get_or_create_collection", None):
-            res = chroma_query_with_policy(
-                self.chroma,
-                collection=COL_DOMAIN_TERMS,
-                query_text=sentence.split()[0] if sentence.split() else "",
-                n_results=3,
-            )
-            if res:
-                docs = (res.get("documents") or [[]])[0]
-                metas = (res.get("metadatas") or [[]])[0]
-                for d, m in zip(docs, metas):
-                    citations.append(Citation(text=d, meta=m))
-            elif settings.strict_mode:
-                # strict: RAGを期待しているのに取得できない
-                raise RuntimeError("RAG is enabled but no citations were retrieved (strict mode)")
-        # 確度: RAG 引用があれば medium、LLM 補強も効いていれば high に近い扱い
+        
+        # 確度: LLM 補強が効いていれば high、フォールバックなら medium
         if citations and revisions and issues:
+            confidence = ConfidenceLevel.high
+        elif revisions and issues:
             confidence = ConfidenceLevel.medium
         else:
             confidence = ConfidenceLevel.low
+            
         return SentenceCheckResponse(issues=issues, revisions=revisions, exercise=exercise, citations=citations, confidence=confidence)

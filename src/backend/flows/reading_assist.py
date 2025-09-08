@@ -2,10 +2,7 @@ from typing import Any, Dict, List
 
 from . import create_state_graph
 
-try:
-    import chromadb
-except Exception:  # pragma: no cover - library optional
-    chromadb = Any  # type: ignore
+# ChromaDB import removed - RAG functionality disabled
 
 from ..models.text import (
     TextAssistResponse,
@@ -16,7 +13,7 @@ from ..models.text import (
 from ..models.common import Citation, ConfidenceLevel
 from ..logging import logger
 from ..config import settings
-from ..providers import chroma_query_with_policy, COL_DOMAIN_TERMS
+# RAG imports removed - functionality disabled
 
 
 class ReadingAssistFlow:
@@ -48,60 +45,88 @@ class ReadingAssistFlow:
         return [s.strip().rstrip(".?!") for s in parts if s.strip()]
 
     def _analyze(self, sentence: str) -> AssistedSentence:
-        """文を解析し、構文情報・用語注・パラフレーズを付与。LLM があれば簡易言い換え。"""
-        # 最小の用語抽出: 先頭語を代表語として抽出
-        terms = [TermInfo(lemma=w, gloss_ja=None, ipa=None) for w in sentence.split()[:1]]
+        """文を解析し、構文情報・用語注・パラフレーズを付与。OpenAI LLM を使用。"""
+        # OpenAI LLM を使用して文の解析とパラフレーズを生成
+        terms = []
         paraphrase = sentence
-        # LLM が使えれば、非常に短い指示でパラフレーズを試みる（失敗時は無視）
+        syntax_info = SyntaxInfo(subject=None, predicate=None, mods=[])
+        
         try:
             if self.llm is not None and hasattr(self.llm, "complete"):
-                prompt = (
-                    "Paraphrase the following English sentence in simple words (10-18 words).\n" 
-                    f"Sentence: {sentence}"
-                )
+                # 文の解析とパラフレーズを同時に生成
+                prompt = f"""Analyze this English sentence and provide:
+1. A simple paraphrase (10-18 words)
+2. Key vocabulary words with Japanese meanings
+3. Basic syntax structure
+
+Sentence: {sentence}
+
+Respond in JSON format:
+{{
+  "paraphrase": "simple paraphrase here",
+  "vocabulary": [{{"word": "word1", "meaning": "Japanese meaning"}}],
+  "syntax": {{"subject": "subject", "predicate": "predicate"}}
+}}"""
+                
                 out = self.llm.complete(prompt)  # type: ignore[attr-defined]
                 if isinstance(out, str) and out.strip():
-                    paraphrase = out.strip()
+                    import json
+                    try:
+                        data = json.loads(out.strip())
+                        paraphrase = data.get("paraphrase", sentence)
+                        
+                        # 語彙情報を抽出
+                        vocab_list = data.get("vocabulary", [])
+                        for item in vocab_list[:3]:  # 最大3語まで
+                            if isinstance(item, dict) and "word" in item:
+                                terms.append(TermInfo(
+                                    lemma=item["word"],
+                                    gloss_ja=item.get("meaning"),
+                                    ipa=None
+                                ))
+                        
+                        # 構文情報を抽出
+                        syntax_data = data.get("syntax", {})
+                        if isinstance(syntax_data, dict):
+                            syntax_info = SyntaxInfo(
+                                subject=syntax_data.get("subject"),
+                                predicate=syntax_data.get("predicate"),
+                                mods=[]
+                            )
+                    except json.JSONDecodeError:
+                        # JSON解析に失敗した場合は元の文をそのまま使用
+                        paraphrase = out.strip()
         except Exception:
             if settings.strict_mode:
                 raise
-            pass
+            # フォールバック: 最小限の用語抽出
+            words = sentence.split()
+            if words:
+                terms = [TermInfo(lemma=words[0], gloss_ja=None, ipa=None)]
 
         return AssistedSentence(
             raw=sentence,
-            syntax=SyntaxInfo(subject=None, predicate=None, mods=[]),
+            syntax=syntax_info,
             terms=terms,
             paraphrase=paraphrase,
         )
 
     def run(self, paragraph: str) -> TextAssistResponse:
-        """段落を入力として文ごとの支援情報を返す。RAG の引用を付与（任意）。"""
+        """段落を入力として文ごとの支援情報を返す。OpenAI LLM を使用。"""
         sentences = [self._analyze(s) for s in self._segment(paragraph)]
         citations: List[Citation] = []
-        if settings.rag_enabled and self.chroma and getattr(self.chroma, "get_or_create_collection", None):
-            # 先頭文の先頭語で軽く近傍を引く（MVP）
-            query = sentences[0].terms[0].lemma if sentences and sentences[0].terms else ""
-            if query:
-                res = chroma_query_with_policy(
-                    self.chroma,
-                    collection=COL_DOMAIN_TERMS,
-                    query_text=query,
-                    n_results=3,
-                )
-                if res:
-                    docs = (res.get("documents") or [[]])[0]
-                    metas = (res.get("metadatas") or [[]])[0]
-                    for d, m in zip(docs, metas):
-                        citations.append(Citation(text=d, meta=m))
-                elif settings.strict_mode:
-                    raise RuntimeError("RAG is enabled but no citations were retrieved (strict mode)")
-        # 確度ヒューリスティクス: RAG あり + LLM パラフレーズ成功で high / 片方で medium
+        
+        # RAGは無効化されているため、LLMベースの解析のみを使用
+        # 確度ヒューリスティクス: LLM パラフレーズ成功で high / 失敗で medium
         used_llm = any(s.paraphrase and s.paraphrase != s.raw for s in sentences)
-        if citations and used_llm:
+        has_terms = any(s.terms for s in sentences)
+        
+        if used_llm and has_terms:
             confidence = ConfidenceLevel.high
-        elif citations or used_llm:
+        elif used_llm or has_terms:
             confidence = ConfidenceLevel.medium
         else:
             confidence = ConfidenceLevel.low
+            
         summary = sentences[0].paraphrase if sentences else None
         return TextAssistResponse(sentences=sentences, summary=summary, citations=citations, confidence=confidence)
