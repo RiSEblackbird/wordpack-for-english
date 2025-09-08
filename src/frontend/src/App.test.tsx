@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
 import '@testing-library/jest-dom';
@@ -10,17 +10,26 @@ describe('App navigation', () => {
     const cardBtn = screen.getByRole('button', { name: 'カードを取得' });
     expect(cardBtn).toBeInTheDocument();
 
-    await userEvent.keyboard('{Alt>}{2}{/Alt}');
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.keyboard('{Alt>}{2}{/Alt}');
+    });
     expect(screen.getByPlaceholderText('英文を入力してください')).toBeInTheDocument();
 
-    await userEvent.keyboard('{Alt>}{3}{/Alt}');
+    await act(async () => {
+      await user.keyboard('{Alt>}{3}{/Alt}');
+    });
     expect(screen.getByPlaceholderText('段落を入力してください')).toBeInTheDocument();
 
-    await userEvent.keyboard('{Alt>}{4}{/Alt}');
-    expect(screen.getByLabelText('API ベースURL')).toBeInTheDocument();
+    await act(async () => {
+      await user.keyboard('{Alt>}{4}{/Alt}');
+    });
+    expect(screen.getByLabelText('発音を有効化')).toBeInTheDocument();
 
-    await userEvent.keyboard('{Alt>}{1}{/Alt}');
-    await userEvent.keyboard('/');
+    await act(async () => {
+      await user.keyboard('{Alt>}{1}{/Alt}');
+      await user.keyboard('/');
+    });
     const cardPanel = document.getElementById('card-panel')!;
     expect(cardPanel).toHaveFocus();
   });
