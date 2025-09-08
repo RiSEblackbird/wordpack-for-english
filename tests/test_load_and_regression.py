@@ -34,4 +34,19 @@ def test_prompt_regression_pack_schema(client):
     for key in ["lemma", "senses", "examples", "citations", "confidence"]:
         assert key in j
 
+def test_progress_and_grade_lemma_regression(client):
+    # 進捗APIが最低限のキーを返し、整数/配列型であること
+    r1 = client.get("/api/review/stats")
+    assert r1.status_code == 200
+    s = r1.json()
+    assert isinstance(s.get("due_now"), int)
+    assert isinstance(s.get("reviewed_today"), int)
+    assert isinstance(s.get("recent"), list)
+
+    # レンマ採点APIの回帰: 正常応答
+    r2 = client.post("/api/review/grade_by_lemma", json={"lemma": "regress", "grade": 1})
+    assert r2.status_code == 200
+    j2 = r2.json()
+    assert j2.get("ok") is True and "next_due" in j2
+
 

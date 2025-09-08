@@ -92,6 +92,10 @@ def test_review_grade_by_lemma(client):
     resp2 = client.post("/api/review/grade_by_lemma", json={"lemma": "foobar", "grade": 3})
     assert resp2.status_code == 422
 
+    # invalid lemma should be rejected by validation
+    resp3 = client.post("/api/review/grade_by_lemma", json={"lemma": "", "grade": 1})
+    assert resp3.status_code == 422
+
 
 def test_review_stats(client):
     # 基本的に 200 が返り、必須キーがあること
