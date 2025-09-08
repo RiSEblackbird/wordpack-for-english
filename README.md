@@ -44,6 +44,12 @@ python -m backend.indexing \
 python -m backend.indexing --persist .chroma
 ```
 
+Docker 環境でのシード（コンテナ内実行）:
+```bash
+docker compose exec backend sh -lc "PYTHONPATH=src python -m backend.indexing"
+```
+※ `STRICT_MODE=true` かつ `RAG_ENABLED=true` の場合、シード未投入だと引用0件で WordPack 生成が失敗します（意図的なFail-Fast）。先に上記のシードを実行してください。
+
 ### 1-4. バックエンド起動
 ```bash
 # リポジトリルートで
