@@ -51,6 +51,8 @@ interface ReviewStatsResponse {
 
 type PopularCard = { id: string; front: string; back: string };
 
+interface CardMeta { repetitions: number; interval_days: number; due_at: string }
+
 export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
   const { settings } = useSettings();
   const [lemma, setLemma] = useState('');
@@ -64,6 +66,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
   const [sessionStartAt] = useState<Date>(new Date());
   const [sessionReviewed, setSessionReviewed] = useState<number>(0);
   const [popular, setPopular] = useState<PopularCard[] | null>(null);
+  const [cardMeta, setCardMeta] = useState<CardMeta | null>(null);
 
   const sectionIds = useMemo(
     () => [
@@ -101,6 +104,13 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
         signal: ctrl.signal,
       });
       setData(res);
+      // SRSメタの取得
+      try {
+        const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(res.lemma)}`);
+        setCardMeta(m);
+      } catch {
+        setCardMeta(null); // 未登録
+      }
       setMsg({ kind: 'status', text: 'WordPack を生成しました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
@@ -127,7 +137,15 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
       const due = new Date(res.next_due);
       setMsg({ kind: 'status', text: `採点しました（次回: ${due.toLocaleString()}）` });
       // 採点後に進捗を再取得
-      refreshStats();
+      await refreshStats();
+      await refreshPopular();
+      // 採点後のSRSメタも再取得
+      try {
+        const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(data.lemma)}`);
+        setCardMeta(m);
+      } catch {
+        setCardMeta(null);
+      }
       setSessionReviewed((v) => v + 1);
       if (settings.autoAdvanceAfterGrade) {
         setData(null);
@@ -238,6 +256,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
           <span style={{ marginLeft: 6 }}>残り {stats ? Math.max(stats.due_now, 0) : '-'} 件</span>
         </div>
         <div style={{ marginLeft: 'auto' }}>
+          <details>
+            <summary>ショートカット</summary>
+            <small>1/J: ×, 2/K: △, 3/L: ○</small>
+          </details>
           <small>
             本セッション: {sessionReviewed} 件 / 経過 {(() => {
               const ms = Date.now() - sessionStartAt.getTime();
@@ -458,12 +480,22 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
 
             <section id="srs" className="wp-section">
               <h3>SRSメタ</h3>
-              <p>未登録（PR2で連携予定）</p>
-              <div className="kv">
-                <div>repetitions</div><div>-</div>
-                <div>interval_days</div><div>-</div>
-                <div>due_at</div><div>-</div>
-              </div>
+              {cardMeta ? (
+                <div className="kv">
+                  <div>repetitions</div><div>{cardMeta.repetitions}</div>
+                  <div>interval_days</div><div>{cardMeta.interval_days}</div>
+                  <div>due_at</div><div>{new Date(cardMeta.due_at).toLocaleString()}</div>
+                </div>
+              ) : (
+                <>
+                  <p>未登録</p>
+                  <div className="kv">
+                    <div>repetitions</div><div>-</div>
+                    <div>interval_days</div><div>-</div>
+                    <div>due_at</div><div>-</div>
+                  </div>
+                </>
+              )}
             </section>
           </div>
         </div>

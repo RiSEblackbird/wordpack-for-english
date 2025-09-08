@@ -116,3 +116,18 @@ def test_review_popular(client):
     if arr:
         first = arr[0]
         assert set(["id", "front", "back"]).issubset(first.keys())
+
+
+def test_review_card_by_lemma(client):
+    # 未存在 → 404
+    r404 = client.get("/api/review/card_by_lemma", params={"lemma": "___neverexists___"})
+    assert r404.status_code == 404
+
+    # grade_by_lemma で作成 → 取得できる
+    lemma = "foobar2"
+    r1 = client.post("/api/review/grade_by_lemma", json={"lemma": lemma, "grade": 2})
+    assert r1.status_code == 200
+    r2 = client.get("/api/review/card_by_lemma", params={"lemma": lemma})
+    assert r2.status_code == 200
+    j = r2.json()
+    assert set(["repetitions", "interval_days", "due_at"]).issubset(j.keys())

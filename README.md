@@ -185,6 +185,14 @@ FastAPI アプリは `src/backend/main.py`。
     [ { "id": "w:converge", "front": "converge", "back": "to come together" } ]
     ```
 
+- `GET /api/review/card_by_lemma`
+  - レンマからカードの SRS メタ（登録済みなら）を返します。未登録なら 404。
+  - クエリ: `?lemma=<string>`（例: `?lemma=converge`）
+  - レスポンス例:
+    ```json
+    { "repetitions": 3, "interval_days": 6, "due_at": "2025-01-01T12:34:56.000Z" }
+    ```
+
 補足:
 - ルータのプレフィックスは `src/backend/main.py` で設定されています。
 `flows/*` は LangGraph による処理で、RAG（Chroma）と `citations`/`confidence` の一貫管理を導入済みです。`ReadingAssistFlow` は簡易要約を返し、`FeedbackFlow` はRAG引用を付与します。各ルータにはタグ/summaryが付与され、OpenAPI の可読性を向上しています。
@@ -211,6 +219,7 @@ FastAPI アプリは `src/backend/main.py`。
   - 1画面で「発音/語義/共起/対比/例文/語源/引用/信頼度/学習カード要点」を表示。
   - セルフチェック: 初期は学習カード要点に3秒のぼかしが入り、クリックで即解除可能。
   - SRS連携: 画面上で ×/△/○ の3段階採点が可能。`POST /api/review/grade_by_lemma` を呼び出し、未登録なら自動でカードを作成。
+  - SRSメタ: `GET /api/review/card_by_lemma` で登録状況と `repetitions/interval_days/due_at` を表示（未登録時は「未登録」）。採点後は進捗/インデックス（最近/よく見る）と併せて自動更新。
   - ショートカット: `1/J = ×`, `2/K = △`, `3/L = ○`。設定で「採点後に自動で次へ」を切替可能。
   - 進捗の見える化（PR4）: 画面上部に「今日のレビュー済/残り」「最近見た語（直近5）」、セッション完了時の簡易サマリ（件数/所要時間）を表示。
   - 単語アクセス導線（PR5）: 「対比」や「共起」から横展開リンクで他語へ移動。画面下部に「インデックス（最近/よく見る）」を表示。

@@ -72,3 +72,23 @@ class ReviewStatsResponse(BaseModel):
     due_now: int
     reviewed_today: int
     recent: list[ReviewCard] = []
+
+
+class ReviewCardMetaResponse(BaseModel):
+    """カードのSRSメタ情報。
+
+    - repetitions: 反復回数
+    - interval_days: 次回までの間隔（日）
+    - due_at: 次回出題予定時刻
+    """
+
+    repetitions: int
+    interval_days: int
+    due_at: datetime
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"repetitions": 3, "interval_days": 6, "due_at": "2025-01-01T12:34:56Z"}
+            ]
+        }
+    )

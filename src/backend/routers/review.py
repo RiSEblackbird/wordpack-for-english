@@ -12,6 +12,7 @@ from ..models.review import (
     ReviewGradeByLemmaRequest,
     ReviewStatsResponse,
     ReviewCard,
+    ReviewCardMetaResponse,
 )
 
 router = APIRouter(tags=["review"])
@@ -76,3 +77,24 @@ async def review_popular(limit: int = 10) -> list[ReviewCard]:
     """Return popular cards ordered by number of reviews (desc)."""
     items = store.get_popular(limit=limit)
     return [ReviewCard(id=it.id, front=it.front, back=it.back) for it in items]
+
+
+@router.get("/card_by_lemma", response_model=ReviewCardMetaResponse, response_model_exclude_none=True, summary="レンマからSRSメタを取得（存在しない場合404）")
+async def review_card_by_lemma(lemma: str) -> ReviewCardMetaResponse:
+    """Return SRS meta for the lemma's card.
+
+    - id 形式: "w:<lemma>"
+    - 取得のみ。存在しなければ 404
+    """
+    if not lemma or not lemma.strip():
+        raise HTTPException(status_code=422, detail="lemma is required")
+
+    card_id = f"w:{lemma.strip()}"
+    meta = store.get_card_meta(card_id)
+    if meta is None:
+        raise HTTPException(status_code=404, detail="card not found")
+    return ReviewCardMetaResponse(
+        repetitions=meta.repetitions,
+        interval_days=meta.interval_days,
+        due_at=meta.due_at,
+    )
