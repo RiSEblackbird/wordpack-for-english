@@ -72,7 +72,7 @@ docker compose up --build
 OpenAI LLM統合:
 - 既定で `LLM_PROVIDER=openai` および `LLM_MODEL=gpt-4o-mini` を使用します。
 - RAG機能は無効化されており、OpenAI LLMが直接語義・用例・フィードバックを生成します。
- - 生成品質のため `LLM_MAX_TOKENS` を `.env` で調整できます（既定 900）。JSON 出力の途中切れを防止します。
+- 生成品質のため `LLM_MAX_TOKENS` を `.env` で調整できます（推奨 1500）。JSON 出力の途中切れを防止します。
 
 Tips (Windows)：Vite のファイル監視が不安定な場合、`CHOKIDAR_USEPOLLING=1` を環境変数に設定してください（compose の service へ追加可能）。
 

@@ -109,7 +109,42 @@ class WordPackFlow:
                             )
                         )
                     except json.JSONDecodeError:
-                        citations.append(Citation(text=out.strip(), meta={"source": "openai_llm", "word": lemma}))
+                        # JSON としては壊れているが、部分的に "examples": {...} を含む場合がある
+                        # 例文だけでも使えるように最小限のサルベージを試みる
+                        try:
+                            ex_obj: Dict[str, Any] | None = None
+                            # "examples": { ... } のブロックを素朴に抽出
+                            m = re.search(r'"examples"\s*:\s*\{[\s\S]*?\}\s*(,|\})', raw)
+                            if m:
+                                ex_text = m.group(0)
+                                # 末尾の区切り , or } を除去して純粋なオブジェクトに近づける
+                                if ex_text.endswith(','):
+                                    ex_text = ex_text[:-1]
+                                # キーだけのオブジェクト化を試みる
+                                ex_text = ex_text
+                                # ex_text は '"examples": { ... }' なので後段で JSON として読むために外側をそのまま利用
+                                try:
+                                    ex_kv = '{' + ex_text + '}' if not raw.strip().startswith('{') else ex_text
+                                    # まず '"examples": {...}' を含む一時JSONを作って読み、examples 部分を取り出す
+                                    tmp = '{' + ex_text + '}' if not ex_text.strip().startswith('{') else ex_text
+                                    # tmp は {"examples": {...}} になる想定
+                                    obj = json.loads(tmp if tmp.strip().startswith('{') else '{' + tmp + '}')
+                                    ex_obj = obj.get('examples') if isinstance(obj, dict) else None
+                                except Exception:
+                                    ex_obj = None
+
+                            if isinstance(ex_obj, dict):
+                                # 最小 llm_data を構築（他キーは欠落可）
+                                llm_data = {"examples": ex_obj}
+                                citations.append(Citation(text=out.strip(), meta={"source": "openai_llm", "word": lemma}))
+                            else:
+                                # 例文の抽出もできない場合はそのまま引用として保存
+                                citations.append(Citation(text=out.strip(), meta={"source": "openai_llm", "word": lemma}))
+                        except Exception:
+                            citations.append(Citation(text=out.strip(), meta={"source": "openai_llm", "word": lemma}))
+                        # strict モードでは JSON 解析失敗かつサルベージ不可を許容しない
+                        if settings.strict_mode and not (isinstance(llm_data, dict) and isinstance(llm_data.get("examples"), dict)):
+                            raise RuntimeError("Failed to parse LLM JSON (no usable examples) in strict mode")
         except Exception:
             if settings.strict_mode:
                 raise
