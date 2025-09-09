@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
+import { LoadingIndicator } from './LoadingIndicator';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -35,7 +36,7 @@ interface Collocations { general: CollocationLists; academic: CollocationLists }
 interface ContrastItem { with: string; diff_ja: string }
 
 interface ExampleItem { en: string; ja: string; grammar_ja?: string }
-interface Examples { A1: ExampleItem[]; B1: ExampleItem[]; C1: ExampleItem[]; tech: ExampleItem[] }
+interface Examples { Dev: ExampleItem[]; CS: ExampleItem[]; LLM: ExampleItem[]; Tech: ExampleItem[]; Common: ExampleItem[] }
 
 interface Etymology { note: string; confidence: 'low' | 'medium' | 'high' }
 
@@ -71,6 +72,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingInfo, setLoadingInfo] = useState<{ label: string; subtext?: string } | null>(null);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [reveal, setReveal] = useState(false);
   const [count, setCount] = useState(3);
@@ -103,6 +105,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
+    setLoadingInfo({ label: '生成処理を実行中', subtext: 'LLM応答の受信と解析を待機しています…' });
     setMsg(null);
     setData(null);
     setReveal(false);
@@ -116,7 +119,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           regenerate_scope: settings.regenerateScope,
         },
         signal: ctrl.signal,
-        timeoutMs: 60000,
+        timeoutMs: settings.requestTimeoutMs,
       });
       setData(res);
       setCurrentWordPackId(null); // 新規生成なのでIDはnull
@@ -130,10 +133,14 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setMsg({ kind: 'status', text: 'WordPack を生成しました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      const m = e instanceof ApiError ? e.message : 'WordPack の生成に失敗しました';
+      let m = e instanceof ApiError ? e.message : 'WordPack の生成に失敗しました';
+      if (e instanceof ApiError && e.status === 0 && /aborted|timed out/i.test(e.message)) {
+        m = 'タイムアウトしました（サーバ側で処理継続の可能性があります）。時間をおいて更新または保存済みを開いてください。';
+      }
       setMsg({ kind: 'alert', text: m });
     } finally {
       setLoading(false);
+      setLoadingInfo(null);
     }
   };
 
@@ -143,6 +150,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
+    setLoadingInfo({ label: '採点を記録中', subtext: 'SRSメタ・進捗を更新しています…' });
     setMsg(null);
     try {
       const res = await fetchJson<GradeResponse>(`${settings.apiBase}/review/grade_by_lemma`, {
@@ -173,6 +181,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setMsg({ kind: 'alert', text: m });
     } finally {
       setLoading(false);
+      setLoadingInfo(null);
     }
   };
 
@@ -199,6 +208,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
+    setLoadingInfo({ label: '保存済みWordPackを読み込み中', subtext: 'サーバーから詳細を取得しています…' });
     setMsg(null);
     setData(null);
     setReveal(false);
@@ -219,10 +229,14 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setMsg({ kind: 'status', text: '保存済みWordPackを読み込みました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      const m = e instanceof ApiError ? e.message : 'WordPackの読み込みに失敗しました';
+      let m = e instanceof ApiError ? e.message : 'WordPackの読み込みに失敗しました';
+      if (e instanceof ApiError && e.status === 0 && /aborted|timed out/i.test(e.message)) {
+        m = '読み込みがタイムアウトしました。時間をおいて再試行してください。';
+      }
       setMsg({ kind: 'alert', text: m });
     } finally {
       setLoading(false);
+      setLoadingInfo(null);
     }
   };
 
@@ -231,6 +245,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
+    setLoadingInfo({ label: '再生成を実行中', subtext: '指定スコープでLLMにより内容を再構築しています…' });
     setMsg(null);
     setData(null);
     setReveal(false);
@@ -243,7 +258,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           regenerate_scope: settings.regenerateScope,
         },
         signal: ctrl.signal,
-        timeoutMs: 60000,
+        timeoutMs: settings.requestTimeoutMs,
       });
       setData(res);
       setCurrentWordPackId(wordPackId);
@@ -257,10 +272,14 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
-      const m = e instanceof ApiError ? e.message : 'WordPackの再生成に失敗しました';
+      let m = e instanceof ApiError ? e.message : 'WordPackの再生成に失敗しました';
+      if (e instanceof ApiError && e.status === 0 && /aborted|timed out/i.test(e.message)) {
+        m = '再生成がタイムアウトしました（サーバ側で処理継続の可能性）。時間をおいて再試行してください。';
+      }
       setMsg({ kind: 'alert', text: m });
     } finally {
       setLoading(false);
+      setLoadingInfo(null);
     }
   };
 
@@ -387,7 +406,12 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         </div>
       )}
 
-      {loading && <div role="status">読み込み中…</div>}
+      {loading && (
+        <LoadingIndicator
+          label={loadingInfo?.label || '処理中'}
+          subtext={loadingInfo?.subtext}
+        />
+      )}
       {msg && <div role={msg.kind}>{msg.text}</div>}
 
       {data && (
@@ -502,7 +526,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 .ex-grammar { color: #6b6b6b; font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
                 .ex-level { font-weight: 600; margin: 0.25rem 0; color: #2a5bd7; }
               `}</style>
-              {(['A1','B1','C1','tech'] as const).map((k) => (
+              {(['Dev','CS','LLM','Tech','Common'] as const).map((k) => (
                 <div key={k} style={{ marginBottom: '0.5rem' }}>
                   <div className="ex-level">{k}</div>
                   {data.examples?.[k]?.length ? (

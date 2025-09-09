@@ -92,7 +92,13 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
             "wordpack_generate_response",
             lemma=word_pack.lemma,
             senses_count=len(word_pack.senses),
-            examples_total=len(word_pack.examples.A1)+len(word_pack.examples.B1)+len(word_pack.examples.C1)+len(word_pack.examples.tech),
+            examples_total=(
+                len(word_pack.examples.Dev)
+                + len(word_pack.examples.CS)
+                + len(word_pack.examples.LLM)
+                + len(word_pack.examples.Tech)
+                + len(word_pack.examples.Common)
+            ),
             has_definition_any=any(bool(s.definition_ja) for s in word_pack.senses),
         )
         return word_pack

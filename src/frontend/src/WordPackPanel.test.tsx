@@ -29,27 +29,39 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
             contrast: [],
             examples: {
-              A1: [
-                { en: `${lemma} example one with around twenty five tokens total.`, ja: `${lemma} の例文1`, grammar_ja: '第3文型' },
-                { en: `${lemma} example two includes subordinate clauses and clear structure.`, ja: `${lemma} の例文2`, grammar_ja: '関係節' },
-                { en: `${lemma} example three demonstrates prepositional phrases effectively.`, ja: `${lemma} の例文3`, grammar_ja: '前置詞句' },
+              Dev: [
+                { en: `${lemma} dev example one with around twenty five tokens total.`, ja: `${lemma} のDev例文1`, grammar_ja: '第3文型' },
+                { en: `${lemma} dev example two includes subordinate clauses and clear structure.`, ja: `${lemma} のDev例文2`, grammar_ja: '関係節' },
+                { en: `${lemma} dev example three demonstrates prepositional phrases effectively.`, ja: `${lemma} のDev例文3`, grammar_ja: '前置詞句' },
+                { en: `${lemma} dev example four focuses on application context and clarity.`, ja: `${lemma} のDev例文4`, grammar_ja: '不定詞' },
+                { en: `${lemma} dev example five reflects code-review style feedback.`, ja: `${lemma} のDev例文5`, grammar_ja: '分詞構文' },
               ],
-              B1: [
-                { en: `This ${lemma} sentence explains a concept in moderate complexity.`, ja: `${lemma} の例文4`, grammar_ja: '分詞構文' },
-                { en: `Writers often ${lemma} when evidence points in the same direction.`, ja: `${lemma} の例文5`, grammar_ja: '時制一致' },
-                { en: `Over time, ideas ${lemma} and form a coherent perspective.`, ja: `${lemma} の例文6`, grammar_ja: '副詞句' },
+              CS: [
+                { en: `In computer science, results ${lemma} toward a coherent theory under constraints.`, ja: `${lemma} のCS例文1`, grammar_ja: '倒置' },
+                { en: `As complexity grows, algorithms ${lemma} on shared invariants.`, ja: `${lemma} のCS例文2`, grammar_ja: '従属節' },
+                { en: `Formal proofs ${lemma} as lemmas link foundational claims.`, ja: `${lemma} のCS例文3`, grammar_ja: '仮定法' },
+                { en: `Empirical results ${lemma} across benchmarks when variables are controlled.`, ja: `${lemma} のCS例文4`, grammar_ja: '受動態' },
+                { en: `Theoretical bounds ${lemma} under relaxed assumptions.`, ja: `${lemma} のCS例文5`, grammar_ja: '関係代名詞' },
               ],
-              C1: [
-                { en: `Scholars ${lemma} on nuanced interpretations as methodologies mature.`, ja: `${lemma} の例文7`, grammar_ja: '倒置' },
-                { en: `As constraints relax, results ${lemma} toward a stable equilibrium.`, ja: `${lemma} の例文8`, grammar_ja: '従属節' },
-                { en: `Once assumptions hold, estimates ${lemma} with provable guarantees.`, ja: `${lemma} の例文9`, grammar_ja: '仮定法' },
+              LLM: [
+                { en: `LLM outputs ${lemma} with more context provided via system prompts.`, ja: `LLM例文1`, grammar_ja: '時制一致' },
+                { en: `Fine-tuned models ${lemma} on domain-specific jargon effectively.`, ja: `LLM例文2`, grammar_ja: '前置詞句' },
+                { en: `Safety mitigations ${lemma} as alignment objectives are strengthened.`, ja: `LLM例文3`, grammar_ja: '分詞' },
+                { en: `Evaluation metrics ${lemma} when test sets reflect real usage.`, ja: `LLM例文4`, grammar_ja: '従属節' },
+                { en: `Chain-of-thought traces ${lemma} with improved reasoning over steps.`, ja: `LLM例文5`, grammar_ja: '不定詞' },
               ],
-              tech: [
-                { en: `Under mild assumptions, iterative updates ${lemma} to a local optimum.`, ja: `技術例1`, grammar_ja: '不定詞' },
-                { en: `Multiple models ${lemma} when trained on sufficiently diverse datasets.`, ja: `技術例2`, grammar_ja: '関係代名詞' },
-                { en: `Gradients ${lemma} as the learning rate decays over epochs.`, ja: `技術例3`, grammar_ja: '分詞' },
-                { en: `Posterior distributions ${lemma} given informative priors and larger samples.`, ja: `技術例4`, grammar_ja: '受動態' },
-                { en: `Independent estimates ${lemma} despite heterogeneous measurement noise.`, ja: `技術例5`, grammar_ja: '譲歩構文' },
+              Tech: [
+                { en: `Under mild assumptions, iterative updates ${lemma} to a local optimum.`, ja: `Tech例1`, grammar_ja: '不定詞' },
+                { en: `Multiple systems ${lemma} when signals stabilize over time.`, ja: `Tech例2`, grammar_ja: '関係代名詞' },
+                { en: `Gradients ${lemma} as learning rates decay across epochs.`, ja: `Tech例3`, grammar_ja: '分詞' },
+              ],
+              Common: [
+                { en: `Over months, ideas ${lemma} into a clear plan.`, ja: `Common例1`, grammar_ja: '副詞句' },
+                { en: `Our opinions ${lemma} after discussing the options.`, ja: `Common例2`, grammar_ja: '現在完了' },
+                { en: `Paths ${lemma} at the main square downtown.`, ja: `Common例3`, grammar_ja: '前置詞句' },
+                { en: `Tastes ${lemma} as people grow older and gain experience.`, ja: `Common例4`, grammar_ja: '現在形' },
+                { en: `Schedules ${lemma} around the team’s availability.`, ja: `Common例5`, grammar_ja: '三単現' },
+                { en: `Trains ${lemma} at this station every hour.`, ja: `Common例6`, grammar_ja: '進行形' },
               ],
             },
             etymology: { note: '-', confidence: 'low' },

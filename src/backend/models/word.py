@@ -92,10 +92,11 @@ class Examples(BaseModel):
         ja: str
         grammar_ja: Optional[str] = None
 
-    A1: List[ExampleItem] = Field(default_factory=list)
-    B1: List[ExampleItem] = Field(default_factory=list)
-    C1: List[ExampleItem] = Field(default_factory=list)
-    tech: List[ExampleItem] = Field(default_factory=list)
+    Dev: List[ExampleItem] = Field(default_factory=list)
+    CS: List[ExampleItem] = Field(default_factory=list)
+    LLM: List[ExampleItem] = Field(default_factory=list)
+    Tech: List[ExampleItem] = Field(default_factory=list)
+    Common: List[ExampleItem] = Field(default_factory=list)
 
 
 class Etymology(BaseModel):
@@ -120,7 +121,7 @@ class WordPack(BaseModel):
                 "senses": [{"id": "s1", "gloss_ja": "意味（暫定）", "patterns": []}],
                 "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
                 "contrast": [],
-                "examples": {"A1": [{"en": "converge example.", "ja": "converge の例文", "grammar_ja": "第3文型。"}], "B1": [], "C1": [], "tech": []},
+                "examples": {"Dev": [{"en": "converge example in app dev.", "ja": "アプリ開発の現場での converge の例", "grammar_ja": "第3文型。"}], "CS": [], "LLM": [], "Tech": [], "Common": []},
                 "etymology": {"note": "TBD", "confidence": "low"},
                 "study_card": "この語の要点（暫定）。",
                 "citations": [],
