@@ -152,3 +152,89 @@ def test_review_card_by_lemma(client):
     assert r2.status_code == 200
     j = r2.json()
     assert set(["repetitions", "interval_days", "due_at"]).issubset(j.keys())
+
+
+def test_word_pack_persistence(client):
+    """WordPack永続化機能のテスト"""
+    # 1. 新しいWordPackを生成（自動保存される）
+    resp = client.post("/api/word/pack", json={"lemma": "persistence_test"})
+    assert resp.status_code == 200
+    word_pack = resp.json()
+    assert word_pack["lemma"] == "persistence_test"
+    
+    # 2. 保存済みWordPack一覧を取得
+    resp = client.get("/api/word/packs")
+    assert resp.status_code == 200
+    packs_list = resp.json()
+    assert "items" in packs_list
+    assert "total" in packs_list
+    assert "limit" in packs_list
+    assert "offset" in packs_list
+    assert len(packs_list["items"]) > 0
+    
+    # 最初のWordPackのIDを取得
+    first_pack = packs_list["items"][0]
+    pack_id = first_pack["id"]
+    assert "id" in first_pack
+    assert "lemma" in first_pack
+    assert "created_at" in first_pack
+    assert "updated_at" in first_pack
+    
+    # 3. 特定のWordPackを取得
+    resp = client.get(f"/api/word/packs/{pack_id}")
+    assert resp.status_code == 200
+    retrieved_pack = resp.json()
+    assert retrieved_pack["lemma"] == first_pack["lemma"]
+    assert "senses" in retrieved_pack
+    assert "citations" in retrieved_pack
+    assert "confidence" in retrieved_pack
+    
+    # 4. WordPackを再生成
+    resp = client.post(f"/api/word/packs/{pack_id}/regenerate", json={
+        "pronunciation_enabled": True,
+        "regenerate_scope": "all"
+    })
+    assert resp.status_code == 200
+    regenerated_pack = resp.json()
+    assert regenerated_pack["lemma"] == first_pack["lemma"]
+    
+    # 5. 存在しないWordPackの取得
+    resp = client.get("/api/word/packs/nonexistent_id")
+    assert resp.status_code == 404
+    
+    # 6. WordPackを削除
+    resp = client.delete(f"/api/word/packs/{pack_id}")
+    assert resp.status_code == 200
+    delete_result = resp.json()
+    assert "message" in delete_result
+    
+    # 7. 削除後の確認
+    resp = client.get(f"/api/word/packs/{pack_id}")
+    assert resp.status_code == 404
+    
+    # 8. 存在しないWordPackの削除
+    resp = client.delete("/api/word/packs/nonexistent_id")
+    assert resp.status_code == 404
+
+
+def test_word_pack_list_pagination(client):
+    """WordPack一覧のページネーション機能のテスト"""
+    # 複数のWordPackを生成
+    for i in range(3):
+        resp = client.post("/api/word/pack", json={"lemma": f"pagination_test_{i}"})
+        assert resp.status_code == 200
+    
+    # ページネーションパラメータをテスト
+    resp = client.get("/api/word/packs?limit=2&offset=0")
+    assert resp.status_code == 200
+    result = resp.json()
+    assert len(result["items"]) <= 2
+    assert result["limit"] == 2
+    assert result["offset"] == 0
+    
+    # 無効なパラメータのテスト
+    resp = client.get("/api/word/packs?limit=0")
+    assert resp.status_code == 422  # validation error
+    
+    resp = client.get("/api/word/packs?offset=-1")
+    assert resp.status_code == 422  # validation error

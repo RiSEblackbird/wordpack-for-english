@@ -125,6 +125,28 @@ class WordPack(BaseModel):
     confidence: ConfidenceLevel = ConfidenceLevel.low
 
 
+class WordPackListItem(BaseModel):
+    """WordPack一覧表示用の軽量モデル"""
+    id: str
+    lemma: str
+    created_at: str
+    updated_at: str
+
+
+class WordPackListResponse(BaseModel):
+    """WordPack一覧レスポンス"""
+    items: List[WordPackListItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class WordPackRegenerateRequest(BaseModel):
+    """WordPack再生成リクエスト"""
+    pronunciation_enabled: bool = True
+    regenerate_scope: RegenerateScope = Field(default=RegenerateScope.all)
+
+
 """
 GET /api/word プレースホルダは PR2 で廃止。
 必要になれば専用エンドポイント設計の上で別モデルを追加する。

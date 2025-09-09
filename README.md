@@ -4,11 +4,12 @@
 
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
-- フロントエンド: React + TypeScript + Vite、単一ページ/5パネル構成（カード/自作文/段落注釈/WordPack/設定）
+- フロントエンド: React + TypeScript + Vite、単一ページ/6パネル構成（カード/自作文/段落注釈/WordPack/保存済み/設定）
 - SRS（簡易SM-2, SQLite 永続化）: 今日のカード取得・3段階採点・進捗統計（今日の提案数/残数・最近5件）に対応（M6）
   - よく見る順（人気）APIを追加: `GET /api/review/popular?limit=10`（フロントのインデックスに反映）
 - 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（例外辞書・辞書キャッシュ・タイムアウト付きフォールバック）
 - WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
+- **WordPack永続化機能**: 生成されたWordPackを自動保存し、一覧表示・再生成・削除が可能
 
 ---
 
@@ -197,6 +198,43 @@ FastAPI アプリは `src/backend/main.py`。
     { "repetitions": 3, "interval_days": 6, "due_at": "2025-01-01T12:34:56.000Z" }
     ```
 
+### WordPack永続化API
+
+- `GET /api/word/packs`
+  - 保存済みWordPackの一覧を取得。ページネーション対応。
+  - クエリ: `?limit=<int>&offset=<int>`（例: `?limit=20&offset=0`）
+  - レスポンス例:
+    ```json
+    {
+      "items": [
+        {
+          "id": "wp:converge:a1b2c3d4",
+          "lemma": "converge",
+          "created_at": "2025-01-01T12:34:56.000Z",
+          "updated_at": "2025-01-01T12:34:56.000Z"
+        }
+      ],
+      "total": 1,
+      "limit": 20,
+      "offset": 0
+    }
+    ```
+
+- `GET /api/word/packs/{word_pack_id}`
+  - 指定されたIDのWordPackを取得。
+  - レスポンス: 完全なWordPackオブジェクト（`POST /api/word/pack`と同じ形式）
+  - 存在しない場合は404エラー
+
+- `POST /api/word/packs/{word_pack_id}/regenerate`
+  - 既存のWordPackを再生成。指定されたIDのWordPackを上書き更新。
+  - リクエスト例: `{ "pronunciation_enabled": true, "regenerate_scope": "all" }`
+  - レスポンス: 再生成されたWordPackオブジェクト
+
+- `DELETE /api/word/packs/{word_pack_id}`
+  - 指定されたIDのWordPackを削除。
+  - レスポンス例: `{ "message": "WordPack deleted successfully" }`
+  - 存在しない場合は404エラー
+
 ### 3-1. 引用と確度（citations/confidence）の読み方（PR5）
 - citations（引用）:
   - **意味**: OpenAI LLM が生成した情報の参照元。
@@ -236,6 +274,14 @@ FastAPI アプリは `src/backend/main.py`。
   - ショートカット: `1/J = ×`, `2/K = △`, `3/L = ○`。設定で「採点後に自動で次へ」を切替可能。
   - 進捗の見える化（PR4）: 画面上部に「今日のレビュー済/残り」「最近見た語（直近5）」、セッション完了時の簡易サマリ（件数/所要時間）を表示。
   - 単語アクセス導線（PR5）: 「対比」や「共起」から横展開リンクで他語へ移動。画面下部に「インデックス（最近/よく見る）」を表示。
+  - **永続化機能**: 生成されたWordPackは自動的にデータベースに保存され、再生成ボタンで内容を更新可能。
+
+- 保存済み（`WordPackListPanel.tsx`）
+  - 保存済みWordPackの一覧をカード形式で表示。使用API: `GET /api/word/packs`
+  - 各カードから「表示」「再生成」「削除」が可能。
+  - 「表示」はその場で大きめのモーダルとして内容をプレビュー表示（Esc または「閉じる」で閉じる）。
+  - ページネーション機能（limit/offset）で大量のWordPackを効率的に閲覧。
+  - 作成日時・更新日時を表示し、管理しやすいUIを提供。
 
 - 設定（`SettingsPanel.tsx`）
   - 発音の有効/無効トグル（M5）
@@ -243,7 +289,7 @@ FastAPI アプリは `src/backend/main.py`。
   - 採点後に自動で次へ（WordPack採点時にリセット）
 
 アクセシビリティ/操作:
-- Alt+1..5 でタブ切替、`/` で主要入力へフォーカス
+- Alt+1..6 でタブ切替、`/` で主要入力へフォーカス
 - WordPack表示中: `1/J`, `2/K`, `3/L` で採点
 - ローディング中は `role="status"`、エラーは `role="alert"`
 

@@ -4,6 +4,8 @@ import { fetchJson, ApiError } from '../lib/fetcher';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
+  selectedWordPackId?: string | null;
+  onWordPackGenerated?: (wordPackId: string) => void;
 }
 
 // --- API types ---
@@ -54,7 +56,7 @@ type PopularCard = { id: string; front: string; back: string };
 
 interface CardMeta { repetitions: number; interval_days: number; due_at: string }
 
-export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
+export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated }) => {
   const { settings } = useSettings();
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
@@ -68,6 +70,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
   const [sessionReviewed, setSessionReviewed] = useState<number>(0);
   const [popular, setPopular] = useState<PopularCard[] | null>(null);
   const [cardMeta, setCardMeta] = useState<CardMeta | null>(null);
+  const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
 
   const sectionIds = useMemo(
     () => [
@@ -105,6 +108,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
         signal: ctrl.signal,
       });
       setData(res);
+      setCurrentWordPackId(null); // 新規生成なのでIDはnull
       // SRSメタの取得
       try {
         const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(res.lemma)}`);
@@ -179,10 +183,86 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
     }
   };
 
+  const loadWordPack = async (wordPackId: string) => {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(true);
+    setMsg(null);
+    setData(null);
+    setReveal(false);
+    setCount(3);
+    try {
+      const res = await fetchJson<WordPack>(`${settings.apiBase}/word/packs/${wordPackId}`, {
+        signal: ctrl.signal,
+      });
+      setData(res);
+      setCurrentWordPackId(wordPackId);
+      // SRSメタの取得
+      try {
+        const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(res.lemma)}`);
+        setCardMeta(m);
+      } catch {
+        setCardMeta(null); // 未登録
+      }
+      setMsg({ kind: 'status', text: '保存済みWordPackを読み込みました' });
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      const m = e instanceof ApiError ? e.message : 'WordPackの読み込みに失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const regenerateWordPack = async (wordPackId: string) => {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(true);
+    setMsg(null);
+    setData(null);
+    setReveal(false);
+    setCount(3);
+    try {
+      const res = await fetchJson<WordPack>(`${settings.apiBase}/word/packs/${wordPackId}/regenerate`, {
+        method: 'POST',
+        body: {
+          pronunciation_enabled: settings.pronunciationEnabled,
+          regenerate_scope: settings.regenerateScope,
+        },
+        signal: ctrl.signal,
+      });
+      setData(res);
+      setCurrentWordPackId(wordPackId);
+      // SRSメタの取得
+      try {
+        const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(res.lemma)}`);
+        setCardMeta(m);
+      } catch {
+        setCardMeta(null); // 未登録
+      }
+      setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      const m = e instanceof ApiError ? e.message : 'WordPackの再生成に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     refreshStats();
     refreshPopular();
   }, []);
+
+  // 選択されたWordPackIDが変更された場合の処理
+  useEffect(() => {
+    if (selectedWordPackId && selectedWordPackId !== currentWordPackId) {
+      loadWordPack(selectedWordPackId);
+    }
+  }, [selectedWordPackId]);
 
   // 3秒セルフチェック: カウントダウン後に自動解除（クリックで即解除）
   useEffect(() => {
@@ -313,10 +393,19 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef }) => {
                 <div>見出し語</div>
                 <div><strong>{data.lemma}</strong></div>
               </div>
-              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem' }}>
+              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button onClick={() => grade(0)} disabled={loading}>× わからない (1)</button>
                 <button onClick={() => grade(1)} disabled={loading}>△ あいまい (2)</button>
                 <button onClick={() => grade(2)} disabled={loading}>○ できた (3)</button>
+                {currentWordPackId && (
+                  <button 
+                    onClick={() => regenerateWordPack(currentWordPackId)} 
+                    disabled={loading}
+                    style={{ marginLeft: 'auto', backgroundColor: '#f0f0f0' }}
+                  >
+                    再生成
+                  </button>
+                )}
               </div>
               <div className="selfcheck" style={{ marginTop: '0.5rem' }}>
                 <div className={!reveal ? 'blurred' : ''}>

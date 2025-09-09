@@ -106,6 +106,21 @@ class SRSSQLiteStore:
                     """
                 )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_cards_due_at ON cards(due_at);")
+                
+                # WordPack永続化テーブル
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS word_packs (
+                        id TEXT PRIMARY KEY,
+                        lemma TEXT NOT NULL,
+                        data TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    """
+                )
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_lemma ON word_packs(lemma);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_created_at ON word_packs(created_at);")
         finally:
             conn.close()
 
@@ -393,6 +408,62 @@ class SRSSQLiteStore:
                     )
                 )
             return items
+        finally:
+            conn.close()
+
+    # --- WordPack永続化機能 ---
+    def save_word_pack(self, word_pack_id: str, lemma: str, data: str) -> None:
+        """WordPackをデータベースに保存する。"""
+        now = datetime.utcnow().isoformat()
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO word_packs(id, lemma, data, created_at, updated_at)
+                    VALUES (?, ?, ?, 
+                        COALESCE((SELECT created_at FROM word_packs WHERE id = ?), ?),
+                        ?);
+                    """,
+                    (word_pack_id, lemma, data, word_pack_id, now, now),
+                )
+        finally:
+            conn.close()
+
+    def get_word_pack(self, word_pack_id: str) -> Optional[tuple[str, str, str, str]]:
+        """WordPackをIDで取得する。戻り値: (lemma, data, created_at, updated_at)"""
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                "SELECT lemma, data, created_at, updated_at FROM word_packs WHERE id = ?;",
+                (word_pack_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return (row["lemma"], row["data"], row["created_at"], row["updated_at"])
+        finally:
+            conn.close()
+
+    def list_word_packs(self, limit: int = 50, offset: int = 0) -> List[tuple[str, str, str, str]]:
+        """WordPack一覧を取得する。戻り値: [(id, lemma, created_at, updated_at), ...]"""
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                "SELECT id, lemma, created_at, updated_at FROM word_packs ORDER BY created_at DESC LIMIT ? OFFSET ?;",
+                (limit, offset),
+            )
+            return [(row["id"], row["lemma"], row["created_at"], row["updated_at"]) for row in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def delete_word_pack(self, word_pack_id: str) -> bool:
+        """WordPackを削除する。成功時True、存在しない場合False。"""
+        conn = self._connect()
+        try:
+            with conn:
+                cur = conn.execute("DELETE FROM word_packs WHERE id = ?;", (word_pack_id,))
+                return cur.rowcount > 0
         finally:
             conn.close()
 
