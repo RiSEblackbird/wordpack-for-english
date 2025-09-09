@@ -493,21 +493,30 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
             <section id="examples" className="wp-section">
               <h3>例文</h3>
+              <style>{`
+                .ex-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+                .ex-card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 0.5rem 0.75rem; background: #fff; }
+                .ex-label { display: inline-block; min-width: 3em; color: #666; font-size: 90%; }
+                .ex-en { font-weight: 600; line-height: 1.5; }
+                .ex-ja { color: #444; margin-top: 2px; line-height: 1.6; }
+                .ex-grammar { color: #6b6b6b; font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
+                .ex-level { font-weight: 600; margin: 0.25rem 0; color: #2a5bd7; }
+              `}</style>
               {(['A1','B1','C1','tech'] as const).map((k) => (
-                <div key={k}>
-                  <h4>{k}</h4>
+                <div key={k} style={{ marginBottom: '0.5rem' }}>
+                  <div className="ex-level">{k}</div>
                   {data.examples?.[k]?.length ? (
-                    <ul>
+                    <div className="ex-grid">
                       {(data.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
-                        <li key={i}>
-                          <div>{ex.en}</div>
-                          <div style={{ color: '#555' }}>{ex.ja}</div>
+                        <article key={i} className="ex-card" aria-label={`example-${k}-${i}`}>
+                          <div className="ex-en"><span className="ex-label">英</span> {ex.en}</div>
+                          <div className="ex-ja"><span className="ex-label">訳</span> {ex.ja}</div>
                           {ex.grammar_ja ? (
-                            <div style={{ color: '#6b6b6b', fontSize: '90%', whiteSpace: 'pre-wrap' }}>{ex.grammar_ja}</div>
+                            <div className="ex-grammar"><span className="ex-label">解説</span> {ex.grammar_ja}</div>
                           ) : null}
-                        </li>
+                        </article>
                       ))}
-                    </ul>
+                    </div>
                   ) : <p>なし</p>}
                 </div>
               ))}

@@ -91,6 +91,10 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     // study_card 内容が表示される
     expect(screen.getByText('学習カード要点')).toBeInTheDocument();
 
+    // 例文カードUI: 英/訳/解説ラベルのうち「解説」が表示されること
+    // （モック例文には grammar_ja が含まれている）
+    expect(screen.getAllByText(/解説/).length).toBeGreaterThan(0);
+
     // 採点（○）
     await act(async () => {
       await user.click(screen.getByRole('button', { name: '○ できた (3)' }));
