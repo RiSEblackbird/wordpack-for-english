@@ -66,14 +66,24 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
         self._model = model
 
     def complete(self, prompt: str) -> str:
-        # 最小実装（Chat Completions）
-        resp = self._client.chat.completions.create(
-            model=self._model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=64,
-        )
-        return (resp.choices[0].message.content or "").strip()
+        # JSON強制を試み、未対応モデル/バージョンでは従来呼び出しにフォールバック
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=getattr(settings, "llm_max_tokens", 900),
+                response_format={"type": "json_object"},
+            )
+            return (resp.choices[0].message.content or "").strip()
+        except Exception:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=getattr(settings, "llm_max_tokens", 900),
+            )
+            return (resp.choices[0].message.content or "").strip()
 
 
 

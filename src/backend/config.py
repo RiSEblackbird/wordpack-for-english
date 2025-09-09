@@ -34,12 +34,16 @@ class Settings(BaseSettings):
 
     # --- LLM 呼出しのタイムアウト/リトライ ---
     llm_timeout_ms: int = Field(
-        default=8000,
+        default=20000,
         description="Per-attempt timeout for LLM calls (ms) / LLM呼出しの試行毎タイムアウト(ms)",
     )
     llm_max_retries: int = Field(
-        default=2,
+        default=1,
         description="Max retries for LLM calls / LLM呼出しの最大リトライ回数",
+    )
+    llm_max_tokens: int = Field(
+        default=900,
+        description="Max tokens for LLM completion output / LLM出力の最大トークン数",
     )
 
     # --- RAG 制御（導入のみ・フラグで無効化可） ---
