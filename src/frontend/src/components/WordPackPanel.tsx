@@ -17,7 +17,17 @@ interface Pronunciation {
   linking_notes: string[];
 }
 
-interface Sense { id: string; gloss_ja: string; patterns: string[]; register?: string | null }
+interface Sense {
+  id: string;
+  gloss_ja: string;
+  definition_ja?: string | null;
+  nuances_ja?: string | null;
+  patterns: string[];
+  synonyms?: string[];
+  antonyms?: string[];
+  register?: string | null;
+  notes_ja?: string | null;
+}
 
 interface CollocationLists { verb_object: string[]; adj_noun: string[]; prep_noun: string[] }
 interface Collocations { general: CollocationLists; academic: CollocationLists }
@@ -106,6 +116,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           regenerate_scope: settings.regenerateScope,
         },
         signal: ctrl.signal,
+        timeoutMs: 60000,
       });
       setData(res);
       setCurrentWordPackId(null); // 新規生成なのでIDはnull
@@ -232,6 +243,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           regenerate_scope: settings.regenerateScope,
         },
         signal: ctrl.signal,
+        timeoutMs: 60000,
       });
       setData(res);
       setCurrentWordPackId(wordPackId);
@@ -438,7 +450,31 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                   {data.senses.map((s) => (
                     <li key={s.id}>
                       <div><strong>{s.gloss_ja}</strong></div>
-                      {s.patterns?.length ? <div className="mono">{s.patterns.join(' | ')}</div> : null}
+                      {s.definition_ja ? (
+                        <div style={{ marginTop: 4 }}>{s.definition_ja}</div>
+                      ) : null}
+                      {s.nuances_ja ? (
+                        <div style={{ marginTop: 4, color: '#555' }}>{s.nuances_ja}</div>
+                      ) : null}
+                      {s.patterns?.length ? (
+                        <div className="mono" style={{ marginTop: 4 }}>{s.patterns.join(' | ')}</div>
+                      ) : null}
+                      {(s.synonyms && s.synonyms.length) || (s.antonyms && s.antonyms.length) ? (
+                        <div style={{ marginTop: 4 }}>
+                          {s.synonyms?.length ? (
+                            <div><span style={{ color: '#555' }}>類義:</span> {s.synonyms.join(', ')}</div>
+                          ) : null}
+                          {s.antonyms?.length ? (
+                            <div><span style={{ color: '#555' }}>反義:</span> {s.antonyms.join(', ')}</div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {s.register ? (
+                        <div style={{ marginTop: 4 }}><span style={{ color: '#555' }}>レジスター:</span> {s.register}</div>
+                      ) : null}
+                      {s.notes_ja ? (
+                        <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{s.notes_ja}</div>
+                      ) : null}
                     </li>
                   ))}
                 </ol>
@@ -539,7 +575,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                           <div>{ex.en}</div>
                           <div style={{ color: '#555' }}>{ex.ja}</div>
                           {ex.grammar_ja ? (
-                            <div style={{ color: '#6b6b6b', fontSize: '90%' }}>文法: {ex.grammar_ja}</div>
+                            <div style={{ color: '#6b6b6b', fontSize: '90%', whiteSpace: 'pre-wrap' }}>{ex.grammar_ja}</div>
                           ) : null}
                         </li>
                       ))}

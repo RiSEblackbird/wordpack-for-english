@@ -36,7 +36,7 @@ describe('WordPackListPanel modal preview', () => {
           JSON.stringify({
             lemma: 'delta',
             pronunciation: { ipa_GA: null, ipa_RP: null, syllables: null, stress_index: null, linking_notes: [] },
-            senses: [{ id: 's1', gloss_ja: '意味', patterns: [] }],
+            senses: [{ id: 's1', gloss_ja: '意味', definition_ja: '定義', nuances_ja: 'ニュアンス', patterns: ['p1'], synonyms: ['syn'], antonyms: ['ant'], register: 'formal', notes_ja: '注意' }],
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
             contrast: [],
             examples: {

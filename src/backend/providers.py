@@ -4,6 +4,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 from .config import settings
+from .logging import logger
 
 try:
     import chromadb  # type: ignore
@@ -68,8 +69,11 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
 
     def complete(self, prompt: str) -> str:
         # テストキーの場合は認証エラーを回避
+        logger.info("llm_complete_call", provider="openai", model=self._model, prompt_chars=len(prompt))
         if self._api_key == "test-key":
-            return '{"senses": [{"id": "s1", "gloss_ja": "テスト用の語義", "patterns": ["test pattern"]}], "collocations": {"general": {"verb_object": ["test verb"], "adj_noun": ["test adj"], "prep_noun": ["test prep"]}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}}, "contrast": [], "examples": {"A1": [{"en": "This is a test.", "ja": "これはテストです。"}], "B1": [], "C1": [], "tech": []}, "etymology": {"note": "Test etymology", "confidence": "medium"}, "study_card": "テスト用の学習カード", "pronunciation": {"ipa_RP": "/test/"}}'
+            out = '{"senses": [{"id": "s1", "gloss_ja": "テスト用の語義", "patterns": ["test pattern"]}], "collocations": {"general": {"verb_object": ["test verb"], "adj_noun": ["test adj"], "prep_noun": ["test prep"]}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}}, "contrast": [], "examples": {"A1": [{"en": "This is a test.", "ja": "これはテストです。"}], "B1": [], "C1": [], "tech": []}, "etymology": {"note": "Test etymology", "confidence": "medium"}, "study_card": "テスト用の学習カード", "pronunciation": {"ipa_RP": "/test/"}}'
+            logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(out))
+            return out
         
         # JSON強制を試み、未対応モデル/バージョンでは従来呼び出しにフォールバック
         try:
@@ -79,23 +83,32 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
                 temperature=0.2,
                 max_tokens=getattr(settings, "llm_max_tokens", 900),
                 response_format={"type": "json_object"},
+                timeout=settings.llm_timeout_ms / 1000.0,
             )
-            return (resp.choices[0].message.content or "").strip()
+            content = (resp.choices[0].message.content or "").strip()
+            logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=True)
+            return content
         except Exception:
             resp = self._client.chat.completions.create(
                 model=self._model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
                 max_tokens=getattr(settings, "llm_max_tokens", 900),
+                timeout=settings.llm_timeout_ms / 1000.0,
             )
-            return (resp.choices[0].message.content or "").strip()
+            content = (resp.choices[0].message.content or "").strip()
+            logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=False)
+            return content
 
 
 
 class _LocalEchoLLM(_LLMBase):
     def complete(self, prompt: str) -> str:
         # ネットワーク不要のフォールバック。安全な固定応答。
-        return ""
+        logger.info("llm_complete_call", provider="local", model="echo", prompt_chars=len(prompt))
+        out = ""
+        logger.info("llm_complete_result", provider="local", model="echo", content_chars=len(out))
+        return out
 
 
 def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
@@ -107,13 +120,32 @@ def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
             for attempt in range(1, max(1, settings.llm_max_retries) + 1):
                 try:
                     future = _llm_executor.submit(llm.complete, prompt)
-                    return future.result(timeout=settings.llm_timeout_ms / 1000.0)
+                    result = future.result(timeout=settings.llm_timeout_ms / 1000.0)
+                    if result == "":
+                        logger.info("llm_complete_empty", attempt=attempt, retries=settings.llm_max_retries)
+                    return result
                 except Exception as exc:
                     last_exc = exc
+                    logger.info("llm_complete_error", attempt=attempt, retries=settings.llm_max_retries)
+                    try:
+                        future.cancel()
+                    except Exception:
+                        pass
                     if attempt >= max(1, settings.llm_max_retries):
                         break
                     time.sleep(0.1 * attempt)
             # 最終失敗は空文字を返す（上位でフォールバック可能）
+            logger.info("llm_complete_failed_all_retries", error=str(last_exc) if last_exc else None)
+            if settings.strict_mode:
+                msg = "LLM timeout or failure"
+                try:
+                    from concurrent.futures import TimeoutError as FuturesTimeout  # local import to avoid top dependency
+                    if isinstance(last_exc, FuturesTimeout):
+                        msg = "LLM timeout"
+                except Exception:
+                    pass
+            
+                raise RuntimeError(msg)
             return ""
 
     return _Wrapped()
@@ -136,6 +168,7 @@ def get_llm_provider() -> Any:
         if provider in {"", "local"}:
             if settings.strict_mode:
                 raise RuntimeError("LLM_PROVIDER must be 'openai' in strict mode")
+            logger.info("llm_provider_select", provider="local")
             _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
             return _LLM_INSTANCE
         if provider == "openai":
@@ -143,20 +176,24 @@ def get_llm_provider() -> Any:
                 if settings.strict_mode:
                     raise RuntimeError("OPENAI_API_KEY is required for LLM_PROVIDER=openai (strict mode)")
                 # 非 strict: ローカルフォールバック
+                logger.info("llm_provider_select", provider="local", reason="missing_openai_api_key")
                 _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
                 return _LLM_INSTANCE
+            logger.info("llm_provider_select", provider="openai", model=settings.llm_model)
             _LLM_INSTANCE = _llm_with_policy(_OpenAILLM(api_key=settings.openai_api_key, model=settings.llm_model))
             return _LLM_INSTANCE
         # 未対応プロバイダ
         # 未知のプロバイダ
         if settings.strict_mode:
             raise RuntimeError(f"Unknown LLM provider: {provider}")
+        logger.info("llm_provider_select", provider="local", reason="unknown_provider", requested=provider)
         _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
         return _LLM_INSTANCE
     except Exception:
         # 例外時の扱い: strict では再送出、非 strict ではローカルフォールバック
         if settings.strict_mode:
             raise
+        logger.info("llm_provider_select", provider="local", reason="exception")
         _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
         return _LLM_INSTANCE
 

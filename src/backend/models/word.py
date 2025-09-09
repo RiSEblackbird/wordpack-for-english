@@ -42,14 +42,30 @@ class WordPackRequest(BaseModel):
 class Sense(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "examples": [
-            {"id": "s1", "gloss_ja": "意味（暫定）", "patterns": []}
+            {
+                "id": "s1",
+                "gloss_ja": "意味（暫定）",
+                "definition_ja": "核となる定義を1〜2文で端的に示す。",
+                "nuances_ja": "フォーマル/口語/専門寄り等の含意や使い分け。",
+                "patterns": ["converge on N"],
+                "synonyms": ["gather", "meet"],
+                "antonyms": ["diverge"],
+                "register": "formal",
+                "notes_ja": "可算/不可算や自他/再帰などの注意点。"
+            }
         ]
     })
 
     id: str
     gloss_ja: str
+    # よりボリューミーな語義のための追加フィールド（すべて任意）
+    definition_ja: Optional[str] = None
+    nuances_ja: Optional[str] = None
     patterns: List[str] = Field(default_factory=list)
+    synonyms: List[str] = Field(default_factory=list)
+    antonyms: List[str] = Field(default_factory=list)
     register: Optional[str] = None
+    notes_ja: Optional[str] = None
 
 
 class CollocationLists(BaseModel):

@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     # --- LLM 呼出しのタイムアウト/リトライ ---
     llm_timeout_ms: int = Field(
-        default=20000,
+        default=60000,
         description="Per-attempt timeout for LLM calls (ms) / LLM呼出しの試行毎タイムアウト(ms)",
     )
     llm_max_retries: int = Field(
