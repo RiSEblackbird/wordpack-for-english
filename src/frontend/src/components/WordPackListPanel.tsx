@@ -3,6 +3,7 @@ import { useSettings } from '../SettingsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { Modal } from './Modal';
 import { WordPackPanel } from './WordPackPanel';
+import { LoadingIndicator } from './LoadingIndicator';
 
 interface WordPackListItem {
   id: string;
@@ -131,7 +132,12 @@ export const WordPackListPanel: React.FC = () => {
           </button>
         </div>
 
-        {loading && <div role="status">読み込み中…</div>}
+        {loading && (
+          <LoadingIndicator
+            label="一覧を取得中"
+            subtext="保存済みのWordPackメタデータを取得しています…"
+          />
+        )}
         {msg && <div role={msg.kind}>{msg.text}</div>}
 
         {wordPacks.length === 0 && !loading ? (

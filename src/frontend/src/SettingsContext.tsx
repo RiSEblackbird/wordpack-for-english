@@ -5,6 +5,7 @@ export interface Settings {
   pronunciationEnabled: boolean;
   regenerateScope: 'all' | 'examples' | 'collocations';
   autoAdvanceAfterGrade: boolean;
+  requestTimeoutMs: number;
 }
 
 interface SettingsValue {
@@ -15,7 +16,7 @@ interface SettingsValue {
 const SettingsContext = React.createContext<SettingsValue | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<Settings>({ apiBase: '/api', pronunciationEnabled: true, regenerateScope: 'all', autoAdvanceAfterGrade: false });
+  const [settings, setSettings] = useState<Settings>({ apiBase: '/api', pronunciationEnabled: true, regenerateScope: 'all', autoAdvanceAfterGrade: false, requestTimeoutMs: 60000 });
   return (
     <SettingsContext.Provider value={{ settings, setSettings }}>
       {children}
