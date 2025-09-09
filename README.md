@@ -279,6 +279,7 @@ FastAPI アプリは `src/backend/main.py`。
 - 保存済み（`WordPackListPanel.tsx`）
   - 保存済みWordPackの一覧をカード形式で表示。使用API: `GET /api/word/packs`
   - 各カードから「表示」「再生成」「削除」が可能。
+  - 「表示」はその場で大きめのモーダルとして内容をプレビュー表示（Esc または「閉じる」で閉じる）。
   - ページネーション機能（limit/offset）で大量のWordPackを効率的に閲覧。
   - 作成日時・更新日時を表示し、管理しやすいUIを提供。
 

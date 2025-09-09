@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSettings } from '../SettingsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
+import { Modal } from './Modal';
+import { WordPackPanel } from './WordPackPanel';
 
 interface Props {
   onSelectWordPack: (wordPackId: string) => void;
@@ -30,6 +32,9 @@ export const WordPackListPanel: React.FC<Props> = ({ onSelectWordPack, onRegener
   const [offset, setOffset] = useState(0);
   const [limit] = useState(20);
   const abortRef = useRef<AbortController | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewWordPackId, setPreviewWordPackId] = useState<string | null>(null);
+  const modalFocusRef = useRef<HTMLElement>(null);
 
   const loadWordPacks = async (newOffset: number = 0) => {
     abortRef.current?.abort();
@@ -152,7 +157,7 @@ export const WordPackListPanel: React.FC<Props> = ({ onSelectWordPack, onRegener
                     <div>更新: {formatDate(wp.updated_at)}</div>
                   </div>
                   <div className="wp-card-actions">
-                    <button onClick={() => onSelectWordPack(wp.id)}>
+                    <button onClick={() => { setPreviewWordPackId(wp.id); setPreviewOpen(true); }}>
                       表示
                     </button>
                     <button onClick={() => onRegenerateWordPack(wp.id)}>
@@ -191,6 +196,14 @@ export const WordPackListPanel: React.FC<Props> = ({ onSelectWordPack, onRegener
           </>
         )}
       </div>
+      <Modal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} title="WordPack プレビュー">
+        {previewWordPackId ? (
+          <WordPackPanel
+            focusRef={modalFocusRef}
+            selectedWordPackId={previewWordPackId}
+          />
+        ) : null}
+      </Modal>
     </section>
   );
 };
