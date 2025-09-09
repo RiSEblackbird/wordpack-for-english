@@ -74,6 +74,7 @@ class Examples(BaseModel):
     class ExampleItem(BaseModel):
         en: str
         ja: str
+        grammar_ja: Optional[str] = None
 
     A1: List[ExampleItem] = Field(default_factory=list)
     B1: List[ExampleItem] = Field(default_factory=list)
@@ -103,7 +104,7 @@ class WordPack(BaseModel):
                 "senses": [{"id": "s1", "gloss_ja": "意味（暫定）", "patterns": []}],
                 "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
                 "contrast": [],
-                "examples": {"A1": [{"en": "converge example.", "ja": "converge の例文"}], "B1": [], "C1": [], "tech": []},
+                "examples": {"A1": [{"en": "converge example.", "ja": "converge の例文", "grammar_ja": "第3文型。"}], "B1": [], "C1": [], "tech": []},
                 "etymology": {"note": "TBD", "confidence": "low"},
                 "study_card": "この語の要点（暫定）。",
                 "citations": [],

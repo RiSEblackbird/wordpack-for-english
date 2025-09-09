@@ -28,7 +28,30 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
             senses: [{ id: 's1', gloss_ja: '意味', patterns: [] }],
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
             contrast: [],
-            examples: { A1: [{ en: `${lemma} example.`, ja: `${lemma} の例文` }], B1: [], C1: [], tech: [] },
+            examples: {
+              A1: [
+                { en: `${lemma} example one with around twenty five tokens total.`, ja: `${lemma} の例文1`, grammar_ja: '第3文型' },
+                { en: `${lemma} example two includes subordinate clauses and clear structure.`, ja: `${lemma} の例文2`, grammar_ja: '関係節' },
+                { en: `${lemma} example three demonstrates prepositional phrases effectively.`, ja: `${lemma} の例文3`, grammar_ja: '前置詞句' },
+              ],
+              B1: [
+                { en: `This ${lemma} sentence explains a concept in moderate complexity.`, ja: `${lemma} の例文4`, grammar_ja: '分詞構文' },
+                { en: `Writers often ${lemma} when evidence points in the same direction.`, ja: `${lemma} の例文5`, grammar_ja: '時制一致' },
+                { en: `Over time, ideas ${lemma} and form a coherent perspective.`, ja: `${lemma} の例文6`, grammar_ja: '副詞句' },
+              ],
+              C1: [
+                { en: `Scholars ${lemma} on nuanced interpretations as methodologies mature.`, ja: `${lemma} の例文7`, grammar_ja: '倒置' },
+                { en: `As constraints relax, results ${lemma} toward a stable equilibrium.`, ja: `${lemma} の例文8`, grammar_ja: '従属節' },
+                { en: `Once assumptions hold, estimates ${lemma} with provable guarantees.`, ja: `${lemma} の例文9`, grammar_ja: '仮定法' },
+              ],
+              tech: [
+                { en: `Under mild assumptions, iterative updates ${lemma} to a local optimum.`, ja: `技術例1`, grammar_ja: '不定詞' },
+                { en: `Multiple models ${lemma} when trained on sufficiently diverse datasets.`, ja: `技術例2`, grammar_ja: '関係代名詞' },
+                { en: `Gradients ${lemma} as the learning rate decays over epochs.`, ja: `技術例3`, grammar_ja: '分詞' },
+                { en: `Posterior distributions ${lemma} given informative priors and larger samples.`, ja: `技術例4`, grammar_ja: '受動態' },
+                { en: `Independent estimates ${lemma} despite heterogeneous measurement noise.`, ja: `技術例5`, grammar_ja: '譲歩構文' },
+              ],
+            },
             etymology: { note: '-', confidence: 'low' },
             study_card: `study of ${lemma}`,
             citations: [{ text: 'citation' }],

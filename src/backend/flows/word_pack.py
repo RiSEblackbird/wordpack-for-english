@@ -81,16 +81,20 @@ class WordPackFlow:
                     "  },\n"
                     "  \"contrast\": [ { \"with\": \"...\", \"diff_ja\": \"...\" } ],\n"
                     "  \"examples\": {\n"
-                    "    \"A1\": [ { \"en\": \"...\", \"ja\": \"...\" } ],\n"
-                    "    \"B1\": [ { \"en\": \"...\", \"ja\": \"...\" } ],\n"
-                    "    \"C1\": [ { \"en\": \"...\", \"ja\": \"...\" } ],\n"
-                    "    \"tech\": [ { \"en\": \"...\", \"ja\": \"...\" } ]\n"
+                    "    \"A1\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
+                    "    \"B1\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
+                    "    \"C1\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
+                    "    \"tech\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ]\n"
                     "  },\n"
                     "  \"etymology\": { \"note\": \"...\", \"confidence\": \"low|medium|high\" },\n"
                     "  \"study_card\": \"1文の要点(日本語)\",\n"
                     "  \"pronunciation\": { \"ipa_RP\": \"/.../\" }\n"
                     "}\n"
-                    "Notes: \n- gloss_ja は日本語。\n- 例文は自然で簡潔に。\n- 配列は重複・空文字を避ける。\n"
+                    "Notes: \n"
+                    "- gloss_ja と grammar_ja は日本語。\n"
+                    "- 例文は自然で、約25語（±5語）の英文にする。\n"
+                    "- 例文の数: A1/B1/C1 は各3文、tech は5文。重複・空文字・同内容の言い換えは禁止。\n"
+                    "- CEFR ラベルに難易度を合わせ、tech は技術・学術文脈に寄せる。\n"
                 )
 
                 out = self.llm.complete(prompt)  # type: ignore[attr-defined]
@@ -215,14 +219,20 @@ class WordPackFlow:
                             if isinstance(item, dict):
                                 en = str(item.get("en") or "").strip()
                                 ja = str(item.get("ja") or "").strip()
+                                grammar_ja = str(item.get("grammar_ja") or "").strip() or None
                                 if en and ja:
-                                    out.append(Examples.ExampleItem(en=en, ja=ja))  # type: ignore[attr-defined]
+                                    out.append(Examples.ExampleItem(en=en, ja=ja, grammar_ja=grammar_ja))  # type: ignore[attr-defined]
                     return out
+                a1_list = _ex_list(ex.get("A1"))
+                b1_list = _ex_list(ex.get("B1"))
+                c1_list = _ex_list(ex.get("C1"))
+                tech_list = _ex_list(ex.get("tech"))
+                # 仕様: A1/B1/C1 は各最大3件、tech は最大5件に制限（不足はそのまま、ダミーを入れない）
                 examples = Examples(
-                    A1=_ex_list(ex.get("A1")),
-                    B1=_ex_list(ex.get("B1")),
-                    C1=_ex_list(ex.get("C1")),
-                    tech=_ex_list(ex.get("tech")),
+                    A1=a1_list[:3],
+                    B1=b1_list[:3],
+                    C1=c1_list[:3],
+                    tech=tech_list[:5],
                 )
             except Exception:
                 pass

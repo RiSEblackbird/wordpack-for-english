@@ -39,7 +39,22 @@ describe('WordPackListPanel modal preview', () => {
             senses: [{ id: 's1', gloss_ja: '意味', patterns: [] }],
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
             contrast: [],
-            examples: { A1: [{ en: `delta example.`, ja: `delta の例文` }], B1: [], C1: [], tech: [] },
+            examples: {
+              A1: [
+                { en: `delta example one with about twenty five words overall.`, ja: `delta の例文1`, grammar_ja: '第3文型' },
+                { en: `another delta example that remains readable yet slightly longer`, ja: `delta の例文2`, grammar_ja: '関係節' },
+                { en: `a third delta example demonstrating adjunct phrases and clarity`, ja: `delta の例文3`, grammar_ja: '前置詞句' },
+              ],
+              B1: [],
+              C1: [],
+              tech: [
+                { en: `In practice, estimates delta as constraints relax and noise diminishes.`, ja: `技術例1`, grammar_ja: '受動態' },
+                { en: `Optimization routines delta when gradients vanish near stationary points.`, ja: `技術例2`, grammar_ja: '分詞' },
+                { en: `Signals delta across nodes under synchronized sampling schedules.`, ja: `技術例3`, grammar_ja: '関係代名詞' },
+                { en: `Distributions delta as additional evidence accumulates over trials.`, ja: `技術例4`, grammar_ja: '従属節' },
+                { en: `Parameters delta following repeated fine-tuning across domains.`, ja: `技術例5`, grammar_ja: '不定詞' },
+              ],
+            },
             etymology: { note: '-', confidence: 'low' },
             study_card: `study of delta`,
             citations: [{ text: 'citation' }],

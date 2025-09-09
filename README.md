@@ -111,7 +111,10 @@ FastAPI アプリは `src/backend/main.py`。
 - `POST /api/word/pack`
   - 周辺知識パック生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RPを直接生成し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - 例文: 英日ペア（`{ en, ja }`）で返却。取得できない場合は空配列となります。
+  - 例文: CEFR別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。
+    - 件数: `A1/B1/C1` は各3文、`tech` は5文（不足時は短くなる／空許容、ダミーは入れない）。
+    - 長さ: 英文は原則 約25語（±5語）を目安。
+    - 解説: `grammar_ja` に文法的な要点を日本語で付与（任意）。
   - リクエスト例（M5 追加パラメータ・Enum化）:
     ```json
     { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
@@ -126,7 +129,18 @@ FastAPI アプリは `src/backend/main.py`。
       "senses": [{"id":"s1","gloss_ja":"集まる・収束する","patterns":["converge on N"]}],
       "collocations": {"general": {"verb_object": ["gain insight"], "adj_noun": ["deep insight"], "prep_noun": ["insight into N"]}, "academic": {"verb_object": ["derive insight"], "adj_noun": ["empirical insight"], "prep_noun": ["insight for N"]}},
       "contrast": [{"with":"intuition","diff_ja":"直観は体系的根拠が薄いのに対し、insight は分析や経験から得る洞察。"}],
-      "examples": {"A1": [{"en":"I gained insight into the topic.","ja":"そのテーマへの洞察を得た。"}], "B1": [], "C1": [], "tech": []},
+      "examples": {
+        "A1": [
+          {"en":"I gained insight into the topic after several attempts and revisions.","ja":"複数回の試行と修正の末に洞察を得た。","grammar_ja":"第3文型"},
+          {"en":"Researchers gained insight as the results stabilized over iterations.","ja":"反復ごとに結果が安定し、研究者らは洞察を得た。","grammar_ja":"分詞構文"},
+          {"en":"Over months, we gained insight that informed the final decision.","ja":"数か月を経て、最終判断を支える洞察を得た。","grammar_ja":"過去分詞"}
+        ],
+        "B1": [],
+        "C1": [],
+        "tech": [
+          {"en":"Under mild assumptions, the estimator gained insight into latent structure.","ja":"温和な仮定の下で推定量は潜在構造への洞察を与えた。","grammar_ja":"不定詞"}
+        ]
+      },
       "etymology": {"note":"from Middle English, influenced by Old Norse.","confidence":"medium"},
       "study_card": "insight: into による対象提示。deep/valuable と相性良。",
       "citations": [{"text":"LLM-generated information for insight","meta":{"source":"openai_llm","word":"insight"}}],
