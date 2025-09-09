@@ -47,10 +47,11 @@
   cd src/frontend
   npm run dev
   ```
-ヒント（OpenAI API キー）:
+ヒント（OpenAI API キー / 出力ボリューム）:
 - OpenAI API キーが設定されていない場合、アプリは安全なフォールバックモードで動作します。
 - 本番/実運用では `STRICT_MODE=true` を推奨（既定）。必須設定が不足している場合はエラーとなり早期に検出できます。
 - テスト/オフライン開発では `STRICT_MODE=false` を設定すると、ローカルフォールバック動作を許容します。
+ - WordPack の生成で情報が欠ける場合は `.env` の `LLM_MAX_TOKENS` を増やしてください（既定 900）。出力JSONの途中切れを防止します。
 
 
 ---
@@ -194,7 +195,7 @@
 ## 6. 参考（現状のAPI）
 - `POST /api/sentence/check` … 自作文チェック（OpenAI LLM による詳細な文法・スタイル分析と `confidence` を付与）
 - `POST /api/text/assist` … 段落注釈（OpenAI LLM: 文の解析・パラフレーズ・語彙情報を直接生成し `citations`/`confidence` を付与）
-- `POST /api/word/pack` … WordPack 生成（OpenAI LLM: 語義・用例・共起語を直接生成し `citations`/`confidence` を付与。`pronunciation_enabled`, `regenerate_scope`(Enum) をサポート）
+- `POST /api/word/pack` … WordPack 生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RP を直接生成し `citations`/`confidence` を付与。`pronunciation_enabled`, `regenerate_scope`(Enum) をサポート）
 - `GET  /api/review/today` … 本日のカード（最大5枚）
 - `POST /api/review/grade` … 採点（0/1/2）と次回時刻の更新
 

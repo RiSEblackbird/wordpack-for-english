@@ -12,7 +12,7 @@ def add_src_to_path():
 
 
 def test_get_llm_provider_without_keys_returns_safe_client(monkeypatch):
-    from backend import providers
+    from backend.providers import get_llm_provider
 
     # Force provider to local or unset keys
     monkeypatch.setenv("STRICT_MODE", "false")
@@ -21,9 +21,10 @@ def test_get_llm_provider_without_keys_returns_safe_client(monkeypatch):
 
     # Reload settings to pick env
     from importlib import reload
-    reload(providers)
+    import backend.providers
+    reload(backend.providers)
 
-    llm = providers.get_llm_provider()
+    llm = get_llm_provider()
     assert llm is not None
     # complete should not raise and return str
     out = llm.complete("ping")
@@ -32,7 +33,7 @@ def test_get_llm_provider_without_keys_returns_safe_client(monkeypatch):
 
 def test_get_llm_provider_openai_with_key(monkeypatch):
     """OpenAI APIキーが設定されている場合のテスト"""
-    from backend import providers
+    from backend.providers import get_llm_provider
 
     # OpenAI provider with test key
     monkeypatch.setenv("STRICT_MODE", "false")
@@ -42,9 +43,10 @@ def test_get_llm_provider_openai_with_key(monkeypatch):
 
     # Reload settings to pick env
     from importlib import reload
-    reload(providers)
+    import backend.providers
+    reload(backend.providers)
 
-    llm = providers.get_llm_provider()
+    llm = get_llm_provider()
     assert llm is not None
     # complete should not raise and return str
     out = llm.complete("ping")
@@ -58,11 +60,12 @@ def test_get_llm_provider_is_singleton(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     from importlib import reload
-    from backend import providers
+    import backend.providers
+    from backend.providers import get_llm_provider
 
-    reload(providers)
-    llm1 = providers.get_llm_provider()
-    llm2 = providers.get_llm_provider()
+    reload(backend.providers)
+    llm1 = get_llm_provider()
+    llm2 = get_llm_provider()
     assert llm1 is llm2
 
 

@@ -71,6 +71,7 @@ docker compose up --build
 OpenAI LLM統合:
 - 既定で `LLM_PROVIDER=openai` および `LLM_MODEL=gpt-4o-mini` を使用します。
 - RAG機能は無効化されており、OpenAI LLMが直接語義・用例・フィードバックを生成します。
+ - 生成品質のため `LLM_MAX_TOKENS` を `.env` で調整できます（既定 900）。JSON 出力の途中切れを防止します。
 
 Tips (Windows)：Vite のファイル監視が不安定な場合、`CHOKIDAR_USEPOLLING=1` を環境変数に設定してください（compose の service へ追加可能）。
 
@@ -107,9 +108,9 @@ FastAPI アプリは `src/backend/main.py`。
     - `request_id`, `path`, `method`, `latency_ms`, `is_error`, `is_timeout`, `client_ip`, `user_agent`
 
 - `POST /api/word/pack`
-  - 周辺知識パック生成（OpenAI LLM: 語義・用例・共起語を直接生成し `citations` と `confidence` を付与）。
+  - 周辺知識パック生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RPを直接生成し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - 例文: 英日ペア（`{ en, ja }`）で返却。ダミー例文は生成せず、取得できない場合は空配列となります。
+  - 例文: 英日ペア（`{ en, ja }`）で返却。取得できない場合は空配列となります。
   - リクエスト例（M5 追加パラメータ・Enum化）:
     ```json
     { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
@@ -120,15 +121,15 @@ FastAPI アプリは `src/backend/main.py`。
     ```json
     {
       "lemma": "converge",
-      "pronunciation": {"ipa_GA":"/kənvɝdʒ/","syllables":2,"stress_index":1,"linking_notes":[]},
-      "senses": [],
-      "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
-      "contrast": [],
-      "examples": {"A1": [], "B1": [], "C1": [], "tech": []},
-      "etymology": {"note":"","confidence":"low"},
-      "study_card": "",
-      "citations": [],
-      "confidence": "low"
+      "pronunciation": {"ipa_GA":"/kənvɝdʒ/","ipa_RP":"/kənˈvɜːdʒ/","syllables":2,"stress_index":1,"linking_notes":[]},
+      "senses": [{"id":"s1","gloss_ja":"集まる・収束する","patterns":["converge on N"]}],
+      "collocations": {"general": {"verb_object": ["gain insight"], "adj_noun": ["deep insight"], "prep_noun": ["insight into N"]}, "academic": {"verb_object": ["derive insight"], "adj_noun": ["empirical insight"], "prep_noun": ["insight for N"]}},
+      "contrast": [{"with":"intuition","diff_ja":"直観は体系的根拠が薄いのに対し、insight は分析や経験から得る洞察。"}],
+      "examples": {"A1": [{"en":"I gained insight into the topic.","ja":"そのテーマへの洞察を得た。"}], "B1": [], "C1": [], "tech": []},
+      "etymology": {"note":"from Middle English, influenced by Old Norse.","confidence":"medium"},
+      "study_card": "insight: into による対象提示。deep/valuable と相性良。",
+      "citations": [{"text":"LLM-generated information for insight","meta":{"source":"openai_llm","word":"insight"}}],
+      "confidence": "high"
     }
     ```
 
@@ -303,6 +304,8 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 - `STRICT_MODE`（既定: `true`）
   - 本番/実運用では `true` を推奨。必須設定が不足している場合はフォールバックせずエラーにします（Fail-Fast）。
   - テスト/オフライン開発では `false` に設定することで、ローカル/ダミー挙動を許容します。
+ - `LLM_MAX_TOKENS`（既定: `900`）
+   - WordPack のJSONが途中で切れないよう、十分なトークン数を確保してください。
 
 補足（互換キーの無視）:
 - 旧サンプル/別アプリ由来のキー（例: `API_KEY`/`ALLOWED_ORIGINS` など）が `.env` に残っていても、`src/backend/config.py` は未使用の環境変数を無視する設定になっています（`extra="ignore"`）。
