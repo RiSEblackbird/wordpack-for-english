@@ -111,6 +111,10 @@ class WordPackFlow:
                 raise
             # 非 strict では静かにフォールバック
 
+        # RAG strict モードで引用がない場合はエラーを発生
+        if settings.rag_enabled and settings.strict_mode and not citations:
+            raise RuntimeError("No citations available in RAG strict mode")
+
         return {"lemma": lemma, "citations": citations, "llm_data": llm_data}
 
     def _synthesize(
@@ -138,6 +142,9 @@ class WordPackFlow:
         # citations からは信頼度判断のみ。構造化は llm_data を優先
         confidence = ConfidenceLevel.low
         if citations:
+            confidence = ConfidenceLevel.medium
+        # LLMが使用されている場合は最低でもmedium
+        if self.llm is not None and hasattr(self.llm, "complete"):
             confidence = ConfidenceLevel.medium
 
         # 直近の _retrieve の結果を graph/state 経由ではなく run から受け取れないため、
