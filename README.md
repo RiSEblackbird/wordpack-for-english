@@ -102,7 +102,7 @@ OpenAI LLM統合:
     "detail": {
       "message": "WordPack generation returned empty content (no senses/examples)",
       "reason_code": "EMPTY_CONTENT",
-      "diagnostics": { "lemma": "converge", "senses_count": 0, "examples_counts": { "A1": 0, "B1": 0, "C1": 0, "tech": 0 } },
+      "diagnostics": { "lemma": "converge", "senses_count": 0, "examples_counts": { "Dev": 0, "CS": 0, "LLM": 0, "Tech": 0, "Common": 0 } },
       "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。"
     }
   }
@@ -152,7 +152,7 @@ FastAPI アプリは `src/backend/main.py`。
 - `POST /api/word/pack`
   - 周辺知識パック生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RPを直接生成し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - 例文: CEFR別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。
+  - 例文: Dev/CS/LLM/Tech/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。
   - 語義の拡張（本リリース）: 各 `sense` に以下の詳細フィールドを追加し、よりボリューミーに表示します。
     - `definition_ja: string?` … 日本語の定義（1–2文）
     - `nuances_ja: string?` … 使い分け/含意/文体レベル
@@ -160,7 +160,7 @@ FastAPI アプリは `src/backend/main.py`。
     - `synonyms: string[]` / `antonyms: string[]`
     - `register: string?` … フォーマル/口語など
     - `notes_ja: string?` … 可算/不可算や自他/前置詞選択などの注意
-    - 件数: `A1/B1/C1` は各3文、`tech` は5文（不足時は短くなる／空許容、ダミーは入れない）。
+    - 件数: `Dev/CS/LLM` は各5文、`Tech` は3文、`Common` は6文（不足時は短くなる／空許容、ダミーは入れない）。
     - 長さ: 英文は原則 約25語（±5語）を目安。
     - 解説: `grammar_ja` に文法的な要点を日本語で付与（任意）。
   - リクエスト例（M5 追加パラメータ・Enum化）:
@@ -192,15 +192,20 @@ FastAPI アプリは `src/backend/main.py`。
       "collocations": {"general": {"verb_object": ["gain insight"], "adj_noun": ["deep insight"], "prep_noun": ["insight into N"]}, "academic": {"verb_object": ["derive insight"], "adj_noun": ["empirical insight"], "prep_noun": ["insight for N"]}},
       "contrast": [{"with":"intuition","diff_ja":"直観は体系的根拠が薄いのに対し、insight は分析や経験から得る洞察。"}],
       "examples": {
-        "A1": [
-          {"en":"I gained insight into the topic after several attempts and revisions.","ja":"複数回の試行と修正の末に洞察を得た。","grammar_ja":"第3文型"},
-          {"en":"Researchers gained insight as the results stabilized over iterations.","ja":"反復ごとに結果が安定し、研究者らは洞察を得た。","grammar_ja":"分詞構文"},
-          {"en":"Over months, we gained insight that informed the final decision.","ja":"数か月を経て、最終判断を支える洞察を得た。","grammar_ja":"過去分詞"}
+        "Dev": [
+          {"en":"We gained insight after refactoring modules and reviewing logs.","ja":"モジュールのリファクタリングとログ確認の後に洞察を得た。","grammar_ja":"第3文型"}
         ],
-        "B1": [],
-        "C1": [],
-        "tech": [
-          {"en":"Under mild assumptions, the estimator gained insight into latent structure.","ja":"温和な仮定の下で推定量は潜在構造への洞察を与えた。","grammar_ja":"不定詞"}
+        "CS": [
+          {"en":"Under mild assumptions, an estimator gains insight about latent structure.","ja":"温和な仮定の下で推定量は潜在構造について洞察を得る。","grammar_ja":"不定詞"}
+        ],
+        "LLM": [
+          {"en":"With better prompts, outputs converge and provide clearer insight.","ja":"プロンプト改善により出力が収束し明確な洞察が得られる。","grammar_ja":"分詞構文"}
+        ],
+        "Tech": [
+          {"en":"Metrics offer insight as systems stabilize across deployments.","ja":"デプロイを重ねるにつれメトリクスが洞察を与える。","grammar_ja":"現在形"}
+        ],
+        "Common": [
+          {"en":"Over months, we gained insight and made a better decision.","ja":"数か月を経て洞察を得て、より良い判断を下した。","grammar_ja":"過去形"}
         ]
       },
       "etymology": {"note":"from Middle English, influenced by Old Norse.","confidence":"medium"},

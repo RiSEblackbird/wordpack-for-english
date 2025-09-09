@@ -82,10 +82,11 @@ class WordPackFlow:
                     "  },\n"
                     "  \"contrast\": [ { \"with\": \"...\", \"diff_ja\": \"...\" } ],\n"
                     "  \"examples\": {\n"
-                    "    \"A1\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
-                    "    \"B1\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
-                    "    \"C1\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
-                    "    \"tech\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ]\n"
+                    "    \"Dev\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
+                    "    \"CS\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
+                    "    \"LLM\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
+                    "    \"Tech\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
+                    "    \"Common\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ]\n"
                     "  },\n"
                     "  \"etymology\": { \"note\": \"...\", \"confidence\": \"low|medium|high\" },\n"
                     "  \"study_card\": \"1文の要点(日本語)\",\n"
@@ -94,8 +95,8 @@ class WordPackFlow:
                     "Notes: \n"
                     "- gloss_ja / definition_ja / nuances_ja / grammar_ja / notes_ja は日本語。\n"
                     "- 例文は自然で、約25語（±5語）の英文にする。\n"
-                    "- 例文の数: A1/B1/C1 は各3文、tech は5文。重複・空文字・同内容の言い換えは禁止。\n"
-                    "- CEFR ラベルに難易度を合わせ、tech は技術・学術文脈に寄せる。\n"
+                    "- 例文の数: Dev/CS/LLM は各5文、Tech は3文、Common は6文（欠けはそのまま、ダミーは追加しない）。\n"
+                    "- Dev はアプリ開発現場の実務文脈、CS は計算機科学の学術文脈、LLM は応用/研究の文脈、Tech は従来の技術一般、Common は一般生活/ニュース等での標準的文脈。\n"
                     "- 各例文の grammar_ja は2段落の詳細解説にする：\n"
                     "  1) 品詞分解：形態素/句を『／』で区切り、語の後に【品詞/統語役割】を付す。必要に応じて句の内部構造も『＝』で示す（例：I【代/主】／sent【動/過去】／the documents【名/目】／via email【前置詞句＝via(前)+email(名)：手段】／to ensure quick delivery【不定詞句＝to+ensure(動)+quick(形)+delivery(名)：目的】）。\n"
                     "  2) 解説：文の核（S/V/O/C）、修飾関係（手段/目的/時/理由など）、冠詞・可算/不可算の扱い等を日本語で簡潔に説明。\n"
@@ -297,24 +298,27 @@ class WordPackFlow:
                                 if en and ja:
                                     out.append(Examples.ExampleItem(en=en, ja=ja, grammar_ja=grammar_ja))  # type: ignore[attr-defined]
                     return out
-                a1_list = _ex_list(ex.get("A1"))
-                b1_list = _ex_list(ex.get("B1"))
-                c1_list = _ex_list(ex.get("C1"))
-                tech_list = _ex_list(ex.get("tech"))
-                # 仕様: A1/B1/C1 は各最大3件、tech は最大5件に制限（不足はそのまま、ダミーを入れない）
+                dev_list = _ex_list(ex.get("Dev"))
+                cs_list = _ex_list(ex.get("CS"))
+                llm_list = _ex_list(ex.get("LLM"))
+                tech_list = _ex_list(ex.get("Tech"))
+                common_list = _ex_list(ex.get("Common"))
+                # 仕様: Dev/CS/LLM は最大5件、Tech は最大3件、Common は最大6件（不足はそのまま、ダミーを入れない）
                 examples = Examples(
-                    A1=a1_list[:3],
-                    B1=b1_list[:3],
-                    C1=c1_list[:3],
-                    tech=tech_list[:5],
+                    Dev=dev_list[:5],
+                    CS=cs_list[:5],
+                    LLM=llm_list[:5],
+                    Tech=tech_list[:3],
+                    Common=common_list[:6],
                 )
                 logger.info(
                     "wordpack_examples_built",
                     lemma=lemma,
-                    A1=len(examples.A1),
-                    B1=len(examples.B1),
-                    C1=len(examples.C1),
-                    tech=len(examples.tech),
+                    Dev=len(examples.Dev),
+                    CS=len(examples.CS),
+                    LLM=len(examples.LLM),
+                    Tech=len(examples.Tech),
+                    Common=len(examples.Common),
                 )
             except Exception:
                 logger.info("wordpack_examples_build_error", lemma=lemma)
@@ -367,7 +371,13 @@ class WordPackFlow:
             "wordpack_synthesize_done",
             lemma=lemma,
             senses_count=len(pack.senses),
-            examples_total=len(pack.examples.A1) + len(pack.examples.B1) + len(pack.examples.C1) + len(pack.examples.tech),
+            examples_total=(
+                len(pack.examples.Dev)
+                + len(pack.examples.CS)
+                + len(pack.examples.LLM)
+                + len(pack.examples.Tech)
+                + len(pack.examples.Common)
+            ),
             has_definition_any=any(bool(s.definition_ja) for s in pack.senses),
         )
         # 厳格モードでは、語義と例文がともにゼロの場合はエラーとして扱う（ダミーを返さない）
@@ -377,10 +387,11 @@ class WordPackFlow:
             _settings = None  # type: ignore[assignment]
         if _settings and getattr(_settings, "strict_mode", False):
             total_examples = (
-                len(pack.examples.A1)
-                + len(pack.examples.B1)
-                + len(pack.examples.C1)
-                + len(pack.examples.tech)
+                len(pack.examples.Dev)
+                + len(pack.examples.CS)
+                + len(pack.examples.LLM)
+                + len(pack.examples.Tech)
+                + len(pack.examples.Common)
             )
             if len(pack.senses) == 0 and total_examples == 0:
                 # 例外クラスをローカル定義（ルータ側で詳細HTTPにマップ）
@@ -397,10 +408,11 @@ class WordPackFlow:
                         "lemma": lemma,
                         "senses_count": 0,
                         "examples_counts": {
-                            "A1": len(examples.A1),
-                            "B1": len(examples.B1),
-                            "C1": len(examples.C1),
-                            "tech": len(examples.tech),
+                            "Dev": len(examples.Dev),
+                            "CS": len(examples.CS),
+                            "LLM": len(examples.LLM),
+                            "Tech": len(examples.Tech),
+                            "Common": len(examples.Common),
                         },
                     },
                 )
