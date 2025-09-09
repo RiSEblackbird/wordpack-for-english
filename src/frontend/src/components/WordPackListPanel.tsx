@@ -4,11 +4,6 @@ import { fetchJson, ApiError } from '../lib/fetcher';
 import { Modal } from './Modal';
 import { WordPackPanel } from './WordPackPanel';
 
-interface Props {
-  onSelectWordPack: (wordPackId: string) => void;
-  onRegenerateWordPack: (wordPackId: string) => void;
-}
-
 interface WordPackListItem {
   id: string;
   lemma: string;
@@ -23,7 +18,7 @@ interface WordPackListResponse {
   offset: number;
 }
 
-export const WordPackListPanel: React.FC<Props> = ({ onSelectWordPack, onRegenerateWordPack }) => {
+export const WordPackListPanel: React.FC = () => {
   const { settings } = useSettings();
   const [wordPacks, setWordPacks] = useState<WordPackListItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -108,7 +103,7 @@ export const WordPackListPanel: React.FC<Props> = ({ onSelectWordPack, onRegener
         .wp-list-container { max-width: 100%; }
         .wp-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
         .wp-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-        .wp-card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .wp-card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
         .wp-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
         .wp-card-title { font-size: 1.2em; font-weight: bold; color: #333; margin: 0; }
         .wp-card-meta { font-size: 0.85em; color: #666; margin: 0.25rem 0; }
@@ -148,7 +143,12 @@ export const WordPackListPanel: React.FC<Props> = ({ onSelectWordPack, onRegener
           <>
             <div className="wp-list-grid">
               {wordPacks.map((wp) => (
-                <div key={wp.id} className="wp-card">
+                <div
+                  key={wp.id}
+                  className="wp-card"
+                  data-testid="wp-card"
+                  onClick={() => { setPreviewWordPackId(wp.id); setPreviewOpen(true); }}
+                >
                   <div className="wp-card-header">
                     <h3 className="wp-card-title">{wp.lemma}</h3>
                   </div>
@@ -157,15 +157,9 @@ export const WordPackListPanel: React.FC<Props> = ({ onSelectWordPack, onRegener
                     <div>更新: {formatDate(wp.updated_at)}</div>
                   </div>
                   <div className="wp-card-actions">
-                    <button onClick={() => { setPreviewWordPackId(wp.id); setPreviewOpen(true); }}>
-                      表示
-                    </button>
-                    <button onClick={() => onRegenerateWordPack(wp.id)}>
-                      再生成
-                    </button>
                     <button 
                       className="danger" 
-                      onClick={() => deleteWordPack(wp.id)}
+                      onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
                     >
                       削除
                     </button>

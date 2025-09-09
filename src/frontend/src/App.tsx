@@ -75,16 +75,7 @@ export const App: React.FC = () => {
             />
           )}
           {tab === 'wordpacklist' && (
-            <WordPackListPanel 
-              onSelectWordPack={(wordPackId) => {
-                setSelectedWordPackId(wordPackId);
-                setTab('wordpack');
-              }}
-              onRegenerateWordPack={(wordPackId) => {
-                setSelectedWordPackId(wordPackId);
-                setTab('wordpack');
-              }}
-            />
+            <WordPackListPanel />
           )}
           {tab === 'settings' && <SettingsPanel focusRef={focusRef} />}
         </main>

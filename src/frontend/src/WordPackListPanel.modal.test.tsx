@@ -71,7 +71,7 @@ describe('WordPackListPanel modal preview', () => {
     return mock;
   }
 
-  it('opens modal and shows WordPack content when clicking 表示', async () => {
+  it('カードをクリックするとモーダルでWordPack内容を表示する', async () => {
     setupFetchMocks();
     render(<App />);
 
@@ -83,7 +83,7 @@ describe('WordPackListPanel modal preview', () => {
     await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
 
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '表示' }));
+      await user.click(screen.getByTestId('wp-card'));
     });
 
     // モーダルが開き、WordPack の概要が表示される
