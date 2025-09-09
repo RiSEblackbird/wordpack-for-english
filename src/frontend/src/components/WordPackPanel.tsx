@@ -87,10 +87,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       { id: 'overview', label: '概要' },
       { id: 'pronunciation', label: '発音' },
       { id: 'senses', label: '語義' },
+      { id: 'etymology', label: '語源' },
+      { id: 'examples', label: '例文' },
       { id: 'collocations', label: '共起' },
       { id: 'contrast', label: '対比' },
-      { id: 'examples', label: '例文' },
-      { id: 'etymology', label: '語源' },
       { id: 'citations', label: '引用' },
       { id: 'confidence', label: '信頼度' },
       { id: 'srs', label: 'SRSメタ' },
@@ -483,6 +483,36 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               )}
             </section>
 
+            <section id="etymology" className="wp-section">
+              <h3>語源</h3>
+              <p>{data.etymology?.note || '-'}</p>
+              <p>確度: {data.etymology?.confidence}</p>
+            </section>
+
+            
+
+            <section id="examples" className="wp-section">
+              <h3>例文</h3>
+              {(['A1','B1','C1','tech'] as const).map((k) => (
+                <div key={k}>
+                  <h4>{k}</h4>
+                  {data.examples?.[k]?.length ? (
+                    <ul>
+                      {(data.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
+                        <li key={i}>
+                          <div>{ex.en}</div>
+                          <div style={{ color: '#555' }}>{ex.ja}</div>
+                          {ex.grammar_ja ? (
+                            <div style={{ color: '#6b6b6b', fontSize: '90%', whiteSpace: 'pre-wrap' }}>{ex.grammar_ja}</div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p>なし</p>}
+                </div>
+              ))}
+            </section>
+
             <section id="collocations" className="wp-section">
               <h3>共起</h3>
               <div>
@@ -561,34 +591,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                   </ul>
                 ) : <p>なし</p>}
               </div>
-            </section>
-
-            <section id="examples" className="wp-section">
-              <h3>例文</h3>
-              {(['A1','B1','C1','tech'] as const).map((k) => (
-                <div key={k}>
-                  <h4>{k}</h4>
-                  {data.examples?.[k]?.length ? (
-                    <ul>
-                      {(data.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
-                        <li key={i}>
-                          <div>{ex.en}</div>
-                          <div style={{ color: '#555' }}>{ex.ja}</div>
-                          {ex.grammar_ja ? (
-                            <div style={{ color: '#6b6b6b', fontSize: '90%', whiteSpace: 'pre-wrap' }}>{ex.grammar_ja}</div>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : <p>なし</p>}
-                </div>
-              ))}
-            </section>
-
-            <section id="etymology" className="wp-section">
-              <h3>語源</h3>
-              <p>{data.etymology?.note || '-'}</p>
-              <p>確度: {data.etymology?.confidence}</p>
             </section>
 
             <section id="citations" className="wp-section">
