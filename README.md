@@ -152,7 +152,12 @@ FastAPI アプリは `src/backend/main.py`。
 - `POST /api/word/pack`
   - 周辺知識パック生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RPを直接生成し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - 例文: Dev/CS/LLM/Tech/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。
+  - 例文: Dev/CS/LLM/Tech/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。カテゴリ定義は次の通り：
+    - Dev … ITエンジニアの開発現場（アプリ開発）の文脈
+    - CS … 計算機科学の学術研究の文脈
+    - LLM … LLMの応用/研究の文脈
+    - Tech … 技術一般の文脈
+    - Common … 日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）
   - 語義の拡張（本リリース）: 各 `sense` に以下の詳細フィールドを追加し、よりボリューミーに表示します。
     - `definition_ja: string?` … 日本語の定義（1–2文）
     - `nuances_ja: string?` … 使い分け/含意/文体レベル
@@ -160,7 +165,7 @@ FastAPI アプリは `src/backend/main.py`。
     - `synonyms: string[]` / `antonyms: string[]`
     - `register: string?` … フォーマル/口語など
     - `notes_ja: string?` … 可算/不可算や自他/前置詞選択などの注意
-    - 件数: `Dev/CS/LLM` は各5文、`Tech` は3文、`Common` は6文（不足時は短くなる／空許容、ダミーは入れない）。
+    - 件数: `Dev/CS/LLM` は各5文、`Tech` は3文、`Common` は6文（不足時は短くなる／空許容、ダミーは入れない）。`Common` は日常会話のカジュアルな用例に限定。
     - 長さ: 英文は原則 約25語（±5語）を目安。
     - 解説: `grammar_ja` に文法的な要点を日本語で付与（任意）。
   - リクエスト例（M5 追加パラメータ・Enum化）:

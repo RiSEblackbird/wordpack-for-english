@@ -96,7 +96,7 @@ class WordPackFlow:
                     "- gloss_ja / definition_ja / nuances_ja / grammar_ja / notes_ja は日本語。\n"
                     "- 例文は自然で、約25語（±5語）の英文にする。\n"
                     "- 例文の数: Dev/CS/LLM は各5文、Tech は3文、Common は6文（欠けはそのまま、ダミーは追加しない）。\n"
-                    "- Dev はアプリ開発現場の実務文脈、CS は計算機科学の学術文脈、LLM は応用/研究の文脈、Tech は従来の技術一般、Common は一般生活/ニュース等での標準的文脈。\n"
+                    "- Dev はアプリ開発現場の実務文脈、CS は計算機科学の学術文脈、LLM は応用/研究の文脈、Tech は従来の技術一般、Common は日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。\n"
                     "- 各例文の grammar_ja は2段落の詳細解説にする：\n"
                     "  1) 品詞分解：形態素/句を『／』で区切り、語の後に【品詞/統語役割】を付す。必要に応じて句の内部構造も『＝』で示す（例：I【代/主】／sent【動/過去】／the documents【名/目】／via email【前置詞句＝via(前)+email(名)：手段】／to ensure quick delivery【不定詞句＝to+ensure(動)+quick(形)+delivery(名)：目的】）。\n"
                     "  2) 解説：文の核（S/V/O/C）、修飾関係（手段/目的/時/理由など）、冠詞・可算/不可算の扱い等を日本語で簡潔に説明。\n"
