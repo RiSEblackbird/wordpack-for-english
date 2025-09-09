@@ -49,9 +49,22 @@ export async function fetchJson<T = any>(url: string, options: FetchJsonOptions 
     const data = isJson ? await res.json().catch(() => undefined) : await res.text().catch(() => undefined);
 
     if (!res.ok) {
-      const message = (data && typeof data === 'object' && 'detail' in (data as any))
-        ? String((data as any).detail)
-        : `Request failed: ${res.status}`;
+      let message = `Request failed: ${res.status}`;
+      // FastAPI の detail は任意型。 {message, hint, reason_code} を優先
+      if (data && typeof data === 'object' && 'detail' in (data as any)) {
+        const d = (data as any).detail;
+        if (d && typeof d === 'object') {
+          const m = typeof d.message === 'string' ? d.message : undefined;
+          const hint = typeof d.hint === 'string' ? d.hint : undefined;
+          const rc = typeof d.reason_code === 'string' ? d.reason_code : undefined;
+          const diag = d.diagnostics ? ` diagnostics=${JSON.stringify(d.diagnostics)}` : '';
+          message = [m || String(d), rc ? `(code=${rc})` : null, hint ? `hint: ${hint}` : null, diag]
+            .filter(Boolean)
+            .join(' ');
+        } else {
+          message = String(d);
+        }
+      }
       throw new ApiError(message, res.status, data);
     }
 

@@ -14,6 +14,7 @@ from ..models.word import (
     WordPackRegenerateRequest
 )
 from ..srs import store
+from ..logging import logger
 
 router = APIRouter(tags=["word"])
 
@@ -70,6 +71,12 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     llm = get_llm_provider()
     flow = WordPackFlow(chroma_client=chroma_client, llm=llm)
     try:
+        logger.info(
+            "wordpack_generate_request",
+            lemma=req.lemma,
+            pronunciation_enabled=req.pronunciation_enabled,
+            regenerate_scope=str(req.regenerate_scope),
+        )
         word_pack = flow.run(
             req.lemma,
             pronunciation_enabled=req.pronunciation_enabled,
@@ -81,6 +88,13 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
         word_pack_data = word_pack.model_dump_json()
         store.save_word_pack(word_pack_id, req.lemma, word_pack_data)
         
+        logger.info(
+            "wordpack_generate_response",
+            lemma=word_pack.lemma,
+            senses_count=len(word_pack.senses),
+            examples_total=len(word_pack.examples.A1)+len(word_pack.examples.B1)+len(word_pack.examples.C1)+len(word_pack.examples.tech),
+            has_definition_any=any(bool(s.definition_ja) for s in word_pack.senses),
+        )
         return word_pack
     except RuntimeError as exc:
         msg = str(exc)
@@ -99,6 +113,19 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
                 detail={
                     "message": "RAG dependency not ready or no citations (strict mode)",
                     "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
+                },
+            ) from exc
+        # Flow での空データ検出（厳格）を詳細に変換
+        reason_code = getattr(exc, "reason_code", None)
+        diagnostics = getattr(exc, "diagnostics", None)
+        if reason_code == "EMPTY_CONTENT":
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "message": "WordPack generation returned empty content (no senses/examples)",
+                    "reason_code": reason_code,
+                    "diagnostics": diagnostics or {},
+                    "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
                 },
             ) from exc
         # それ以外は既定のハンドリングへ委譲
@@ -231,6 +258,18 @@ async def regenerate_word_pack(
                 detail={
                     "message": "RAG dependency not ready or no citations (strict mode)",
                     "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
+                },
+            ) from exc
+        reason_code = getattr(exc, "reason_code", None)
+        diagnostics = getattr(exc, "diagnostics", None)
+        if reason_code == "EMPTY_CONTENT":
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "message": "WordPack regeneration returned empty content (no senses/examples)",
+                    "reason_code": reason_code,
+                    "diagnostics": diagnostics or {},
+                    "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
                 },
             ) from exc
         raise

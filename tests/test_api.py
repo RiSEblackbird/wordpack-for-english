@@ -238,3 +238,30 @@ def test_word_pack_list_pagination(client):
     
     resp = client.get("/api/word/packs?offset=-1")
     assert resp.status_code == 422  # validation error
+
+
+def test_word_pack_strict_empty_llm(monkeypatch):
+    """STRICT_MODE で LLM が空文字を返した場合、5xx となることを確認。
+
+    ルータは内部で例外をリレーズするため、FastAPI の既定ハンドラで 500 になる。
+    （RAG 依存不足時の 424 は別テストで担保済み）
+    """
+    import os, sys
+    # Strict を有効化して設定を再ロード
+    monkeypatch.setenv("STRICT_MODE", "true")
+    sys.modules.pop("backend.config", None)
+    sys.modules.pop("backend.providers", None)
+    from backend import main as backend_main
+    from fastapi.testclient import TestClient
+    # LLM を空応答に固定
+    from backend import providers
+
+    class _StubLLM:
+        def complete(self, prompt: str) -> str:
+            return ""
+
+    providers._LLM_INSTANCE = _StubLLM()
+
+    client = TestClient(backend_main.app)
+    r = client.post("/api/word/pack", json={"lemma": "no_data"})
+    assert 500 <= r.status_code < 600

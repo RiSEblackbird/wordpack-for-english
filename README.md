@@ -72,7 +72,47 @@ docker compose up --build
 OpenAI LLM統合:
 - 既定で `LLM_PROVIDER=openai` および `LLM_MODEL=gpt-4o-mini` を使用します。
 - RAG機能は無効化されており、OpenAI LLMが直接語義・用例・フィードバックを生成します。
- - 生成品質のため `LLM_MAX_TOKENS` を `.env` で調整できます（既定 900）。JSON 出力の途中切れを防止します。
+- 生成品質のため `LLM_MAX_TOKENS` を `.env` で調整できます（推奨 1500）。JSON 出力の途中切れを防止します。
+
+### 1-7. ログとトラブルシューティング（語義/例文が「なし」になる場合）
+- バックエンドは structlog による JSON 構造化ログを出力します（標準出力）。
+- WordPack 生成パスの主なログイベント:
+  - `wordpack_generate_request` … 入力診断（`lemma`, `pronunciation_enabled`, `regenerate_scope`）
+  - `llm_provider_select` … LLM プロバイダ選択（`openai`/`local`）
+  - `wordpack_llm_prompt_built` / `wordpack_llm_output_received` … LLM へのプロンプト構築と出力受領（文字数）
+  - `wordpack_llm_json_parsed` … JSON 解析成功（`has_senses`, `has_examples`）
+  - `wordpack_llm_json_parse_failed` / `wordpack_llm_examples_salvaged` … 解析失敗と例文のみサルベージ
+  - `wordpack_senses_built` / `wordpack_examples_built` … 合成結果（件数）
+  - `wordpack_generate_response` … 最終レスポンス診断（`senses_count`, `examples_total`, `has_definition_any`）
+
+調査手順:
+1. リクエスト直後の `wordpack_generate_request` を確認し、意図した `lemma` であるか確認
+2. `llm_provider_select` が `openai` になっているか確認（`local` の場合、LLM出力は空になり得ます）
+3. `wordpack_llm_output_received` の `output_chars` が十分か（0 または極端に小さい場合は `LLM_MAX_TOKENS` を増加）
+4. `wordpack_llm_json_parsed` の `has_senses`/`has_examples` を確認。`false` の場合はプロンプト/モデル/トークン上限を調整
+5. `wordpack_examples_built`/`wordpack_senses_built` の件数が 0 の場合、上流の LLM 出力の構造が仕様通りかチェック
+6. それでも改善しない場合は `STRICT_MODE=true` で実行し、解析失敗時に例外化して根因を特定
+
+厳格モードの空データ検出（エラー詳細）:
+- `STRICT_MODE=true` のとき、語義(senses) と例文(examples) がともに空の場合は 502 を返します。
+- レスポンス例:
+  ```json
+  {
+    "detail": {
+      "message": "WordPack generation returned empty content (no senses/examples)",
+      "reason_code": "EMPTY_CONTENT",
+      "diagnostics": { "lemma": "converge", "senses_count": 0, "examples_counts": { "A1": 0, "B1": 0, "C1": 0, "tech": 0 } },
+      "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。"
+    }
+  }
+  ```
+- 対応: `.env` の `LLM_TIMEOUT_MS` を増やす（例: 90000）、`LLM_MAX_TOKENS` を増やす（例: 1500–1800）、`LLM_MAX_RETRIES` を 2 へ、モデルを安定タグへ変更。
+
+strict モードでのLLMエラー挙動:
+
+- LLM がタイムアウト/失敗した場合、または空出力/パース不能で `senses`/`examples` が得られない場合はエラー（5xx）になります。
+- 既定の LLM タイムアウトは 60 秒（`LLM_TIMEOUT_MS=60000`）。必要に応じて `.env` で調整してください。
+- OpenAI SDK 呼び出しには `timeout` を適用し、内部ラッパでリトライ/キャンセル処理を行っています。
 
 Tips (Windows)：Vite のファイル監視が不安定な場合、`CHOKIDAR_USEPOLLING=1` を環境変数に設定してください（compose の service へ追加可能）。
 
@@ -111,7 +151,17 @@ FastAPI アプリは `src/backend/main.py`。
 - `POST /api/word/pack`
   - 周辺知識パック生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RPを直接生成し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - 例文: 英日ペア（`{ en, ja }`）で返却。取得できない場合は空配列となります。
+  - 例文: CEFR別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。
+  - 語義の拡張（本リリース）: 各 `sense` に以下の詳細フィールドを追加し、よりボリューミーに表示します。
+    - `definition_ja: string?` … 日本語の定義（1–2文）
+    - `nuances_ja: string?` … 使い分け/含意/文体レベル
+    - `patterns: string[]` … 典型パターン
+    - `synonyms: string[]` / `antonyms: string[]`
+    - `register: string?` … フォーマル/口語など
+    - `notes_ja: string?` … 可算/不可算や自他/前置詞選択などの注意
+    - 件数: `A1/B1/C1` は各3文、`tech` は5文（不足時は短くなる／空許容、ダミーは入れない）。
+    - 長さ: 英文は原則 約25語（±5語）を目安。
+    - 解説: `grammar_ja` に文法的な要点を日本語で付与（任意）。
   - リクエスト例（M5 追加パラメータ・Enum化）:
     ```json
     { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
@@ -124,9 +174,34 @@ FastAPI アプリは `src/backend/main.py`。
       "lemma": "converge",
       "pronunciation": {"ipa_GA":"/kənvɝdʒ/","ipa_RP":"/kənˈvɜːdʒ/","syllables":2,"stress_index":1,"linking_notes":[]},
       "senses": [{"id":"s1","gloss_ja":"集まる・収束する","patterns":["converge on N"]}],
+  - 追加の `senses` 詳細の例:
+    ```json
+    {
+      "id": "s1",
+      "gloss_ja": "集まる・収束する",
+      "definition_ja": "複数のものが一点・一方向に向かって近づき一つにまとまること。",
+      "nuances_ja": "学術文脈では系列や推定量が極限へ近づく含意が強い。",
+      "patterns": ["converge on N", "converge toward N"],
+      "synonyms": ["gather", "meet"],
+      "antonyms": ["diverge"],
+      "register": "formal",
+      "notes_ja": "自動詞。数学/統計では to/toward の選択でニュアンス差あり。"
+    }
+    ```
       "collocations": {"general": {"verb_object": ["gain insight"], "adj_noun": ["deep insight"], "prep_noun": ["insight into N"]}, "academic": {"verb_object": ["derive insight"], "adj_noun": ["empirical insight"], "prep_noun": ["insight for N"]}},
       "contrast": [{"with":"intuition","diff_ja":"直観は体系的根拠が薄いのに対し、insight は分析や経験から得る洞察。"}],
-      "examples": {"A1": [{"en":"I gained insight into the topic.","ja":"そのテーマへの洞察を得た。"}], "B1": [], "C1": [], "tech": []},
+      "examples": {
+        "A1": [
+          {"en":"I gained insight into the topic after several attempts and revisions.","ja":"複数回の試行と修正の末に洞察を得た。","grammar_ja":"第3文型"},
+          {"en":"Researchers gained insight as the results stabilized over iterations.","ja":"反復ごとに結果が安定し、研究者らは洞察を得た。","grammar_ja":"分詞構文"},
+          {"en":"Over months, we gained insight that informed the final decision.","ja":"数か月を経て、最終判断を支える洞察を得た。","grammar_ja":"過去分詞"}
+        ],
+        "B1": [],
+        "C1": [],
+        "tech": [
+          {"en":"Under mild assumptions, the estimator gained insight into latent structure.","ja":"温和な仮定の下で推定量は潜在構造への洞察を与えた。","grammar_ja":"不定詞"}
+        ]
+      },
       "etymology": {"note":"from Middle English, influenced by Old Norse.","confidence":"medium"},
       "study_card": "insight: into による対象提示。deep/valuable と相性良。",
       "citations": [{"text":"LLM-generated information for insight","meta":{"source":"openai_llm","word":"insight"}}],
@@ -267,13 +342,13 @@ FastAPI アプリは `src/backend/main.py`。
 
 - WordPack（`WordPackPanel.tsx`）
   - 見出し語を入力→`生成`。使用API: `POST /api/word/pack`
-  - 1画面で「発音/語義/共起/対比/例文/語源/引用/信頼度/学習カード要点」を表示。
+  - 1画面で「発音/語義/語源/例文/共起/対比/インデックス/引用/信頼度/学習カード要点」を表示（「語源」は「語義」の直後、「共起」「対比」「インデックス」は「例文」の直後に表示）。
   - セルフチェック: 初期は学習カード要点に3秒のぼかしが入り、クリックで即解除可能。
   - SRS連携: 画面上で ×/△/○ の3段階採点が可能。`POST /api/review/grade_by_lemma` を呼び出し、未登録なら自動でカードを作成。
   - SRSメタ: `GET /api/review/card_by_lemma` で登録状況と `repetitions/interval_days/due_at` を表示（未登録時は「未登録」）。採点後は進捗/インデックス（最近/よく見る）と併せて自動更新。
   - ショートカット: `1/J = ×`, `2/K = △`, `3/L = ○`。設定で「採点後に自動で次へ」を切替可能。
   - 進捗の見える化（PR4）: 画面上部に「今日のレビュー済/残り」「最近見た語（直近5）」、セッション完了時の簡易サマリ（件数/所要時間）を表示。
-  - 単語アクセス導線（PR5）: 「対比」や「共起」から横展開リンクで他語へ移動。画面下部に「インデックス（最近/よく見る）」を表示。
+  - 単語アクセス導線（PR5）: 「対比」や「共起」から横展開リンクで他語へ移動。「例文」の直後に「インデックス（最近/よく見る）」を表示。
   - **永続化機能**: 生成されたWordPackは自動的にデータベースに保存され、再生成ボタンで内容を更新可能。
 
 - 保存済み（`WordPackListPanel.tsx`）

@@ -17,14 +17,24 @@ interface Pronunciation {
   linking_notes: string[];
 }
 
-interface Sense { id: string; gloss_ja: string; patterns: string[]; register?: string | null }
+interface Sense {
+  id: string;
+  gloss_ja: string;
+  definition_ja?: string | null;
+  nuances_ja?: string | null;
+  patterns: string[];
+  synonyms?: string[];
+  antonyms?: string[];
+  register?: string | null;
+  notes_ja?: string | null;
+}
 
 interface CollocationLists { verb_object: string[]; adj_noun: string[]; prep_noun: string[] }
 interface Collocations { general: CollocationLists; academic: CollocationLists }
 
 interface ContrastItem { with: string; diff_ja: string }
 
-interface ExampleItem { en: string; ja: string }
+interface ExampleItem { en: string; ja: string; grammar_ja?: string }
 interface Examples { A1: ExampleItem[]; B1: ExampleItem[]; C1: ExampleItem[]; tech: ExampleItem[] }
 
 interface Etymology { note: string; confidence: 'low' | 'medium' | 'high' }
@@ -77,10 +87,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       { id: 'overview', label: '概要' },
       { id: 'pronunciation', label: '発音' },
       { id: 'senses', label: '語義' },
+      { id: 'etymology', label: '語源' },
+      { id: 'examples', label: '例文' },
       { id: 'collocations', label: '共起' },
       { id: 'contrast', label: '対比' },
-      { id: 'examples', label: '例文' },
-      { id: 'etymology', label: '語源' },
       { id: 'citations', label: '引用' },
       { id: 'confidence', label: '信頼度' },
       { id: 'srs', label: 'SRSメタ' },
@@ -106,6 +116,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           regenerate_scope: settings.regenerateScope,
         },
         signal: ctrl.signal,
+        timeoutMs: 60000,
       });
       setData(res);
       setCurrentWordPackId(null); // 新規生成なのでIDはnull
@@ -232,6 +243,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           regenerate_scope: settings.regenerateScope,
         },
         signal: ctrl.signal,
+        timeoutMs: 60000,
       });
       setData(res);
       setCurrentWordPackId(wordPackId);
@@ -438,13 +450,67 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                   {data.senses.map((s) => (
                     <li key={s.id}>
                       <div><strong>{s.gloss_ja}</strong></div>
-                      {s.patterns?.length ? <div className="mono">{s.patterns.join(' | ')}</div> : null}
+                      {s.definition_ja ? (
+                        <div style={{ marginTop: 4 }}>{s.definition_ja}</div>
+                      ) : null}
+                      {s.nuances_ja ? (
+                        <div style={{ marginTop: 4, color: '#555' }}>{s.nuances_ja}</div>
+                      ) : null}
+                      {s.patterns?.length ? (
+                        <div className="mono" style={{ marginTop: 4 }}>{s.patterns.join(' | ')}</div>
+                      ) : null}
+                      {(s.synonyms && s.synonyms.length) || (s.antonyms && s.antonyms.length) ? (
+                        <div style={{ marginTop: 4 }}>
+                          {s.synonyms?.length ? (
+                            <div><span style={{ color: '#555' }}>類義:</span> {s.synonyms.join(', ')}</div>
+                          ) : null}
+                          {s.antonyms?.length ? (
+                            <div><span style={{ color: '#555' }}>反義:</span> {s.antonyms.join(', ')}</div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {s.register ? (
+                        <div style={{ marginTop: 4 }}><span style={{ color: '#555' }}>レジスター:</span> {s.register}</div>
+                      ) : null}
+                      {s.notes_ja ? (
+                        <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{s.notes_ja}</div>
+                      ) : null}
                     </li>
                   ))}
                 </ol>
               ) : (
                 <p>なし</p>
               )}
+            </section>
+
+            <section id="etymology" className="wp-section">
+              <h3>語源</h3>
+              <p>{data.etymology?.note || '-'}</p>
+              <p>確度: {data.etymology?.confidence}</p>
+            </section>
+
+            
+
+            <section id="examples" className="wp-section">
+              <h3>例文</h3>
+              {(['A1','B1','C1','tech'] as const).map((k) => (
+                <div key={k}>
+                  <h4>{k}</h4>
+                  {data.examples?.[k]?.length ? (
+                    <ul>
+                      {(data.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
+                        <li key={i}>
+                          <div>{ex.en}</div>
+                          <div style={{ color: '#555' }}>{ex.ja}</div>
+                          {ex.grammar_ja ? (
+                            <div style={{ color: '#6b6b6b', fontSize: '90%', whiteSpace: 'pre-wrap' }}>{ex.grammar_ja}</div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p>なし</p>}
+                </div>
+              ))}
             </section>
 
             <section id="collocations" className="wp-section">
@@ -525,31 +591,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                   </ul>
                 ) : <p>なし</p>}
               </div>
-            </section>
-
-            <section id="examples" className="wp-section">
-              <h3>例文</h3>
-              {(['A1','B1','C1','tech'] as const).map((k) => (
-                <div key={k}>
-                  <h4>{k}</h4>
-                  {data.examples?.[k]?.length ? (
-                    <ul>
-                      {(data.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
-                        <li key={i}>
-                          <div>{ex.en}</div>
-                          <div style={{ color: '#555' }}>{ex.ja}</div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : <p>なし</p>}
-                </div>
-              ))}
-            </section>
-
-            <section id="etymology" className="wp-section">
-              <h3>語源</h3>
-              <p>{data.etymology?.note || '-'}</p>
-              <p>確度: {data.etymology?.confidence}</p>
             </section>
 
             <section id="citations" className="wp-section">

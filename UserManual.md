@@ -56,7 +56,7 @@
 - OpenAI API キーが設定されていない場合、アプリは安全なフォールバックモードで動作します。
 - 本番/実運用では `STRICT_MODE=true` を推奨（既定）。必須設定が不足している場合はエラーとなり早期に検出できます。
 - テスト/オフライン開発では `STRICT_MODE=false` を設定すると、ローカルフォールバック動作を許容します。
- - WordPack の生成で情報が欠ける場合は `.env` の `LLM_MAX_TOKENS` を増やしてください（既定 900）。出力JSONの途中切れを防止します。
+ - WordPack の生成で情報が欠ける場合は `.env` の `LLM_MAX_TOKENS` を増やしてください（推奨 1500、状況により 1200–1800）。出力JSONの途中切れを防止します。
 
 
 ---
@@ -100,7 +100,8 @@
 1) 「WordPack」を選択
 2) 見出し語を入力（例: `converge`）
 3) 「生成」をクリック
-4) 結果: 1画面に「発音/語義/共起/対比/例文（英日ペア）/語源/引用/信頼度/学習カード要点」を表示
+4) 結果: 1画面に「発音/語義/語源/例文（英日ペア+文法解説）/共起/対比/インデックス/引用/信頼度/学習カード要点」を表示（「語源」は「語義」の直後、「共起」「対比」「インデックス」は「例文」の直後に表示）
+   - 語義は各 sense ごとに次を表示: 見出し語義（gloss_ja）、定義（definition_ja）、ニュアンス（nuances_ja）、典型パターン（patterns）、類義/反義、レジスター、注意点（notes_ja）
 
 セルフチェック:
 - 初期状態で「学習カード要点」には 3 秒のぼかしがかかります
@@ -138,7 +139,20 @@
 単語アクセス導線の強化（PR5）:
 - 対比: `対比` セクションの単語をクリックすると、その語で WordPack をすぐに開けます。
 - 共起: `共起` セクションの候補（VO/Adj+N/Prep+N）から語をクリックして横展開できます。
-- インデックス: 画面下部に `インデックス` を追加し、`最近`（直近5件）と `よく見る`（レビュー回数上位、`GET /api/review/popular`）を表示します。クリックで入力欄に反映されます。
+- インデックス: 「例文」の直後に `インデックス` を表示し、`最近`（直近5件）と `よく見る`（レビュー回数上位、`GET /api/review/popular`）を表示します。クリックで入力欄に反映されます。
+
+語義表示の仕様（更新）:
+- `definition_ja`（任意）: 1–2文で核となる定義
+- `nuances_ja`（任意）: 文体/専門度/含意の説明
+- `patterns`（配列）: 代表的な構文パターン
+- `synonyms` / `antonyms`（配列）: 類義語/反義語
+- `register`（任意）: formal/informal 等
+- `notes_ja`（任意）: 可算/不可算、自他、前置詞選択など
+
+例文仕様（更新）:
+- A1/B1/C1 は各3文、tech は5文を目安に表示（不足時は空のまま）。
+- 英文は原則 約25語（±5語）。
+- 各例文には任意で `文法: grammar_ja` が付与されます。
 
 引用と確度（citations/confidence）の読み方（PR5）:
 - 引用（citations）: OpenAI LLM が生成した情報の参照元。LLM生成の情報は `{"source": "openai_llm"}` として記録されます。
@@ -185,6 +199,24 @@
 ---
 
 ## 5. トラブルシュート
+- 語義/例文が「なし」になる
+  - バックエンドの構造化ログを確認します（標準出力）。主なイベント:
+    - `wordpack_generate_request`（入力確認）
+    - `llm_provider_select`（`openai` になっているか）
+    - `wordpack_llm_output_received`（`output_chars` が 0/極小でないか）
+    - `wordpack_llm_json_parsed`（`has_senses`/`has_examples`）
+    - `wordpack_examples_built` / `wordpack_senses_built`（件数）
+    - `wordpack_generate_response`（`senses_count`/`examples_total`/`has_definition_any`）
+  - 改善のためのチェックリスト:
+    1) `.env` に `OPENAI_API_KEY` が設定されているか（`llm_provider_select` が `local` だと LLM 出力は空になります）
+    2) `.env` の `LLM_MAX_TOKENS` を 1200–1800 に引き上げる（JSON 途中切れ対策）
+    3) モデルを `gpt-4o-mini` など JSON 出力が安定したものに設定
+    4) `STRICT_MODE=true` で実行してパース失敗を例外化し、根因を特定
+  - strict モードの挙動:
+    - LLM がタイムアウト/失敗、または空出力/パース不能で `senses`/`examples` が得られない場合はエラー（5xx）になります。
+    - さらに、`senses` と `examples` がともに空の場合は 502 を返し、詳細を `detail.message/reason_code/diagnostics/hint` に含めます（`reason_code=EMPTY_CONTENT`）。
+    - 既定の LLM タイムアウトは 60 秒（`LLM_TIMEOUT_MS=60000`）。必要に応じて `.env` で調整してください。
+  - それでも改善しない場合は、ログ付きで `X-Request-ID` を添えて報告してください。
 - 404 が返る
   - エンドポイントのパスを確認（例: `…/api/sentence/check`, `…/api/text/assist`）
 - CORS エラー
