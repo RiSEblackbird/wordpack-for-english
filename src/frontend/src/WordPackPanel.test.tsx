@@ -10,7 +10,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
   });
 
   function setupFetchMocks() {
-    const mock = vi.spyOn(global, 'fetch' as any).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const mock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
       if (url.endsWith('/api/review/stats')) {
         return new Response(JSON.stringify({ due_now: 1, reviewed_today: 0, recent: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
