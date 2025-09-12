@@ -131,6 +131,13 @@ def test_word_pack_returns_424_when_rag_strict_and_no_citations(monkeypatch):
         for m in ["backend.config", "backend.providers", "backend.main"]:
             if m in sys.modules:
                 importlib.reload(sys.modules[m])
+        # LLM を完全モック化してキー不要にする
+        import backend.providers as providers_mod
+        class _StubLLM:
+            def complete(self, prompt: str) -> str:
+                # 最小のJSON（examplesの空辞書）を返し、LLM依存を回避
+                return '{"examples": {"Dev": [], "CS": [], "LLM": [], "Tech": [], "Common": []}}'
+        providers_mod._LLM_INSTANCE = _StubLLM()
         from backend.main import app
         from fastapi.testclient import TestClient
         client = TestClient(app)
