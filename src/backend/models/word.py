@@ -20,9 +20,9 @@ class WordPackRequest(BaseModel):
 
     model_config = ConfigDict(json_schema_extra={
         "examples": [
-            {"lemma": "converge", "pronunciation_enabled": True, "regenerate_scope": "all"},
-            {"lemma": "converge", "pronunciation_enabled": False, "regenerate_scope": "examples"},
-            {"lemma": "converge", "regenerate_scope": "collocations"}
+            {"lemma": "converge", "pronunciation_enabled": True, "regenerate_scope": "all", "model": "gpt-4o-mini", "temperature": 0.6},
+            {"lemma": "converge", "pronunciation_enabled": False, "regenerate_scope": "examples", "model": "gpt-4o-mini", "temperature": 0.6},
+            {"lemma": "converge", "regenerate_scope": "collocations", "model": "gpt-4o-mini", "temperature": 0.6}
         ],
         "x-schema-version": "0.3.0"
     })
@@ -37,6 +37,12 @@ class WordPackRequest(BaseModel):
             "collocations=共起セクションのみダミー加筆。"
         ),
     )
+    # オプショナルな生成パラメータ（未指定ならバックエンド設定を使用）
+    model: Optional[str] = Field(default=None, description="LLMモデル名の上書き（未指定なら既定 settings.llm_model）")
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="生成の温度。未指定時は実装既定値を使用")
+    # gpt-5-mini 等の推論系モデル向けパラメータ
+    reasoning: Optional[dict] = Field(default=None, description="reasoning オプション（例: {effort: minimal|low|medium|high}）")
+    text: Optional[dict] = Field(default=None, description="text オプション（例: {verbosity: low|medium|high}）")
 
 
 class Sense(BaseModel):
@@ -163,9 +169,7 @@ class WordPackRegenerateRequest(BaseModel):
     """WordPack再生成リクエスト"""
     pronunciation_enabled: bool = True
     regenerate_scope: RegenerateScope = Field(default=RegenerateScope.all)
-
-
-"""
-GET /api/word プレースホルダは PR2 で廃止。
-必要になれば専用エンドポイント設計の上で別モデルを追加する。
-"""
+    model: Optional[str] = Field(default=None, description="LLMモデル名の上書き（未指定なら既定 settings.llm_model）")
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    reasoning: Optional[dict] = Field(default=None)
+    text: Optional[dict] = Field(default=None)

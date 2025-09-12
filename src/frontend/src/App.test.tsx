@@ -30,6 +30,8 @@ describe('App navigation', () => {
       await user.keyboard('{Alt>}{6}{/Alt}');
     });
     expect(screen.getByLabelText('発音を有効化')).toBeInTheDocument();
+    // temperature 入力の存在
+    expect(screen.getByLabelText('temperature')).toBeInTheDocument();
 
     await act(async () => {
       await user.keyboard('{Alt>}{1}{/Alt}');
@@ -47,5 +49,7 @@ describe('App navigation', () => {
     });
     expect(screen.getByPlaceholderText('見出し語を入力')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '生成' })).toBeInTheDocument();
+    // モデル選択の存在
+    expect(screen.getByLabelText('モデル')).toBeInTheDocument();
   });
 });

@@ -43,6 +43,28 @@ export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
           />
         </label>
       </div>
+      <div>
+        <label>
+          temperature
+          <input
+            type="number"
+            min={0}
+            max={1}
+            step={0.1}
+            value={settings.temperature}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              const v = Number(e.target.value);
+              const clamped = Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.6;
+              setSettings({ ...settings, temperature: clamped });
+            }}
+            aria-describedby="temperature-help"
+          />
+        </label>
+        <div id="temperature-help">
+          <small>0.6–0.8（文体の多様性）、語数厳密なら 0.3–0.5</small>
+        </div>
+      </div>
+      
       
     </section>
   );

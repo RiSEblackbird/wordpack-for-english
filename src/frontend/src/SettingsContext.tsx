@@ -6,6 +6,9 @@ export interface Settings {
   regenerateScope: 'all' | 'examples' | 'collocations';
   autoAdvanceAfterGrade: boolean;
   requestTimeoutMs: number;
+  temperature: number;
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  textVerbosity?: 'low' | 'medium' | 'high';
 }
 
 interface SettingsValue {
@@ -16,7 +19,16 @@ interface SettingsValue {
 const SettingsContext = React.createContext<SettingsValue | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<Settings>({ apiBase: '/api', pronunciationEnabled: true, regenerateScope: 'all', autoAdvanceAfterGrade: false, requestTimeoutMs: 60000 });
+  const [settings, setSettings] = useState<Settings>({
+    apiBase: '/api',
+    pronunciationEnabled: true,
+    regenerateScope: 'all',
+    autoAdvanceAfterGrade: false,
+    requestTimeoutMs: 60000,
+    temperature: 0.6,
+    reasoningEffort: 'minimal',
+    textVerbosity: 'medium',
+  });
 
   // 起動時にバックエンドの実行時設定でタイムアウトを同期
   useEffect(() => {
@@ -28,8 +40,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           throw new Error(`Failed to load /api/config: ${res.status}`);
         }
         const json = (await res.json()) as { request_timeout_ms?: number };
-        if (!aborted && typeof json.request_timeout_ms === 'number' && Number.isFinite(json.request_timeout_ms)) {
-          setSettings((prev) => ({ ...prev, requestTimeoutMs: json.request_timeout_ms }));
+        const ms = json.request_timeout_ms;
+        if (!aborted && typeof ms === 'number' && Number.isFinite(ms)) {
+          setSettings((prev) => ({ ...prev, requestTimeoutMs: ms }));
         }
       } catch (err) {
         // 画面に明示せず、コンソールに詳細を出す（ユーザーの運用で把握可能）

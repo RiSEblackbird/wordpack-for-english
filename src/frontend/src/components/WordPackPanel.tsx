@@ -68,7 +68,7 @@ type PopularCard = { id: string; front: string; back: string };
 interface CardMeta { repetitions: number; interval_days: number; due_at: string }
 
 export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated }) => {
-  const { settings } = useSettings();
+  const { settings, setSettings } = useSettings();
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
   const [loading, setLoading] = useState(false);
@@ -83,6 +83,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [popular, setPopular] = useState<PopularCard[] | null>(null);
   const [cardMeta, setCardMeta] = useState<CardMeta | null>(null);
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
+  const [model, setModel] = useState<string>('gpt-5-mini');
 
   const sectionIds = useMemo(
     () => [
@@ -113,11 +114,21 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     try {
       const res = await fetchJson<WordPack>(`${settings.apiBase}/word/pack`, {
         method: 'POST',
-        body: {
-          lemma: lemma.trim(),
-          pronunciation_enabled: settings.pronunciationEnabled,
-          regenerate_scope: settings.regenerateScope,
-        },
+        body: (() => {
+          const base: any = {
+            lemma: lemma.trim(),
+            pronunciation_enabled: settings.pronunciationEnabled,
+            regenerate_scope: settings.regenerateScope,
+            model,
+          };
+          if ((model || '').toLowerCase() === 'gpt-5-mini') {
+            base.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+            base.text = { verbosity: settings.textVerbosity || 'medium' };
+          } else {
+            base.temperature = settings.temperature;
+          }
+          return base;
+        })(),
         signal: ctrl.signal,
         timeoutMs: settings.requestTimeoutMs,
       });
@@ -253,10 +264,20 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     try {
       const res = await fetchJson<WordPack>(`${settings.apiBase}/word/packs/${wordPackId}/regenerate`, {
         method: 'POST',
-        body: {
-          pronunciation_enabled: settings.pronunciationEnabled,
-          regenerate_scope: settings.regenerateScope,
-        },
+        body: (() => {
+          const base: any = {
+            pronunciation_enabled: settings.pronunciationEnabled,
+            regenerate_scope: settings.regenerateScope,
+            model,
+          };
+          if ((model || '').toLowerCase() === 'gpt-5-mini') {
+            base.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+            base.text = { verbosity: settings.textVerbosity || 'medium' };
+          } else {
+            base.temperature = settings.temperature;
+          }
+          return base;
+        })(),
         signal: ctrl.signal,
         timeoutMs: settings.requestTimeoutMs,
       });
@@ -349,7 +370,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         @media (max-width: 840px) { .wp-container { grid-template-columns: 1fr; } }
       `}</style>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
         <input
           ref={focusRef as React.RefObject<HTMLInputElement>}
           value={lemma}
@@ -358,6 +379,45 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           disabled={loading}
         />
         <button onClick={generate} disabled={loading || !lemma.trim()}>生成</button>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          モデル
+          <select value={model} onChange={(e) => setModel(e.target.value)} disabled={loading}>
+            <option value="gpt-5-mini">gpt-5-mini</option>
+            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+            <option value="gpt-4o-mini">gpt-4o-mini</option>
+          </select>
+        </label>
+        {(model || '').toLowerCase() === 'gpt-5-mini' && (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              reasoning.effort
+              <select
+                aria-label="reasoning.effort"
+                value={settings.reasoningEffort || 'minimal'}
+                onChange={(e) => setSettings({ ...settings, reasoningEffort: e.target.value as any })}
+                disabled={loading}
+              >
+                <option value="minimal">minimal</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              text.verbosity
+              <select
+                aria-label="text.verbosity"
+                value={settings.textVerbosity || 'medium'}
+                onChange={(e) => setSettings({ ...settings, textVerbosity: e.target.value as any })}
+                disabled={loading}
+              >
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </label>
+          </div>
+        )}
       </div>
 
       {/* 進捗ヘッダー */}

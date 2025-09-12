@@ -60,12 +60,16 @@ class _LLMBase:
 
 
 class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
-    def __init__(self, *, api_key: str, model: str) -> None:
+    def __init__(self, *, api_key: str, model: str, temperature: float | None = None, reasoning: Optional[dict] = None, text: Optional[dict] = None) -> None:
         if OpenAI is None:
             raise RuntimeError("openai package not installed")
         self._client = OpenAI(api_key=api_key)
         self._model = model
         self._api_key = api_key
+        self._temperature = 0.2 if temperature is None else float(max(0.0, min(1.0, temperature)))
+        # 推論系モデル向けの追加オプション（必要時のみ付与）
+        self._reasoning = reasoning
+        self._text = text
 
     def complete(self, prompt: str) -> str:
         # テストキーの場合は認証エラーを回避
@@ -75,30 +79,120 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
             logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(out))
             return out
         
-        # JSON強制を試み、未対応モデル/バージョンでは従来呼び出しにフォールバック
+        # Responses API を優先し、未対応パラメータ名/機能はフォールバック
+        max_tokens_value = int(getattr(settings, "llm_max_tokens", 900))
+        timeout_sec = settings.llm_timeout_ms / 1000.0
+
+        def _extract_text(resp: Any) -> str:
+            try:
+                txt = getattr(resp, "output_text", None)
+                if isinstance(txt, str) and txt.strip():
+                    return txt.strip()
+            except Exception:
+                pass
+            try:
+                d = resp if isinstance(resp, dict) else resp.model_dump()  # type: ignore[attr-defined]
+                # ベータSDK互換: output[0].content[0].text
+                output = d.get("output") or []
+                if output and isinstance(output, list):
+                    first = output[0] or {}
+                    contents = first.get("content") or []
+                    if contents and isinstance(contents, list):
+                        t = contents[0].get("text")
+                        if isinstance(t, str):
+                            return t.strip()
+            except Exception:
+                pass
+            # 最低限のフォールバック: 文字列化
+            return (str(resp) or "").strip()
+
+        def _create_with_params(*, use_json: bool, token_param: str, include_temperature: bool = True, include_reasoning_text: bool = False):
+            kwargs: dict[str, Any] = {
+                "model": self._model,
+                "input": prompt,
+                "timeout": timeout_sec,
+            }
+            if include_temperature:
+                kwargs["temperature"] = self._temperature
+            if include_reasoning_text:
+                if self._reasoning:
+                    kwargs["reasoning"] = self._reasoning
+                if self._text:
+                    kwargs["text"] = self._text
+            if token_param == "max_output_tokens":
+                kwargs["max_output_tokens"] = max_tokens_value
+            elif token_param == "max_tokens":
+                kwargs["max_tokens"] = max_tokens_value
+            elif token_param == "max_completion_tokens":
+                kwargs["max_completion_tokens"] = max_tokens_value
+            if use_json:
+                kwargs["response_format"] = {"type": "json_object"}
+            return self._client.responses.create(**kwargs)
+
+        def _call_with_param_fallback(*, use_json: bool, token_param: str, include_temperature: bool, include_reasoning_text: bool):
+            try:
+                return _create_with_params(use_json=use_json, token_param=token_param, include_temperature=include_temperature, include_reasoning_text=include_reasoning_text)
+            except Exception as exc:
+                low = (str(exc) or "").lower()
+                if include_temperature and ("temperature" in low) and ("unsupported" in low or "only the default" in low or "unsupported_value" in low):
+                    logger.info(
+                        "llm_complete_retry_without_temperature",
+                        provider="openai",
+                        model=self._model,
+                        reason=str(exc)[:200],
+                    )
+                    return _create_with_params(use_json=use_json, token_param=token_param, include_temperature=False, include_reasoning_text=include_reasoning_text)
+                if include_reasoning_text and ("reasoning" in low or "text" in low) and ("unsupported" in low or "not supported" in low or "unrecognized" in low):
+                    logger.info(
+                        "llm_complete_retry_without_reasoning_text",
+                        provider="openai",
+                        model=self._model,
+                        reason=str(exc)[:200],
+                    )
+                    return _create_with_params(use_json=use_json, token_param=token_param, include_temperature=include_temperature, include_reasoning_text=False)
+                if include_reasoning_text and ("unexpected keyword argument" in low or "got an unexpected keyword argument" in low) and ("reasoning" in low or "text" in low):
+                    logger.info(
+                        "llm_complete_retry_without_reasoning_text_unexpected_kw",
+                        provider="openai",
+                        model=self._model,
+                        reason=str(exc)[:200],
+                    )
+                    return _create_with_params(use_json=use_json, token_param=token_param, include_temperature=include_temperature, include_reasoning_text=False)
+                raise
+
+        # 1) JSON + max_output_tokens（Responses API 正式）
         try:
-            resp = self._client.chat.completions.create(
-                model=self._model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_tokens=getattr(settings, "llm_max_tokens", 900),
-                response_format={"type": "json_object"},
-                timeout=settings.llm_timeout_ms / 1000.0,
-            )
-            content = (resp.choices[0].message.content or "").strip()
+            is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
+            resp = _call_with_param_fallback(use_json=True, token_param="max_output_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
+            content = _extract_text(resp)
             logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=True)
             return content
-        except Exception:
-            resp = self._client.chat.completions.create(
-                model=self._model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_tokens=getattr(settings, "llm_max_tokens", 900),
-                timeout=settings.llm_timeout_ms / 1000.0,
-            )
-            content = (resp.choices[0].message.content or "").strip()
-            logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=False)
-            return content
+        except Exception as exc1:
+            text1 = (str(exc1) or "").lower()
+            # max_output_tokens 非対応 → max_tokens（互換）
+            if ("unsupported parameter" in text1 or "not supported" in text1) and "max_output_tokens" in text1:
+                try:
+                    is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
+                    resp = _call_with_param_fallback(use_json=True, token_param="max_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
+                    content = _extract_text(resp)
+                    logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=True, param="max_tokens")
+                    return content
+                except Exception:
+                    pass
+            # JSON 指定が非対応 or その他 → 素応答へ
+            try:
+                is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
+                resp = _call_with_param_fallback(use_json=False, token_param="max_output_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
+                content = _extract_text(resp)
+                logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=False)
+                return content
+            except Exception:
+                # さらに互換パラメータ（max_completion_tokens）での最後の試行
+                is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
+                resp = _call_with_param_fallback(use_json=False, token_param="max_completion_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
+                content = _extract_text(resp)
+                logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=False, param="max_completion_tokens")
+                return content
 
 
 
@@ -126,7 +220,13 @@ def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
                     return result
                 except Exception as exc:
                     last_exc = exc
-                    logger.info("llm_complete_error", attempt=attempt, retries=settings.llm_max_retries)
+                    logger.info(
+                        "llm_complete_error",
+                        attempt=attempt,
+                        retries=settings.llm_max_retries,
+                        error_type=type(exc).__name__,
+                        error=str(exc),
+                    )
                     try:
                         future.cancel()
                     except Exception:
@@ -135,23 +235,44 @@ def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
                         break
                     time.sleep(0.1 * attempt)
             # 最終失敗は空文字を返す（上位でフォールバック可能）
-            logger.info("llm_complete_failed_all_retries", error=str(last_exc) if last_exc else None)
+            logger.info(
+                "llm_complete_failed_all_retries",
+                error=str(last_exc) if last_exc else None,
+                error_type=(type(last_exc).__name__ if last_exc else None),
+            )
             if settings.strict_mode:
-                msg = "LLM timeout or failure"
+                # 代表的な失敗パターンを分類し、詳細を例外メッセージに含める
+                reason_code = "UNKNOWN"
+                base_msg = "LLM failure"
                 try:
                     from concurrent.futures import TimeoutError as FuturesTimeout  # local import to avoid top dependency
                     if isinstance(last_exc, FuturesTimeout):
-                        msg = "LLM timeout"
+                        base_msg = "LLM timeout"
+                        reason_code = "TIMEOUT"
                 except Exception:
                     pass
-            
+                text = (str(last_exc) or "") if last_exc else ""
+                etype = type(last_exc).__name__ if last_exc else "None"
+                low = text.lower()
+                if "rate limit" in low or "too many requests" in low or "429" in low or "ratelimit" in etype.lower():
+                    reason_code = "RATE_LIMIT"
+                elif "auth" in low or "invalid api key" in low or "unauthorized" in low or "401" in low:
+                    reason_code = "AUTH"
+                elif "timeout" in low and reason_code != "TIMEOUT":
+                    reason_code = "TIMEOUT"
+                    base_msg = "LLM timeout"
+                elif ("unsupported parameter" in low or "not supported" in low) and ("max_tokens" in low or "parameter" in low):
+                    reason_code = "PARAM_UNSUPPORTED"
+                elif "unexpected keyword argument" in low or "got an unexpected keyword argument" in low:
+                    reason_code = "PARAM_UNSUPPORTED"
+                msg = f"{base_msg} (reason_code={reason_code}, error_type={etype}, detail={text[:256]})"
                 raise RuntimeError(msg)
             return ""
 
     return _Wrapped()
 
 
-def get_llm_provider() -> Any:
+def get_llm_provider(*, model_override: str | None = None, temperature_override: float | None = None, reasoning_override: Optional[dict] = None, text_override: Optional[dict] = None) -> Any:
     """Return an LLM client based on the configured provider.
 
     設定値 ``settings.llm_provider`` に応じて、実際の LLM クライアントを返す。
@@ -160,7 +281,8 @@ def get_llm_provider() -> Any:
     失敗時は None ではなく安全なローカルフォールバックを返却。
     """
     global _LLM_INSTANCE
-    if _LLM_INSTANCE is not None:
+    # オーバーライドがない場合はシングルトンを使う
+    if model_override is None and temperature_override is None and reasoning_override is None and text_override is None and _LLM_INSTANCE is not None:
         return _LLM_INSTANCE
     provider = (settings.llm_provider or "").lower()
     try:
@@ -179,9 +301,15 @@ def get_llm_provider() -> Any:
                 logger.info("llm_provider_select", provider="local", reason="missing_openai_api_key")
                 _LLM_INSTANCE = _llm_with_policy(_LocalEchoLLM())
                 return _LLM_INSTANCE
-            logger.info("llm_provider_select", provider="openai", model=settings.llm_model)
-            _LLM_INSTANCE = _llm_with_policy(_OpenAILLM(api_key=settings.openai_api_key, model=settings.llm_model))
-            return _LLM_INSTANCE
+            selected_model = (model_override or settings.llm_model)
+            selected_temp = temperature_override
+            selected_reasoning = reasoning_override
+            selected_text = text_override
+            logger.info("llm_provider_select", provider="openai", model=selected_model, override=bool(model_override or temperature_override or reasoning_override or text_override))
+            instance = _llm_with_policy(_OpenAILLM(api_key=settings.openai_api_key, model=selected_model, temperature=selected_temp, reasoning=selected_reasoning, text=selected_text))
+            if model_override is None and temperature_override is None and reasoning_override is None and text_override is None:
+                _LLM_INSTANCE = instance
+            return instance
         # 未対応プロバイダ
         # 未知のプロバイダ
         if settings.strict_mode:
