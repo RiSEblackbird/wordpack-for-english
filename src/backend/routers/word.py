@@ -68,7 +68,13 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
             ) from exc
         # それ以外は再送出
         raise
-    llm = get_llm_provider()
+    # リクエストでモデル/パラメータが指定されていればオーバーライド
+    llm = get_llm_provider(
+        model_override=getattr(req, 'model', None),
+        temperature_override=getattr(req, 'temperature', None),
+        reasoning_override=getattr(req, 'reasoning', None),
+        text_override=getattr(req, 'text', None),
+    )
     flow = WordPackFlow(chroma_client=chroma_client, llm=llm)
     try:
         logger.info(
@@ -96,7 +102,7 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
                 len(word_pack.examples.Dev)
                 + len(word_pack.examples.CS)
                 + len(word_pack.examples.LLM)
-                + len(word_pack.examples.Tech)
+                + len(word_pack.examples.Business)
                 + len(word_pack.examples.Common)
             ),
             has_definition_any=any(bool(s.definition_ja) for s in word_pack.senses),
@@ -121,6 +127,45 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
                     "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
                 },
             ) from exc
+        # LLM 系のエラー分類（providers で付与）
+        low = msg.lower()
+        if "reason_code=" in msg:
+            if "reason_code=TIMEOUT" in msg:
+                raise HTTPException(
+                    status_code=504,
+                    detail={
+                        "message": "LLM request timed out",
+                        "reason_code": "TIMEOUT",
+                        "hint": "LLM_TIMEOUT_MS を増やす（例: 90000）、HTTP全体のタイムアウトは +5秒。リトライも検討。",
+                    },
+                ) from exc
+            if "reason_code=RATE_LIMIT" in msg:
+                raise HTTPException(
+                    status_code=429,
+                    detail={
+                        "message": "LLM provider rate limited",
+                        "reason_code": "RATE_LIMIT",
+                        "hint": "少し待って再試行。モデル/アカウントのレート制限を確認。リトライ上限を増やす。",
+                    },
+                ) from exc
+            if "reason_code=AUTH" in msg or "invalid api key" in low or "unauthorized" in low:
+                raise HTTPException(
+                    status_code=401,
+                    detail={
+                        "message": "LLM provider authentication failed",
+                        "reason_code": "AUTH",
+                        "hint": "OPENAI_API_KEY を確認（有効/権限/課金）。コンテナ環境変数に反映されているか確認。",
+                    },
+                ) from exc
+            if "reason_code=PARAM_UNSUPPORTED" in msg:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "message": "LLM parameter not supported by model",
+                        "reason_code": "PARAM_UNSUPPORTED",
+                        "hint": "モデルの仕様変更により 'max_tokens' 非対応の可能性。最新SDK/パラメータを使用してください。",
+                    },
+                ) from exc
         # Flow での空データ検出（厳格）を詳細に変換
         reason_code = getattr(exc, "reason_code", None)
         diagnostics = getattr(exc, "diagnostics", None)
@@ -188,6 +233,14 @@ async def get_word_pack(word_pack_id: str) -> WordPack:
     lemma, data, created_at, updated_at = result
     try:
         word_pack_dict = json.loads(data)
+        # 互換: 旧スキーマの examples.Tech を新スキーマ Business にマップ
+        try:
+            ex = word_pack_dict.get("examples")
+            if isinstance(ex, dict) and ("Business" not in ex) and ("Tech" in ex):
+                ex["Business"] = ex.get("Tech")
+                ex.pop("Tech", None)
+        except Exception:
+            pass
         return WordPack.model_validate(word_pack_dict)
     except (json.JSONDecodeError, ValueError) as exc:
         raise HTTPException(status_code=500, detail=f"Invalid WordPack data: {exc}")
@@ -234,7 +287,13 @@ async def regenerate_word_pack(
             ) from exc
         raise
     
-    llm = get_llm_provider()
+    # リクエストでモデル/パラメータが指定されていればオーバーライド
+    llm = get_llm_provider(
+        model_override=getattr(req, 'model', None),
+        temperature_override=getattr(req, 'temperature', None),
+        reasoning_override=getattr(req, 'reasoning', None),
+        text_override=getattr(req, 'text', None),
+    )
     flow = WordPackFlow(chroma_client=chroma_client, llm=llm)
     try:
         word_pack = flow.run(

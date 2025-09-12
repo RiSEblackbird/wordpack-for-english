@@ -12,6 +12,12 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
   function setupFetchMocks() {
     const mock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.endsWith('/api/config') && (!init || (init && (!init.method || init.method === 'GET')))) {
+        return new Response(
+          JSON.stringify({ request_timeout_ms: 60000 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
       if (url.endsWith('/api/review/stats')) {
         return new Response(JSON.stringify({ due_now: 1, reviewed_today: 0, recent: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
@@ -50,10 +56,10 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
                 { en: `Evaluation metrics ${lemma} when test sets reflect real usage.`, ja: `LLM例文4`, grammar_ja: '従属節' },
                 { en: `Chain-of-thought traces ${lemma} with improved reasoning over steps.`, ja: `LLM例文5`, grammar_ja: '不定詞' },
               ],
-              Tech: [
-                { en: `Under mild assumptions, iterative updates ${lemma} to a local optimum.`, ja: `Tech例1`, grammar_ja: '不定詞' },
-                { en: `Multiple systems ${lemma} when signals stabilize over time.`, ja: `Tech例2`, grammar_ja: '関係代名詞' },
-                { en: `Gradients ${lemma} as learning rates decay across epochs.`, ja: `Tech例3`, grammar_ja: '分詞' },
+              Business: [
+                { en: `Under mild assumptions, iterative updates ${lemma} to a local optimum.`, ja: `Business例1`, grammar_ja: '不定詞' },
+                { en: `Multiple systems ${lemma} when signals stabilize over time.`, ja: `Business例2`, grammar_ja: '関係代名詞' },
+                { en: `Gradients ${lemma} as learning rates decay across epochs.`, ja: `Business例3`, grammar_ja: '分詞' },
               ],
               Common: [
                 { en: `Over months, ideas ${lemma} into a clear plan.`, ja: `Common例1`, grammar_ja: '副詞句' },
@@ -94,6 +100,12 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
     const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
     expect(input).toBeInTheDocument();
+    // モデルドロップダウンが表示されている
+    expect(screen.getByLabelText('モデル')).toBeInTheDocument();
+    // 1回目の生成は sampling 系モデルを選択（temperature を送る前提）
+    await act(async () => {
+      await user.selectOptions(screen.getByLabelText('モデル'), 'gpt-4o-mini');
+    });
     await act(async () => {
       await user.type(input, 'delta');
       await user.click(screen.getByRole('button', { name: '生成' }));
@@ -118,6 +130,26 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     const urls = fetchMock.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));
     expect(urls.some((u) => u.endsWith('/api/word/pack'))).toBe(true);
     expect(urls.some((u) => u.endsWith('/api/review/grade_by_lemma'))).toBe(true);
+
+    // リクエストボディに model/temperature が含まれていること（非 reasoning モデルの場合）
+    const bodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(bodies.some((b) => typeof b.model === 'string' && typeof b.temperature === 'number')).toBe(true);
+
+    // gpt-5-mini を選択時は reasoning/text が入ること
+    const user2 = userEvent.setup();
+    await act(async () => {
+      await user2.selectOptions(screen.getByLabelText('モデル'), 'gpt-5-mini');
+      const lemmaInput = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+      lemmaInput.value = '';
+      await user2.type(lemmaInput, 'alpha');
+      await user2.click(screen.getByRole('button', { name: '生成' }));
+    });
+    const bodies2 = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(bodies2.some((b) => b.model === 'gpt-5-mini' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
   });
 });
 

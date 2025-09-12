@@ -10,8 +10,14 @@ describe('WordPackListPanel modal preview', () => {
   });
 
   function setupFetchMocks() {
-    const mock = vi.spyOn(global, 'fetch' as any).mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const mock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: any) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.endsWith('/api/config') && (!init || (init && (!init.method || init.method === 'GET')))) {
+        return new Response(
+          JSON.stringify({ request_timeout_ms: 60000 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
       if (url.startsWith('/api/word/packs?')) {
         return new Response(
           JSON.stringify({
@@ -49,10 +55,10 @@ describe('WordPackListPanel modal preview', () => {
               ],
               CS: [],
               LLM: [],
-              Tech: [
-                { en: `In practice, estimates delta as constraints relax and noise diminishes.`, ja: `Tech例1`, grammar_ja: '受動態' },
-                { en: `Optimization routines delta when gradients vanish near stationary points.`, ja: `Tech例2`, grammar_ja: '分詞' },
-                { en: `Signals delta across nodes under synchronized sampling schedules.`, ja: `Tech例3`, grammar_ja: '関係代名詞' },
+              Business: [
+                { en: `In practice, estimates delta as constraints relax and noise diminishes.`, ja: `Business例1`, grammar_ja: '受動態' },
+                { en: `Optimization routines delta when gradients vanish near stationary points.`, ja: `Business例2`, grammar_ja: '分詞' },
+                { en: `Signals delta across nodes under synchronized sampling schedules.`, ja: `Business例3`, grammar_ja: '関係代名詞' },
               ],
               Common: [
                 { en: `Paths delta near the central plaza after sunset.`, ja: `Common例1`, grammar_ja: '副詞句' },

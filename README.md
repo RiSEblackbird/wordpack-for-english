@@ -74,6 +74,10 @@ OpenAI LLM統合:
 - 既定で `LLM_PROVIDER=openai` および `LLM_MODEL=gpt-4o-mini` を使用します。
 - RAG機能は無効化されており、OpenAI LLMが直接語義・用例・フィードバックを生成します。
 - 生成品質のため `LLM_MAX_TOKENS` を `.env` で調整できます（推奨 1500）。JSON 出力の途中切れを防止します。
+ - フロントの設定タブに temperature 入力を追加しました（0.0〜1.0、デフォルト 0.6）。
+   - 補足: 0.6–0.8（文体の多様性）、語数厳密なら 0.3–0.5
+ - WordPack パネルの［生成］右にモデル選択（gpt-4.1-mini / gpt-5-mini / gpt-4o-mini）を追加。選択したモデルと temperature は生成/再生成のAPIに渡されます（未指定時はバックエンド既定）。
+   - 注意: 現状バックエンドは Chat Completions を使用しており、gpt-5-mini の `reasoning`/`text` は未サポートです。選択しても内部で当該パラメータは無効化されます。安定運用は `gpt-4o-mini` を推奨。
 
 ### 1-7. ログとトラブルシューティング（語義/例文が「なし」になる場合）
 - バックエンドは structlog による JSON 構造化ログを出力します（標準出力）。
@@ -102,7 +106,7 @@ OpenAI LLM統合:
     "detail": {
       "message": "WordPack generation returned empty content (no senses/examples)",
       "reason_code": "EMPTY_CONTENT",
-      "diagnostics": { "lemma": "converge", "senses_count": 0, "examples_counts": { "Dev": 0, "CS": 0, "LLM": 0, "Tech": 0, "Common": 0 } },
+      "diagnostics": { "lemma": "converge", "senses_count": 0, "examples_counts": { "Dev": 0, "CS": 0, "LLM": 0, "Business": 0, "Common": 0 } },
       "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。"
     }
   }
@@ -114,6 +118,31 @@ strict モードでのLLMエラー挙動:
 - LLM がタイムアウト/失敗した場合、または空出力/パース不能で `senses`/`examples` が得られない場合はエラー（5xx）になります。
 - 既定の LLM タイムアウトは 60 秒（`LLM_TIMEOUT_MS=60000`）。必要に応じて `.env` で調整してください。
 - OpenAI SDK 呼び出しには `timeout` を適用し、内部ラッパでリトライ/キャンセル処理を行っています。
+
+LLMエラーのHTTPマッピング（詳細化・新）:
+- 504 Gateway Timeout（`reason_code=TIMEOUT`）
+  - 意味: LLM応答が `LLM_TIMEOUT_MS` を超過。アプリのHTTP全体タイムアウトは `LLM_TIMEOUT_MS + 5秒`。
+  - 対処: `LLM_TIMEOUT_MS` を増やす（例: 90000–120000）。必要なら `LLM_MAX_RETRIES` を 2 に。
+- 429 Too Many Requests（`reason_code=RATE_LIMIT`）
+  - 意味: LLMプロバイダのレート制限に到達。
+  - 対処: しばらく待って再試行。アカウントのレート上限を確認。呼び出し頻度を下げる。
+- 401 Unauthorized（`reason_code=AUTH`）
+  - 意味: APIキー不備/権限不足。
+  - 対処: `.env` の `OPENAI_API_KEY` を確認。コンテナ環境変数に反映されているか `docker compose exec backend env | grep OPENAI` 等で確認。
+
+バックエンドログ（構造化）には次が追加され、原因切り分けが容易になりました（新）:
+- `llm_complete_error` … `error_type` と `error`（例外メッセージの先頭）を出力
+- `llm_complete_failed_all_retries` … 最終失敗時の `error_type`/`error`
+
+推奨値の目安:
+- `LLM_TIMEOUT_MS`: 90000–120000（語義/長文例文を安定取得）
+- `LLM_MAX_TOKENS`: 1500–1800（JSON途切れ防止）
+- `LLM_MAX_RETRIES`: 1–2（429対策）。過度な再試行は課金/レート圧迫に注意。
+
+補足（reasoning/text パラメータ未対応時の挙動）:
+- 一部のモデル/SDK 組み合わせでは、`reasoning` や `text` パラメータが未サポートで `TypeError: ... got an unexpected keyword argument 'reasoning'` が発生する場合があります。
+- 本アプリは自動的に当該パラメータを外して再試行します。最終的に失敗する場合、strict モードでは `reason_code=PARAM_UNSUPPORTED` として分類してエラー化します。
+- 対応策: モデルを `gpt-4o-mini` 等に切り替えるか、OpenAI SDK を更新してください（`pip install -U openai`）。
 
 Tips (Windows)：Vite のファイル監視が不安定な場合、`CHOKIDAR_USEPOLLING=1` を環境変数に設定してください（compose の service へ追加可能）。
 
@@ -152,11 +181,11 @@ FastAPI アプリは `src/backend/main.py`。
 - `POST /api/word/pack`
   - 周辺知識パック生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RPを直接生成し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - 例文: Dev/CS/LLM/Tech/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。カテゴリ定義は次の通り：
+  - 例文: Dev/CS/LLM/Business/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。カテゴリ定義は次の通り：
     - Dev … ITエンジニアの開発現場（アプリ開発）の文脈
     - CS … 計算機科学の学術研究の文脈
     - LLM … LLMの応用/研究の文脈
-    - Tech … 技術一般の文脈
+    - Business … ビジネスの文脈
     - Common … 日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。ビジネス文書調の語彙（therefore, regarding, via など）は避け、軽いノリの口語（過度なスラングは不可）で、メッセや通話、待ち合わせなど身近な場面を想定。
   - 語義の拡張（本リリース）: 各 `sense` に以下の詳細フィールドを追加し、よりボリューミーに表示します。
     - `definition_ja: string?` … 日本語の定義（1–2文）
@@ -165,7 +194,7 @@ FastAPI アプリは `src/backend/main.py`。
     - `synonyms: string[]` / `antonyms: string[]`
     - `register: string?` … フォーマル/口語など
     - `notes_ja: string?` … 可算/不可算や自他/前置詞選択などの注意
-    - 件数: `Dev/CS/LLM` は各5文、`Tech` は3文、`Common` は6文（不足時は短くなる／空許容、ダミーは入れない）。`Common` は日常会話のカジュアルな用例に限定し、フォーマル表現は避ける。
+    - 件数: `Dev/CS/LLM` は各5文、`Business` は3文、`Common` は6文（不足時は短くなる／空許容、ダミーは入れない）。`Common` は日常会話のカジュアルな用例に限定し、フォーマル表現は避ける。
     - 長さ: 英文は原則 約75語（±5語）を目安。
     - 解説: `grammar_ja` に文法的な要点を日本語で付与（任意）。
   - リクエスト例（M5 追加パラメータ・Enum化）:
@@ -206,7 +235,7 @@ FastAPI アプリは `src/backend/main.py`。
         "LLM": [
           {"en":"With better prompts, outputs converge and provide clearer insight.","ja":"プロンプト改善により出力が収束し明確な洞察が得られる。","grammar_ja":"分詞構文"}
         ],
-        "Tech": [
+        "Business": [
           {"en":"Metrics offer insight as systems stabilize across deployments.","ja":"デプロイを重ねるにつれメトリクスが洞察を与える。","grammar_ja":"現在形"}
         ],
         "Common": [
@@ -544,3 +573,78 @@ graph TD
         C
     end
 ```
+
+## 10. 付録: OpenAIモデルの比較情報（本プロジェクトは Responses API に移行済み）
+
+注意: 本プロジェクトのバックエンドは **Responses API を使用**します。これにより、推論系の `reasoning`/`text` パラメータを適切に指定できます（未対応エラー時は自動でパラメータを外して再試行）。
+
+このプロジェクトで制御できるパラメータ（Responses API）:
+- **gpt-4o-mini / gpt-4.1-mini**: `temperature`, `max_output_tokens`（= `.env: LLM_MAX_TOKENS`）
+- **gpt-5-mini**: `reasoning.effort`, `text.verbosity`, `max_output_tokens`（`temperature` は通常無効）
+
+結論：**gpt-5-mini は推論系（reasoning）モデル**で、**Responses API で `reasoning`/`text` を利用**します。**gpt-4.1-mini** と **gpt-4o-mini** は従来どおり **`temperature`** が有効です（UIでは `temperature`/推論系では `reasoning.effort` を選択）。
+
+UI補足：フロントで `gpt-5-mini` を選択した場合は `reasoning.effort`/`text.verbosity` がバックエンドに渡され有効化されます。非推論系では `temperature` が有効です。
+
+---
+
+## gpt-5-mini（reasoning系：`temperature`は使わない／本プロジェクトでは実質非対応）
+
+Responses API（本プロジェクトで有効）:
+```json
+{
+  "model": "gpt-5-mini",
+  "max_output_tokens": 1600
+}
+```
+- **有効**: `max_output_tokens`, `reasoning`, `text`
+- **無効**: `temperature`（多くの推論系モデル）
+
+Chat Completions（参考: 本プロジェクトでは未使用）:
+```json
+{
+  "model": "gpt-5-mini",
+  "max_tokens": 1600
+}
+```
+
+## gpt-4.1-mini（従来型テキスト：sampling系が有効）
+
+```json
+{
+  "model": "gpt-4.1-mini",
+  "temperature": 0.45,
+  "max_tokens": 1600
+}
+```
+- **有効**: `temperature`, `max_tokens`
+
+## gpt-4o-mini（高コスパ量産：sampling系が有効）
+
+```json
+{
+  "model": "gpt-4o-mini",
+  "temperature": 0.60,
+  "max_tokens": 1600
+}
+```
+- **有効**: `temperature`, `max_tokens`
+
+---
+
+## 80語×10文タスク向けの微調整ヒント
+
+* **語数の安定化**：Responses API の **Structured Outputs** や JSON スキーマで「`minItems=10`/`maxItems=10`」「各文 `word_count` は 70–90」などを強制すると取り回しが楽です（どのモデルでも可）。([OpenAI Cookbook][3])
+* **gpt-5-mini を使うとき**は `temperature` ではなく `reasoning.effort` を段階的に上げ下げして文のまとまり・一貫性を調整します（例：`minimal`→高速量産、`low/medium`→表現の精緻化）。([OpenAI Cookbook][4])
+
+---
+
+## 参考：なぜ `temperature` が「廃止扱い」なのか
+
+* \*\*推論系モデル（o3/o4-mini/GPT-5系）\*\*では内部で思考トークンを別勘定し、その振る舞いを **`reasoning.effort`** 等で制御する設計に移行。**この系統では `temperature` などのサンプリング系パラメータは未サポート**と公式に明記されています。([Microsoft Learn][1])
+* 逆に **非推論モデル（GPT-4.1系・4o系）**では、**`temperature`/`top_p`** が引き続きサポートされ、OpenAIの API リファレンスでも調整指針（どちらか片方を調整）が示されています。([OpenAI Platform][2])
+
+[1]: https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning "Azure OpenAI reasoning models - GPT-5 series, o3-mini, o1, o1-mini - Azure OpenAI | Microsoft Learn"
+[2]: https://platform.openai.com/docs/api-reference/responses-streaming/response/function_call_arguments?utm_source=chatgpt.com "API Reference"
+[3]: https://cookbook.openai.com/examples/gpt4-1_prompting_guide "GPT-4.1 Prompting Guide"
+[4]: https://cookbook.openai.com/examples/gpt-5/gpt-5_new_params_and_tools?utm_source=chatgpt.com "GPT-5 New Params and Tools"

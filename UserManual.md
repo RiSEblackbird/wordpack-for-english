@@ -83,6 +83,8 @@
 - フィールド: 
   - 「発音を有効化」 … WordPack の発音生成を ON/OFF（M5）
   - 「再生成スコープ」 … `全体/例文のみ/コロケのみ` から選択（M5, Enum）
+  - 「temperature」 … 0.0〜1.0（デフォルト 0.6）。
+    - 0.6–0.8（文体の多様性）、語数厳密なら 0.3–0.5
 - 入力後は、他パネルに移動して各機能を試してください
 
 ### 2-3. 文（自作文）パネルの使い方
@@ -104,7 +106,8 @@
 ### 2-5. カード/WordPack パネルの使い方（SRS 連携）
 1) 「WordPack」を選択
 2) 見出し語を入力（例: `converge`）
-3) 「生成」をクリック
+3) 右側の「モデル」ドロップダウンで使用モデルを選択（gpt-4.1-mini / gpt-5-mini / gpt-4o-mini）
+4) 「生成」をクリック
 4) 結果: 1画面に「発音/語義/語源/例文（英日ペア+文法解説）/共起/対比/インデックス/引用/信頼度/学習カード要点」を表示（「語源」は「語義」の直後、「共起」「対比」「インデックス」は「例文」の直後に表示）
    - 例文はカード型で表示され、各項目には「英 / 訳 / 解説」のラベルが付きます。1列で縦に積んで表示され、横並びにはなりません。
    - 語義は各 sense ごとに次を表示: 見出し語義（gloss_ja）、定義（definition_ja）、ニュアンス（nuances_ja）、典型パターン（patterns）、類義/反義、レジスター、注意点（notes_ja）
@@ -160,9 +163,9 @@
   - Dev … ITエンジニアの開発現場（アプリ開発）の文脈
   - CS … 計算機科学の学術研究の文脈
   - LLM … LLMの応用/研究の文脈
-  - Tech … 技術一般の文脈
+  - Business … ビジネスの文脈
   - Common … 日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。ビジネス文書調の語彙（therefore, regarding, via など）は避け、軽いノリの口語で自然なトーンに（過度なスラング・下品な表現は不可）。
-- 件数: Dev/CS/LLM は各5文、Tech は3文、Common は6文を目安に表示（不足時は空のまま）。Common はカジュアルな日常会話用例に限定（フォーマル表現は避ける）。
+- 件数: Dev/CS/LLM は各5文、Business は3文、Common は6文を目安に表示（不足時は空のまま）。Common はカジュアルな日常会話用例に限定（フォーマル表現は避ける）。
 - 英文は原則 約75語（±5語）。
 - 各例文には任意で `文法: grammar_ja` が付与されます。UI上は「解説」としてカード下部にまとまって表示されます。
 
@@ -242,12 +245,10 @@
     pip install -U -r requirements.txt
     docker compose build --no-cache && docker compose up
     ```
-- 500 Internal Server Error（WordPack 生成時）で `NameError: name 'CollocationLists' is not defined` と出る
-  - 原因: `src/backend/flows/word_pack.py` で `CollocationLists`（および `ContrastItem`）のインポート抜け。
-  - 対応: 最新版では修正済み。ローカルは `git pull` → 再起動、Docker は `docker compose build --no-cache && docker compose up` を実行してください。
-- Docker 起動時に Pydantic の ValidationError（`Extra inputs are not permitted`）が出る
-  - `.env` に旧サンプルや別アプリのキー（例: `API_KEY`, `ALLOWED_ORIGINS`）が残っている可能性があります。
-  - 現行のバックエンド設定（`src/backend/config.py`）は未使用キーを無視するよう修正済みです（`extra="ignore"`）。再起動して問題が解消するか確認してください。
+- 500 Internal Server Error（WordPack 生成時）で `TypeError: Responses.create() got an unexpected keyword argument 'reasoning'` と出る
+  - 原因: SDK/モデルの組み合わせにより `reasoning`/`text` パラメータが未サポートな場合があります。
+  - 現行実装の対応: 当該パラメータを自動で外して再試行します（strict モードでは最終失敗時に `reason_code=PARAM_UNSUPPORTED` でエラー化）。
+  - 対応策: モデルを `gpt-4o-mini` 等に変更するか、OpenAI SDK を最新版へ更新してください（`pip install -U openai`）。
 - 500 Internal Server Error で `ValidationError: 1 validation error for ContrastItem with Field required` が出る
   - 原因: Pydantic v2 のエイリアス設定が未適用で、`contrast` 要素の `with` が内部フィールド `with_` にマッピングされず必須エラーになっていました。
   - 対応: `src/backend/models/word.py` の `ContrastItem` を `model_config = ConfigDict(populate_by_name=True)` へ修正済み。最新版へ更新し再起動（Docker は `docker compose build --no-cache && docker compose up`）。
