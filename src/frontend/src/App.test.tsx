@@ -27,7 +27,7 @@ describe('App navigation', () => {
     expect(screen.getByPlaceholderText('見出し語を入力')).toBeInTheDocument();
 
     await act(async () => {
-      await user.keyboard('{Alt>}{5}{/Alt}');
+      await user.keyboard('{Alt>}{6}{/Alt}');
     });
     expect(screen.getByLabelText('発音を有効化')).toBeInTheDocument();
 
