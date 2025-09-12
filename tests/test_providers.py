@@ -1,3 +1,4 @@
+import os
 import sys
 import types
 from pathlib import Path
@@ -21,7 +22,9 @@ def test_get_llm_provider_without_keys_returns_safe_client(monkeypatch):
 
     # Reload settings to pick env
     from importlib import reload
+    import backend.config
     import backend.providers
+    reload(backend.config)
     reload(backend.providers)
 
     llm = get_llm_provider()
@@ -43,7 +46,9 @@ def test_get_llm_provider_openai_with_key(monkeypatch):
 
     # Reload settings to pick env
     from importlib import reload
+    import backend.config
     import backend.providers
+    reload(backend.config)
     reload(backend.providers)
 
     llm = get_llm_provider()
@@ -60,9 +65,11 @@ def test_get_llm_provider_is_singleton(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     from importlib import reload
+    import backend.config
     import backend.providers
     from backend.providers import get_llm_provider
 
+    reload(backend.config)
     reload(backend.providers)
     llm1 = get_llm_provider()
     llm2 = get_llm_provider()
@@ -73,6 +80,11 @@ def test_chroma_client_fallback_when_module_missing(monkeypatch):
     # remove chromadb module to trigger in-memory fallback
     sys.modules.pop("chromadb", None)
     monkeypatch.setenv("STRICT_MODE", "false")
+    from importlib import reload
+    import backend.config
+    import backend.providers
+    reload(backend.config)
+    reload(backend.providers)
     from backend.providers import ChromaClientFactory
 
     client = ChromaClientFactory().create_client()
@@ -87,6 +99,11 @@ def test_embedding_provider_default_is_callable(monkeypatch):
     # Ensure no OpenAI key -> fallback SimpleEmbeddingFunction
     monkeypatch.setenv("STRICT_MODE", "false")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    from importlib import reload
+    import backend.config
+    import backend.providers
+    reload(backend.config)
+    reload(backend.providers)
     from backend.providers import get_embedding_provider
 
     ef = get_embedding_provider()

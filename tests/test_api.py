@@ -20,6 +20,11 @@ def client():
     sys.modules.setdefault("langgraph", lg_mod)
     sys.modules.setdefault("langgraph.graph", graph_mod)
     sys.modules.setdefault("chromadb", types.SimpleNamespace())
+    # 設定変更後に関連モジュールをリロードして反映
+    import importlib
+    for m in ["backend.config", "backend.providers", "backend.main"]:
+        if m in sys.modules:
+            importlib.reload(sys.modules[m])
     from backend.main import app
     return TestClient(app)
 
@@ -113,13 +118,14 @@ def test_review_stats(client):
 
 def test_word_pack_returns_424_when_rag_strict_and_no_citations(monkeypatch):
     # strict + RAG を有効化し、chromadb を外して依存未満を再現
-    import os, sys
+    import os, sys, importlib
     monkeypatch.setenv("STRICT_MODE", "true")
     monkeypatch.setenv("RAG_ENABLED", "true")
     sys.modules.pop("chromadb", None)
-    # backend.config をリロードして settings を反映
-    sys.modules.pop("backend.config", None)
-    sys.modules.pop("backend.providers", None)
+    # backend.config / backend.providers / backend.main をリロードして settings を反映
+    for m in ["backend.config", "backend.providers", "backend.main"]:
+        if m in sys.modules:
+            importlib.reload(sys.modules[m])
     from backend.main import app
     from fastapi.testclient import TestClient
     client = TestClient(app)
@@ -247,20 +253,28 @@ def test_word_pack_strict_empty_llm(monkeypatch):
     （RAG 依存不足時の 424 は別テストで担保済み）
     """
     import os, sys
+    import importlib
     # Strict を有効化して設定を再ロード
     monkeypatch.setenv("STRICT_MODE", "true")
-    sys.modules.pop("backend.config", None)
-    sys.modules.pop("backend.providers", None)
+    # 既存LLMインスタンスをクリア
+    try:
+        import backend.providers as providers
+        providers._LLM_INSTANCE = None
+    except Exception:
+        pass
+    for m in ["backend.config", "backend.providers", "backend.main"]:
+        if m in sys.modules:
+            importlib.reload(sys.modules[m])
     from backend import main as backend_main
     from fastapi.testclient import TestClient
     # LLM を空応答に固定
-    from backend import providers
+    import backend.providers as providers_mod
 
     class _StubLLM:
         def complete(self, prompt: str) -> str:
             return ""
 
-    providers._LLM_INSTANCE = _StubLLM()
+    providers_mod._LLM_INSTANCE = _StubLLM()
 
     client = TestClient(backend_main.app)
     r = client.post("/api/word/pack", json={"lemma": "no_data"})

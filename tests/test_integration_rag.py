@@ -22,6 +22,12 @@ def client_with_openai_llm():
     # src を import パスに追加
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+    # 設定反映のため関連モジュールをリロード
+    import importlib
+    for m in ["backend.config", "backend.providers", "backend.main"]:
+        if m in sys.modules:
+            importlib.reload(sys.modules[m])
+
     # アプリをロード
     from backend.main import app
     return TestClient(app)
