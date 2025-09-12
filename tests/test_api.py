@@ -118,21 +118,46 @@ def test_review_stats(client):
 
 def test_word_pack_returns_424_when_rag_strict_and_no_citations(monkeypatch):
     # strict + RAG を有効化し、chromadb を外して依存未満を再現
-    import os, sys, importlib
-    monkeypatch.setenv("STRICT_MODE", "true")
-    monkeypatch.setenv("RAG_ENABLED", "true")
-    sys.modules.pop("chromadb", None)
-    # backend.config / backend.providers / backend.main をリロードして settings を反映
-    for m in ["backend.config", "backend.providers", "backend.main"]:
-        if m in sys.modules:
-            importlib.reload(sys.modules[m])
-    from backend.main import app
-    from fastapi.testclient import TestClient
-    client = TestClient(app)
-    r = client.post("/api/word/pack", json={"lemma": "nohit"})
-    assert r.status_code == 424
-    body = r.json()
-    assert "detail" in body
+    import os, sys, importlib, types
+    # 退避
+    prev_strict = os.environ.get("STRICT_MODE")
+    prev_rag = os.environ.get("RAG_ENABLED")
+    prev_openai = os.environ.get("OPENAI_API_KEY")
+    try:
+        monkeypatch.setenv("STRICT_MODE", "true")
+        monkeypatch.setenv("RAG_ENABLED", "true")
+        sys.modules.pop("chromadb", None)
+        # backend.config / backend.providers / backend.main をリロードして settings を反映
+        for m in ["backend.config", "backend.providers", "backend.main"]:
+            if m in sys.modules:
+                importlib.reload(sys.modules[m])
+        from backend.main import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        r = client.post("/api/word/pack", json={"lemma": "nohit"})
+        assert r.status_code == 424
+        body = r.json()
+        assert "detail" in body
+    finally:
+        # 元の環境に戻す（テスト汚染回避）
+        if prev_strict is None:
+            os.environ.pop("STRICT_MODE", None)
+        else:
+            os.environ["STRICT_MODE"] = prev_strict
+        if prev_rag is None:
+            os.environ.pop("RAG_ENABLED", None)
+        else:
+            os.environ["RAG_ENABLED"] = prev_rag
+        if prev_openai is None:
+            os.environ.pop("OPENAI_API_KEY", None)
+        else:
+            os.environ["OPENAI_API_KEY"] = prev_openai or ""
+        # chromadb を最低限のスタブに戻す
+        sys.modules.setdefault("chromadb", types.SimpleNamespace())
+        # 関連モジュールを非厳格に戻した環境で再ロード
+        for m in ["backend.config", "backend.providers", "backend.main"]:
+            if m in sys.modules:
+                importlib.reload(sys.modules[m])
 
 
 def test_review_popular(client):
