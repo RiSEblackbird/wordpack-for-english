@@ -12,6 +12,12 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
   function setupFetchMocks() {
     const mock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.endsWith('/api/config') && (!init || (init && (!init.method || init.method === 'GET')))) {
+        return new Response(
+          JSON.stringify({ request_timeout_ms: 60000 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
       if (url.endsWith('/api/review/stats')) {
         return new Response(JSON.stringify({ due_now: 1, reviewed_today: 0, recent: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
@@ -96,6 +102,10 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     expect(input).toBeInTheDocument();
     // モデルドロップダウンが表示されている
     expect(screen.getByLabelText('モデル')).toBeInTheDocument();
+    // 1回目の生成は sampling 系モデルを選択（temperature を送る前提）
+    await act(async () => {
+      await user.selectOptions(screen.getByLabelText('モデル'), 'gpt-4o-mini');
+    });
     await act(async () => {
       await user.type(input, 'delta');
       await user.click(screen.getByRole('button', { name: '生成' }));
