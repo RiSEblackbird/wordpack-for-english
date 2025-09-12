@@ -75,7 +75,7 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
         # テストキーの場合は認証エラーを回避
         logger.info("llm_complete_call", provider="openai", model=self._model, prompt_chars=len(prompt))
         if self._api_key == "test-key":
-            out = '{"senses": [{"id": "s1", "gloss_ja": "テスト用の語義", "patterns": ["test pattern"]}], "collocations": {"general": {"verb_object": ["test verb"], "adj_noun": ["test adj"], "prep_noun": ["test prep"]}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}}, "contrast": [], "examples": {"Dev": [{"en": "This is a test in dev.", "ja": "これは開発現場のテストです。"}], "CS": [], "LLM": [], "Tech": [], "Common": []}, "etymology": {"note": "Test etymology", "confidence": "medium"}, "study_card": "テスト用の学習カード", "pronunciation": {"ipa_RP": "/test/"}}'
+            out = '{"senses": [{"id": "s1", "gloss_ja": "テスト用の語義", "patterns": ["test pattern"]}], "collocations": {"general": {"verb_object": ["test verb"], "adj_noun": ["test adj"], "prep_noun": ["test prep"]}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}}, "contrast": [], "examples": {"Dev": [{"en": "This is a test in dev.", "ja": "これは開発現場のテストです。"}], "CS": [], "LLM": [], "Business": [], "Common": []}, "etymology": {"note": "Test etymology", "confidence": "medium"}, "study_card": "テスト用の学習カード", "pronunciation": {"ipa_RP": "/test/"}}'
             logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(out))
             return out
         

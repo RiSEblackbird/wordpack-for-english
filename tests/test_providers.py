@@ -149,7 +149,7 @@ def test_openai_reasoning_param_fallback_on_unexpected_keyword(monkeypatch):
             if "reasoning" in kwargs or "text" in kwargs:
                 raise TypeError("Responses.create() got an unexpected keyword argument 'reasoning'")
             # 再試行: reasoning/text を外してくれれば成功（Responses API 互換: output_text を返す）
-            return _DummyResp('{"senses": [{"id": "s1", "gloss_ja": "ok"}], "examples": {"Dev": [], "CS": [], "LLM": [], "Tech": [], "Common": []}}')
+            return _DummyResp('{"senses": [{"id": "s1", "gloss_ja": "ok"}], "examples": {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}}')
 
     class DummyOpenAI:
         def __init__(self, api_key: str) -> None:  # type: ignore[no-untyped-def]

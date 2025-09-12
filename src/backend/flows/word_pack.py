@@ -85,7 +85,7 @@ class WordPackFlow:
                     "    \"Dev\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
                     "    \"CS\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
                     "    \"LLM\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
-                    "    \"Tech\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
+                    "    \"Business\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
                     "    \"Common\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ]\n"
                     "  },\n"
                     "  \"etymology\": { \"note\": \"...\", \"confidence\": \"low|medium|high\" },\n"
@@ -94,10 +94,10 @@ class WordPackFlow:
                     "}\n"
                     "Notes: \n"
                     "- gloss_ja / definition_ja / nuances_ja / grammar_ja / notes_ja は日本語。\n"
-                    "- 例文は自然で、約75語（±5語）の英文にする。\n"
-                    "- 例文の数: Dev/CS/LLM は各5文、Tech は3文、Common は6文（欠けはそのまま、ダミーは追加しない）。\n"
-                    "- Dev はアプリ開発現場の実務文脈、CS は計算機科学の学術文脈、LLM は応用/研究の文脈、Tech は従来の技術一般、Common は日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。\n"
-                    f"- Dev, CS, LLM, Tech の例文は専門性の高い内容にする。{lemma} 以外にもその方向の専門的な語彙を複数含める。\n"
+                    "- 例文は自然で、約70語（±5語）の英文にする。\n"
+                    "- 例文の数: Dev/CS/LLM は各5文、Business は3文、Common は6文（欠けはそのまま、ダミーは追加しない）。\n"
+                    "- Dev はアプリ開発現場の実務文脈、CS は計算機科学の学術文脈、LLM は応用/研究の文脈、Business はビジネスの文脈、Common は日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。\n"
+                    # f"- Dev, CS, LLM, Business の例文は専門性の高い内容にする。{lemma} 以外にもその方向の専門的な語彙を複数含める。\n" # 一時停止中
                     "- Common の英例文は“ビジネス英語ではなく”カジュアルな日常会話のトーンで。友達/家族/同僚との軽いチャット想定。丁寧すぎる表現やフォーマルな語彙（therefore, thus, regarding, via など）は避け、口語（gonna, kinda, hey などは過度に使いすぎない範囲で可）、よくあるシーン（メッセ/通話/待ち合わせ/日常の小さな出来事）を取り入れる。\n"
                     "- Common は短い感嘆や相づち・依頼も自然に含めてよい（e.g., Could you shoot me a text?, Mind sending me the link?）。ただしスラングや下品な表現は避ける。\n"
                     "- 各例文の grammar_ja は2段落の詳細解説にする：\n"
@@ -304,14 +304,14 @@ class WordPackFlow:
                 dev_list = _ex_list(ex.get("Dev"))
                 cs_list = _ex_list(ex.get("CS"))
                 llm_list = _ex_list(ex.get("LLM"))
-                tech_list = _ex_list(ex.get("Tech"))
+                business_list = _ex_list(ex.get("Business"))
                 common_list = _ex_list(ex.get("Common"))
-                # 仕様: Dev/CS/LLM は最大5件、Tech は最大3件、Common は最大6件（不足はそのまま、ダミーを入れない）
+                # 仕様: Dev/CS/LLM は最大5件、Business は最大3件、Common は最大6件（不足はそのまま、ダミーを入れない）
                 examples = Examples(
                     Dev=dev_list[:5],
                     CS=cs_list[:5],
                     LLM=llm_list[:5],
-                    Tech=tech_list[:3],
+                    Business=business_list[:3],
                     Common=common_list[:6],
                 )
                 logger.info(
@@ -320,7 +320,7 @@ class WordPackFlow:
                     Dev=len(examples.Dev),
                     CS=len(examples.CS),
                     LLM=len(examples.LLM),
-                    Tech=len(examples.Tech),
+                    Business=len(examples.Business),
                     Common=len(examples.Common),
                 )
             except Exception:
@@ -378,7 +378,7 @@ class WordPackFlow:
                 len(pack.examples.Dev)
                 + len(pack.examples.CS)
                 + len(pack.examples.LLM)
-                + len(pack.examples.Tech)
+                + len(pack.examples.Business)
                 + len(pack.examples.Common)
             ),
             has_definition_any=any(bool(s.definition_ja) for s in pack.senses),
@@ -393,7 +393,7 @@ class WordPackFlow:
                 len(pack.examples.Dev)
                 + len(pack.examples.CS)
                 + len(pack.examples.LLM)
-                + len(pack.examples.Tech)
+                + len(pack.examples.Business)
                 + len(pack.examples.Common)
             )
             if len(pack.senses) == 0 and total_examples == 0:
@@ -414,7 +414,7 @@ class WordPackFlow:
                             "Dev": len(examples.Dev),
                             "CS": len(examples.CS),
                             "LLM": len(examples.LLM),
-                            "Tech": len(examples.Tech),
+                            "Business": len(examples.Business),
                             "Common": len(examples.Common),
                         },
                     },

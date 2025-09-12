@@ -49,10 +49,10 @@ describe('WordPackListPanel modal preview', () => {
               ],
               CS: [],
               LLM: [],
-              Tech: [
-                { en: `In practice, estimates delta as constraints relax and noise diminishes.`, ja: `Tech例1`, grammar_ja: '受動態' },
-                { en: `Optimization routines delta when gradients vanish near stationary points.`, ja: `Tech例2`, grammar_ja: '分詞' },
-                { en: `Signals delta across nodes under synchronized sampling schedules.`, ja: `Tech例3`, grammar_ja: '関係代名詞' },
+              Business: [
+                { en: `In practice, estimates delta as constraints relax and noise diminishes.`, ja: `Business例1`, grammar_ja: '受動態' },
+                { en: `Optimization routines delta when gradients vanish near stationary points.`, ja: `Business例2`, grammar_ja: '分詞' },
+                { en: `Signals delta across nodes under synchronized sampling schedules.`, ja: `Business例3`, grammar_ja: '関係代名詞' },
               ],
               Common: [
                 { en: `Paths delta near the central plaza after sunset.`, ja: `Common例1`, grammar_ja: '副詞句' },

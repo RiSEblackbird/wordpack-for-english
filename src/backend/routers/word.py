@@ -102,7 +102,7 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
                 len(word_pack.examples.Dev)
                 + len(word_pack.examples.CS)
                 + len(word_pack.examples.LLM)
-                + len(word_pack.examples.Tech)
+                + len(word_pack.examples.Business)
                 + len(word_pack.examples.Common)
             ),
             has_definition_any=any(bool(s.definition_ja) for s in word_pack.senses),
@@ -233,6 +233,14 @@ async def get_word_pack(word_pack_id: str) -> WordPack:
     lemma, data, created_at, updated_at = result
     try:
         word_pack_dict = json.loads(data)
+        # 互換: 旧スキーマの examples.Tech を新スキーマ Business にマップ
+        try:
+            ex = word_pack_dict.get("examples")
+            if isinstance(ex, dict) and ("Business" not in ex) and ("Tech" in ex):
+                ex["Business"] = ex.get("Tech")
+                ex.pop("Tech", None)
+        except Exception:
+            pass
         return WordPack.model_validate(word_pack_dict)
     except (json.JSONDecodeError, ValueError) as exc:
         raise HTTPException(status_code=500, detail=f"Invalid WordPack data: {exc}")

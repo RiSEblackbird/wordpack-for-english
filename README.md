@@ -106,7 +106,7 @@ OpenAI LLM統合:
     "detail": {
       "message": "WordPack generation returned empty content (no senses/examples)",
       "reason_code": "EMPTY_CONTENT",
-      "diagnostics": { "lemma": "converge", "senses_count": 0, "examples_counts": { "Dev": 0, "CS": 0, "LLM": 0, "Tech": 0, "Common": 0 } },
+      "diagnostics": { "lemma": "converge", "senses_count": 0, "examples_counts": { "Dev": 0, "CS": 0, "LLM": 0, "Business": 0, "Common": 0 } },
       "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。"
     }
   }
@@ -181,11 +181,11 @@ FastAPI アプリは `src/backend/main.py`。
 - `POST /api/word/pack`
   - 周辺知識パック生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RPを直接生成し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - 例文: Dev/CS/LLM/Tech/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。カテゴリ定義は次の通り：
+  - 例文: Dev/CS/LLM/Business/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。カテゴリ定義は次の通り：
     - Dev … ITエンジニアの開発現場（アプリ開発）の文脈
     - CS … 計算機科学の学術研究の文脈
     - LLM … LLMの応用/研究の文脈
-    - Tech … 技術一般の文脈
+    - Business … ビジネスの文脈
     - Common … 日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。ビジネス文書調の語彙（therefore, regarding, via など）は避け、軽いノリの口語（過度なスラングは不可）で、メッセや通話、待ち合わせなど身近な場面を想定。
   - 語義の拡張（本リリース）: 各 `sense` に以下の詳細フィールドを追加し、よりボリューミーに表示します。
     - `definition_ja: string?` … 日本語の定義（1–2文）
@@ -194,7 +194,7 @@ FastAPI アプリは `src/backend/main.py`。
     - `synonyms: string[]` / `antonyms: string[]`
     - `register: string?` … フォーマル/口語など
     - `notes_ja: string?` … 可算/不可算や自他/前置詞選択などの注意
-    - 件数: `Dev/CS/LLM` は各5文、`Tech` は3文、`Common` は6文（不足時は短くなる／空許容、ダミーは入れない）。`Common` は日常会話のカジュアルな用例に限定し、フォーマル表現は避ける。
+    - 件数: `Dev/CS/LLM` は各5文、`Business` は3文、`Common` は6文（不足時は短くなる／空許容、ダミーは入れない）。`Common` は日常会話のカジュアルな用例に限定し、フォーマル表現は避ける。
     - 長さ: 英文は原則 約75語（±5語）を目安。
     - 解説: `grammar_ja` に文法的な要点を日本語で付与（任意）。
   - リクエスト例（M5 追加パラメータ・Enum化）:
@@ -235,7 +235,7 @@ FastAPI アプリは `src/backend/main.py`。
         "LLM": [
           {"en":"With better prompts, outputs converge and provide clearer insight.","ja":"プロンプト改善により出力が収束し明確な洞察が得られる。","grammar_ja":"分詞構文"}
         ],
-        "Tech": [
+        "Business": [
           {"en":"Metrics offer insight as systems stabilize across deployments.","ja":"デプロイを重ねるにつれメトリクスが洞察を与える。","grammar_ja":"現在形"}
         ],
         "Common": [

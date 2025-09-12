@@ -50,10 +50,10 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
                 { en: `Evaluation metrics ${lemma} when test sets reflect real usage.`, ja: `LLM例文4`, grammar_ja: '従属節' },
                 { en: `Chain-of-thought traces ${lemma} with improved reasoning over steps.`, ja: `LLM例文5`, grammar_ja: '不定詞' },
               ],
-              Tech: [
-                { en: `Under mild assumptions, iterative updates ${lemma} to a local optimum.`, ja: `Tech例1`, grammar_ja: '不定詞' },
-                { en: `Multiple systems ${lemma} when signals stabilize over time.`, ja: `Tech例2`, grammar_ja: '関係代名詞' },
-                { en: `Gradients ${lemma} as learning rates decay across epochs.`, ja: `Tech例3`, grammar_ja: '分詞' },
+              Business: [
+                { en: `Under mild assumptions, iterative updates ${lemma} to a local optimum.`, ja: `Business例1`, grammar_ja: '不定詞' },
+                { en: `Multiple systems ${lemma} when signals stabilize over time.`, ja: `Business例2`, grammar_ja: '関係代名詞' },
+                { en: `Gradients ${lemma} as learning rates decay across epochs.`, ja: `Business例3`, grammar_ja: '分詞' },
               ],
               Common: [
                 { en: `Over months, ideas ${lemma} into a clear plan.`, ja: `Common例1`, grammar_ja: '副詞句' },

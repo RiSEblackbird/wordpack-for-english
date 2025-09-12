@@ -36,7 +36,7 @@ interface Collocations { general: CollocationLists; academic: CollocationLists }
 interface ContrastItem { with: string; diff_ja: string }
 
 interface ExampleItem { en: string; ja: string; grammar_ja?: string }
-interface Examples { Dev: ExampleItem[]; CS: ExampleItem[]; LLM: ExampleItem[]; Tech: ExampleItem[]; Common: ExampleItem[] }
+interface Examples { Dev: ExampleItem[]; CS: ExampleItem[]; LLM: ExampleItem[]; Business: ExampleItem[]; Common: ExampleItem[] }
 
 interface Etymology { note: string; confidence: 'low' | 'medium' | 'high' }
 
@@ -586,7 +586,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 .ex-grammar { color: #6b6b6b; font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
                 .ex-level { font-weight: 600; margin: 0.25rem 0; color: #2a5bd7; }
               `}</style>
-              {(['Dev','CS','LLM','Tech','Common'] as const).map((k) => (
+              {(['Dev','CS','LLM','Business','Common'] as const).map((k) => (
                 <div key={k} style={{ marginBottom: '0.5rem' }}>
                   <div className="ex-level">{k}</div>
                   {data.examples?.[k]?.length ? (
