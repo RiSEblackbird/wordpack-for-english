@@ -1,13 +1,14 @@
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 
-// Ensure global fetch exists (jsdom 21 provides fetch by default, but keep fallback)
+// Ensure global fetch exists without external deps
 if (!(globalThis as any).fetch) {
-  (globalThis as any).fetch = (...args: any[]) =>
-    import('node-fetch').then(({ default: fetch }) => (fetch as any)(...args));
+  (globalThis as any).fetch = ((): any => {
+    throw new Error('global fetch is not available. Provide a mock in tests.');
+  }) as any;
 }
 
 // Base mock for /api/config so SettingsContext doesn't 404 in tests
-const originalFetch = globalThis.fetch.bind(globalThis);
+const originalFetch = (globalThis.fetch as any).bind(globalThis);
 
 beforeAll(() => {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
