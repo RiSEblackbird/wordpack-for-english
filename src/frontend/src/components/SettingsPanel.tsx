@@ -43,18 +43,7 @@ export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
           />
         </label>
       </div>
-      <div>
-        <label>
-          リクエスト・タイムアウト(ms)
-          <input
-            type="number"
-            min={1000}
-            step={1000}
-            value={settings.requestTimeoutMs}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSettings({ ...settings, requestTimeoutMs: Math.max(1000, Number(e.target.value || 0)) })}
-          />
-        </label>
-      </div>
+      
     </section>
   );
 };

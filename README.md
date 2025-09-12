@@ -478,6 +478,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 - CORS/タイムアウト/メトリクス（M6）
   - `src/backend/main.py` に CORS/Timeout/アクセスログ（JSON, structlog）とメトリクス記録を実装
   - `/metrics` で p95/件数/エラー/タイムアウトのスナップショットを返却
+  - HTTP レベルの全体タイムアウトは `LLM_TIMEOUT_MS` に +5秒した値を Starlette `TimeoutMiddleware` に適用します（環境変数で調整）。
   - Chroma 近傍クエリは2回まで軽量リトライ
 
 ### LangGraph 互換性メモ（重要）

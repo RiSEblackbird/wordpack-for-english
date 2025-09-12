@@ -14,7 +14,7 @@ except Exception:
 
 from .config import settings  # noqa: F401 - imported for side effects or future use
 from .logging import configure_logging, logger
-from .routers import health, review, sentence, text, word
+from .routers import health, review, sentence, text, word, config as cfg
 from .metrics import registry
 from .config import settings
 from .middleware import RequestIDMiddleware, RateLimitMiddleware
@@ -34,9 +34,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# タイムアウト（運用の初期値: 10秒）: Starlette が未対応ならスキップ
+# タイムアウト: アプリの LLM タイムアウトに概ね合わせる（秒）
 if TimeoutMiddleware is not None:
-    app.add_middleware(TimeoutMiddleware, timeout=10)
+    # LLM の試行タイムアウト(ms)をベースに、HTTP全体の上限を少し長め（+5秒）に設定
+    # Starlette TimeoutMiddleware は秒指定
+    http_timeout_sec = max(1, int((settings.llm_timeout_ms + 5000) / 1000))
+    app.add_middleware(TimeoutMiddleware, timeout=http_timeout_sec)
 
 # リクエストID付与（全リクエスト）
 app.add_middleware(RequestIDMiddleware)
@@ -87,6 +90,7 @@ app.include_router(sentence.router, prefix="/api/sentence")  # 例文チェッ�
 app.include_router(text.router, prefix="/api/text")  # リーディング支援関連
 app.include_router(review.router, prefix="/api/review")  # 復習（SRS）関連
 app.include_router(health.router)  # ヘルスチェック
+app.include_router(cfg.router, prefix="/api")  # フロント向け実行時設定
 
 
 @app.on_event("shutdown")
