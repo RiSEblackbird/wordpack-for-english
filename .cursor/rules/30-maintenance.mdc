@@ -1,6 +1,6 @@
 ---
 description: "改修時のテスト・メンテナンス手順（Agent-Requested）"
-alwaysApply: false
+alwaysApply: true
 ---
 # 改修時チェック
 - 差分駆動：変更設計→**影響領域を列挙**（関数/API/画面/スキーマ）→該当テストを追加/更新。

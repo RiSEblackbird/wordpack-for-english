@@ -1,6 +1,6 @@
 ---
 description: "フロントエンドのテスト指針（技術・フレームワーク非依存／Agent-Requested）"
-alwaysApply: false
+alwaysApply: ture
 ---
 # フロントエンド
 - コンポーネント検証は**ユーザー視点**（Role/Label/Text）で行い、実装詳細（内部関数/CSSクラス名）に結合しない。

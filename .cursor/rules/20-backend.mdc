@@ -1,6 +1,6 @@
 ---
 description: "バックエンドのテスト指針（言語/フレームワーク非依存／Agent-Requested）"
-alwaysApply: false
+alwaysApply: true
 ---
 # バックエンド
 - ドメイン/サービス層は外部I/Oを抽象化し**ビジネスルールを単体で厳密**に検証（例外/再試行/冪等性/境界値）。
