@@ -105,7 +105,7 @@ export const WordPackListPanel: React.FC = () => {
         .wp-list-container { max-width: 100%; }
         .wp-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
         .wp-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-        .wp-card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
+        .wp-card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background:rgb(240, 247, 240); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
         .wp-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
         .wp-card-title { font-size: 1.2em; font-weight: bold; color: #333; margin: 0; }
         .wp-card-meta { font-size: 0.85em; color: #666; margin: 0.25rem 0; }
