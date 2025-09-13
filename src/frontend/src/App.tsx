@@ -6,12 +6,13 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { WordPackPanel } from './components/WordPackPanel';
 import { WordPackListPanel } from './components/WordPackListPanel';
 import { SettingsProvider } from './SettingsContext';
+import { ModalProvider } from './ModalContext';
 import { useSettings } from './SettingsContext';
 
-type Tab = 'card' | 'sentence' | 'assist' | 'wordpack' | 'wordpacklist' | 'settings';
+type Tab = 'card' | 'sentence' | 'assist' | 'wordpack' | 'settings';
 
 export const App: React.FC = () => {
-  const [tab, setTab] = useState<Tab>('wordpacklist');
+  const [tab, setTab] = useState<Tab>('wordpack');
   const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
   const focusRef = useRef<HTMLElement>(null);
 
@@ -22,8 +23,7 @@ export const App: React.FC = () => {
         if (e.key === '2') setTab('sentence');
         if (e.key === '3') setTab('assist');
         if (e.key === '4') setTab('wordpack');
-        if (e.key === '5') setTab('wordpacklist');
-        if (e.key === '6') setTab('settings');
+        if (e.key === '5') setTab('settings');
       } else if (e.key === '/') {
         e.preventDefault();
         if (tab === 'card') {
@@ -47,7 +47,8 @@ export const App: React.FC = () => {
 
   return (
     <SettingsProvider>
-      <div>
+      <ModalProvider>
+        <div>
         <ThemeApplier />
         <style>{`
           /* テーマ変数 */
@@ -97,7 +98,6 @@ export const App: React.FC = () => {
           <button onClick={() => setTab('sentence')} aria-selected={tab === 'sentence'}>文</button>
           <button onClick={() => setTab('assist')} aria-selected={tab === 'assist'}>アシスト</button>
           <button onClick={() => setTab('wordpack')} aria-selected={tab === 'wordpack'}>WordPack</button>
-          <button onClick={() => setTab('wordpacklist')} aria-selected={tab === 'wordpacklist'}>保存済み</button>
           <button onClick={() => setTab('settings')} aria-selected={tab === 'settings'}>設定</button>
         </nav>
         <main>
@@ -105,21 +105,25 @@ export const App: React.FC = () => {
           {tab === 'sentence' && <SentencePanel focusRef={focusRef} />}
           {tab === 'assist' && <AssistPanel focusRef={focusRef} />}
           {tab === 'wordpack' && (
-            <WordPackPanel 
-              focusRef={focusRef} 
-              selectedWordPackId={selectedWordPackId}
-              onWordPackGenerated={(wordPackId) => setSelectedWordPackId(wordPackId)}
-            />
-          )}
-          {tab === 'wordpacklist' && (
-            <WordPackListPanel />
+            <>
+              <WordPackPanel 
+                focusRef={focusRef} 
+                selectedWordPackId={selectedWordPackId}
+                onWordPackGenerated={(wordPackId) => setSelectedWordPackId(wordPackId)}
+              />
+              <hr />
+              <section aria-label="保存済みWordPack一覧 セクション">
+                <WordPackListPanel />
+              </section>
+            </>
           )}
           {tab === 'settings' && <SettingsPanel focusRef={focusRef} />}
         </main>
         <footer>
           <small>WordPack 英語学習</small>
         </footer>
-      </div>
+        </div>
+      </ModalProvider>
     </SettingsProvider>
   );
 };

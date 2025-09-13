@@ -4,11 +4,11 @@ import { App } from './App';
 import '@testing-library/jest-dom';
 
 describe('App navigation', () => {
-  it('renders saved list by default and navigates with keyboard', async () => {
+  it('renders WordPack by default and navigates with keyboard', async () => {
     render(<App />);
 
-    // デフォルトは 保存済み 一覧
-    expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument();
+    // デフォルトは WordPack（見出し語入力が見える）
+    expect(screen.getByPlaceholderText('見出し語を入力')).toBeInTheDocument();
 
     const user = userEvent.setup();
     await act(async () => {
@@ -24,10 +24,11 @@ describe('App navigation', () => {
     await act(async () => {
       await user.keyboard('{Alt>}{4}{/Alt}');
     });
+    // WordPack タブに戻る
     expect(screen.getByPlaceholderText('見出し語を入力')).toBeInTheDocument();
 
     await act(async () => {
-      await user.keyboard('{Alt>}{6}{/Alt}');
+      await user.keyboard('{Alt>}{5}{/Alt}');
     });
     expect(screen.getByLabelText('発音を有効化')).toBeInTheDocument();
     // temperature 入力の存在

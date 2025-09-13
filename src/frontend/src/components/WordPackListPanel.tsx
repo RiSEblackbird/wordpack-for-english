@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSettings } from '../SettingsContext';
+import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { Modal } from './Modal';
 import { WordPackPanel } from './WordPackPanel';
@@ -22,6 +23,7 @@ interface WordPackListResponse {
 
 export const WordPackListPanel: React.FC = () => {
   const { settings } = useSettings();
+  const { setModalOpen } = useModal();
   const [wordPacks, setWordPacks] = useState<WordPackListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
@@ -116,7 +118,7 @@ export const WordPackListPanel: React.FC = () => {
         .wp-list-container { max-width: 100%; }
         .wp-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
         .wp-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-        .wp-card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background:rgb(240, 247, 240); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
+        .wp-card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background:rgb(173, 159, 211); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
         .wp-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
         .wp-card-title { font-size: 1.2em; font-weight: bold; color: #333; margin: 0; }
         .wp-card-meta { font-size: 0.85em; color: #666; margin: 0.25rem 0; }
@@ -167,7 +169,11 @@ export const WordPackListPanel: React.FC = () => {
                   key={wp.id}
                   className="wp-card"
                   data-testid="wp-card"
-                  onClick={() => { setPreviewWordPackId(wp.id); setPreviewOpen(true); }}
+                  onClick={() => { 
+                    setPreviewWordPackId(wp.id); 
+                    setPreviewOpen(true);
+                    setModalOpen(true);
+                  }}
                 >
                   <div className="wp-card-header">
                     <h3 className="wp-card-title">
@@ -213,7 +219,14 @@ export const WordPackListPanel: React.FC = () => {
           </>
         )}
       </div>
-      <Modal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} title="WordPack プレビュー">
+      <Modal 
+        isOpen={previewOpen} 
+        onClose={() => { 
+          setPreviewOpen(false);
+          setModalOpen(false);
+        }} 
+        title="WordPack プレビュー"
+      >
         {previewWordPackId ? (
           <WordPackPanel
             focusRef={modalFocusRef}

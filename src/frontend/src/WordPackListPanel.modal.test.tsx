@@ -85,15 +85,18 @@ describe('WordPackListPanel modal preview', () => {
     return mock;
   }
 
-  it('カードをクリックするとモーダルでWordPack内容を表示する', async () => {
+  it('カードをクリックするとモーダルでWordPack内容を表示する（WordPackタブ統合後）', async () => {
     setupFetchMocks();
     render(<App />);
 
     const user = userEvent.setup();
+
+    // WordPack タブへ（デフォルトがWordPackのため念のためAlt+4で明示）
     await act(async () => {
-      await user.keyboard('{Alt>}{5}{/Alt}');
+      await user.keyboard('{Alt>}{4}{/Alt}');
     });
 
+    // 統合された一覧のヘッダーが表示される
     await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
 
     // 未生成バッジ表示

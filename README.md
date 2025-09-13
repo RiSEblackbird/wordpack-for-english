@@ -4,12 +4,12 @@
 
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
-- フロントエンド: React + TypeScript + Vite、単一ページ/6パネル構成（カード/自作文/段落注釈/WordPack/保存済み/設定）
+- フロントエンド: React + TypeScript + Vite、単一ページ/5パネル構成（カード/自作文/段落注釈/WordPack/設定）
 - SRS（簡易SM-2, SQLite 永続化）: 今日のカード取得・3段階採点・進捗統計（今日の提案数/残数・最近5件）に対応（M6）
   - よく見る順（人気）APIを追加: `GET /api/review/popular?limit=10`（フロントのインデックスに反映）
 - 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（例外辞書・辞書キャッシュ・タイムアウト付きフォールバック）
 - WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
-- **WordPack永続化機能**: 生成されたWordPackを自動保存し、一覧表示・削除が可能（再生成は `WordPack` パネルから実行）
+- **WordPack永続化機能**: 生成されたWordPackを自動保存し、WordPackタブ下部の一覧で閲覧・削除が可能（再生成は `WordPack` セクションから実行）
 - **WordPackのみ作成（新）**: 内容生成を行わず、空のWordPackを保存できます（UI: 生成ボタン横）。
 - **例文UIの改善（新）**: 英文・訳文・文法解説をカード型で横並びグリッド表示。各項目に「英/訳/解説」ラベルを付け、可読性を向上。
  - **例文の個別削除（新）**: 保存済みWordPackの詳細画面から、特定カテゴリ内の任意の例文を個別に削除できます。
@@ -96,7 +96,7 @@ src/backend/             # 本番用FastAPIアプリ
   models/                # pydanticモデル（厳密化済み: Enum/Field制約/例）
   pronunciation.py       # 発音（cmudict/g2p-en優先・例外辞書/キャッシュ/タイムアウト付き）
 src/frontend/            # React + Vite
-  src/components/        # 6パネルのコンポーネント
+  src/components/        # 5パネルのコンポーネント
   src/SettingsContext.tsx
 static/                  # 最小UIの静的ファイル（`app/main.py`用）
 ```
@@ -125,7 +125,7 @@ FastAPI アプリは `src/backend/main.py`。
   - 例文: Dev/CS/LLM/Business/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja?, category?, llm_model?, llm_params? }`。カテゴリ定義は次の通り：
     - `category` はサーバが付与するカテゴリEnum（`Dev|CS|LLM|Business|Common`）。後方互換のため任意。
     - `llm_model` は例文生成に使用したモデル名（任意）。
-    - `llm_params` は当該リクエスト時の主要パラメータを連結した文字列（例: `"temperature=0.60;reasoning.effort=minimal;text.verbosity=medium"`）（任意）。
+    - `llm_params` は当該リクエスト時の主要パラメータを連結した文字列（例: "temperature=0.60;reasoning.effort=minimal;text.verbosity=medium"）（任意）。
     - 既存クライアントは `en/ja/grammar_ja` のみを参照しており、UI変更は不要です。
     - Dev … ITエンジニアの開発現場（アプリ開発）の文脈
     - CS … 計算機科学の学術研究の文脈
@@ -144,59 +144,59 @@ FastAPI アプリは `src/backend/main.py`。
     - 長さ: 英文は原則 約75語（±5語）を目安。
     - 解説: `grammar_ja` に文法的な要点を日本語で付与（任意）。
   - リクエスト例（M5 追加パラメータ・Enum化）:
-    ```json
-    { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
-    ```
+  ```json
+  { "lemma": "converge", "pronunciation_enabled": true, "regenerate_scope": "all" }
+  ```
     - `pronunciation_enabled`: 発音情報の生成 ON/OFF（既定 true）
     - `regenerate_scope`: `all` | `examples` | `collocations`（Enum）。
   - レスポンス例（抜粋）:
-    ```json
-    {
-      "lemma": "converge",
-      "pronunciation": {"ipa_GA":"/kənvɝdʒ/","ipa_RP":"/kənˈvɜːdʒ/","syllables":2,"stress_index":1,"linking_notes":[]},
-      "senses": [{"id":"s1","gloss_ja":"集まる・収束する","patterns":["converge on N"]}],
+  ```json
+  {
+    "lemma": "converge",
+    "pronunciation": {"ipa_GA":"/kənvɝdʒ/","ipa_RP":"/kənˈvɜːdʒ/","syllables":2,"stress_index":1,"linking_notes":[]},
+    "senses": [{"id":"s1","gloss_ja":"集まる・収束する","patterns":["converge on N"]}]
+  }
+  ```
   - 追加の `senses` 詳細の例:
-    ```json
-    {
-      "id": "s1",
-      "gloss_ja": "集まる・収束する",
-      "definition_ja": "複数のものが一点・一方向に向かって近づき一つにまとまること。",
-      "nuances_ja": "学術文脈では系列や推定量が極限へ近づく含意が強い。",
-      "patterns": ["converge on N", "converge toward N"],
-      "synonyms": ["gather", "meet"],
-      "antonyms": ["diverge"],
-      "register": "formal",
-      "notes_ja": "自動詞。数学/統計では to/toward の選択でニュアンス差あり。"
-    }
-    ```
-      "collocations": {"general": {"verb_object": ["gain insight"], "adj_noun": ["deep insight"], "prep_noun": ["insight into N"]}, "academic": {"verb_object": ["derive insight"], "adj_noun": ["empirical insight"], "prep_noun": ["insight for N"]}},
-      "contrast": [{"with":"intuition","diff_ja":"直観は体系的根拠が薄いのに対し、insight は分析や経験から得る洞察。"}],
-      "examples": {
-        "Dev": [
-          {"en":"We gained insight after refactoring modules and reviewing logs.","ja":"モジュールのリファクタリングとログ確認の後に洞察を得た。","grammar_ja":"第3文型"}
-        ],
-        "CS": [
-          {"en":"Under mild assumptions, an estimator gains insight about latent structure.","ja":"温和な仮定の下で推定量は潜在構造について洞察を得る。","grammar_ja":"不定詞"}
-        ],
-        "LLM": [
-          {"en":"With better prompts, outputs converge and provide clearer insight.","ja":"プロンプト改善により出力が収束し明確な洞察が得られる。","grammar_ja":"分詞構文"}
-        ],
-        "Business": [
-          {"en":"Metrics offer insight as systems stabilize across deployments.","ja":"デプロイを重ねるにつれメトリクスが洞察を与える。","grammar_ja":"現在形"}
-        ],
-        "Common": [
-          {"en":"Over months, we gained insight and made a better decision.","ja":"数か月を経て洞察を得て、より良い判断を下した。","grammar_ja":"過去形"}
-        ]
-      },
-      "etymology": {"note":"from Middle English, influenced by Old Norse.","confidence":"medium"},
-      "study_card": "insight: into による対象提示。deep/valuable と相性良。",
-      "citations": [{"text":"LLM-generated information for insight","meta":{"source":"openai_llm","word":"insight"}}],
-      "confidence": "high"
-    }
-    ```
-
+  ```json
+  {
+    "id": "s1",
+    "gloss_ja": "集まる・収束する",
+    "definition_ja": "複数のものが一点・一方向に向かって近づき一つにまとまること。",
+    "nuances_ja": "学術文脈では系列や推定量が極限へ近づく含意が強い。",
+    "patterns": ["converge on N", "converge toward N"],
+    "synonyms": ["gather", "meet"],
+    "antonyms": ["diverge"],
+    "register": "formal",
+    "notes_ja": "自動詞。数学/統計では to/toward の選択でニュアンス差あり。"
+  }
+  ```
+    "collocations": {"general": {"verb_object": ["gain insight"], "adj_noun": ["deep insight"], "prep_noun": ["insight into N"]}, "academic": {"verb_object": ["derive insight"], "adj_noun": ["empirical insight"], "prep_noun": ["insight for N"]}},
+    "contrast": [{"with":"intuition","diff_ja":"直観は体系的根拠が薄いのに対し、insight は分析や経験から得る洞察。"}],
+    "examples": {
+      "Dev": [
+        {"en":"We gained insight after refactoring modules and reviewing logs.","ja":"モジュールのリファクタリングとログ確認の後に洞察を得た。","grammar_ja":"第3文型"}
+      ],
+      "CS": [
+        {"en":"Under mild assumptions, an estimator gains insight about latent structure.","ja":"温和な仮定の下で推定量は潜在構造について洞察を得る。","grammar_ja":"不定詞"}
+      ],
+      "LLM": [
+        {"en":"With better prompts, outputs converge and provide clearer insight.","ja":"プロンプト改善により出力が収束し明確な洞察が得られる。","grammar_ja":"分詞構文"}
+      ],
+      "Business": [
+        {"en":"Metrics offer insight as systems stabilize across deployments.","ja":"デプロイを重ねるにつれメトリクスが洞察を与える。","grammar_ja":"現在形"}
+      ],
+      "Common": [
+        {"en":"Over months, we gained insight and made a better decision.","ja":"数か月を経て洞察を得て、より良い判断を下した。","grammar_ja":"過去形"}
+      ]
+    },
+    "etymology": {"note":"from Middle English, influenced by Old Norse.","confidence":"medium"},
+    "study_card": "insight: into による対象提示。deep/valuable と相性良。",
+    "citations": [{"text":"LLM-generated information for insight","meta":{"source":"openai_llm","word":"insight"}}],
+    "confidence": "high"
+  }
+  ```
   
-
 - `POST /api/sentence/check`
   - 自作文チェック（OpenAI LLM による詳細な文法・スタイル分析と `confidence` を付与）。
   - LLM が有効な場合、issues/revisions/mini exercise を安全に補強します（失敗時はフォールバック）。
@@ -312,7 +312,7 @@ FastAPI アプリは `src/backend/main.py`。
 ---
 
 ## 4. フロントエンド UI 概要
-単一ページで以下の6タブを切替。初期表示は「保存済み」タブ。最小スタイル・セマンティックHTMLを志向。
+単一ページで以下の5タブを切替。初期表示は「WordPack」タブ。最小スタイル・セマンティックHTMLを志向。
 
 - カード（`CardPanel.tsx`）
   - `カードを取得` で本日の一枚を取得し、`復習` で採点
@@ -336,14 +336,7 @@ FastAPI アプリは `src/backend/main.py`。
   - ショートカット: `1/J = ×`, `2/K = △`, `3/L = ○`。設定で「採点後に自動で次へ」を切替可能。
   - 進捗の見える化（PR4）: 画面上部に「今日のレビュー済/残り」「最近見た語（直近5）」、セッション完了時の簡易サマリ（件数/所要時間）を表示。
   - 単語アクセス導線（PR5）: 「対比」や「共起」から横展開リンクで他語へ移動。「例文」の直後に「インデックス（最近/よく見る）」を表示。
-  - **永続化機能**: 生成されたWordPackは自動的にデータベースに保存され、再生成ボタンで内容を更新可能。
-
-- 保存済み（`WordPackListPanel.tsx`）
-  - 保存済みWordPackの一覧をカード形式で表示。使用API: `GET /api/word/packs`
-  - 各カードはクリックでモーダルが開き、内容をプレビューできます（Esc または「閉じる」で閉じる）。
-  - カード内の「削除」ボタンでWordPackを削除できます。
-  - ページネーション機能（limit/offset）で大量のWordPackを効率的に閲覧。
-  - 作成日時・更新日時を表示し、管理しやすいUIを提供。
+  - **永続化機能**: 生成されたWordPackは自動的にデータベースに保存され、同ページ下部に保存済み一覧を表示。再生成ボタンで内容を更新可能。
 
 - 設定（`SettingsPanel.tsx`）
   - 発音の有効/無効トグル（M5）
@@ -351,7 +344,7 @@ FastAPI アプリは `src/backend/main.py`。
   - 採点後に自動で次へ（WordPack採点時にリセット）
 
 アクセシビリティ/操作:
-- Alt+1..6 でタブ切替、`/` で主要入力へフォーカス
+- Alt+1..5 でタブ切替（1=カード, 2=文, 3=アシスト, 4=WordPack, 5=設定）。`/` で主要入力へフォーカス
 - WordPack表示中: `1/J`, `2/K`, `3/L` で採点
 - ローディング中は `role="status"`、エラーは `role="alert"`
   - 読み込み表示は `LoadingIndicator` コンポーネントに統一。スピナー＋経過時間（mm:ss）と詳細サブテキストを表示します。
