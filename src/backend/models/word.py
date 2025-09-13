@@ -182,6 +182,7 @@ class WordPackListItem(BaseModel):
     created_at: str
     updated_at: str
     is_empty: bool = Field(default=False, description="内容が空のWordPackかどうか（UI用）")
+    examples_count: Optional[dict] = Field(default=None, description="カテゴリごとの例文数（UI用）")
 
 
 class WordPackListResponse(BaseModel):

@@ -625,6 +625,41 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 <div>見出し語</div>
                 <div><strong>{data.lemma}</strong></div>
               </div>
+              <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <strong style={{ color: 'var(--color-accent)' }}>📊 例文統計</strong>
+                  <span style={{ fontSize: '1.1em', fontWeight: 'bold' }}>
+                    総数 {(() => {
+                      const total = (data.examples?.Dev?.length || 0) + 
+                                   (data.examples?.CS?.length || 0) + 
+                                   (data.examples?.LLM?.length || 0) + 
+                                   (data.examples?.Business?.length || 0) + 
+                                   (data.examples?.Common?.length || 0);
+                      return total;
+                    })()}件
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.9em' }}>
+                  {(['Dev','CS','LLM','Business','Common'] as const).map(cat => {
+                    const count = data.examples?.[cat]?.length || 0;
+                    return (
+                      <span key={cat} style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '0.25rem',
+                        padding: '0.25rem 0.5rem',
+                        backgroundColor: count > 0 ? 'var(--color-accent-bg)' : 'var(--color-neutral-surface)',
+                        color: count > 0 ? 'var(--color-accent)' : 'var(--color-subtle)',
+                        borderRadius: '4px',
+                        border: `1px solid ${count > 0 ? 'var(--color-accent)' : 'var(--color-border)'}`
+                      }}>
+                        <span style={{ fontWeight: 'bold' }}>{cat}</span>
+                        <span style={{ fontSize: '0.85em' }}>{count}件</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
               <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 <button onClick={() => grade(0)} disabled={loading}>× わからない (1)</button>
                 <button onClick={() => grade(1)} disabled={loading}>△ あいまい (2)</button>
@@ -718,7 +753,19 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             
 
             <section id="examples" className="wp-section">
-              <h3>例文</h3>
+              <h3>
+                例文 
+                <span style={{ fontSize: '0.7em', fontWeight: 'normal', color: 'var(--color-subtle)', marginLeft: '0.5rem' }}>
+                  (総数 {(() => {
+                    const total = (data.examples?.Dev?.length || 0) + 
+                                 (data.examples?.CS?.length || 0) + 
+                                 (data.examples?.LLM?.length || 0) + 
+                                 (data.examples?.Business?.length || 0) + 
+                                 (data.examples?.Common?.length || 0);
+                    return total;
+                  })()}件)
+                </span>
+              </h3>
               <style>{`
                 .ex-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
                 .ex-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem 0.75rem; background: var(--color-surface); }
@@ -731,7 +778,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               {(['Dev','CS','LLM','Business','Common'] as const).map((k) => (
                 <div key={k} style={{ marginBottom: '0.5rem' }}>
                   <div className="ex-level" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>{k}</span>
+                    <span>{k} ({data.examples?.[k]?.length || 0}件)</span>
                     {currentWordPackId ? (
                       <button
                         onClick={() => generateExamples(k)}
@@ -747,7 +794,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                     <div className="ex-grid">
                       {(data.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
                         <article key={i} className="ex-card" aria-label={`example-${k}-${i}`}>
-                          <div className="ex-en"><span className="ex-label">英</span> {ex.en}</div>
+                          <div className="ex-en"><span className="ex-label">[{i + 1}] 英</span> {ex.en}</div>
                           <div className="ex-ja"><span className="ex-label">訳</span> {ex.ja}</div>
                           {ex.grammar_ja ? (
                             <div className="ex-grammar"><span className="ex-label">解説</span> {ex.grammar_ja}</div>

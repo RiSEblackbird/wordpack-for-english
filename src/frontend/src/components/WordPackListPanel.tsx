@@ -12,6 +12,13 @@ interface WordPackListItem {
   created_at: string;
   updated_at: string;
   is_empty?: boolean;
+  examples_count?: {
+    Dev: number;
+    CS: number;
+    LLM: number;
+    Business: number;
+    Common: number;
+  };
 }
 
 interface WordPackListResponse {
@@ -101,7 +108,6 @@ export const WordPackListPanel: React.FC = () => {
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit',
         hour12: false,
       } as Intl.DateTimeFormatOptions);
     } catch {
@@ -121,12 +127,7 @@ export const WordPackListPanel: React.FC = () => {
         .wp-card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background:rgb(173, 159, 211); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
         .wp-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
         .wp-card-title { font-size: 1.2em; font-weight: bold; color: #333; margin: 0; }
-        .wp-card-meta { font-size: 0.85em; color: #666; margin: 0.25rem 0; }
-        .wp-card-actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
-        .wp-card-actions button { padding: 0.25rem 0.5rem; font-size: 0.85em; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
-        .wp-card-actions button:hover { background: #f5f5f5; }
-        .wp-card-actions button.danger { color: #d32f2f; border-color: #d32f2f; }
-        .wp-card-actions button.danger:hover { background: #ffebee; }
+        .wp-card-meta { font-size: 0.50em; color: #666; margin: 0.25rem 0; }
         .wp-badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 999px; font-size: 0.75em; margin-left: 0.5rem; }
         .wp-badge.empty { background: #fff3cd; color: #7a5b00; border: 1px solid #ffe08a; }
         .wp-pagination { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem; }
@@ -178,20 +179,67 @@ export const WordPackListPanel: React.FC = () => {
                   <div className="wp-card-header">
                     <h3 className="wp-card-title">
                       {wp.lemma}
-                      {wp.is_empty ? <span className="wp-badge empty" aria-label="未生成バッジ">未生成</span> : null}
                     </h3>
+                    <button 
+                      className="danger" 
+                      onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
+                      style={{ 
+                        padding: '0.25rem 0.5rem', 
+                        fontSize: '0.75em', 
+                        border: '1px solid #d32f2f', 
+                        borderRadius: '4px', 
+                        background: 'white', 
+                        cursor: 'pointer',
+                        color: '#d32f2f',
+                        marginLeft: 'auto'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#ffebee'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                    >
+                      削除
+                    </button>
                   </div>
                   <div className="wp-card-meta">
                     <div>作成: {formatDate(wp.created_at)}</div>
                     <div>更新: {formatDate(wp.updated_at)}</div>
-                  </div>
-                  <div className="wp-card-actions">
-                    <button 
-                      className="danger" 
-                      onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
-                    >
-                      削除
-                    </button>
+                    {wp.is_empty ? (
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.8em' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          padding: '0.1rem 0.3rem',
+                          backgroundColor: '#fff3cd',
+                          color: '#7a5b00',
+                          borderRadius: '3px',
+                          border: '1px solid #ffe08a',
+                          fontSize: '0.75em'
+                        }}>
+                          例文未生成
+                        </span>
+                      </div>
+                    ) : wp.examples_count && (
+                      <div style={{ marginTop: '0.3rem', fontSize: '0.2em' }}>
+                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                          {Object.entries(wp.examples_count).map(([category, count]) => (
+                            <span key={category} style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.10rem',
+                              padding: '0.1rem 0.2rem',
+                              backgroundColor: count > 0 ? '#e3f2fd' : '#f5f5f5',
+                              color: count > 0 ? '#1565c0' : '#666',
+                              borderRadius: '3px',
+                              border: `1px solid ${count > 0 ? '#1565c0' : '#ddd'}`,
+                              fontSize: '0.40em'
+                            }}>
+                              <span style={{ fontWeight: 'bold' }}>{category}</span>
+                              <span>{count}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
