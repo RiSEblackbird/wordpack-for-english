@@ -57,12 +57,7 @@ describe('WordPackListPanel modal preview', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
-      if (url.endsWith('/api/review/stats')) {
-        return new Response(JSON.stringify({ due_now: 0, reviewed_today: 0, recent: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
-      if (url.startsWith('/api/review/popular')) {
-        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
+      
       if (url.endsWith('/api/word/packs/wp:test:1')) {
         return new Response(
           JSON.stringify({
@@ -140,9 +135,7 @@ describe('WordPackListPanel modal preview', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
-      if (url.startsWith('/api/review/card_by_lemma?')) {
-        return new Response(JSON.stringify({ repetitions: 1, interval_days: 1, due_at: new Date(Date.now() + 3600_000).toISOString() }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
+      
       return new Response('not found', { status: 404 });
     });
     return mock;

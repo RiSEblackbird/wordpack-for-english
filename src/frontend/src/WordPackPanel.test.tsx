@@ -45,12 +45,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      if (url.endsWith('/api/review/stats')) {
-        return new Response(JSON.stringify({ due_now: 1, reviewed_today: 0, recent: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
-      if (url.startsWith('/api/review/popular')) {
-        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
+      
       if (url.endsWith('/api/word/pack') && init?.method === 'POST') {
         const body = init?.body ? JSON.parse(init.body as string) : {};
         const lemma = body.lemma || 'test';
@@ -105,12 +100,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
-      if (url.startsWith('/api/review/card_by_lemma?')) {
-        return new Response(JSON.stringify({ repetitions: 1, interval_days: 1, due_at: new Date(Date.now() + 3600_000).toISOString() }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
-      if (url.endsWith('/api/review/grade_by_lemma') && init?.method === 'POST') {
-        return new Response(JSON.stringify({ ok: true, next_due: new Date(Date.now() + 3600_000).toISOString() }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
+      
       return new Response('not found', { status: 404 });
     });
     return mock;
