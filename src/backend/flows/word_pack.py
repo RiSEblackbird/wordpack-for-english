@@ -28,7 +28,7 @@ from ..config import settings
 def _category_guidelines_text() -> str:
     """各カテゴリの例文ガイドライン（自然さ・一貫性のため）。"""
     return (
-        "カテゴリ別ガイドライン（examples.Dev/CS/LLM/Business/Common に厳格適用）:\n"
+        "カテゴリ別ガイドライン（Dev/CS/LLM/Business/Common に厳格適用）:\n"
         "- Dev: ソフトウェア開発の文脈を扱う。\n"
         "  実務的で具体、学術調は避ける。\n"
         "- CS: 計算機科学の学術文脈。\n"
@@ -425,7 +425,7 @@ class WordPackFlow:
             "  term_overview_ja（3〜5文の概要）と term_core_ja（3〜5文の本質）を必ず日本語で記述する。\n"
             "  名詞以外（動詞/形容詞など）の場合、これら2つのキーは省略してよい。\n"
             "- 例文は自然で、約55語（±5語）の英文にする。各英例文には必ず対象語（lemma）を含める。\n"
-            "- 例文の数: Dev/CS/LLM は各2文、Business は2文、Common は2文（欠けはそのまま、ダミーは追加しない）。\n"
+            "- 本リクエストでは Target category のみを生成し、件数は末尾の Override 指示に厳密に従う。\n"
             "- Dev はアプリ開発現場の実務文脈、CS は計算機科学の学術文脈、LLM は応用/研究の文脈、Business はビジネスの文脈、Common は日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。\n"
             "- Common の英例文は“ビジネス英語ではなく”カジュアルな日常会話のトーンで。友達/家族/同僚との軽いチャット想定。丁寧すぎる表現やフォーマルな語彙（therefore, thus, regarding, via など）は避け、口語（gonna, kinda, hey などは過度に使いすぎない範囲で可）、よくあるシーン（メッセ/通話/待ち合わせ/日常の小さな出来事）を取り入れる。\n"
             "- Common は短い感嘆や相づち・依頼も自然に含めてよい（e.g., Could you shoot me a text?, Mind sending me the link?）。ただしスラングや下品な表現は避ける。\n"
@@ -436,7 +436,7 @@ class WordPackFlow:
         )
 
         category_rules = _category_guidelines_text()
-        enforce = "Enforce these category-specific rules for each examples.Dev/CS/LLM/Business/Common respectively.\n"
+        enforce = "Apply these category-specific rules to the Target category only.\n"
 
         # カテゴリを明示し、このリクエストでは当該カテゴリのみ生成する旨を指定
         # 件数は最後に厳密指定（正の文言は保持しつつ上書き制約）
@@ -467,7 +467,7 @@ class WordPackFlow:
             return [x for x in obj if isinstance(x, dict)]
         if isinstance(obj, dict) and isinstance(obj.get("examples"), list):
             return [x for x in obj.get("examples") if isinstance(x, dict)]
-        raise ValueError("Invalid LLM JSON shape (no examples)")
+        raise ValueError("Invalid LLM JSON shape (expected array or {\"examples\": [...]})")
 
     def generate_examples_for_categories(self, lemma: str, plan: dict[ExampleCategory, int]) -> dict[ExampleCategory, list[Examples.ExampleItem]]:
         """カテゴリごとの要求数に従って例文を生成する（LangGraph相当の逐次計画、フォールバック実装あり）。"""
