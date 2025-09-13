@@ -341,48 +341,10 @@ class WordPackFlow:
                     Business=len(examples.Business),
                     Common=len(examples.Common),
                 )
-            except Exception:
-                # フォールバック: 取得済み llm_payload の examples があれば最小限で使用
-                try:
-                    ex = llm_payload.get("examples") or {}
-                    def _llm_meta_values() -> tuple[Optional[str], Optional[str]]:
-                        try:
-                            return (
-                                str(self._llm_info.get("model") or "").strip() or None,
-                                str(self._llm_info.get("params") or "").strip() or None,
-                            )
-                        except Exception:
-                            return (None, None)
-                    def _ex_list(v: Any, category: ExampleCategory) -> List[Examples.ExampleItem]:  # type: ignore[attr-defined]
-                        out: List[Examples.ExampleItem] = []  # type: ignore[name-defined]
-                        if isinstance(v, list):
-                            for item in v:
-                                if isinstance(item, dict):
-                                    en = str(item.get("en") or "").strip()
-                                    ja = str(item.get("ja") or "").strip()
-                                    grammar_ja = str(item.get("grammar_ja") or "").strip() or None
-                                    if en and ja:
-                                        m, p = _llm_meta_values()
-                                        out.append(Examples.ExampleItem(  # type: ignore[attr-defined]
-                                            en=en,
-                                            ja=ja,
-                                            grammar_ja=grammar_ja,
-                                            category=category,
-                                            llm_model=m,
-                                            llm_params=p,
-                                        ))
-                        return out
-                    examples = Examples(
-                        Dev=_ex_list(ex.get("Dev"), ExampleCategory.Dev)[:5],
-                        CS=_ex_list(ex.get("CS"), ExampleCategory.CS)[:5],
-                        LLM=_ex_list(ex.get("LLM"), ExampleCategory.LLM)[:5],
-                        Business=_ex_list(ex.get("Business"), ExampleCategory.Business)[:3],
-                        Common=_ex_list(ex.get("Common"), ExampleCategory.Common)[:6],
-                    )
-                    logger.info("wordpack_examples_built_fallback", lemma=lemma)
-                except Exception:
-                    logger.info("wordpack_examples_build_error", lemma=lemma)
-                    pass
+            except Exception as exc:
+                # 統合フローのみを使用（旧ロジックのサルベージは廃止）
+                logger.info("wordpack_examples_build_error_unified", lemma=lemma, error=str(exc))
+                examples = Examples()
 
             # etymology
             try:

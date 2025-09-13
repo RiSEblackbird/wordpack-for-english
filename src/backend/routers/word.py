@@ -578,9 +578,9 @@ async def generate_examples_for_word_pack(
         }
     except HTTPException:
         raise
-    except Exception:
-        # 続く従来経路にフォールバック
-        pass
+    except Exception as exc:
+        # 統合フロー以外の経路は廃止
+        raise HTTPException(status_code=502, detail=f"Failed to generate examples (unified flow): {exc}")
 
     def _format_llm_params_for_request() -> str | None:
         try:
