@@ -99,8 +99,8 @@ describe('WordPackListPanel modal preview', () => {
     // 統合された一覧のヘッダーが表示される
     await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
 
-    // 未生成バッジ表示
-    await waitFor(() => expect(screen.getByLabelText('未生成バッジ')).toBeInTheDocument());
+    // 例文未生成バッジ表示
+    await waitFor(() => expect(screen.getByText('例文未生成')).toBeInTheDocument());
 
     await act(async () => {
       await user.click(screen.getByTestId('wp-card'));
