@@ -122,7 +122,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
     const user = userEvent.setup();
     await act(async () => {
-      await user.keyboard('{Alt>}{4}{/Alt}');
+      await user.keyboard('{Alt>}{1}{/Alt}');
     });
 
     const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
@@ -185,7 +185,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
     const user = userEvent.setup();
     await act(async () => {
-      await user.keyboard('{Alt>}{4}{/Alt}');
+      await user.keyboard('{Alt>}{1}{/Alt}');
     });
 
     const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;

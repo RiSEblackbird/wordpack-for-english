@@ -14,7 +14,7 @@ except Exception:
 
 from .config import settings  # noqa: F401 - imported for side effects or future use
 from .logging import configure_logging, logger
-from .routers import health, review, sentence, text, word, config as cfg
+from .routers import health, word, config as cfg
 from .metrics import registry
 from .config import settings
 from .middleware import RequestIDMiddleware, RateLimitMiddleware
@@ -86,9 +86,6 @@ async def access_log_and_metrics(request: Request, call_next):
         )
 
 app.include_router(word.router, prefix="/api/word")  # 語彙関連エンドポイント
-app.include_router(sentence.router, prefix="/api/sentence")  # 例文チェック関連
-app.include_router(text.router, prefix="/api/text")  # リーディング支援関連
-app.include_router(review.router, prefix="/api/review")  # 復習（SRS）関連
 app.include_router(health.router)  # ヘルスチェック
 app.include_router(cfg.router, prefix="/api")  # フロント向け実行時設定
 

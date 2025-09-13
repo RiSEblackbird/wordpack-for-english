@@ -51,69 +51,30 @@ def test_word_lookup(client):
     assert resp.json() == {"definition": None, "examples": []}
 
 
-def test_sentence_check(client):
+def test_sentence_check_removed(client):
     resp = client.post("/api/sentence/check", json={"sentence": "Hello"})
-    assert resp.status_code == 200
-    j = resp.json()
-    assert "issues" in j and isinstance(j["issues"], list)
-    assert "citations" in j and "confidence" in j
+    assert resp.status_code in (404, 405)
 
 
-def test_text_assist(client):
+def test_text_assist_removed(client):
     resp = client.post("/api/text/assist", json={"paragraph": "Some text."})
-    assert resp.status_code == 200
-    j = resp.json()
-    assert "sentences" in j and isinstance(j["sentences"], list)
-    assert "citations" in j and "confidence" in j
+    assert resp.status_code in (404, 405)
 
 
-def test_review_today(client):
-    resp = client.get("/api/review/today")
-    assert resp.status_code == 200
-    j = resp.json()
-    assert "items" in j and isinstance(j["items"], list)
-    # when seeded, at least 1 item should be due
-    if j["items"]:
-        first = j["items"][0]
-        assert set(["id", "front", "back"]).issubset(first.keys())
+def test_review_routes_removed(client):
+    assert client.get("/api/review/today").status_code in (404, 405)
 
 
-def test_review_grade(client):
-    # get one card
-    today = client.get("/api/review/today").json()
-    if not today["items"]:
-        return
-    item_id = today["items"][0]["id"]
-    resp = client.post("/api/review/grade", json={"item_id": item_id, "grade": 2})
-    assert resp.status_code == 200
-    j = resp.json()
-    assert j.get("ok") is True and "next_due" in j
+def test_review_grade_removed(client):
+    assert client.post("/api/review/grade", json={"item_id": "w:x", "grade": 2}).status_code in (404, 405)
 
 
-def test_review_grade_by_lemma(client):
-    resp = client.post("/api/review/grade_by_lemma", json={"lemma": "foobar", "grade": 2})
-    assert resp.status_code == 200
-    j = resp.json()
-    assert j.get("ok") is True and "next_due" in j
-
-    # invalid grade should be rejected by validation
-    resp2 = client.post("/api/review/grade_by_lemma", json={"lemma": "foobar", "grade": 3})
-    assert resp2.status_code == 422
-
-    # invalid lemma should be rejected by validation
-    resp3 = client.post("/api/review/grade_by_lemma", json={"lemma": "", "grade": 1})
-    assert resp3.status_code == 422
+def test_review_grade_by_lemma_removed(client):
+    assert client.post("/api/review/grade_by_lemma", json={"lemma": "foobar", "grade": 2}).status_code in (404, 405)
 
 
-def test_review_stats(client):
-    # 基本的に 200 が返り、必須キーがあること
-    resp = client.get("/api/review/stats")
-    assert resp.status_code == 200
-    j = resp.json()
-    assert set(["due_now", "reviewed_today", "recent"]).issubset(j.keys())
-    assert isinstance(j["due_now"], int)
-    assert isinstance(j["reviewed_today"], int)
-    assert isinstance(j["recent"], list)
+def test_review_stats_removed(client):
+    assert client.get("/api/review/stats").status_code in (404, 405)
 
 
 def test_word_pack_returns_424_when_rag_strict_and_no_citations(monkeypatch):
@@ -167,29 +128,12 @@ def test_word_pack_returns_424_when_rag_strict_and_no_citations(monkeypatch):
                 importlib.reload(sys.modules[m])
 
 
-def test_review_popular(client):
-    resp = client.get("/api/review/popular?limit=5")
-    assert resp.status_code == 200
-    arr = resp.json()
-    assert isinstance(arr, list)
-    if arr:
-        first = arr[0]
-        assert set(["id", "front", "back"]).issubset(first.keys())
+def test_review_popular_removed(client):
+    assert client.get("/api/review/popular?limit=5").status_code in (404, 405)
 
 
-def test_review_card_by_lemma(client):
-    # 未存在 → 404
-    r404 = client.get("/api/review/card_by_lemma", params={"lemma": "___neverexists___"})
-    assert r404.status_code == 404
-
-    # grade_by_lemma で作成 → 取得できる
-    lemma = "foobar2"
-    r1 = client.post("/api/review/grade_by_lemma", json={"lemma": lemma, "grade": 2})
-    assert r1.status_code == 200
-    r2 = client.get("/api/review/card_by_lemma", params={"lemma": lemma})
-    assert r2.status_code == 200
-    j = r2.json()
-    assert set(["repetitions", "interval_days", "due_at"]).issubset(j.keys())
+def test_review_card_by_lemma_removed(client):
+    assert client.get("/api/review/card_by_lemma", params={"lemma": "any"}).status_code in (404, 405)
 
 
 def test_word_pack_persistence(client):

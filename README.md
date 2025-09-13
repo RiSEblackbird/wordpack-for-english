@@ -4,9 +4,7 @@
 
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
-- フロントエンド: React + TypeScript + Vite、単一ページ/5パネル構成（カード/自作文/段落注釈/WordPack/設定）
-- SRS（簡易SM-2, SQLite 永続化）: 今日のカード取得・3段階採点・進捗統計（今日の提案数/残数・最近5件）に対応（M6）
-  - よく見る順（人気）APIを追加: `GET /api/review/popular?limit=10`（フロントのインデックスに反映）
+- フロントエンド: React + TypeScript + Vite、単一ページ/2パネル構成（WordPack/設定）
 - 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（例外辞書・辞書キャッシュ・タイムアウト付きフォールバック）
 - WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
 - **WordPack永続化機能**: 生成されたWordPackを自動保存し、WordPackタブ下部の一覧で閲覧・削除が可能（再生成は `WordPack` セクションから実行）
@@ -209,67 +207,6 @@ FastAPI アプリは `src/backend/main.py`。
   }
   ```
   
-- `POST /api/sentence/check`
-  - 自作文チェック（OpenAI LLM による詳細な文法・スタイル分析と `confidence` を付与）。
-  - LLM が有効な場合、issues/revisions/mini exercise を安全に補強します（失敗時はフォールバック）。
-  - レスポンス例（抜粋）:
-    ```json
-    { "issues": [{"what":"語法","why":"対象語の使い分け不正確","fix":"共起に合わせて置換"}],
-      "revisions": [{"style":"natural","text":"..."}],
-      "exercise": {"q":"Fill the blank: ...","a":"..."} }
-    ```
-
-- `POST /api/text/assist`
-  - 段落注釈（OpenAI LLM: 文の解析・パラフレーズ・語彙情報を直接生成し `citations` と `confidence` を付与）。
-  - LLM が有効なら各文の簡易パラフレーズを生成し、総合 `confidence` を調整します。
-  - レスポンス例（抜粋）:
-    ```json
-    { "sentences": [{"raw":"Some text","terms":[{"lemma":"Some"}]}], "summary": null, "citations": [] }
-    ```
-
-- `GET /api/review/today`
-  - 本日の復習カード（最大5枚）を返します。
-  - レスポンス例:
-    ```json
-    { "items": [ { "id": "w:converge", "front": "converge", "back": "to come together" } ] }
-    ```
-
-- `POST /api/review/grade`
-  - 復習カードの採点を記録。簡易SM-2で次回出題時刻を更新。
-  - リクエスト例: `{ "item_id": "w:converge", "grade": 2 }`（2=正解,1=部分的,0=不正解）
-  - レスポンス例: `{ "ok": true, "next_due": "2025-01-01T12:34:56.000Z" }`
-  - 実装: `src/backend/srs.py`（SQLite 永続化）。復習履歴は `reviews` テーブルに保存され、同時実行はトランザクションで保護されます。
-
-- `POST /api/review/grade_by_lemma`
-  - レンマ（例: `"converge"`）を指定して採点。カード未存在時は自動作成。
-  - 自動作成の仕様: `id = "w:<lemma>"`, `front = lemma`, `back = WordPack.study_card`。
-  - リクエスト例: `{ "lemma": "converge", "grade": 0 }`（0|1|2）
-  - レスポンス例: `{ "ok": true, "next_due": "2025-01-01T12:34:56.000Z" }`
-  - OpenAPI補足（スキーマ）:
-    - Request: `ReviewGradeByLemmaRequest` … `lemma: str (1..64)`, `grade: int (0..2)`
-    - Response: `ReviewGradeResponse` … `ok: bool`, `next_due: datetime`
-
-- `GET /api/review/stats`
-  - 進捗統計（セッション体験用）
-  - レスポンス例:
-    ```json
-    { "due_now": 3, "reviewed_today": 7, "recent": [ {"id":"w:converge","front":"converge","back":"to come together"} ] }
-    ```
-
-- `GET /api/review/popular`
-  - よく見る順（レビュー回数の多い順）で最大 `limit` 件のカードを返します（既定 10）。
-  - レスポンス例:
-    ```json
-    [ { "id": "w:converge", "front": "converge", "back": "to come together" } ]
-    ```
-
-- `GET /api/review/card_by_lemma`
-  - レンマからカードの SRS メタ（登録済みなら）を返します。未登録なら 404。
-  - クエリ: `?lemma=<string>`（例: `?lemma=converge`）
-  - レスポンス例:
-    ```json
-    { "repetitions": 3, "interval_days": 6, "due_at": "2025-01-01T12:34:56.000Z" }
-    ```
 
 ### WordPack永続化API
 
@@ -324,29 +261,13 @@ FastAPI アプリは `src/backend/main.py`。
 ---
 
 ## 4. フロントエンド UI 概要
-単一ページで以下の5タブを切替。初期表示は「WordPack」タブ。最小スタイル・セマンティックHTMLを志向。
-
-- カード（`CardPanel.tsx`）
-  - `カードを取得` で本日の一枚を取得し、`復習` で採点
-  - 使用API: `GET {apiBase}/review/today`, `POST {apiBase}/review/grade`
-
-- 自作文（`SentencePanel.tsx`）
-  - 文入力→`チェック`。使用API: `POST {apiBase}/sentence/check`
-  - 返却された `issues/revisions/exercise` を画面に表示
-
-- 段落注釈（`AssistPanel.tsx`）
-  - 段落入力→`アシスト`。使用API: `POST /api/text/assist`
-  - 返却された `sentences/summary` を画面に表示
+単一ページで以下の2タブを切替。初期表示は「WordPack」タブ。
 
 - WordPack（`WordPackPanel.tsx`）
   - 見出し語を入力→`生成`。使用API: `POST /api/word/pack`
   - 1画面で「発音/語義/語源/例文/共起/対比/インデックス/引用/信頼度/学習カード要点」を表示（「語源」は「語義」の直後、「共起」「対比」「インデックス」は「例文」の直後に表示）。
   - 例文はカード型（英/訳/解説ラベル付き）で、レベルごとに1列で縦に積んで表示します（横並びにしません）。
   - セルフチェック: 初期は学習カード要点に3秒のぼかしが入り、クリックで即解除可能。
-  - SRS連携: 画面上で ×/△/○ の3段階採点が可能。`POST /api/review/grade_by_lemma` を呼び出し、未登録なら自動でカードを作成。
-  - SRSメタ: `GET /api/review/card_by_lemma` で登録状況と `repetitions/interval_days/due_at` を表示（未登録時は「未登録」）。採点後は進捗/インデックス（最近/よく見る）と併せて自動更新。
-  - ショートカット: `1/J = ×`, `2/K = △`, `3/L = ○`。設定で「採点後に自動で次へ」を切替可能。
-  - 進捗の見える化（PR4）: 画面上部に「今日のレビュー済/残り」「最近見た語（直近5）」、セッション完了時の簡易サマリ（件数/所要時間）を表示。
   - 単語アクセス導線（PR5）: 「対比」や「共起」から横展開リンクで他語へ移動。「例文」の直後に「インデックス（最近/よく見る）」を表示。
   - **永続化機能**: 生成されたWordPackは自動的にデータベースに保存され、同ページ下部に保存済み一覧を表示。再生成ボタンで内容を更新可能。
 
@@ -356,8 +277,7 @@ FastAPI アプリは `src/backend/main.py`。
   - 採点後に自動で次へ（WordPack採点時にリセット）
 
 アクセシビリティ/操作:
-- Alt+1..5 でタブ切替（1=カード, 2=文, 3=アシスト, 4=WordPack, 5=設定）。`/` で主要入力へフォーカス
-- WordPack表示中: `1/J`, `2/K`, `3/L` で採点
+- Alt+1..2 でタブ切替（1=WordPack, 2=設定）。`/` で主要入力へフォーカス
 - ローディング/通知
   - 生成系の処理（WordPack生成・再生成・例文追加生成・空のWordPack作成）は、画面右下の小さな通知カードに統一しました。従来の画面内ローディング表示や完了時の画面遷移は廃止しています。
   - 通知カードは以下の仕様です：
