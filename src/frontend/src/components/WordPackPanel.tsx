@@ -3,6 +3,7 @@ import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { LoadingIndicator } from './LoadingIndicator';
+import { useNotifications } from '../NotificationsContext';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -74,6 +75,7 @@ interface CardMeta { repetitions: number; interval_days: number; due_at: string 
 export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta }) => {
   const { settings, setSettings } = useSettings();
   const { isModalOpen } = useModal();
+  const { add: addNotification, update: updateNotification } = useNotifications();
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
   const [loading, setLoading] = useState(false);
@@ -127,11 +129,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   );
 
   const generate = async () => {
-    abortRef.current?.abort();
     const ctrl = new AbortController();
-    abortRef.current = ctrl;
     setLoading(true);
-    setLoadingInfo({ label: '生成処理を実行中', subtext: 'LLM応答の受信と解析を待機しています…' });
+    const l = lemma.trim();
+    const notifId = addNotification({ title: `【${l}】の生成処理中...`, message: '新規のWordPackを生成しています（LLM応答の受信と解析を待機中）', status: 'progress' });
     setMsg(null);
     setData(null);
     setReveal(false);
@@ -167,6 +168,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         setCardMeta(null); // 未登録
       }
       setMsg({ kind: 'status', text: 'WordPack を生成しました' });
+      updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '新規生成が完了しました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
       let m = e instanceof ApiError ? e.message : 'WordPack の生成に失敗しました';
@@ -174,6 +176,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         m = 'タイムアウトしました（サーバ側で処理継続の可能性があります）。時間をおいて更新または保存済みを開いてください。';
       }
       setMsg({ kind: 'alert', text: m });
+      updateNotification(notifId, { title: `【${l}】の生成失敗`, status: 'error', message: `新規生成に失敗しました（${m}）` });
     } finally {
       setLoading(false);
       setLoadingInfo(null);
@@ -181,11 +184,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   };
 
   const createEmpty = async () => {
-    abortRef.current?.abort();
     const ctrl = new AbortController();
-    abortRef.current = ctrl;
     setLoading(true);
-    setLoadingInfo({ label: '空のWordPackを作成中', subtext: '内容の生成は行いません…' });
+    const l2 = lemma.trim();
+    const notifId = addNotification({ title: `【${l2}】の生成処理中...`, message: '空のWordPackを作成しています', status: 'progress' });
     setMsg(null);
     try {
       const res = await fetchJson<{ id: string }>(`${settings.apiBase}/word/packs`, {
@@ -195,6 +197,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         timeoutMs: settings.requestTimeoutMs,
       });
       setMsg({ kind: 'status', text: '空のWordPackを作成しました' });
+      updateNotification(notifId, { title: `【${l2}】の生成完了！`, status: 'success', message: '空のWordPackを作成しました' });
       setCurrentWordPackId(res.id);
       // 直後に保存済みWordPack詳細を読み込んで表示
       await loadWordPack(res.id);
@@ -209,6 +212,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       if (ctrl.signal.aborted) return;
       const m = e instanceof ApiError ? e.message : '空のWordPack作成に失敗しました';
       setMsg({ kind: 'alert', text: m });
+      updateNotification(notifId, { title: `【${l2}】の生成失敗`, status: 'error', message: `空のWordPackの作成に失敗しました（${m}）` });
     } finally {
       setLoading(false);
       setLoadingInfo(null);
@@ -221,7 +225,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
-    setLoadingInfo({ label: '採点を記録中', subtext: 'SRSメタ・進捗を更新しています…' });
     setMsg(null);
     try {
       const res = await fetchJson<GradeResponse>(`${settings.apiBase}/review/grade_by_lemma`, {
@@ -279,7 +282,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
-    setLoadingInfo({ label: '保存済みWordPackを読み込み中', subtext: 'サーバーから詳細を取得しています…' });
     setMsg(null);
     setData(null);
     setReveal(false);
@@ -312,11 +314,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   };
 
   const regenerateWordPack = async (wordPackId: string) => {
-    abortRef.current?.abort();
     const ctrl = new AbortController();
-    abortRef.current = ctrl;
     setLoading(true);
-    setLoadingInfo({ label: '再生成を実行中', subtext: '指定スコープでLLMにより内容を再構築しています…' });
+    const lemma3 = data?.lemma || '(unknown)';
+    const notifId = addNotification({ title: `【${lemma3}】の生成処理中...`, message: 'WordPackを再生成しています', status: 'progress' });
     setMsg(null);
     setData(null);
     setReveal(false);
@@ -351,6 +352,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         setCardMeta(null); // 未登録
       }
       setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
+      updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '再生成が完了しました' });
       try {
         onWordPackGenerated?.(wordPackId);
       } catch {}
@@ -361,6 +363,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         m = '再生成がタイムアウトしました（サーバ側で処理継続の可能性）。時間をおいて再試行してください。';
       }
       setMsg({ kind: 'alert', text: m });
+      updateNotification(notifId, { title: `【${lemma3}】の生成失敗`, status: 'error', message: `再生成に失敗しました（${m}）` });
     } finally {
       setLoading(false);
       setLoadingInfo(null);
@@ -374,7 +377,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
-    setLoadingInfo({ label: '例文を削除中', subtext: 'サーバーへ保存しています…' });
     setMsg(null);
     try {
       await fetchJson(`${settings.apiBase}/word/packs/${currentWordPackId}/examples/${category}/${index}`, {
@@ -397,11 +399,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
   const generateExamples = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common') => {
     if (!currentWordPackId) return;
-    abortRef.current?.abort();
     const ctrl = new AbortController();
-    abortRef.current = ctrl;
     setLoading(true);
-    setLoadingInfo({ label: '例文を追加生成中', subtext: '2件の例文を生成して保存しています…' });
+    const lemma4 = data?.lemma || '(unknown)';
+    const notifId = addNotification({ title: `【${lemma4}】の生成処理中...`, message: `例文（${category}）を2件追加生成しています`, status: 'progress' });
     setMsg(null);
     try {
       await fetchJson(`${settings.apiBase}/word/packs/${currentWordPackId}/examples/${category}/generate`, {
@@ -420,11 +421,13 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         timeoutMs: settings.requestTimeoutMs,
       });
       setMsg({ kind: 'status', text: `${category} に例文を2件追加しました` });
+      updateNotification(notifId, { title: `【${lemma4}】の生成完了！`, status: 'success', message: `${category} に例文を2件追加しました` });
       await loadWordPack(currentWordPackId);
     } catch (e) {
-      if (ctrl.signal.aborted) return;
+      if (ctrl.signal.aborted) { updateNotification(notifId, { title: `【${lemma4}】の生成失敗`, status: 'error', message: '処理を中断しました' }); return; }
       const m = e instanceof ApiError ? e.message : '例文の追加生成に失敗しました';
       setMsg({ kind: 'alert', text: m });
+      updateNotification(notifId, { title: `【${lemma4}】の生成失敗`, status: 'error', message: `${category} の例文追加生成に失敗しました（${m}）` });
     } finally {
       setLoading(false);
       setLoadingInfo(null);
@@ -596,12 +599,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         </div>
       )}
 
-      {loading && (
-        <LoadingIndicator
-          label={loadingInfo?.label || '処理中'}
-          subtext={loadingInfo?.subtext}
-        />
-      )}
+      {/* グローバル通知に置き換えたため、パネル内のローディング表示は削除 */}
       {msg && <div role={msg.kind}>{msg.text}</div>}
 
       {data && (
