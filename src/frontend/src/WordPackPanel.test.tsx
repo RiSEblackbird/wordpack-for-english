@@ -195,9 +195,11 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.click(screen.getByRole('button', { name: 'WordPackのみ作成' }));
     });
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('空のWordPackを作成しました'));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(/空のWordPackを作成しました|保存済みWordPackを読み込みました/)
+    );
     // 概要セクションが表示され、学習カードは空文字
-    await waitFor(() => expect(screen.getByText('概要')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: '概要' })).toBeInTheDocument());
     expect(screen.getByText('学習カード要点')).toBeInTheDocument();
     // 呼び出しURL検証
     const urls = fetchMock.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));

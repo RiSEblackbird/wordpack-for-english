@@ -365,6 +365,70 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     }
   };
 
+  const deleteExample = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common', index: number) => {
+    if (!currentWordPackId) return;
+    if (!confirm('この例文を削除しますか？')) return;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(true);
+    setLoadingInfo({ label: '例文を削除中', subtext: 'サーバーへ保存しています…' });
+    setMsg(null);
+    try {
+      await fetchJson(`${settings.apiBase}/word/packs/${currentWordPackId}/examples/${category}/${index}`, {
+        method: 'DELETE',
+        signal: ctrl.signal,
+        timeoutMs: settings.requestTimeoutMs,
+      });
+      setMsg({ kind: 'status', text: '例文を削除しました' });
+      // 最新状態を再取得
+      await loadWordPack(currentWordPackId);
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      const m = e instanceof ApiError ? e.message : '例文の削除に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+      setLoadingInfo(null);
+    }
+  };
+
+  const generateExamples = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common') => {
+    if (!currentWordPackId) return;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(true);
+    setLoadingInfo({ label: '例文を追加生成中', subtext: '2件の例文を生成して保存しています…' });
+    setMsg(null);
+    try {
+      await fetchJson(`${settings.apiBase}/word/packs/${currentWordPackId}/examples/${category}/generate`, {
+        method: 'POST',
+        body: (() => {
+          const base: any = { model };
+          if ((model || '').toLowerCase() === 'gpt-5-mini') {
+            base.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+            base.text = { verbosity: settings.textVerbosity || 'medium' };
+          } else {
+            base.temperature = settings.temperature;
+          }
+          return base;
+        })(),
+        signal: ctrl.signal,
+        timeoutMs: settings.requestTimeoutMs,
+      });
+      setMsg({ kind: 'status', text: `${category} に例文を2件追加しました` });
+      await loadWordPack(currentWordPackId);
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      const m = e instanceof ApiError ? e.message : '例文の追加生成に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+      setLoadingInfo(null);
+    }
+  };
+
   useEffect(() => {
     refreshStats();
     refreshPopular();
@@ -662,7 +726,19 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               `}</style>
               {(['Dev','CS','LLM','Business','Common'] as const).map((k) => (
                 <div key={k} style={{ marginBottom: '0.5rem' }}>
-                  <div className="ex-level">{k}</div>
+                  <div className="ex-level" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>{k}</span>
+                    {currentWordPackId ? (
+                      <button
+                        onClick={() => generateExamples(k)}
+                        disabled={loading}
+                        aria-label={`generate-examples-${k}`}
+                        style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                      >
+                        追加生成（2件）
+                      </button>
+                    ) : null}
+                  </div>
                   {data.examples?.[k]?.length ? (
                     <div className="ex-grid">
                       {(data.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
@@ -671,6 +747,18 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                           <div className="ex-ja"><span className="ex-label">訳</span> {ex.ja}</div>
                           {ex.grammar_ja ? (
                             <div className="ex-grammar"><span className="ex-label">解説</span> {ex.grammar_ja}</div>
+                          ) : null}
+                          {currentWordPackId ? (
+                            <div style={{ marginTop: 6 }}>
+                              <button
+                                onClick={() => deleteExample(k, i)}
+                                disabled={loading}
+                                aria-label={`delete-example-${k}-${i}`}
+                                style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                              >
+                                削除
+                              </button>
+                            </div>
                           ) : null}
                         </article>
                       ))}

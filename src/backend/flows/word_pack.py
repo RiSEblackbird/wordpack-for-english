@@ -25,6 +25,23 @@ from ..config import settings
 # RAG imports removed - functionality disabled
 
 
+def _category_guidelines_text() -> str:
+    """各カテゴリの例文ガイドライン（自然さ・一貫性のため）。"""
+    return (
+        "カテゴリ別ガイドライン（examples.Dev/CS/LLM/Business/Common に厳格適用）:\n"
+        "- Dev: ソフトウェア開発の文脈を扱う。\n"
+        "  実務的で具体、学術調は避ける。\n"
+        "- CS: 計算機科学の学術文脈。\n"
+        "  精密・中立・フォーマル。\n"
+        "- LLM: 機械学習/LLM 文脈。\n"
+        "  用語は技術的/学術的に正確、マーケ調は避ける。\n"
+        "- Business: ビジネス文脈（関係者/指標/KPI/スケジュール/トレードオフ/調整/戦略/財務/マーケティング）。\n"
+        "  丁寧で簡潔、スラング禁止。\n"
+        "- Common: 日常会話（友人/同僚とのチャット・通話/待ち合わせ/日常の小さな出来事/小さなやり取り）。\n"
+        "  ビジネス/過度なフォーマル語彙は避け、軽い口語を適度に用いる（下品表現は不可）。\n"
+    )
+
+
 class WordPackFlow:
     """Word pack generation flow (no dummy outputs).
 
@@ -100,8 +117,8 @@ class WordPackFlow:
                     "- もし対象語が名詞（一般名詞/固有名詞）や専門用語である場合、\n"
                     "  term_overview_ja（3〜5文の概要）と term_core_ja（3〜5文の本質）を必ず日本語で記述する。\n"
                     "  名詞以外（動詞/形容詞など）の場合、これら2つのキーは省略してよい。\n"
-                    "- 例文は自然で、約55語（±5語）の英文にする。\n"
-                    "- 例文の数: Dev/CS/LLM は各4文、Business は3文、Common は4文（欠けはそのまま、ダミーは追加しない）。\n"
+                    "- 例文は自然で、約55語（±5語）の英文にする。各英例文には必ず対象語（lemma）を含める。\n"
+                    "- 例文の数: Dev/CS/LLM は各2文、Business は2文、Common は2文（欠けはそのまま、ダミーは追加しない）。\n"
                     "- Dev はアプリ開発現場の実務文脈、CS は計算機科学の学術文脈、LLM は応用/研究の文脈、Business はビジネスの文脈、Common は日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。\n"
                     # f"- Dev, CS, LLM, Business の例文は専門性の高い内容にする。{lemma} 以外にもその方向の専門的な語彙を複数含める。\n" # 一時停止中
                     "- Common の英例文は“ビジネス英語ではなく”カジュアルな日常会話のトーンで。友達/家族/同僚との軽いチャット想定。丁寧すぎる表現やフォーマルな語彙（therefore, thus, regarding, via など）は避け、口語（gonna, kinda, hey などは過度に使いすぎない範囲で可）、よくあるシーン（メッセ/通話/待ち合わせ/日常の小さな出来事）を取り入れる。\n"
@@ -110,6 +127,8 @@ class WordPackFlow:
                     "  1) 品詞分解：形態素/句を『／』で区切り、語の後に【品詞/統語役割】を付す。必要に応じて句の内部構造も『＝』で示す（例：I【代/主】／sent【動/過去】／the documents【名/目】／via email【前置詞句＝via(前)+email(名)：手段】／to ensure quick delivery【不定詞句＝to+ensure(動)+quick(形)+delivery(名)：目的】）。\n"
                     "  2) 解説：文の核（S/V/O/C）、修飾関係（手段/目的/時/理由など）、冠詞・可算/不可算の扱い等を日本語で簡潔に説明。\n"
                     "- 『動詞+前置詞』のような表層的ラベルだけの説明は禁止。具体的に機能・役割まで述べる。\n"
+                    + _category_guidelines_text()
+                    + "Enforce these category-specific rules for each examples.Dev/CS/LLM/Business/Common respectively.\n"
                 )
 
                 out = self.llm.complete(prompt)  # type: ignore[attr-defined]

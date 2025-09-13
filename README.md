@@ -12,6 +12,8 @@
 - **WordPack永続化機能**: 生成されたWordPackを自動保存し、一覧表示・削除が可能（再生成は `WordPack` パネルから実行）
 - **WordPackのみ作成（新）**: 内容生成を行わず、空のWordPackを保存できます（UI: 生成ボタン横）。
 - **例文UIの改善（新）**: 英文・訳文・文法解説をカード型で横並びグリッド表示。各項目に「英/訳/解説」ラベルを付け、可読性を向上。
+ - **例文の個別削除（新）**: 保存済みWordPackの詳細画面から、特定カテゴリ内の任意の例文を個別に削除できます。
+ - **例文ストレージの正規化（新）**: DB内部で例文を別テーブルに分離し、部分読み込み/部分削除を高速化（後方互換維持）。API入出力は従来どおり `examples` を含む完全な `WordPack` を返します。
  - **名詞の用語解説を強化（新）**: 単語が名詞・専門用語の場合、各 `sense` に `term_core_ja`（本質・1〜2文）と `term_overview_ja`（概要・3〜5文）を追加出力・表示。用語としての概念や背景も学べます。
 
 ### フロントエンドのテーマ切替（ライト/ダーク）
@@ -369,6 +371,18 @@ FastAPI アプリは `src/backend/main.py`。
   - 指定されたIDのWordPackを削除。
   - レスポンス例: `{ "message": "WordPack deleted successfully" }`
   - 存在しない場合は404エラー
+
+- `DELETE /api/word/packs/{word_pack_id}/examples/{category}/{index}`（新）
+  - 保存済みWordPackから、特定カテゴリ（`Dev|CS|LLM|Business|Common`）の `index`（0始まり）の例文を削除。
+  - レスポンス例: `{ "message": "Example deleted", "category": "Dev", "index": 0, "remaining": 4 }`
+  - 存在しないID/範囲外インデックスは404、壊れた保存データは500
+
+- `POST /api/word/packs/{word_pack_id}/examples/{category}/generate`（新）
+  - 保存済みWordPackに、指定カテゴリの例文を「2件」追加生成し保存します。
+  - 生成時は入力トークン削減のため、既存の例文データをプロンプトに含めません。
+  - リクエスト例: `{ "model": "gpt-5-mini", "reasoning": { "effort": "minimal" }, "text": { "verbosity": "medium" } }`
+  - レスポンス例: `{ "message": "Examples generated and appended", "added": 2, "category": "Dev", "items": [{"en":"...","ja":"..."}] }`
+  - `model/temperature/reasoning/text` は任意。未指定時はサーバ既定（環境変数）を使用。
 
 ### 3-1. 引用と確度（citations/confidence）の読み方（PR5）
 - citations（引用）:
