@@ -179,7 +179,6 @@ export const WordPackListPanel: React.FC = () => {
                   <div className="wp-card-header">
                     <h3 className="wp-card-title">
                       {wp.lemma}
-                      {wp.is_empty ? <span className="wp-badge empty" aria-label="未生成バッジ">未生成</span> : null}
                     </h3>
                     <button 
                       className="danger" 
@@ -203,20 +202,36 @@ export const WordPackListPanel: React.FC = () => {
                   <div className="wp-card-meta">
                     <div>作成: {formatDate(wp.created_at)}</div>
                     <div>更新: {formatDate(wp.updated_at)}</div>
-                    {wp.examples_count && (
+                    {wp.is_empty ? (
                       <div style={{ marginTop: '0.5rem', fontSize: '0.8em' }}>
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          padding: '0.1rem 0.3rem',
+                          backgroundColor: '#fff3cd',
+                          color: '#7a5b00',
+                          borderRadius: '3px',
+                          border: '1px solid #ffe08a',
+                          fontSize: '0.75em'
+                        }}>
+                          例文未生成
+                        </span>
+                      </div>
+                    ) : wp.examples_count && (
+                      <div style={{ marginTop: '0.3rem', fontSize: '0.2em' }}>
+                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
                           {Object.entries(wp.examples_count).map(([category, count]) => (
                             <span key={category} style={{
                               display: 'inline-flex',
                               alignItems: 'center',
-                              gap: '0.25rem',
-                              padding: '0.1rem 0.3rem',
+                              gap: '0.10rem',
+                              padding: '0.1rem 0.2rem',
                               backgroundColor: count > 0 ? '#e3f2fd' : '#f5f5f5',
                               color: count > 0 ? '#1565c0' : '#666',
                               borderRadius: '3px',
                               border: `1px solid ${count > 0 ? '#1565c0' : '#ddd'}`,
-                              fontSize: '0.75em'
+                              fontSize: '0.40em'
                             }}>
                               <span style={{ fontWeight: 'bold' }}>{category}</span>
                               <span>{count}</span>
