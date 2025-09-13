@@ -645,6 +645,61 @@ class SRSSQLiteStore:
             conn.close()
 
 
+    def append_examples(self, word_pack_id: str, category: str, items: List[dict]) -> int:
+        """指定カテゴリに例文を末尾追記し、追加件数を返す。
+
+        - `items`: {en, ja, grammar_ja?, llm_model?, llm_params?} の辞書配列
+        - `word_packs.updated_at` を現在時刻で更新する
+        """
+        if not items:
+            return 0
+        now = datetime.utcnow().isoformat()
+        conn = self._connect()
+        try:
+            with conn:
+                # 既存の末尾位置を取得
+                cur = conn.execute(
+                    """
+                    SELECT COALESCE(MAX(position), -1) AS max_pos
+                    FROM word_pack_examples
+                    WHERE word_pack_id = ? AND category = ?;
+                    """,
+                    (word_pack_id, category),
+                )
+                row = cur.fetchone()
+                start_pos = int(row["max_pos"]) + 1 if row is not None else 0
+
+                # 追記
+                inserted = 0
+                for offset, item in enumerate(items):
+                    en = str((item or {}).get("en") or "").strip()
+                    ja = str((item or {}).get("ja") or "").strip()
+                    if not en or not ja:
+                        continue
+                    grammar_ja = (str((item or {}).get("grammar_ja") or "").strip() or None)
+                    llm_model = (str((item or {}).get("llm_model") or "").strip() or None)
+                    llm_params = (str((item or {}).get("llm_params") or "").strip() or None)
+                    conn.execute(
+                        """
+                        INSERT INTO word_pack_examples(
+                            word_pack_id, category, position, en, ja, grammar_ja, llm_model, llm_params, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                        """,
+                        (word_pack_id, category, start_pos + offset, en, ja, grammar_ja, llm_model, llm_params, now),
+                    )
+                    inserted += 1
+
+                # 本体の updated_at を更新
+                conn.execute(
+                    "UPDATE word_packs SET updated_at = ? WHERE id = ?;",
+                    (now, word_pack_id),
+                )
+
+                return inserted
+        finally:
+            conn.close()
+
+
 # module-level singleton store (wired to settings)
 store = SRSSQLiteStore(db_path=settings.srs_db_path)
 

@@ -377,6 +377,13 @@ FastAPI アプリは `src/backend/main.py`。
   - レスポンス例: `{ "message": "Example deleted", "category": "Dev", "index": 0, "remaining": 4 }`
   - 存在しないID/範囲外インデックスは404、壊れた保存データは500
 
+- `POST /api/word/packs/{word_pack_id}/examples/{category}/generate`（新）
+  - 保存済みWordPackに、指定カテゴリの例文を「2件」追加生成し保存します。
+  - 生成時は入力トークン削減のため、既存の例文データをプロンプトに含めません。
+  - リクエスト例: `{ "model": "gpt-5-mini", "reasoning": { "effort": "minimal" }, "text": { "verbosity": "medium" } }`
+  - レスポンス例: `{ "message": "Examples generated and appended", "added": 2, "category": "Dev", "items": [{"en":"...","ja":"..."}] }`
+  - `model/temperature/reasoning/text` は任意。未指定時はサーバ既定（環境変数）を使用。
+
 ### 3-1. 引用と確度（citations/confidence）の読み方（PR5）
 - citations（引用）:
   - **意味**: OpenAI LLM が生成した情報の参照元。

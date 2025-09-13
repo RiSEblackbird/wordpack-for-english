@@ -17,6 +17,8 @@ from ..models.word import (
 )
 from ..srs import store
 from ..logging import logger
+from pydantic import BaseModel, Field
+from typing import Optional, Any
 
 router = APIRouter(tags=["word"])
 
@@ -495,3 +497,144 @@ async def delete_example_from_word_pack(
         "remaining": remaining,
     }
 
+
+class ExamplesGenerateRequest(BaseModel):
+    """例文追加生成のための任意パラメータ。"""
+    model: Optional[str] = Field(default=None, description="LLMモデル名の上書き")
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    reasoning: Optional[dict] = Field(default=None)
+    text: Optional[dict] = Field(default=None)
+
+
+@router.post(
+    "/packs/{word_pack_id}/examples/{category}/generate",
+    summary="カテゴリ別の例文を2件追加生成して保存",
+)
+async def generate_examples_for_word_pack(
+    word_pack_id: str,
+    category: ExampleCategory,
+    req: ExamplesGenerateRequest | None = None,
+) -> dict[str, Any]:
+    """保存済みWordPackに、指定カテゴリの例文を2件追加生成して保存する。
+
+    既存の例文データはプロンプトに含めず、入力トークンを削減する。
+    """
+    result = store.get_word_pack(word_pack_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="WordPack not found")
+    lemma, _, _, _ = result
+
+    req = req or ExamplesGenerateRequest()
+    llm = get_llm_provider(
+        model_override=getattr(req, 'model', None),
+        temperature_override=getattr(req, 'temperature', None),
+        reasoning_override=getattr(req, 'reasoning', None),
+        text_override=getattr(req, 'text', None),
+    )
+
+    def _format_llm_params_for_request() -> str | None:
+        try:
+            parts: list[str] = []
+            if getattr(req, 'temperature', None) is not None:
+                parts.append(f"temperature={float(req.temperature):.2f}")
+            r = getattr(req, 'reasoning', None) or {}
+            if isinstance(r, dict) and r.get('effort'):
+                parts.append(f"reasoning.effort={r.get('effort')}")
+            t = getattr(req, 'text', None) or {}
+            if isinstance(t, dict) and t.get('verbosity'):
+                parts.append(f"text.verbosity={t.get('verbosity')}")
+            return ";".join(parts) if parts else None
+        except Exception:
+            return None
+
+    llm_model_name = getattr(req, 'model', None) or settings.llm_model
+    llm_params_str = _format_llm_params_for_request()
+
+    # カテゴリ特化のガイドライン（日本語）
+    def _cat_rule(cat: str) -> str:
+        if cat == "Dev":
+            return "ソフトウェア開発の文脈（コーディング/レビュー/CI/CD/デプロイ/障害対応）。実務的で具体。"
+        if cat == "CS":
+            return "計算機科学の学術文脈（理論/アルゴリズム/証明）。精密・中立・フォーマル。"
+        if cat == "LLM":
+            return "機械学習/LLM 文脈（プロンプト/トークン/埋め込み/推論/評価）。技術的に正確。"
+        if cat == "Business":
+            return "ビジネス文脈（関係者/KPI/スケジュール/調整）。丁寧で簡潔、スラング禁止。"
+        if cat == "Common":
+            return "日常会話（友人/同僚とのチャット/通話）。ビジネス/過度なフォーマルさを避け、軽い口語を適度に。"
+        return ""
+
+    prompt = (
+        "あなたは辞書編纂者かつ日英バイリンガルのライティング指導者です。説明文は不要、JSONオブジェクト1個のみを返してください。\n"
+        f"対象の語（lemma）: {lemma}（英語文にはこの語を必ず明示的に含める）\n"
+        f"カテゴリ: {category.value}（Dev|CS|LLM|Business|Common）\n"
+        f"カテゴリ規則: {_cat_rule(category.value)}\n\n"
+        "スキーマ（キーと型は厳密一致）:\n"
+        "{\n  \"examples\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ]\n}\n"
+        "制約:\n"
+        "- examples はちょうど2件。\n"
+        "- en は50〜60語。必ず lemma を含める。\n"
+        "- ja は忠実で自然な日本語訳。\n"
+        "- grammar_ja は2段落構成：\n"
+        "  1) 品詞分解：形態素/句を『／』で区切り、語の後に【品詞/統語役割】を付す。必要に応じて内部構造は『＝』で示す。\n"
+        "  2) 解説：文の核（S/V/O/C）、修飾関係（手段/目的/時/理由など）、冠詞/可算不可算の扱い等を簡潔に説明。\n"
+        "- 既存の例文は一切参照・引用しない（このリクエストは独立）。\n"
+        "- コードフェンス等は使わず、厳密にJSONのみを返す。\n"
+    )
+
+    try:
+        out = llm.complete(prompt)  # type: ignore[attr-defined]
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}") from exc
+
+    import re, json as _json
+
+    def _strip_code_fences(text: str) -> str:
+        t = text.strip()
+        t = re.sub(r"^```(?:json)?\\s*", "", t, flags=re.IGNORECASE)
+        t = re.sub(r"```\\s*$", "", t)
+        return t.strip()
+
+    raw = out if isinstance(out, str) else ""
+    raw = _strip_code_fences(raw)
+
+    try:
+        parsed = _json.loads(raw)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to parse LLM JSON: {exc}") from exc
+
+    if isinstance(parsed, list):
+        ex_list = parsed
+    elif isinstance(parsed, dict) and isinstance(parsed.get("examples"), list):
+        ex_list = parsed.get("examples")
+    else:
+        raise HTTPException(status_code=502, detail="Invalid LLM JSON shape (no examples)")
+
+    items = []
+    for item in ex_list[:2]:
+        if not isinstance(item, dict):
+            continue
+        en = str(item.get("en") or "").strip()
+        ja = str(item.get("ja") or "").strip()
+        if not en or not ja:
+            continue
+        grammar_ja = (str(item.get("grammar_ja") or "").strip() or None)
+        items.append({
+            "en": en,
+            "ja": ja,
+            "grammar_ja": grammar_ja,
+            "llm_model": llm_model_name,
+            "llm_params": llm_params_str,
+        })
+
+    if not items:
+        raise HTTPException(status_code=502, detail="LLM returned no usable examples")
+
+    added = store.append_examples(word_pack_id, category.value, items)
+
+    return {
+        "message": "Examples generated and appended",
+        "added": added,
+        "category": category.value,
+        "items": items,
+    }
