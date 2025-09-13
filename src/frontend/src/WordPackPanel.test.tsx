@@ -116,7 +116,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     return mock;
   }
 
-  it('generates WordPack and grades via buttons', async () => {
+  it('generates WordPack and shows examples', async () => {
     const fetchMock = setupFetchMocks();
     render(<App />);
 
@@ -146,17 +146,13 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     // （モック例文には grammar_ja が含まれている）
     expect(screen.getAllByText(/解説/).length).toBeGreaterThan(0);
 
-    // 採点（○）
-    await act(async () => {
-      await user.click(screen.getByRole('button', { name: '○ できた (3)' }));
-    });
+    // 例文統計の見出しが表示される（総数はダイナミック）
+    expect(screen.getByRole('heading', { name: /例文 \(総数 \d+件\)/ })).toBeInTheDocument();
 
-    await screen.findByText(/採点しました/);
-
-    // fetch が正しいエンドポイントで呼ばれていること
+    // fetch が正しいエンドポイントで呼ばれていること（採点APIは呼ばれない）
     const urls = fetchMock.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));
     expect(urls.some((u) => u.endsWith('/api/word/pack'))).toBe(true);
-    expect(urls.some((u) => u.endsWith('/api/review/grade_by_lemma'))).toBe(true);
+    expect(urls.some((u) => u.endsWith('/api/review/grade_by_lemma'))).toBe(false);
 
     // リクエストボディに model/temperature が含まれていること（非 reasoning モデルの場合）
     const bodies = fetchMock.mock.calls

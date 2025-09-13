@@ -9,7 +9,7 @@
 - WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
 - **WordPack永続化機能**: 生成されたWordPackを自動保存し、WordPackタブ下部の一覧で閲覧・削除が可能（再生成は `WordPack` セクションから実行）
 - **WordPackのみ作成（新）**: 内容生成を行わず、空のWordPackを保存できます（UI: 生成ボタン横）。
-- **例文UIの改善（新）**: 英文・訳文・文法解説をカード型で横並びグリッド表示。各項目に「英/訳/解説」ラベルを付け、可読性を向上。
+- **例文UIの改善（新）**: 英文・訳文・文法解説をカード型で表示。各項目に「英/訳/解説」ラベルを付け、可読性を向上。
  - **例文の個別削除（新）**: 保存済みWordPackの詳細画面から、特定カテゴリ内の任意の例文を個別に削除できます。
  - **例文ストレージの正規化（新）**: DB内部で例文を別テーブルに分離し、部分読み込み/部分削除を高速化。API入出力は引き続き `examples` を含む完全な `WordPack` を返します（旧DB形式の自動変換は行いません）。
  - **名詞の用語解説を強化（新）**: 単語が名詞・専門用語の場合、各 `sense` に `term_core_ja`（本質・1〜2文）と `term_overview_ja`（概要・3〜5文）を追加出力・表示。用語としての概念や背景も学べます。
@@ -94,7 +94,7 @@ src/backend/             # 本番用FastAPIアプリ
   models/                # pydanticモデル（厳密化済み: Enum/Field制約/例）
   pronunciation.py       # 発音（cmudict/g2p-en優先・例外辞書/キャッシュ/タイムアウト付き）
 src/frontend/            # React + Vite
-  src/components/        # 5パネルのコンポーネント
+  src/components/        # 2パネルのコンポーネント（WordPack/Settings）
   src/SettingsContext.tsx
 static/                  # 最小UIの静的ファイル（`app/main.py`用）
 ```
@@ -274,7 +274,7 @@ FastAPI アプリは `src/backend/main.py`。
 - 設定（`SettingsPanel.tsx`）
   - 発音の有効/無効トグル（M5）
   - 再生成スコープ選択（`全体/例文のみ/コロケのみ`）（M5, Enum）
-  - 採点後に自動で次へ（WordPack採点時にリセット）
+  - （採点機能は廃止しました）
 
 アクセシビリティ/操作:
 - Alt+1..2 でタブ切替（1=WordPack, 2=設定）。`/` で主要入力へフォーカス
