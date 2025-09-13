@@ -101,34 +101,15 @@ class WordPackFlow:
                     "    \"academic\": { \"verb_object\": [\"...\"], \"adj_noun\": [\"...\"], \"prep_noun\": [\"...\"] }\n"
                     "  },\n"
                     "  \"contrast\": [ { \"with\": \"...\", \"diff_ja\": \"...\" } ],\n"
-                    "  \"examples\": {\n"
-                    "    \"Dev\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
-                    "    \"CS\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
-                    "    \"LLM\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
-                    "    \"Business\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ],\n"
-                    "    \"Common\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ]\n"
-                    "  },\n"
                     "  \"etymology\": { \"note\": \"...\", \"confidence\": \"low|medium|high\" },\n"
                     "  \"study_card\": \"1文の要点(日本語)\",\n"
                     "  \"pronunciation\": { \"ipa_RP\": \"/.../\" }\n"
                     "}\n"
                     "Notes: \n"
-                    "- gloss_ja / definition_ja / nuances_ja / grammar_ja / notes_ja は日本語。\n"
+                    "- gloss_ja / definition_ja / nuances_ja / notes_ja は日本語。\n"
                     "- もし対象語が名詞（一般名詞/固有名詞）や専門用語である場合、\n"
                     "  term_overview_ja（3〜5文の概要）と term_core_ja（3〜5文の本質）を必ず日本語で記述する。\n"
                     "  名詞以外（動詞/形容詞など）の場合、これら2つのキーは省略してよい。\n"
-                    "- 例文は自然で、約55語（±5語）の英文にする。各英例文には必ず対象語（lemma）を含める。\n"
-                    "- 例文の数: Dev/CS/LLM は各2文、Business は2文、Common は2文（欠けはそのまま、ダミーは追加しない）。\n"
-                    "- Dev はアプリ開発現場の実務文脈、CS は計算機科学の学術文脈、LLM は応用/研究の文脈、Business はビジネスの文脈、Common は日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。\n"
-                    # f"- Dev, CS, LLM, Business の例文は専門性の高い内容にする。{lemma} 以外にもその方向の専門的な語彙を複数含める。\n" # 一時停止中
-                    "- Common の英例文は“ビジネス英語ではなく”カジュアルな日常会話のトーンで。友達/家族/同僚との軽いチャット想定。丁寧すぎる表現やフォーマルな語彙（therefore, thus, regarding, via など）は避け、口語（gonna, kinda, hey などは過度に使いすぎない範囲で可）、よくあるシーン（メッセ/通話/待ち合わせ/日常の小さな出来事）を取り入れる。\n"
-                    "- Common は短い感嘆や相づち・依頼も自然に含めてよい（e.g., Could you shoot me a text?, Mind sending me the link?）。ただしスラングや下品な表現は避ける。\n"
-                    "- 各例文の grammar_ja は2段落の詳細解説にする：\n"
-                    "  1) 品詞分解：形態素/句を『／』で区切り、語の後に【品詞/統語役割】を付す。必要に応じて句の内部構造も『＝』で示す（例：I【代/主】／sent【動/過去】／the documents【名/目】／via email【前置詞句＝via(前)+email(名)：手段】／to ensure quick delivery【不定詞句＝to+ensure(動)+quick(形)+delivery(名)：目的】）。\n"
-                    "  2) 解説：文の核（S/V/O/C）、修飾関係（手段/目的/時/理由など）、冠詞・可算/不可算の扱い等を日本語で簡潔に説明。\n"
-                    "- 『動詞+前置詞』のような表層的ラベルだけの説明は禁止。具体的に機能・役割まで述べる。\n"
-                    + _category_guidelines_text()
-                    + "Enforce these category-specific rules for each examples.Dev/CS/LLM/Business/Common respectively.\n"
                 )
 
                 out = self.llm.complete(prompt)  # type: ignore[attr-defined]
@@ -141,7 +122,6 @@ class WordPackFlow:
                             "wordpack_llm_json_parsed",
                             lemma=lemma,
                             has_senses=isinstance(llm_data.get("senses"), list),
-                            has_examples=isinstance(llm_data.get("examples"), dict),
                         )
                         citations.append(
                             Citation(
@@ -151,45 +131,9 @@ class WordPackFlow:
                         )
                     except json.JSONDecodeError:
                         logger.info("wordpack_llm_json_parse_failed", lemma=lemma)
-                        # JSON としては壊れているが、部分的に "examples": {...} を含む場合がある
-                        # 例文だけでも使えるように最小限のサルベージを試みる
-                        try:
-                            ex_obj: Dict[str, Any] | None = None
-                            # "examples": { ... } のブロックを素朴に抽出
-                            m = re.search(r'"examples"\s*:\s*\{[\s\S]*?\}\s*(,|\})', raw)
-                            if m:
-                                ex_text = m.group(0)
-                                # 末尾の区切り , or } を除去して純粋なオブジェクトに近づける
-                                if ex_text.endswith(','):
-                                    ex_text = ex_text[:-1]
-                                # キーだけのオブジェクト化を試みる
-                                ex_text = ex_text
-                                # ex_text は '"examples": { ... }' なので後段で JSON として読むために外側をそのまま利用
-                                try:
-                                    ex_kv = '{' + ex_text + '}' if not raw.strip().startswith('{') else ex_text
-                                    # まず '"examples": {...}' を含む一時JSONを作って読み、examples 部分を取り出す
-                                    tmp = '{' + ex_text + '}' if not ex_text.strip().startswith('{') else ex_text
-                                    # tmp は {"examples": {...}} になる想定
-                                    obj = json.loads(tmp if tmp.strip().startswith('{') else '{' + tmp + '}')
-                                    ex_obj = obj.get('examples') if isinstance(obj, dict) else None
-                                except Exception:
-                                    ex_obj = None
-
-                            if isinstance(ex_obj, dict):
-                                # 最小 llm_data を構築（他キーは欠落可）
-                                llm_data = {"examples": ex_obj}
-                                logger.info("wordpack_llm_examples_salvaged", lemma=lemma)
-                                citations.append(Citation(text=out.strip(), meta={"source": "openai_llm", "word": lemma}))
-                            else:
-                                # 例文の抽出もできない場合はそのまま引用として保存
-                                logger.info("wordpack_llm_salvage_failed_no_examples", lemma=lemma)
-                                citations.append(Citation(text=out.strip(), meta={"source": "openai_llm", "word": lemma}))
-                        except Exception:
-                            logger.info("wordpack_llm_salvage_exception", lemma=lemma)
-                            citations.append(Citation(text=out.strip(), meta={"source": "openai_llm", "word": lemma}))
-                        # strict モードでは JSON 解析失敗かつサルベージ不可を許容しない
-                        if settings.strict_mode and not (isinstance(llm_data, dict) and isinstance(llm_data.get("examples"), dict)):
-                            raise RuntimeError("Failed to parse LLM JSON (no usable examples) in strict mode")
+                        citations.append(Citation(text=out.strip(), meta={"source": "openai_llm", "word": lemma}))
+                        if settings.strict_mode:
+                            raise RuntimeError("Failed to parse LLM JSON in strict mode")
         except Exception as exc:
             if settings.strict_mode:
                 # strict: LLM 呼び出し失敗/タイムアウトは即エラー
@@ -197,7 +141,9 @@ class WordPackFlow:
             # 非 strict では静かにフォールバック
 
         # strict: LLM 出力が空/未解析ならエラー
-        if settings.strict_mode and (llm_data is None or (isinstance(llm_data, dict) and not llm_data.get("senses") and not llm_data.get("examples"))):
+        if settings.strict_mode and (
+            llm_data is None or (isinstance(llm_data, dict) and not llm_data.get("senses"))
+        ):
             raise RuntimeError("LLM returned no usable data (strict mode)")
 
         # RAG strict モードで引用がない場合はエラーを発生
