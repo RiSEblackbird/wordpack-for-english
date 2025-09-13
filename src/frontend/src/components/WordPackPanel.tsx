@@ -393,7 +393,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   return (
     <section>
       <style>{`
-        .wp-container { display: grid; grid-template-columns: minmax(220px, 260px) 1fr; gap: 1rem; }
+        .wp-container { display: grid; grid-template-columns: minmax(80px, 100px) 1fr; gap: 1rem; }
         .wp-nav { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; gap: 0.25rem; }
         .wp-nav a { text-decoration: none; color: var(--color-link); }
         .wp-section { padding-block: 0.25rem; border-top: 1px solid var(--color-border); }
