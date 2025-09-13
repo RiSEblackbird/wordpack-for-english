@@ -339,7 +339,8 @@ FastAPI アプリは `src/backend/main.py`。
           "id": "wp:converge:a1b2c3d4",
           "lemma": "converge",
           "created_at": "2025-01-01T12:34:56.000Z",
-          "updated_at": "2025-01-01T12:34:56.000Z"
+          "updated_at": "2025-01-01T12:34:56.000Z",
+          "is_empty": true
         }
       ],
       "total": 1,

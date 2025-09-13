@@ -164,6 +164,7 @@ class WordPackListItem(BaseModel):
     lemma: str
     created_at: str
     updated_at: str
+    is_empty: bool = Field(default=False, description="内容が空のWordPackかどうか（UI用）")
 
 
 class WordPackListResponse(BaseModel):

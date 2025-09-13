@@ -241,15 +241,37 @@ async def list_word_packs(
 ) -> WordPackListResponse:
     """保存済みWordPackの一覧を取得する。"""
     items_data = store.list_word_packs(limit=limit, offset=offset)
-    items = [
-        WordPackListItem(
-            id=item[0],
-            lemma=item[1],
-            created_at=item[2],
-            updated_at=item[3],
+    items: list[WordPackListItem] = []
+    for item in items_data:
+        wp_id, lemma, created_at, updated_at = item
+        # 可能であれば簡易に空判定（保存データを軽量に読み出し）
+        is_empty = False
+        try:
+            result = store.get_word_pack(wp_id)
+            if result is not None:
+                _, data_json, _, _ = result
+                try:
+                    d = json.loads(data_json)
+                    # 空判定: sensesが0、examplesの全カテゴリが空、study_cardが空文字相当
+                    senses_empty = not d.get("senses")
+                    ex = d.get("examples") or {}
+                    examples_empty = all(not (ex.get(k) or []) for k in ["Dev","CS","LLM","Business","Common"])
+                    study_empty = not bool((d.get("study_card") or "").strip())
+                    is_empty = bool(senses_empty and examples_empty and study_empty)
+                except Exception:
+                    is_empty = False
+        except Exception:
+            is_empty = False
+
+        items.append(
+            WordPackListItem(
+                id=wp_id,
+                lemma=lemma,
+                created_at=created_at,
+                updated_at=updated_at,
+                is_empty=is_empty,
+            )
         )
-        for item in items_data
-    ]
     
     # 総件数を取得（簡易実装：実際のプロダクションでは別途カウントクエリが必要）
     total_items = store.list_word_packs(limit=10000, offset=0)

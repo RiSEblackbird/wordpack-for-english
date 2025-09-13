@@ -10,6 +10,7 @@ interface WordPackListItem {
   lemma: string;
   created_at: string;
   updated_at: string;
+  is_empty?: boolean;
 }
 
 interface WordPackListResponse {
@@ -113,6 +114,8 @@ export const WordPackListPanel: React.FC = () => {
         .wp-card-actions button:hover { background: #f5f5f5; }
         .wp-card-actions button.danger { color: #d32f2f; border-color: #d32f2f; }
         .wp-card-actions button.danger:hover { background: #ffebee; }
+        .wp-badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 999px; font-size: 0.75em; margin-left: 0.5rem; }
+        .wp-badge.empty { background: #fff3cd; color: #7a5b00; border: 1px solid #ffe08a; }
         .wp-pagination { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem; }
         .wp-pagination button { padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
         .wp-pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -156,7 +159,10 @@ export const WordPackListPanel: React.FC = () => {
                   onClick={() => { setPreviewWordPackId(wp.id); setPreviewOpen(true); }}
                 >
                   <div className="wp-card-header">
-                    <h3 className="wp-card-title">{wp.lemma}</h3>
+                    <h3 className="wp-card-title">
+                      {wp.lemma}
+                      {wp.is_empty ? <span className="wp-badge empty" aria-label="未生成バッジ">未生成</span> : null}
+                    </h3>
                   </div>
                   <div className="wp-card-meta">
                     <div>作成: {formatDate(wp.created_at)}</div>

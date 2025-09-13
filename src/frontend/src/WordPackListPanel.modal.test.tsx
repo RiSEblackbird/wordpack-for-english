@@ -22,7 +22,7 @@ describe('WordPackListPanel modal preview', () => {
         return new Response(
           JSON.stringify({
             items: [
-              { id: 'wp:test:1', lemma: 'delta', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+              { id: 'wp:test:1', lemma: 'delta', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_empty: true },
             ],
             total: 1,
             limit: 20,
@@ -95,6 +95,9 @@ describe('WordPackListPanel modal preview', () => {
     });
 
     await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
+
+    // 未生成バッジ表示
+    await waitFor(() => expect(screen.getByLabelText('未生成バッジ')).toBeInTheDocument());
 
     await act(async () => {
       await user.click(screen.getByTestId('wp-card'));
