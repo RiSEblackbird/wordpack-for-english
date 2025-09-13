@@ -171,6 +171,18 @@ FastAPI アプリは `src/backend/main.py`。
     "notes_ja": "自動詞。数学/統計では to/toward の選択でニュアンス差あり。"
   }
   ```
+  - 完全な `senses` 詳細の例:
+  ```json
+  {
+    "id": "s1",
+    "gloss_ja": "集まる・収束する",
+    "definition_ja": "複数のものが一点・一方向に向かって近づき一つにまとまること。",
+    "nuances_ja": "学術文脈では系列や推定量が極限へ近づく含意が強い。",
+    "patterns": ["converge on N", "converge toward N"],
+    "synonyms": ["gather", "meet"],
+    "antonyms": ["diverge"],
+    "register": "formal",
+    "notes_ja": "自動詞。数学/統計では to/toward の選択でニュアンス差あり。",
     "collocations": {"general": {"verb_object": ["gain insight"], "adj_noun": ["deep insight"], "prep_noun": ["insight into N"]}, "academic": {"verb_object": ["derive insight"], "adj_noun": ["empirical insight"], "prep_noun": ["insight for N"]}},
     "contrast": [{"with":"intuition","diff_ja":"直観は体系的根拠が薄いのに対し、insight は分析や経験から得る洞察。"}],
     "examples": {
