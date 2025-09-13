@@ -266,8 +266,9 @@ async def list_word_packs(
     items: list[WordPackListItem] = []
     for item in items_data:
         wp_id, lemma, created_at, updated_at = item
-        # 可能であれば簡易に空判定（保存データを軽量に読み出し）
+        # 可能であれば簡易に空判定と例文数計算（保存データを軽量に読み出し）
         is_empty = False
+        examples_count = None
         try:
             result = store.get_word_pack(wp_id)
             if result is not None:
@@ -280,10 +281,21 @@ async def list_word_packs(
                     examples_empty = all(not (ex.get(k) or []) for k in ["Dev","CS","LLM","Business","Common"])
                     study_empty = not bool((d.get("study_card") or "").strip())
                     is_empty = bool(senses_empty and examples_empty and study_empty)
+                    
+                    # 例文数の計算
+                    examples_count = {
+                        "Dev": len(ex.get("Dev", [])),
+                        "CS": len(ex.get("CS", [])),
+                        "LLM": len(ex.get("LLM", [])),
+                        "Business": len(ex.get("Business", [])),
+                        "Common": len(ex.get("Common", [])),
+                    }
                 except Exception:
                     is_empty = False
+                    examples_count = None
         except Exception:
             is_empty = False
+            examples_count = None
 
         items.append(
             WordPackListItem(
@@ -292,6 +304,7 @@ async def list_word_packs(
                 created_at=created_at,
                 updated_at=updated_at,
                 is_empty=is_empty,
+                examples_count=examples_count,
             )
         )
     
