@@ -532,6 +532,56 @@ async def generate_examples_for_word_pack(
         text_override=getattr(req, 'text', None),
     )
 
+    # 統合フロー（LangGraph駆動）でカテゴリ別の例文を生成して即保存
+    # 失敗した場合のみ、後続の従来プロンプト経路にフォールバック
+    try:
+        def _fmt_llm_params_here() -> str | None:
+            try:
+                parts: list[str] = []
+                if getattr(req, 'temperature', None) is not None:
+                    parts.append(f"temperature={float(req.temperature):.2f}")
+                r = getattr(req, 'reasoning', None) or {}
+                if isinstance(r, dict) and r.get('effort'):
+                    parts.append(f"reasoning.effort={r.get('effort')}")
+                t = getattr(req, 'text', None) or {}
+                if isinstance(t, dict) and t.get('verbosity'):
+                    parts.append(f"text.verbosity={t.get('verbosity')}")
+                return ";".join(parts) if parts else None
+            except Exception:
+                return None
+
+        llm_info = {
+            "model": getattr(req, 'model', None) or settings.llm_model,
+            "params": _fmt_llm_params_here(),
+        }
+        flow = WordPackFlow(chroma_client=None, llm=llm, llm_info=llm_info)
+        plan = {category: 2}
+        gen = flow.generate_examples_for_categories(lemma, plan)
+        items_model = gen.get(category, [])
+        items: list[dict[str, object]] = []
+        for it in items_model:
+            items.append({
+                "en": it.en,
+                "ja": it.ja,
+                "grammar_ja": it.grammar_ja,
+                "llm_model": it.llm_model,
+                "llm_params": it.llm_params,
+            })
+        if not items:
+            raise HTTPException(status_code=502, detail="LLM returned no usable examples")
+        added = store.append_examples(word_pack_id, category.value, items)
+        return {
+            "message": "Examples generated and appended",
+            "added": added,
+            "category": category.value,
+            "items": items,
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        # 続く従来経路にフォールバック
+        pass
+
     def _format_llm_params_for_request() -> str | None:
         try:
             parts: list[str] = []
