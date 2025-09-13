@@ -129,7 +129,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   );
 
   const generate = async () => {
+    abortRef.current?.abort();
     const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setLoading(true);
     const l = lemma.trim();
     const notifId = addNotification({ title: `【${l}】の生成処理中...`, message: '新規のWordPackを生成しています（LLM応答の受信と解析を待機中）', status: 'progress' });
@@ -184,7 +186,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   };
 
   const createEmpty = async () => {
+    abortRef.current?.abort();
     const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setLoading(true);
     const l2 = lemma.trim();
     const notifId = addNotification({ title: `【${l2}】の生成処理中...`, message: '空のWordPackを作成しています', status: 'progress' });
@@ -314,7 +318,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   };
 
   const regenerateWordPack = async (wordPackId: string) => {
+    abortRef.current?.abort();
     const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setLoading(true);
     const lemma3 = data?.lemma || '(unknown)';
     const notifId = addNotification({ title: `【${lemma3}】の生成処理中...`, message: 'WordPackを再生成しています', status: 'progress' });
@@ -399,7 +405,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
   const generateExamples = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common') => {
     if (!currentWordPackId) return;
+    abortRef.current?.abort();
     const ctrl = new AbortController();
+    abortRef.current = ctrl;
     setLoading(true);
     const lemma4 = data?.lemma || '(unknown)';
     const notifId = addNotification({ title: `【${lemma4}】の生成処理中...`, message: `例文（${category}）を2件追加生成しています`, status: 'progress' });
