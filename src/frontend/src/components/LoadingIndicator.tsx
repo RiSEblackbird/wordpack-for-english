@@ -28,16 +28,16 @@ export const LoadingIndicator: React.FC<Props> = ({ label = '読み込み中…'
         .ldg-spinner {
           width: 20px;
           height: 20px;
-          border: 2px solid #cbd5e1;
-          border-top-color: #2563eb;
+          border: 2px solid var(--color-spinner-border);
+          border-top-color: var(--color-spinner-top);
           border-radius: 50%;
           animation: spin 0.9s linear infinite;
         }
         .ldg-wrap { display: flex; align-items: center; gap: 12px; }
         .ldg-texts { display: flex; flex-direction: column; }
         .ldg-label { font-weight: 600; }
-        .ldg-sub { color: #555; font-size: 90%; }
-        .ldg-time { color: #6b7280; font-variant-numeric: tabular-nums; font-size: 90%; }
+        .ldg-sub { color: var(--color-muted); font-size: 90%; }
+        .ldg-time { color: var(--color-subtle); font-variant-numeric: tabular-nums; font-size: 90%; }
       `}</style>
       <div className="ldg-wrap">
         <div className="ldg-spinner" aria-hidden="true" />

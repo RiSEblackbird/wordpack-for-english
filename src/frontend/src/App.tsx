@@ -6,6 +6,7 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { WordPackPanel } from './components/WordPackPanel';
 import { WordPackListPanel } from './components/WordPackListPanel';
 import { SettingsProvider } from './SettingsContext';
+import { useSettings } from './SettingsContext';
 
 type Tab = 'card' | 'sentence' | 'assist' | 'wordpack' | 'wordpacklist' | 'settings';
 
@@ -47,7 +48,43 @@ export const App: React.FC = () => {
   return (
     <SettingsProvider>
       <div>
+        <ThemeApplier />
         <style>{`
+          /* テーマ変数 */
+          body.theme-light {
+            --color-bg: #ffffff;
+            --color-text: #111827;
+            --color-muted: #555555;
+            --color-subtle: #6b7280;
+            --color-border: #e5e7eb;
+            --color-link: #0066cc;
+            --color-surface: #ffffff;
+            --color-overlay-bg: rgba(255,255,255,0.6);
+            --color-inverse-overlay: rgba(0,0,0,0.5);
+            --color-accent: #2563eb;
+            --color-spinner-border: #cbd5e1;
+            --color-spinner-top: #2563eb;
+            --color-level: #2a5bd7;
+            --color-neutral-surface: #f0f0f0;
+          }
+          body.theme-dark {
+            --color-bg: #0b1220;
+            --color-text: #e5e7eb;
+            --color-muted: #a3a3a3;
+            --color-subtle: #9ca3af;
+            --color-border: #1f2937;
+            --color-link: #93c5fd;
+            --color-surface: #111827;
+            --color-overlay-bg: rgba(0,0,0,0.5);
+            --color-inverse-overlay: rgba(0,0,0,0.6);
+            --color-accent: #60a5fa;
+            --color-spinner-border: #374151;
+            --color-spinner-top: #93c5fd;
+            --color-level: #93c5fd;
+            --color-neutral-surface: #374151;
+          }
+          body { background: var(--color-bg); color: var(--color-text); }
+          a { color: var(--color-link); }
           nav { display: flex; gap: 0.5rem; }
           nav button[aria-selected='true'] { font-weight: bold; }
           main, header, footer, nav { padding: 0.5rem; }
@@ -85,4 +122,16 @@ export const App: React.FC = () => {
       </div>
     </SettingsProvider>
   );
+};
+
+const ThemeApplier: React.FC = () => {
+  const { settings } = useSettings();
+  useEffect(() => {
+    const clsLight = 'theme-light';
+    const clsDark = 'theme-dark';
+    const body = document.body;
+    body.classList.remove(clsLight, clsDark);
+    body.classList.add(settings.theme === 'light' ? clsLight : clsDark);
+  }, [settings.theme]);
+  return null;
 };

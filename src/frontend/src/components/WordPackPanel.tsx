@@ -360,11 +360,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       <style>{`
         .wp-container { display: grid; grid-template-columns: minmax(220px, 260px) 1fr; gap: 1rem; }
         .wp-nav { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; gap: 0.25rem; }
-        .wp-nav a { text-decoration: none; color: #06c; }
-        .wp-section { padding-block: 0.25rem; border-top: 1px solid #eee; }
+        .wp-nav a { text-decoration: none; color: var(--color-link); }
+        .wp-section { padding-block: 0.25rem; border-top: 1px solid var(--color-border); }
         .blurred { filter: blur(6px); pointer-events: none; user-select: none; }
-        .selfcheck { position: relative; border: 1px dashed #aaa; padding: 0.5rem; border-radius: 6px; }
-        .selfcheck-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.6); cursor: pointer; font-weight: bold; }
+        .selfcheck { position: relative; border: 1px dashed var(--color-border); padding: 0.5rem; border-radius: 6px; }
+        .selfcheck-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--color-overlay-bg); cursor: pointer; font-weight: bold; }
         .kv { display: grid; grid-template-columns: 10rem 1fr; row-gap: 0.25rem; }
         .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
         @media (max-width: 840px) { .wp-container { grid-template-columns: 1fr; } }
@@ -497,7 +497,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                   <button 
                     onClick={() => regenerateWordPack(currentWordPackId)} 
                     disabled={loading}
-                    style={{ marginLeft: 'auto', backgroundColor: '#f0f0f0' }}
+                    style={{ marginLeft: 'auto', backgroundColor: 'var(--color-neutral-surface)' }}
                   >
                     再生成
                   </button>
@@ -579,12 +579,12 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               <h3>例文</h3>
               <style>{`
                 .ex-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
-                .ex-card { border: 1px solid #e5e5e5; border-radius: 8px; padding: 0.5rem 0.75rem; background: #fff; }
-                .ex-label { display: inline-block; min-width: 3em; color: #666; font-size: 90%; }
+                .ex-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem 0.75rem; background: var(--color-surface); }
+                .ex-label { display: inline-block; min-width: 3em; color: var(--color-subtle); font-size: 90%; }
                 .ex-en { font-weight: 600; line-height: 1.5; }
-                .ex-ja { color: #444; margin-top: 2px; line-height: 1.6; }
-                .ex-grammar { color: #6b6b6b; font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
-                .ex-level { font-weight: 600; margin: 0.25rem 0; color: #2a5bd7; }
+                .ex-ja { color: var(--color-text); opacity: 0.9; margin-top: 2px; line-height: 1.6; }
+                .ex-grammar { color: var(--color-subtle); font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
+                .ex-level { font-weight: 600; margin: 0.25rem 0; color: var(--color-level); }
               `}</style>
               {(['Dev','CS','LLM','Business','Common'] as const).map((k) => (
                 <div key={k} style={{ marginBottom: '0.5rem' }}>
