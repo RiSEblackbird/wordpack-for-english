@@ -4,11 +4,11 @@ import { App } from './App';
 import '@testing-library/jest-dom';
 
 describe('App navigation', () => {
-  it('renders card panel by default and navigates with keyboard', async () => {
+  it('renders saved list by default and navigates with keyboard', async () => {
     render(<App />);
 
-    const cardBtn = screen.getByRole('button', { name: 'カードを取得' });
-    expect(cardBtn).toBeInTheDocument();
+    // デフォルトは 保存済み 一覧
+    expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument();
 
     const user = userEvent.setup();
     await act(async () => {

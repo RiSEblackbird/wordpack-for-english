@@ -11,7 +11,7 @@ import { useSettings } from './SettingsContext';
 type Tab = 'card' | 'sentence' | 'assist' | 'wordpack' | 'wordpacklist' | 'settings';
 
 export const App: React.FC = () => {
-  const [tab, setTab] = useState<Tab>('card');
+  const [tab, setTab] = useState<Tab>('wordpacklist');
   const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
   const focusRef = useRef<HTMLElement>(null);
 
