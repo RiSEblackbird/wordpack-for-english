@@ -179,10 +179,9 @@ describe('WordPackListPanel modal preview', () => {
     // モーダルが開くまで待機
     await waitFor(() => expect(screen.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeInTheDocument(), { timeout: 5000 });
     
-    // WordPackの詳細が読み込まれるまで待機（タイムアウトを延長）
-    await waitFor(() => expect(screen.getByText((content, element) => {
-      return element?.textContent?.includes('学習カード要点') || false;
-    })).toBeInTheDocument(), { timeout: 10000 });
+    // WordPackの詳細が読み込まれるまで待機（モーダル内の内容を一意に特定）
+    const modalContent = await waitFor(() => screen.getByTestId('modal-wordpack-content'), { timeout: 10000 });
+    expect(modalContent).toHaveTextContent('学習カード要点');
 
     // 閉じる
     await act(async () => {

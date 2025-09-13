@@ -361,18 +361,20 @@ export const WordPackListPanel: React.FC = () => {
         title="WordPack プレビュー"
       >
         {previewWordPackId ? (
-          <WordPackPanel
-            focusRef={modalFocusRef}
-            selectedWordPackId={previewWordPackId}
-            selectedMeta={(() => {
-              const m = wordPacks.find(w => w.id === previewWordPackId);
-              return m ? { created_at: m.created_at, updated_at: m.updated_at } : null;
-            })()}
-            onWordPackGenerated={async () => {
-              // 再生成後に一覧を最新化（更新日時の整合）
-              await loadWordPacks(offset);
-            }}
-          />
+          <div data-testid="modal-wordpack-content">
+            <WordPackPanel
+              focusRef={modalFocusRef}
+              selectedWordPackId={previewWordPackId}
+              selectedMeta={(() => {
+                const m = wordPacks.find(w => w.id === previewWordPackId);
+                return m ? { created_at: m.created_at, updated_at: m.updated_at } : null;
+              })()}
+              onWordPackGenerated={async () => {
+                // 再生成後に一覧を最新化（更新日時の整合）
+                await loadWordPacks(offset);
+              }}
+            />
+          </div>
         ) : null}
       </Modal>
     </section>
