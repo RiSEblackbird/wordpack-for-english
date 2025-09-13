@@ -121,7 +121,26 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
         reasoning_override=getattr(req, 'reasoning', None),
         text_override=getattr(req, 'text', None),
     )
-    flow = WordPackFlow(chroma_client=chroma_client, llm=llm)
+    # 例文の LLM メタ付与用に、モデル名とパラメータ文字列を組み立て
+    def _format_llm_params_for_request() -> str | None:
+        try:
+            parts: list[str] = []
+            if getattr(req, 'temperature', None) is not None:
+                parts.append(f"temperature={float(req.temperature):.2f}")
+            r = getattr(req, 'reasoning', None) or {}
+            if isinstance(r, dict) and r.get('effort'):
+                parts.append(f"reasoning.effort={r.get('effort')}")
+            t = getattr(req, 'text', None) or {}
+            if isinstance(t, dict) and t.get('verbosity'):
+                parts.append(f"text.verbosity={t.get('verbosity')}")
+            return ";".join(parts) if parts else None
+        except Exception:
+            return None
+    llm_info = {
+        "model": getattr(req, 'model', None) or settings.llm_model,
+        "params": _format_llm_params_for_request(),
+    }
+    flow = WordPackFlow(chroma_client=chroma_client, llm=llm, llm_info=llm_info)
     try:
         logger.info(
             "wordpack_generate_request",
@@ -362,7 +381,26 @@ async def regenerate_word_pack(
         reasoning_override=getattr(req, 'reasoning', None),
         text_override=getattr(req, 'text', None),
     )
-    flow = WordPackFlow(chroma_client=chroma_client, llm=llm)
+    # 例文の LLM メタ付与用に、モデル名とパラメータ文字列を組み立て
+    def _format_llm_params_for_request() -> str | None:
+        try:
+            parts: list[str] = []
+            if getattr(req, 'temperature', None) is not None:
+                parts.append(f"temperature={float(req.temperature):.2f}")
+            r = getattr(req, 'reasoning', None) or {}
+            if isinstance(r, dict) and r.get('effort'):
+                parts.append(f"reasoning.effort={r.get('effort')}")
+            t = getattr(req, 'text', None) or {}
+            if isinstance(t, dict) and t.get('verbosity'):
+                parts.append(f"text.verbosity={t.get('verbosity')}")
+            return ";".join(parts) if parts else None
+        except Exception:
+            return None
+    llm_info = {
+        "model": getattr(req, 'model', None) or settings.llm_model,
+        "params": _format_llm_params_for_request(),
+    }
+    flow = WordPackFlow(chroma_client=chroma_client, llm=llm, llm_info=llm_info)
     try:
         word_pack = flow.run(
             lemma,

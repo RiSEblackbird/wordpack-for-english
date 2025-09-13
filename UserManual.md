@@ -174,6 +174,7 @@
 - 件数: Dev/CS/LLM は各5文、Business は3文、Common は6文を目安に表示（不足時は空のまま）。Common はカジュアルな日常会話用例に限定（フォーマル表現は避ける）。
 - 英文は原則 約75語（±5語）。
 - 各例文には任意で `文法: grammar_ja` が付与されます。UI上は「解説」としてカード下部にまとまって表示されます。
+- 付加メタデータ（任意）: `category`（`Dev|CS|LLM|Business|Common` のいずれか）、`llm_model`（生成に用いたモデル名）、`llm_params`（主要パラメータを連結した文字列）。既存UIは `en/ja/grammar_ja` のみを参照するため、表示は従来どおりです。
 
 引用と確度（citations/confidence）の読み方（PR5）:
 - 引用（citations）: OpenAI LLM が生成した情報の参照元。LLM生成の情報は `{"source": "openai_llm"}` として記録されます。

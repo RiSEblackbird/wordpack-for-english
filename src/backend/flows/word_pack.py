@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 import json
 import re
 
@@ -16,6 +16,7 @@ from ..models.word import (
     Examples,
     ContrastItem,
     RegenerateScope,
+    ExampleCategory,
 )
 from ..models.common import ConfidenceLevel, Citation
 from ..pronunciation import generate_pronunciation
@@ -32,7 +33,7 @@ class WordPackFlow:
     strict モードではエラーを送出する。
     """
 
-    def __init__(self, chroma_client: Any | None = None, *, llm: Any | None = None) -> None:
+    def __init__(self, chroma_client: Any | None = None, *, llm: Any | None = None, llm_info: Optional[dict[str, Any]] = None) -> None:
         """ベクトルDB クライアントを受け取り、LangGraph を初期化。
 
         Parameters
@@ -42,6 +43,8 @@ class WordPackFlow:
         """
         self.chroma = chroma_client
         self.llm = llm
+        # 生成に使用した LLM のメタ（モデル名やパラメータ文字列表現）
+        self._llm_info: dict[str, Any] = llm_info or {}
         self.graph = create_state_graph()
 
     # --- 発音推定（cmudict/g2p-en 利用、フォールバック付き） ---
@@ -295,7 +298,18 @@ class WordPackFlow:
             # examples
             try:
                 ex = llm_payload.get("examples") or {}
-                def _ex_list(v: Any) -> List[Examples.ExampleItem]:  # type: ignore[attr-defined]
+
+                def _llm_meta_values() -> tuple[Optional[str], Optional[str]]:
+                    model_name = None
+                    params_str = None
+                    try:
+                        model_name = str(self._llm_info.get("model") or "").strip() or None
+                        params_str = str(self._llm_info.get("params") or "").strip() or None
+                    except Exception:
+                        pass
+                    return model_name, params_str
+
+                def _ex_list(v: Any, category: ExampleCategory) -> List[Examples.ExampleItem]:  # type: ignore[attr-defined]
                     out: List[Examples.ExampleItem] = []  # type: ignore[name-defined]
                     if isinstance(v, list):
                         for item in v:
@@ -304,13 +318,22 @@ class WordPackFlow:
                                 ja = str(item.get("ja") or "").strip()
                                 grammar_ja = str(item.get("grammar_ja") or "").strip() or None
                                 if en and ja:
-                                    out.append(Examples.ExampleItem(en=en, ja=ja, grammar_ja=grammar_ja))  # type: ignore[attr-defined]
+                                    m, p = _llm_meta_values()
+                                    out.append(Examples.ExampleItem(  # type: ignore[attr-defined]
+                                        en=en,
+                                        ja=ja,
+                                        grammar_ja=grammar_ja,
+                                        category=category,
+                                        llm_model=m,
+                                        llm_params=p,
+                                    ))
                     return out
-                dev_list = _ex_list(ex.get("Dev"))
-                cs_list = _ex_list(ex.get("CS"))
-                llm_list = _ex_list(ex.get("LLM"))
-                business_list = _ex_list(ex.get("Business"))
-                common_list = _ex_list(ex.get("Common"))
+
+                dev_list = _ex_list(ex.get("Dev"), ExampleCategory.Dev)
+                cs_list = _ex_list(ex.get("CS"), ExampleCategory.CS)
+                llm_list = _ex_list(ex.get("LLM"), ExampleCategory.LLM)
+                business_list = _ex_list(ex.get("Business"), ExampleCategory.Business)
+                common_list = _ex_list(ex.get("Common"), ExampleCategory.Common)
                 # 仕様: Dev/CS/LLM は最大5件、Business は最大3件、Common は最大6件（不足はそのまま、ダミーを入れない）
                 examples = Examples(
                     Dev=dev_list[:5],

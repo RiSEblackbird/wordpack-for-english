@@ -106,11 +106,23 @@ class ContrastItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class ExampleCategory(str, Enum):
+    Dev = "Dev"
+    CS = "CS"
+    LLM = "LLM"
+    Business = "Business"
+    Common = "Common"
+
+
 class Examples(BaseModel):
     class ExampleItem(BaseModel):
         en: str
         ja: str
         grammar_ja: Optional[str] = None
+        # 追加メタ: カテゴリと生成に使用した LLM 情報
+        category: Optional[ExampleCategory] = Field(default=None, description="例文カテゴリ（後方互換のため任意）")
+        llm_model: Optional[str] = Field(default=None, description="例文生成に使用したLLMモデル名（任意）")
+        llm_params: Optional[str] = Field(default=None, description="LLMパラメータ情報を連結した文字列（任意）")
 
     Dev: List[ExampleItem] = Field(default_factory=list)
     CS: List[ExampleItem] = Field(default_factory=list)

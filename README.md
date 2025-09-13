@@ -195,7 +195,11 @@ FastAPI アプリは `src/backend/main.py`。
   - レスポンス例: `{ "id": "wp:insight:a1b2c3d4" }`
   - 周辺知識パック生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RPを直接生成し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
-  - 例文: Dev/CS/LLM/Business/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。カテゴリ定義は次の通り：
+  - 例文: Dev/CS/LLM/Business/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja?, category?, llm_model?, llm_params? }`。カテゴリ定義は次の通り：
+    - `category` はサーバが付与するカテゴリEnum（`Dev|CS|LLM|Business|Common`）。後方互換のため任意。
+    - `llm_model` は例文生成に使用したモデル名（任意）。
+    - `llm_params` は当該リクエスト時の主要パラメータを連結した文字列（例: `"temperature=0.60;reasoning.effort=minimal;text.verbosity=medium"`）（任意）。
+    - 既存クライアントは `en/ja/grammar_ja` のみを参照しており、UI変更は不要です。
     - Dev … ITエンジニアの開発現場（アプリ開発）の文脈
     - CS … 計算機科学の学術研究の文脈
     - LLM … LLMの応用/研究の文脈
