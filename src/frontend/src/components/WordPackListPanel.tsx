@@ -90,7 +90,18 @@ export const WordPackListPanel: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     try {
-      return new Date(dateStr).toLocaleString('ja-JP');
+      const hasTZ = /[Zz]|[+-]\d{2}:?\d{2}$/.test(dateStr);
+      const s = hasTZ ? dateStr : `${dateStr}Z`;
+      return new Date(s).toLocaleString('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      } as Intl.DateTimeFormatOptions);
     } catch {
       return dateStr;
     }
@@ -207,6 +218,14 @@ export const WordPackListPanel: React.FC = () => {
           <WordPackPanel
             focusRef={modalFocusRef}
             selectedWordPackId={previewWordPackId}
+            selectedMeta={(() => {
+              const m = wordPacks.find(w => w.id === previewWordPackId);
+              return m ? { created_at: m.created_at, updated_at: m.updated_at } : null;
+            })()}
+            onWordPackGenerated={async () => {
+              // 再生成後に一覧を最新化（更新日時の整合）
+              await loadWordPacks(offset);
+            }}
           />
         ) : null}
       </Modal>

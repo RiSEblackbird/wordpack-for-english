@@ -7,6 +7,7 @@ interface Props {
   focusRef: React.RefObject<HTMLElement>;
   selectedWordPackId?: string | null;
   onWordPackGenerated?: (wordPackId: string) => void;
+  selectedMeta?: { created_at: string; updated_at: string } | null;
 }
 
 // --- API types ---
@@ -69,7 +70,7 @@ type PopularCard = { id: string; front: string; back: string };
 
 interface CardMeta { repetitions: number; interval_days: number; due_at: string }
 
-export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated }) => {
+export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta }) => {
   const { settings, setSettings } = useSettings();
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
@@ -86,6 +87,26 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [cardMeta, setCardMeta] = useState<CardMeta | null>(null);
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
   const [model, setModel] = useState<string>('gpt-5-mini');
+
+  const formatDate = (dateStr?: string | null) => {
+    if (!dateStr) return '-';
+    try {
+      const hasTZ = /[Zz]|[+-]\d{2}:?\d{2}$/.test(dateStr);
+      const s = hasTZ ? dateStr : `${dateStr}Z`;
+      return new Date(s).toLocaleString('ja-JP', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      } as Intl.DateTimeFormatOptions);
+    } catch {
+      return dateStr;
+    }
+  };
 
   const sectionIds = useMemo(
     () => [
@@ -328,6 +349,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         setCardMeta(null); // 未登録
       }
       setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
+      try {
+        onWordPackGenerated?.(wordPackId);
+      } catch {}
     } catch (e) {
       if (ctrl.signal.aborted) return;
       let m = e instanceof ApiError ? e.message : 'WordPackの再生成に失敗しました';
@@ -523,6 +547,12 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           <div>
             <section id="overview" className="wp-section">
               <h3>概要</h3>
+              {selectedMeta ? (
+                <div className="kv" style={{ marginBottom: '0.5rem' }}>
+                  <div>作成</div><div>{formatDate(selectedMeta.created_at)}</div>
+                  <div>更新</div><div>{formatDate(selectedMeta.updated_at)}</div>
+                </div>
+              ) : null}
               <div className="kv">
                 <div>見出し語</div>
                 <div><strong>{data.lemma}</strong></div>
@@ -757,7 +787,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 <div className="kv">
                   <div>repetitions</div><div>{cardMeta.repetitions}</div>
                   <div>interval_days</div><div>{cardMeta.interval_days}</div>
-                  <div>due_at</div><div>{new Date(cardMeta.due_at).toLocaleString()}</div>
+                  <div>due_at</div><div>{formatDate(cardMeta.due_at)}</div>
                 </div>
               ) : (
                 <>
