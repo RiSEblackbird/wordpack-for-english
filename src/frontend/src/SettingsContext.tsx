@@ -9,6 +9,7 @@ export interface Settings {
   temperature: number;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   textVerbosity?: 'low' | 'medium' | 'high';
+  theme: 'light' | 'dark';
 }
 
 interface SettingsValue {
@@ -19,15 +20,21 @@ interface SettingsValue {
 const SettingsContext = React.createContext<SettingsValue | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<Settings>({
-    apiBase: '/api',
-    pronunciationEnabled: true,
-    regenerateScope: 'all',
-    autoAdvanceAfterGrade: false,
-    requestTimeoutMs: 60000,
-    temperature: 0.6,
-    reasoningEffort: 'minimal',
-    textVerbosity: 'medium',
+  const [settings, setSettings] = useState<Settings>(() => {
+    const savedTheme = (() => {
+      try { return localStorage.getItem('wp.theme') || undefined; } catch { return undefined; }
+    })();
+    return {
+      apiBase: '/api',
+      pronunciationEnabled: true,
+      regenerateScope: 'all',
+      autoAdvanceAfterGrade: false,
+      requestTimeoutMs: 60000,
+      temperature: 0.6,
+      reasoningEffort: 'minimal',
+      textVerbosity: 'medium',
+      theme: savedTheme === 'light' ? 'light' : 'dark',
+    };
   });
 
   // 起動時にバックエンドの実行時設定でタイムアウトを同期
@@ -55,6 +62,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       aborted = true;
     };
   }, []);
+  // テーマの永続化
+  useEffect(() => {
+    try { localStorage.setItem('wp.theme', settings.theme); } catch { /* ignore */ }
+  }, [settings.theme]);
   return (
     <SettingsContext.Provider value={{ settings, setSettings }}>
       {children}

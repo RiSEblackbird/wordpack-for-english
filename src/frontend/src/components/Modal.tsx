@@ -26,7 +26,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.5)',
+        background: 'var(--color-inverse-overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -42,12 +42,12 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
           width: 'min(1100px, 96vw)',
           maxHeight: '90vh',
           overflow: 'auto',
-          background: 'white',
+          background: 'var(--color-surface)',
           borderRadius: 8,
           boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1rem', borderBottom: '1px solid #eee' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1rem', borderBottom: '1px solid var(--color-border)' }}>
           <strong style={{ fontSize: '1.1rem' }}>{title}</strong>
           <button onClick={onClose} style={{ marginLeft: 'auto' }} aria-label="閉じる">閉じる</button>
         </div>

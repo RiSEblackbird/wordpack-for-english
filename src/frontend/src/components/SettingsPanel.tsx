@@ -11,6 +11,19 @@ export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
     <section>
       <div>
         <label>
+          カラーテーマ
+          <select
+            ref={focusRef as React.RefObject<HTMLSelectElement>}
+            value={settings.theme}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSettings({ ...settings, theme: e.target.value as 'light' | 'dark' })}
+          >
+            <option value="dark">ダークカラー（既定）</option>
+            <option value="light">ライトカラー</option>
+          </select>
+        </label>
+      </div>
+      <div>
+        <label>
           発音を有効化
           <input
             ref={focusRef as React.RefObject<HTMLInputElement>}
