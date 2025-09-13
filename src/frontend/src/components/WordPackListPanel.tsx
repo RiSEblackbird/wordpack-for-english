@@ -21,6 +21,9 @@ interface WordPackListItem {
   };
 }
 
+type SortKey = 'created_at' | 'updated_at' | 'lemma' | 'total_examples';
+type SortOrder = 'asc' | 'desc';
+
 interface WordPackListResponse {
   items: WordPackListItem[];
   total: number;
@@ -41,6 +44,8 @@ export const WordPackListPanel: React.FC = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewWordPackId, setPreviewWordPackId] = useState<string | null>(null);
   const modalFocusRef = useRef<HTMLElement>(null);
+  const [sortKey, setSortKey] = useState<SortKey>('updated_at');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
   const loadWordPacks = async (newOffset: number = 0) => {
     abortRef.current?.abort();
@@ -115,6 +120,51 @@ export const WordPackListPanel: React.FC = () => {
     }
   };
 
+  const getTotalExamples = (wp: WordPackListItem): number => {
+    if (!wp.examples_count) return 0;
+    return Object.values(wp.examples_count).reduce((sum, count) => sum + count, 0);
+  };
+
+  const sortWordPacks = (packs: WordPackListItem[]): WordPackListItem[] => {
+    return [...packs].sort((a, b) => {
+      let aValue: string | number;
+      let bValue: string | number;
+
+      switch (sortKey) {
+        case 'created_at':
+        case 'updated_at':
+          aValue = new Date(a[sortKey]).getTime();
+          bValue = new Date(b[sortKey]).getTime();
+          break;
+        case 'lemma':
+          aValue = a.lemma.toLowerCase();
+          bValue = b.lemma.toLowerCase();
+          break;
+        case 'total_examples':
+          aValue = getTotalExamples(a);
+          bValue = getTotalExamples(b);
+          break;
+        default:
+          return 0;
+      }
+
+      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const handleSortChange = (newSortKey: SortKey) => {
+    if (sortKey === newSortKey) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(newSortKey);
+      setSortOrder('desc'); // 新しいキーでは降順をデフォルトに
+    }
+  };
+
+  const sortedWordPacks = sortWordPacks(wordPacks);
+
   const hasNext = offset + limit < total;
   const hasPrev = offset > 0;
 
@@ -123,6 +173,11 @@ export const WordPackListPanel: React.FC = () => {
       <style>{`
         .wp-list-container { max-width: 100%; }
         .wp-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .wp-sort-controls { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+        .wp-sort-select { padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; background: white; }
+        .wp-sort-button { padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; }
+        .wp-sort-button:hover { background: #f5f5f5; }
+        .wp-sort-button.active { background: #e3f2fd; border-color: #2196f3; }
         .wp-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
         .wp-card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background:rgb(173, 159, 211); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
         .wp-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
@@ -138,6 +193,7 @@ export const WordPackListPanel: React.FC = () => {
         @media (max-width: 640px) { 
           .wp-list-grid { grid-template-columns: 1fr; }
           .wp-card-header { flex-direction: column; align-items: flex-start; }
+          .wp-sort-controls { flex-direction: column; align-items: stretch; }
         }
       `}</style>
 
@@ -146,6 +202,35 @@ export const WordPackListPanel: React.FC = () => {
           <h2>保存済みWordPack一覧</h2>
           <button onClick={() => loadWordPacks(offset)} disabled={loading}>
             更新
+          </button>
+        </div>
+
+        <div className="wp-sort-controls">
+          <label htmlFor="sort-select">並び順:</label>
+          <select 
+            id="sort-select"
+            className="wp-sort-select"
+            value={sortKey}
+            onChange={(e) => handleSortChange(e.target.value as SortKey)}
+          >
+            <option value="updated_at">更新日時</option>
+            <option value="created_at">作成日時</option>
+            <option value="lemma">単語名</option>
+            <option value="total_examples">例文数</option>
+          </select>
+          <button 
+            className={`wp-sort-button ${sortOrder === 'desc' ? 'active' : ''}`}
+            onClick={() => setSortOrder('desc')}
+            title="降順"
+          >
+            ↓
+          </button>
+          <button 
+            className={`wp-sort-button ${sortOrder === 'asc' ? 'active' : ''}`}
+            onClick={() => setSortOrder('asc')}
+            title="昇順"
+          >
+            ↑
           </button>
         </div>
 
@@ -165,7 +250,7 @@ export const WordPackListPanel: React.FC = () => {
         ) : (
           <>
             <div className="wp-list-grid">
-              {wordPacks.map((wp) => (
+              {sortedWordPacks.map((wp) => (
                 <div
                   key={wp.id}
                   className="wp-card"
@@ -276,18 +361,20 @@ export const WordPackListPanel: React.FC = () => {
         title="WordPack プレビュー"
       >
         {previewWordPackId ? (
-          <WordPackPanel
-            focusRef={modalFocusRef}
-            selectedWordPackId={previewWordPackId}
-            selectedMeta={(() => {
-              const m = wordPacks.find(w => w.id === previewWordPackId);
-              return m ? { created_at: m.created_at, updated_at: m.updated_at } : null;
-            })()}
-            onWordPackGenerated={async () => {
-              // 再生成後に一覧を最新化（更新日時の整合）
-              await loadWordPacks(offset);
-            }}
-          />
+          <div data-testid="modal-wordpack-content">
+            <WordPackPanel
+              focusRef={modalFocusRef}
+              selectedWordPackId={previewWordPackId}
+              selectedMeta={(() => {
+                const m = wordPacks.find(w => w.id === previewWordPackId);
+                return m ? { created_at: m.created_at, updated_at: m.updated_at } : null;
+              })()}
+              onWordPackGenerated={async () => {
+                // 再生成後に一覧を最新化（更新日時の整合）
+                await loadWordPacks(offset);
+              }}
+            />
+          </div>
         ) : null}
       </Modal>
     </section>
