@@ -323,14 +323,6 @@ async def get_word_pack(word_pack_id: str) -> WordPack:
     lemma, data, created_at, updated_at = result
     try:
         word_pack_dict = json.loads(data)
-        # 互換: 旧スキーマの examples.Tech を新スキーマ Business にマップ
-        try:
-            ex = word_pack_dict.get("examples")
-            if isinstance(ex, dict) and ("Business" not in ex) and ("Tech" in ex):
-                ex["Business"] = ex.get("Tech")
-                ex.pop("Tech", None)
-        except Exception:
-            pass
         return WordPack.model_validate(word_pack_dict)
     except (json.JSONDecodeError, ValueError) as exc:
         raise HTTPException(status_code=500, detail=f"Invalid WordPack data: {exc}")
@@ -532,109 +524,54 @@ async def generate_examples_for_word_pack(
         text_override=getattr(req, 'text', None),
     )
 
-    def _format_llm_params_for_request() -> str | None:
-        try:
-            parts: list[str] = []
-            if getattr(req, 'temperature', None) is not None:
-                parts.append(f"temperature={float(req.temperature):.2f}")
-            r = getattr(req, 'reasoning', None) or {}
-            if isinstance(r, dict) and r.get('effort'):
-                parts.append(f"reasoning.effort={r.get('effort')}")
-            t = getattr(req, 'text', None) or {}
-            if isinstance(t, dict) and t.get('verbosity'):
-                parts.append(f"text.verbosity={t.get('verbosity')}")
-            return ";".join(parts) if parts else None
-        except Exception:
-            return None
-
-    llm_model_name = getattr(req, 'model', None) or settings.llm_model
-    llm_params_str = _format_llm_params_for_request()
-
-    # カテゴリ特化のガイドライン（日本語）
-    def _cat_rule(cat: str) -> str:
-        if cat == "Dev":
-            return "ソフトウェア開発の文脈（コーディング/レビュー/CI/CD/デプロイ/障害対応）。実務的で具体。"
-        if cat == "CS":
-            return "計算機科学の学術文脈（理論/アルゴリズム/証明）。精密・中立・フォーマル。"
-        if cat == "LLM":
-            return "機械学習/LLM 文脈（プロンプト/トークン/埋め込み/推論/評価）。技術的に正確。"
-        if cat == "Business":
-            return "ビジネス文脈（関係者/KPI/スケジュール/調整）。丁寧で簡潔、スラング禁止。"
-        if cat == "Common":
-            return "日常会話（友人/同僚とのチャット/通話）。ビジネス/過度なフォーマルさを避け、軽い口語を適度に。"
-        return ""
-
-    prompt = (
-        "あなたは辞書編纂者かつ日英バイリンガルのライティング指導者です。説明文は不要、JSONオブジェクト1個のみを返してください。\n"
-        f"対象の語（lemma）: {lemma}（英語文にはこの語を必ず明示的に含める）\n"
-        f"カテゴリ: {category.value}（Dev|CS|LLM|Business|Common）\n"
-        f"カテゴリ規則: {_cat_rule(category.value)}\n\n"
-        "スキーマ（キーと型は厳密一致）:\n"
-        "{\n  \"examples\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ]\n}\n"
-        "制約:\n"
-        "- examples はちょうど2件。\n"
-        "- en は50〜60語。必ず lemma を含める。\n"
-        "- ja は忠実で自然な日本語訳。\n"
-        "- grammar_ja は2段落構成：\n"
-        "  1) 品詞分解：形態素/句を『／』で区切り、語の後に【品詞/統語役割】を付す。必要に応じて内部構造は『＝』で示す。\n"
-        "  2) 解説：文の核（S/V/O/C）、修飾関係（手段/目的/時/理由など）、冠詞/可算不可算の扱い等を簡潔に説明。\n"
-        "- 既存の例文は一切参照・引用しない（このリクエストは独立）。\n"
-        "- コードフェンス等は使わず、厳密にJSONのみを返す。\n"
-    )
-
+    # 統合フロー（LangGraph駆動）でカテゴリ別の例文を生成して即保存
+    # 失敗した場合のみ、後続の従来プロンプト経路にフォールバック
     try:
-        out = llm.complete(prompt)  # type: ignore[attr-defined]
+        def _fmt_llm_params_here() -> str | None:
+            try:
+                parts: list[str] = []
+                if getattr(req, 'temperature', None) is not None:
+                    parts.append(f"temperature={float(req.temperature):.2f}")
+                r = getattr(req, 'reasoning', None) or {}
+                if isinstance(r, dict) and r.get('effort'):
+                    parts.append(f"reasoning.effort={r.get('effort')}")
+                t = getattr(req, 'text', None) or {}
+                if isinstance(t, dict) and t.get('verbosity'):
+                    parts.append(f"text.verbosity={t.get('verbosity')}")
+                return ";".join(parts) if parts else None
+            except Exception:
+                return None
+
+        llm_info = {
+            "model": getattr(req, 'model', None) or settings.llm_model,
+            "params": _fmt_llm_params_here(),
+        }
+        flow = WordPackFlow(chroma_client=None, llm=llm, llm_info=llm_info)
+        plan = {category: 2}
+        gen = flow.generate_examples_for_categories(lemma, plan)
+        items_model = gen.get(category, [])
+        items: list[dict[str, object]] = []
+        for it in items_model:
+            items.append({
+                "en": it.en,
+                "ja": it.ja,
+                "grammar_ja": it.grammar_ja,
+                "llm_model": it.llm_model,
+                "llm_params": it.llm_params,
+            })
+        if not items:
+            raise HTTPException(status_code=502, detail="LLM returned no usable examples")
+        added = store.append_examples(word_pack_id, category.value, items)
+        return {
+            "message": "Examples generated and appended",
+            "added": added,
+            "category": category.value,
+            "items": items,
+        }
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"LLM request failed: {exc}") from exc
+        # 統合フロー以外の経路は廃止
+        raise HTTPException(status_code=502, detail=f"Failed to generate examples (unified flow): {exc}")
 
-    import re, json as _json
-
-    def _strip_code_fences(text: str) -> str:
-        t = text.strip()
-        t = re.sub(r"^```(?:json)?\\s*", "", t, flags=re.IGNORECASE)
-        t = re.sub(r"```\\s*$", "", t)
-        return t.strip()
-
-    raw = out if isinstance(out, str) else ""
-    raw = _strip_code_fences(raw)
-
-    try:
-        parsed = _json.loads(raw)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Failed to parse LLM JSON: {exc}") from exc
-
-    if isinstance(parsed, list):
-        ex_list = parsed
-    elif isinstance(parsed, dict) and isinstance(parsed.get("examples"), list):
-        ex_list = parsed.get("examples")
-    else:
-        raise HTTPException(status_code=502, detail="Invalid LLM JSON shape (no examples)")
-
-    items = []
-    for item in ex_list[:2]:
-        if not isinstance(item, dict):
-            continue
-        en = str(item.get("en") or "").strip()
-        ja = str(item.get("ja") or "").strip()
-        if not en or not ja:
-            continue
-        grammar_ja = (str(item.get("grammar_ja") or "").strip() or None)
-        items.append({
-            "en": en,
-            "ja": ja,
-            "grammar_ja": grammar_ja,
-            "llm_model": llm_model_name,
-            "llm_params": llm_params_str,
-        })
-
-    if not items:
-        raise HTTPException(status_code=502, detail="LLM returned no usable examples")
-
-    added = store.append_examples(word_pack_id, category.value, items)
-
-    return {
-        "message": "Examples generated and appended",
-        "added": added,
-        "category": category.value,
-        "items": items,
-    }
+    
