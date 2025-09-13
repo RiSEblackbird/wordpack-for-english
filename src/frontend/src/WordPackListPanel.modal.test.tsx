@@ -19,12 +19,38 @@ describe('WordPackListPanel modal preview', () => {
         );
       }
       if (url.startsWith('/api/word/packs?')) {
+        const now = new Date();
+        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+        
         return new Response(
           JSON.stringify({
             items: [
-              { id: 'wp:test:1', lemma: 'delta', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), is_empty: true },
+              { 
+                id: 'wp:test:1', 
+                lemma: 'delta', 
+                created_at: twoDaysAgo.toISOString(), 
+                updated_at: yesterday.toISOString(), 
+                is_empty: true 
+              },
+              { 
+                id: 'wp:test:2', 
+                lemma: 'alpha', 
+                created_at: yesterday.toISOString(), 
+                updated_at: now.toISOString(), 
+                is_empty: false,
+                examples_count: { Dev: 2, CS: 1, LLM: 0, Business: 3, Common: 4 }
+              },
+              { 
+                id: 'wp:test:3', 
+                lemma: 'beta', 
+                created_at: now.toISOString(), 
+                updated_at: twoDaysAgo.toISOString(), 
+                is_empty: false,
+                examples_count: { Dev: 1, CS: 2, LLM: 1, Business: 1, Common: 2 }
+              },
             ],
-            total: 1,
+            total: 3,
             limit: 20,
             offset: 0,
           }),
@@ -103,7 +129,7 @@ describe('WordPackListPanel modal preview', () => {
     await waitFor(() => expect(screen.getByText('例文未生成')).toBeInTheDocument());
 
     await act(async () => {
-      await user.click(screen.getByTestId('wp-card'));
+      await user.click(screen.getAllByTestId('wp-card')[0]);
     });
 
     // モーダルが開き、WordPack の概要が表示される
@@ -115,6 +141,56 @@ describe('WordPackListPanel modal preview', () => {
       await user.click(screen.getByRole('button', { name: '閉じる' }));
     });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'WordPack プレビュー' })).not.toBeInTheDocument());
+  });
+
+  it('ソート機能が正しく動作する', async () => {
+    setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+
+    // WordPack タブへ
+    await act(async () => {
+      await user.keyboard('{Alt>}{4}{/Alt}');
+    });
+
+    // 一覧が表示されるまで待機
+    await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(3));
+
+    // デフォルトは更新日時降順（alpha, beta, delta）
+    const cards = screen.getAllByTestId('wp-card');
+    expect(cards[0]).toHaveTextContent('alpha');
+    expect(cards[1]).toHaveTextContent('beta');
+    expect(cards[2]).toHaveTextContent('delta');
+
+    // 単語名でソート（昇順）
+    await act(async () => {
+      await user.selectOptions(screen.getByLabelText('並び順:'), 'lemma');
+    });
+    await act(async () => {
+      await user.click(screen.getByTitle('昇順'));
+    });
+
+    // alpha, beta, delta の順になる
+    const sortedCards = screen.getAllByTestId('wp-card');
+    expect(sortedCards[0]).toHaveTextContent('alpha');
+    expect(sortedCards[1]).toHaveTextContent('beta');
+    expect(sortedCards[2]).toHaveTextContent('delta');
+
+    // 例文数でソート（降順）
+    await act(async () => {
+      await user.selectOptions(screen.getByLabelText('並び順:'), 'total_examples');
+    });
+    await act(async () => {
+      await user.click(screen.getByTitle('降順'));
+    });
+
+    // alpha(10), beta(7), delta(0) の順になる
+    const exampleSortedCards = screen.getAllByTestId('wp-card');
+    expect(exampleSortedCards[0]).toHaveTextContent('alpha');
+    expect(exampleSortedCards[1]).toHaveTextContent('beta');
+    expect(exampleSortedCards[2]).toHaveTextContent('delta');
   });
 });
 
