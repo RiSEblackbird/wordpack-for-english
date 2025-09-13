@@ -18,7 +18,7 @@
   # リポジトリのルートで
   docker compose up --build
   ```
-  - 画面（フロントエンド）にアクセス: `http://127.0.0.1:5173`
+  - 画面（フロントエンド）にアクセス: `http://127.0.0.1:${FRONTEND_PORT:-5173}`
 
 ### A-3. 新機能（保存）
 - 生成した WordPack は自動で保存されます
@@ -26,10 +26,10 @@
 
 ### A-4. 画面の見かた（共通）
 - ヘッダー: アプリ名 `WordPack`
-- ナビゲーション: 「カード / 文 / アシスト / WordPack / 設定」
+- ナビゲーション: 「WordPack / 設定」
 - 初期表示: 「WordPack」タブ（見出し語入力と同ページ下部に保存済み一覧）
 - キーボード操作:
-  - Alt+1..5: タブ切替（1=カード, 2=文, 3=アシスト, 4=WordPack, 5=設定）
+  - Alt+1..2: タブ切替（1=WordPack, 2=設定）
   - `/`: 主要入力欄へフォーカス
 - 通知表示（右下）: 生成の開始〜完了まで、画面右下に小さな通知カードを表示します。進行中はスピナー、成功で ✓、エラーで ✕ に切り替わります。複数件は積み重なって表示され、✕ ボタンで明示的に閉じるまで自動で消えません。ページ移動/リロード後も表示は維持されます。
 - エラー表示: 画面上部の帯または右下の通知カードに表示（内容は同等）
@@ -41,17 +41,6 @@
   - temperature（0.0〜1.0、デフォルト 0.6）
   - カラーテーマ（ダーク/ライト）
 
-### A-6. 文（自作文）パネルの使い方
-1) 「文」を選択
-2) 英文を入力（例: `I researches about AI.`）
-3) 「チェック」をクリック
-4) 結果として、指摘点/修正文/ミニ演習などのフィードバックが表示されます
-
-### A-7. アシスト（段落注釈）パネルの使い方
-1) 「アシスト」を選択
-2) 英文の段落を貼り付け
-3) 「アシスト」をクリック
-4) 文分割・語注・パラフレーズなどの詳細が表示されます
 
 ### A-8. WordPack パネル（学習カード連携）
 1) 「WordPack」を選択
@@ -80,17 +69,10 @@
   - 不要なら「削除」で削除（必要に応じて再生成も可能）
   - 多い場合は画面下部のページネーションで移動（現在件数/総件数を表示）
 
-### A-9. カードタブ（従来の復習フロー）
-1) 「カード」を選択
-2) 「カードを取得」をクリック（本日の対象を取得）
-3) `× わからない(0)` / `△ あいまい(1)` / `○ できた(2)` を選択
-4) 次回の出題時刻が自動で更新されます
 
 ### A-10. 使い方の流れ（例）
 1) 設定で発音・再生成スコープなどを調整
-2) 文パネルで英文チェック
-3) アシストで段落注釈
-4) 必要に応じて WordPack を生成・保存・復習
+2) WordPack を生成・保存
 
 ### A-11. 制約・既知の事項（ユーザー向け）
 - UI文言は今後統一予定
@@ -143,14 +125,9 @@
   - RAG は無効化し ChromaDB 依存を削除
 - 発音生成は `src/backend/pronunciation.py` に統一
   - cmudict/g2p-en 利用時は精度向上、未導入時は例外辞書+規則フォールバック（タイムアウト制御）
-- 復習（SRS）は SQLite に永続化（既定ファイル: `.data/srs.sqlite3`）
 
 ### B-3. API 一覧（現状）
-- `POST /api/sentence/check` … 自作文チェック（LLM による文法/スタイル分析 + `confidence`）
-- `POST /api/text/assist` … 段落注釈（LLM による解析/語彙/パラフレーズ + `citations`/`confidence`）
 - `POST /api/word/pack` … WordPack 生成（語義/共起/対比/例文/語源/学習カード要点/発音RP + `citations`/`confidence`、`pronunciation_enabled`,`regenerate_scope` 対応）
-- `GET  /api/review/today` … 本日のカード（最大5枚）
-- `POST /api/review/grade` … 採点（0/1/2）と次回時刻の更新
 - 追加（保存済み WordPack 関連）:
   - `DELETE /api/word/packs/{id}/examples/{category}/{index}` … 例文の個別削除
 
@@ -189,6 +166,20 @@
 - 変更が反映されない
   - Docker: `docker compose build --no-cache`
   - Vite 監視: Windows は `CHOKIDAR_USEPOLLING=1`（`docker-compose.yml` で設定可）
+
+#### B-1-1. ポート競合の回避（Docker）
+- 既定ポートが使用中で起動できない場合は、ホスト公開ポートを環境変数で上書きできます。
+  - 一時的に上書き:
+    ```bash
+    BACKEND_PORT=8001 FRONTEND_PORT=5174 docker compose up --build
+    ```
+  - `.env` に固定（推奨）:
+    ```env
+    BACKEND_PORT=8001
+    FRONTEND_PORT=5174
+    ```
+    以後は通常どおり `docker compose up --build`。
+- コンテナ内バックエンドの実ポートは常に `8000` 固定です（ヘルスチェック含む）。
 
 - 500 Internal Server Error（採点時など）
   - ログに `StateGraph.__init__() missing 1 required positional argument: 'state_schema'`

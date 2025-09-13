@@ -60,17 +60,6 @@ interface WordPack {
   confidence: 'low' | 'medium' | 'high';
 }
 
-interface GradeResponse { ok: boolean; next_due: string }
-
-interface ReviewStatsResponse {
-  due_now: number;
-  reviewed_today: number;
-  recent: { id: string; front: string; back: string }[];
-}
-
-type PopularCard = { id: string; front: string; back: string };
-
-interface CardMeta { repetitions: number; interval_days: number; due_at: string }
 
 export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta }) => {
   const { settings, setSettings } = useSettings();
@@ -84,11 +73,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [reveal, setReveal] = useState(false);
   const [count, setCount] = useState(3);
   const abortRef = useRef<AbortController | null>(null);
-  const [stats, setStats] = useState<ReviewStatsResponse | null>(null);
   const [sessionStartAt] = useState<Date>(new Date());
-  const [sessionReviewed, setSessionReviewed] = useState<number>(0);
-  const [popular, setPopular] = useState<PopularCard[] | null>(null);
-  const [cardMeta, setCardMeta] = useState<CardMeta | null>(null);
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
   const [model, setModel] = useState<string>('gpt-5-mini');
 
@@ -162,13 +147,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       });
       setData(res);
       setCurrentWordPackId(null); // 新規生成なのでIDはnull
-      // SRSメタの取得
-      try {
-        const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(res.lemma)}`);
-        setCardMeta(m);
-      } catch {
-        setCardMeta(null); // 未登録
-      }
       setMsg({ kind: 'status', text: 'WordPack を生成しました' });
       updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '新規生成が完了しました' });
       try { onWordPackGenerated?.(null); } catch {}
@@ -207,13 +185,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       try { onWordPackGenerated?.(res.id); } catch {}
       // 詳細の読み込みまで完了したことを通知
       updateNotification(notifId, { title: `【${l2}】の生成完了！`, status: 'success', message: '詳細読み込み完了' });
-      // SRSメタを取得（既存処理の中でも実施されるが保険）
-      try {
-        const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(lemma.trim())}`);
-        setCardMeta(m);
-      } catch {
-        setCardMeta(null);
-      }
     } catch (e) {
       if (ctrl.signal.aborted) return;
       const m = e instanceof ApiError ? e.message : '空のWordPack作成に失敗しました';
@@ -225,63 +196,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     }
   };
 
-  const grade = async (g: 0 | 1 | 2) => {
-    if (!data?.lemma) return;
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setLoading(true);
-    setMsg(null);
-    try {
-      const res = await fetchJson<GradeResponse>(`${settings.apiBase}/review/grade_by_lemma`, {
-        method: 'POST',
-        body: { lemma: data.lemma, grade: g },
-        signal: ctrl.signal,
-      });
-      const due = new Date(res.next_due);
-      setMsg({ kind: 'status', text: `採点しました（次回: ${due.toLocaleString()}）` });
-      // 採点後に進捗を再取得
-      await refreshStats();
-      await refreshPopular();
-      // 採点後のSRSメタも再取得
-      try {
-        const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(data.lemma)}`);
-        setCardMeta(m);
-      } catch {
-        setCardMeta(null);
-      }
-      setSessionReviewed((v) => v + 1);
-      if (settings.autoAdvanceAfterGrade) {
-        setData(null);
-        setLemma('');
-      }
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      const m = e instanceof ApiError ? e.message : '採点に失敗しました';
-      setMsg({ kind: 'alert', text: m });
-    } finally {
-      setLoading(false);
-      setLoadingInfo(null);
-    }
-  };
-
-  const refreshStats = async () => {
-    try {
-      const res = await fetchJson<ReviewStatsResponse>(`${settings.apiBase}/review/stats`);
-      setStats(res);
-    } catch (e) {
-      // 進捗はUX補助なので黙ってスキップ
-    }
-  };
-
-  const refreshPopular = async () => {
-    try {
-      const res = await fetchJson<PopularCard[]>(`${settings.apiBase}/review/popular?limit=10`);
-      setPopular(res);
-    } catch (e) {
-      // 補助情報なので黙ってスキップ
-    }
-  };
+  const refreshStats = async () => {};
+  const refreshPopular = async () => {};
 
   const loadWordPack = async (wordPackId: string) => {
     // ここでは同時に例文生成などが進行している可能性がある。
@@ -299,13 +215,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       });
       setData(res);
       setCurrentWordPackId(wordPackId);
-      // SRSメタの取得
-      try {
-        const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(res.lemma)}`);
-        setCardMeta(m);
-      } catch {
-        setCardMeta(null); // 未登録
-      }
       setMsg({ kind: 'status', text: '保存済みWordPackを読み込みました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
@@ -353,13 +262,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       });
       setData(res);
       setCurrentWordPackId(wordPackId);
-      // SRSメタの取得
-      try {
-        const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(res.lemma)}`);
-        setCardMeta(m);
-      } catch {
-        setCardMeta(null); // 未登録
-      }
       setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
       updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '再生成が完了しました' });
       try {
@@ -475,29 +377,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  // キーボードショートカット: 1/2/3 または J/K/L で ×/△/○
-  // モーダルが開いている間は無効化（二重採点防止）
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!data) return;
-      if (isModalOpen) return; // モーダルが開いている間は無効化
-      if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
-      if (e.target && (e.target as HTMLElement).tagName === 'TEXTAREA') return;
-      const key = e.key.toLowerCase();
-      if (key === '1' || key === 'j') {
-        e.preventDefault();
-        grade(0);
-      } else if (key === '2' || key === 'k') {
-        e.preventDefault();
-        grade(1);
-      } else if (key === '3' || key === 'l') {
-        e.preventDefault();
-        grade(2);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [data, isModalOpen]);
 
   return (
     <section>
@@ -566,50 +445,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       </div>
 
       {/* 進捗ヘッダー */}
-      <div style={{ display: 'flex', gap: '1rem', alignItems: 'baseline', marginBottom: '0.5rem' }}>
-        <div>
-          <strong>今日</strong>:
-          <span style={{ marginLeft: 6 }}>レビュー済 {stats?.reviewed_today ?? '-'} 件</span>
-          <span style={{ marginLeft: 6 }}>残り {stats ? Math.max(stats.due_now, 0) : '-'} 件</span>
-        </div>
-        <div style={{ marginLeft: 'auto' }}>
-          <details>
-            <summary>ショートカット</summary>
-            <small>1/J: ×, 2/K: △, 3/L: ○</small>
-          </details>
-          <small>
-            本セッション: {sessionReviewed} 件 / 経過 {(() => {
-              const ms = Date.now() - sessionStartAt.getTime();
-              const m = Math.floor(ms / 60000);
-              const s = Math.floor((ms % 60000) / 1000);
-              return `${m}:${String(s).padStart(2, '0')}`;
-            })()}
-          </small>
-        </div>
-        <button onClick={refreshStats} disabled={loading}>進捗更新</button>
-      </div>
-      {stats?.recent?.length ? (
-        <div style={{ marginBottom: '0.5rem' }}>
-          <small>最近見た語:</small>
-          <ul style={{ display: 'inline-flex', listStyle: 'none', gap: '0.75rem', padding: 0, marginLeft: 8 }}>
-            {stats.recent.slice(0, 5).map((c) => (
-              <li key={c.id}>
-                <a href="#" onClick={(e) => { e.preventDefault(); setLemma(c.front); }} title={c.back}>{c.front}</a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {stats && stats.due_now === 0 && (
-        <div role="status" style={{ marginBottom: '0.5rem' }}>
-          セッション完了。お疲れさまでした！ 本セッション {sessionReviewed} 件 / 所要時間 {(() => {
-            const ms = Date.now() - sessionStartAt.getTime();
-            const m = Math.floor(ms / 60000);
-            const s = Math.floor((ms % 60000) / 1000);
-            return `${m}分${s}秒`;
-          })()}
-        </div>
-      )}
 
       {/* グローバル通知に置き換えたため、パネル内のローディング表示は削除 */}
       {msg && <div role={msg.kind}>{msg.text}</div>}
@@ -671,9 +506,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 </div>
               </div>
               <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button onClick={() => grade(0)} disabled={loading}>× わからない (1)</button>
-                <button onClick={() => grade(1)} disabled={loading}>△ あいまい (2)</button>
-                <button onClick={() => grade(2)} disabled={loading}>○ できた (3)</button>
                 {currentWordPackId && (
                   <button 
                     onClick={() => regenerateWordPack(currentWordPackId)} 
@@ -885,29 +717,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             </section>
 
             {/* 簡易インデックス（最近/よく見る順） */}
-            <section className="wp-section">
-              <h3>インデックス</h3>
-              <div>
-                <h4>最近</h4>
-                {stats?.recent?.length ? (
-                  <ul style={{ display: 'inline-flex', listStyle: 'none', gap: '0.75rem', padding: 0 }}>
-                    {stats.recent.map((c) => (
-                      <li key={c.id}><a href="#" onClick={(e) => { e.preventDefault(); setLemma(c.front); }}>{c.front}</a></li>
-                    ))}
-                  </ul>
-                ) : <p>なし</p>}
-              </div>
-              <div>
-                <h4>よく見る</h4>
-                {popular?.length ? (
-                  <ul style={{ display: 'inline-flex', listStyle: 'none', gap: '0.75rem', padding: 0 }}>
-                    {popular.map((c) => (
-                      <li key={c.id}><a href="#" onClick={(e) => { e.preventDefault(); setLemma(c.front); }}>{c.front}</a></li>
-                    ))}
-                  </ul>
-                ) : <p>なし</p>}
-              </div>
-            </section>
 
             <section id="citations" className="wp-section">
               <h3>引用</h3>
@@ -930,25 +739,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               <p>{data.confidence}</p>
             </section>
 
-            <section id="srs" className="wp-section">
-              <h3>SRSメタ</h3>
-              {cardMeta ? (
-                <div className="kv">
-                  <div>repetitions</div><div>{cardMeta.repetitions}</div>
-                  <div>interval_days</div><div>{cardMeta.interval_days}</div>
-                  <div>due_at</div><div>{formatDate(cardMeta.due_at)}</div>
-                </div>
-              ) : (
-                <>
-                  <p>未登録</p>
-                  <div className="kv">
-                    <div>repetitions</div><div>-</div>
-                    <div>interval_days</div><div>-</div>
-                    <div>due_at</div><div>-</div>
-                  </div>
-                </>
-              )}
-            </section>
           </div>
         </div>
       )}

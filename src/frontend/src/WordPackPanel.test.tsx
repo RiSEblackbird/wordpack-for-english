@@ -45,12 +45,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      if (url.endsWith('/api/review/stats')) {
-        return new Response(JSON.stringify({ due_now: 1, reviewed_today: 0, recent: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
-      if (url.startsWith('/api/review/popular')) {
-        return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
+      
       if (url.endsWith('/api/word/pack') && init?.method === 'POST') {
         const body = init?.body ? JSON.parse(init.body as string) : {};
         const lemma = body.lemma || 'test';
@@ -105,24 +100,19 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
-      if (url.startsWith('/api/review/card_by_lemma?')) {
-        return new Response(JSON.stringify({ repetitions: 1, interval_days: 1, due_at: new Date(Date.now() + 3600_000).toISOString() }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
-      if (url.endsWith('/api/review/grade_by_lemma') && init?.method === 'POST') {
-        return new Response(JSON.stringify({ ok: true, next_due: new Date(Date.now() + 3600_000).toISOString() }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-      }
+      
       return new Response('not found', { status: 404 });
     });
     return mock;
   }
 
-  it('generates WordPack and grades via buttons', async () => {
+  it('generates WordPack and shows examples', async () => {
     const fetchMock = setupFetchMocks();
     render(<App />);
 
     const user = userEvent.setup();
     await act(async () => {
-      await user.keyboard('{Alt>}{4}{/Alt}');
+      await user.keyboard('{Alt>}{1}{/Alt}');
     });
 
     const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
@@ -146,17 +136,13 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     // （モック例文には grammar_ja が含まれている）
     expect(screen.getAllByText(/解説/).length).toBeGreaterThan(0);
 
-    // 採点（○）
-    await act(async () => {
-      await user.click(screen.getByRole('button', { name: '○ できた (3)' }));
-    });
+    // 例文統計の見出しが表示される（総数はダイナミック）
+    expect(screen.getByRole('heading', { name: /例文 \(総数 \d+件\)/ })).toBeInTheDocument();
 
-    await screen.findByText(/採点しました/);
-
-    // fetch が正しいエンドポイントで呼ばれていること
+    // fetch が正しいエンドポイントで呼ばれていること（採点APIは呼ばれない）
     const urls = fetchMock.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));
     expect(urls.some((u) => u.endsWith('/api/word/pack'))).toBe(true);
-    expect(urls.some((u) => u.endsWith('/api/review/grade_by_lemma'))).toBe(true);
+    expect(urls.some((u) => u.endsWith('/api/review/grade_by_lemma'))).toBe(false);
 
     // リクエストボディに model/temperature が含まれていること（非 reasoning モデルの場合）
     const bodies = fetchMock.mock.calls
@@ -185,7 +171,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
     const user = userEvent.setup();
     await act(async () => {
-      await user.keyboard('{Alt>}{4}{/Alt}');
+      await user.keyboard('{Alt>}{1}{/Alt}');
     });
 
     const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;

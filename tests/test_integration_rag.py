@@ -48,33 +48,3 @@ def test_word_pack_integration_openai_llm(client_with_openai_llm):
     
     # LLMが使用されている場合、confidenceはmedium以上になる
     assert j["confidence"] in ("medium", "high")
-
-
-def test_reading_assist_integration_openai_llm(client_with_openai_llm):
-    """OpenAI LLMを使用した読解支援のテスト"""
-    resp = client_with_openai_llm.post("/api/text/assist", json={"paragraph": "The quick brown fox jumps over the lazy dog."})
-    assert resp.status_code == 200
-    j = resp.json()
-    
-    # 基本的な構造の確認
-    assert "sentences" in j
-    assert "confidence" in j
-    assert isinstance(j["sentences"], list)
-    assert len(j["sentences"]) > 0
-
-
-def test_feedback_integration_openai_llm(client_with_openai_llm):
-    """OpenAI LLMを使用したフィードバック生成のテスト"""
-    resp = client_with_openai_llm.post("/api/sentence/check", json={"sentence": "I am go to school."})
-    assert resp.status_code == 200
-    j = resp.json()
-    
-    # 基本的な構造の確認
-    assert "issues" in j
-    assert "revisions" in j
-    assert "exercise" in j
-    assert "confidence" in j
-    assert isinstance(j["issues"], list)
-    assert isinstance(j["revisions"], list)
-
-
