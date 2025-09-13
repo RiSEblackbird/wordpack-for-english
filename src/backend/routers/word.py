@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query
 import json
 import uuid
+import anyio  # オフロード用
 from datetime import datetime
+from functools import partial
 
 from ..flows.word_pack import WordPackFlow
 from ..providers import ChromaClientFactory, get_llm_provider
@@ -151,10 +153,15 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
             pronunciation_enabled=req.pronunciation_enabled,
             regenerate_scope=str(req.regenerate_scope),
         )
-        word_pack = flow.run(
-            req.lemma,
-            pronunciation_enabled=req.pronunciation_enabled,
-            regenerate_scope=req.regenerate_scope,
+        # 同期実装のフローをスレッドプールにオフロードし、イベントループのブロッキングを防ぐ
+        # anyio.to_thread.run_sync はキーワード引数を転送しないため partial で包む
+        word_pack = await anyio.to_thread.run_sync(
+            partial(
+                flow.run,
+                req.lemma,
+                pronunciation_enabled=req.pronunciation_enabled,
+                regenerate_scope=req.regenerate_scope,
+            )
         )
         
         # WordPackをデータベースに保存
@@ -410,10 +417,13 @@ async def regenerate_word_pack(
     }
     flow = WordPackFlow(chroma_client=chroma_client, llm=llm, llm_info=llm_info)
     try:
-        word_pack = flow.run(
-            lemma,
-            pronunciation_enabled=req.pronunciation_enabled,
-            regenerate_scope=req.regenerate_scope,
+        word_pack = await anyio.to_thread.run_sync(
+            partial(
+                flow.run,
+                lemma,
+                pronunciation_enabled=req.pronunciation_enabled,
+                regenerate_scope=req.regenerate_scope,
+            )
         )
         
         # 再生成されたWordPackをデータベースに保存（既存のIDで上書き）

@@ -8,7 +8,7 @@ import { useNotifications } from '../NotificationsContext';
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
   selectedWordPackId?: string | null;
-  onWordPackGenerated?: (wordPackId: string) => void;
+  onWordPackGenerated?: (wordPackId: string | null) => void;
   selectedMeta?: { created_at: string; updated_at: string } | null;
 }
 
@@ -171,6 +171,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       }
       setMsg({ kind: 'status', text: 'WordPack を生成しました' });
       updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '新規生成が完了しました' });
+      try { onWordPackGenerated?.(null); } catch {}
     } catch (e) {
       if (ctrl.signal.aborted) return;
       let m = e instanceof ApiError ? e.message : 'WordPack の生成に失敗しました';
@@ -203,6 +204,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setCurrentWordPackId(res.id);
       // 直後に保存済みWordPack詳細を読み込んで表示
       await loadWordPack(res.id);
+      try { onWordPackGenerated?.(res.id); } catch {}
       // 詳細の読み込みまで完了したことを通知
       updateNotification(notifId, { title: `【${l2}】の生成完了！`, status: 'success', message: '詳細読み込み完了' });
       // SRSメタを取得（既存処理の中でも実施されるが保険）
@@ -282,7 +284,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   };
 
   const loadWordPack = async (wordPackId: string) => {
-    abortRef.current?.abort();
+    // ここでは同時に例文生成などが進行している可能性がある。
+    // 保存済み詳細を閲覧するだけなので、進行中のバックグラウンド処理は中断せずに並行実行させる。
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
@@ -405,9 +408,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
   const generateExamples = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common') => {
     if (!currentWordPackId) return;
-    abortRef.current?.abort();
+    // 例文追加生成はバックグラウンド取得を許可し、モーダル閉鎖でも継続させるため
+    // abortRef には紐付けずローカルで管理する
     const ctrl = new AbortController();
-    abortRef.current = ctrl;
     setLoading(true);
     const lemma4 = data?.lemma || '(unknown)';
     const notifId = addNotification({ title: `【${lemma4}】の生成処理中...`, message: `例文（${category}）を2件追加生成しています`, status: 'progress' });
@@ -431,6 +434,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setMsg({ kind: 'status', text: `${category} に例文を2件追加しました` });
       updateNotification(notifId, { title: `【${lemma4}】の生成完了！`, status: 'success', message: `${category} に例文を2件追加しました` });
       await loadWordPack(currentWordPackId);
+      try { onWordPackGenerated?.(currentWordPackId); } catch {}
     } catch (e) {
       if (ctrl.signal.aborted) { updateNotification(notifId, { title: `【${lemma4}】の生成失敗`, status: 'error', message: '処理を中断しました' }); return; }
       const m = e instanceof ApiError ? e.message : '例文の追加生成に失敗しました';
