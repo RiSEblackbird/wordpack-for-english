@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSettings } from '../SettingsContext';
+import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { Modal } from './Modal';
 import { WordPackPanel } from './WordPackPanel';
@@ -22,6 +23,7 @@ interface WordPackListResponse {
 
 export const WordPackListPanel: React.FC = () => {
   const { settings } = useSettings();
+  const { setModalOpen } = useModal();
   const [wordPacks, setWordPacks] = useState<WordPackListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
@@ -167,7 +169,11 @@ export const WordPackListPanel: React.FC = () => {
                   key={wp.id}
                   className="wp-card"
                   data-testid="wp-card"
-                  onClick={() => { setPreviewWordPackId(wp.id); setPreviewOpen(true); }}
+                  onClick={() => { 
+                    setPreviewWordPackId(wp.id); 
+                    setPreviewOpen(true);
+                    setModalOpen(true);
+                  }}
                 >
                   <div className="wp-card-header">
                     <h3 className="wp-card-title">
@@ -213,7 +219,14 @@ export const WordPackListPanel: React.FC = () => {
           </>
         )}
       </div>
-      <Modal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} title="WordPack プレビュー">
+      <Modal 
+        isOpen={previewOpen} 
+        onClose={() => { 
+          setPreviewOpen(false);
+          setModalOpen(false);
+        }} 
+        title="WordPack プレビュー"
+      >
         {previewWordPackId ? (
           <WordPackPanel
             focusRef={modalFocusRef}

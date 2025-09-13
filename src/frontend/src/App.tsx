@@ -6,6 +6,7 @@ import { SettingsPanel } from './components/SettingsPanel';
 import { WordPackPanel } from './components/WordPackPanel';
 import { WordPackListPanel } from './components/WordPackListPanel';
 import { SettingsProvider } from './SettingsContext';
+import { ModalProvider } from './ModalContext';
 import { useSettings } from './SettingsContext';
 
 type Tab = 'card' | 'sentence' | 'assist' | 'wordpack' | 'settings';
@@ -46,7 +47,8 @@ export const App: React.FC = () => {
 
   return (
     <SettingsProvider>
-      <div>
+      <ModalProvider>
+        <div>
         <ThemeApplier />
         <style>{`
           /* テーマ変数 */
@@ -120,7 +122,8 @@ export const App: React.FC = () => {
         <footer>
           <small>WordPack 英語学習</small>
         </footer>
-      </div>
+        </div>
+      </ModalProvider>
     </SettingsProvider>
   );
 };

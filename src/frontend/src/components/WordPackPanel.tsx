@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
+import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { LoadingIndicator } from './LoadingIndicator';
 
@@ -72,6 +73,7 @@ interface CardMeta { repetitions: number; interval_days: number; due_at: string 
 
 export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta }) => {
   const { settings, setSettings } = useSettings();
+  const { isModalOpen } = useModal();
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
   const [loading, setLoading] = useState(false);
@@ -459,9 +461,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   useEffect(() => () => abortRef.current?.abort(), []);
 
   // キーボードショートカット: 1/2/3 または J/K/L で ×/△/○
+  // モーダルが開いている間は無効化（二重採点防止）
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!data) return;
+      if (isModalOpen) return; // モーダルが開いている間は無効化
       if (e.target && (e.target as HTMLElement).tagName === 'INPUT') return;
       if (e.target && (e.target as HTMLElement).tagName === 'TEXTAREA') return;
       const key = e.key.toLowerCase();
@@ -478,7 +482,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [data]);
+  }, [data, isModalOpen]);
 
   return (
     <section>
