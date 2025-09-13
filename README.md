@@ -65,12 +65,28 @@ npm run dev
 # リポジトリルートで
 docker compose up --build
 ```
-- バックエンド: http://127.0.0.1:8000
-- フロントエンド: http://127.0.0.1:5173
+- バックエンド: http://127.0.0.1:${BACKEND_PORT:-8000}
+- フロントエンド: http://127.0.0.1:${FRONTEND_PORT:-5173}
 - ホットリロード:
   - backend: `uvicorn --reload` + ボリュームマウント `.:/app`
   - frontend: Vite dev サーバ + ボリュームマウント `src/frontend:/app`
 - フロントからの API 呼び出しは Vite のプロキシ設定で `http://backend:8000` に転送されます。
+
+ポート競合の回避（新）:
+- 既定で Backend は `8000`、Frontend は `5173` を公開します。既に使用中の場合は、以下のいずれかで上書きできます。
+  - 一時的に上書き（シェル一発指定）:
+    ```bash
+    BACKEND_PORT=8001 FRONTEND_PORT=5174 docker compose up --build
+    ```
+  - `.env` で恒久設定（リポジトリ直下の `.env`）:
+    ```env
+    BACKEND_PORT=8001
+    FRONTEND_PORT=5174
+    ```
+    その後、通常どおり `docker compose up --build` で起動します。
+
+注意:
+- コンテナ内のバックエンドは常にコンテナ内ポート `8000` で待ち受けます（ヘルスチェックも `http://127.0.0.1:8000/healthz`）。ホスト側での公開ポートのみ `BACKEND_PORT` で変更されます。
 
 OpenAI LLM統合:
 - 既定: `LLM_PROVIDER=openai`, `LLM_MODEL=gpt-4o-mini`。

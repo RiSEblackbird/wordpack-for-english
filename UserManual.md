@@ -18,7 +18,7 @@
   # リポジトリのルートで
   docker compose up --build
   ```
-  - 画面（フロントエンド）にアクセス: `http://127.0.0.1:5173`
+  - 画面（フロントエンド）にアクセス: `http://127.0.0.1:${FRONTEND_PORT:-5173}`
 
 ### A-3. 新機能（保存）
 - 生成した WordPack は自動で保存されます
@@ -166,6 +166,20 @@
 - 変更が反映されない
   - Docker: `docker compose build --no-cache`
   - Vite 監視: Windows は `CHOKIDAR_USEPOLLING=1`（`docker-compose.yml` で設定可）
+
+#### B-1-1. ポート競合の回避（Docker）
+- 既定ポートが使用中で起動できない場合は、ホスト公開ポートを環境変数で上書きできます。
+  - 一時的に上書き:
+    ```bash
+    BACKEND_PORT=8001 FRONTEND_PORT=5174 docker compose up --build
+    ```
+  - `.env` に固定（推奨）:
+    ```env
+    BACKEND_PORT=8001
+    FRONTEND_PORT=5174
+    ```
+    以後は通常どおり `docker compose up --build`。
+- コンテナ内バックエンドの実ポートは常に `8000` 固定です（ヘルスチェック含む）。
 
 - 500 Internal Server Error（採点時など）
   - ログに `StateGraph.__init__() missing 1 required positional argument: 'state_schema'`
