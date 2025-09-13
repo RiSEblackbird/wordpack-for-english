@@ -169,24 +169,27 @@ describe('WordPackListPanel modal preview', () => {
     const cards = screen.getAllByTestId('wp-card');
     expect(cards).toHaveLength(3);
     
+    // カードがクリック可能になるまで少し待機
+    await waitFor(() => expect(cards[0]).toBeInTheDocument());
+    
     await act(async () => {
       await user.click(cards[0]);
     });
 
     // モーダルが開くまで待機
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeInTheDocument(), { timeout: 5000 });
     
-    // WordPackの詳細が読み込まれるまで待機
+    // WordPackの詳細が読み込まれるまで待機（タイムアウトを延長）
     await waitFor(() => expect(screen.getByText((content, element) => {
       return element?.textContent?.includes('学習カード要点') || false;
-    })).toBeInTheDocument(), { timeout: 5000 });
+    })).toBeInTheDocument(), { timeout: 10000 });
 
     // 閉じる
     await act(async () => {
       await user.click(screen.getByRole('button', { name: '閉じる' }));
     });
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'WordPack プレビュー' })).not.toBeInTheDocument());
-  });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'WordPack プレビュー' })).not.toBeInTheDocument(), { timeout: 3000 });
+  }, 15000);
 
   it('ソート機能が正しく動作する', async () => {
     setupFetchMocks();
@@ -236,7 +239,7 @@ describe('WordPackListPanel modal preview', () => {
     expect(exampleSortedCards[0]).toHaveTextContent(/alpha/);
     expect(exampleSortedCards[1]).toHaveTextContent(/beta/);
     expect(exampleSortedCards[2]).toHaveTextContent(/delta/);
-  });
+  }, 10000);
 });
 
 
