@@ -75,7 +75,7 @@ class WordPackFlow:
                     f"{lemma}\n\n"
                     "Schema (keys and types must match exactly):\n"
                     "{\n"
-                    "  \"senses\": [ { \"id\": \"s1\", \"gloss_ja\": \"...\", \"definition_ja\": \"...\", \"nuances_ja\": \"...\", \"patterns\": [\"...\"], \"synonyms\": [\"...\"], \"antonyms\": [\"...\"], \"register\": \"...\", \"notes_ja\": \"...\" } ],\n"
+                    "  \"senses\": [ { \"id\": \"s1\", \"gloss_ja\": \"...\", \"definition_ja\": \"...\", \"nuances_ja\": \"...\", \"patterns\": [\"...\"], \"synonyms\": [\"...\"], \"antonyms\": [\"...\"], \"register\": \"...\", \"notes_ja\": \"...\", \"term_overview_ja\": \"...\", \"term_core_ja\": \"...\" } ],\n"
                     "  \"collocations\": {\n"
                     "    \"general\": { \"verb_object\": [\"...\"], \"adj_noun\": [\"...\"], \"prep_noun\": [\"...\"] },\n"
                     "    \"academic\": { \"verb_object\": [\"...\"], \"adj_noun\": [\"...\"], \"prep_noun\": [\"...\"] }\n"
@@ -94,8 +94,11 @@ class WordPackFlow:
                     "}\n"
                     "Notes: \n"
                     "- gloss_ja / definition_ja / nuances_ja / grammar_ja / notes_ja は日本語。\n"
-                    "- 例文は自然で、約70語（±5語）の英文にする。\n"
-                    "- 例文の数: Dev/CS/LLM は各5文、Business は3文、Common は6文（欠けはそのまま、ダミーは追加しない）。\n"
+                    "- もし対象語が名詞（一般名詞/固有名詞）や専門用語である場合、\n"
+                    "  term_overview_ja（3〜5文の概要）と term_core_ja（3〜5文の本質）を必ず日本語で記述する。\n"
+                    "  名詞以外（動詞/形容詞など）の場合、これら2つのキーは省略してよい。\n"
+                    "- 例文は自然で、約55語（±5語）の英文にする。\n"
+                    "- 例文の数: Dev/CS/LLM は各4文、Business は3文、Common は4文（欠けはそのまま、ダミーは追加しない）。\n"
                     "- Dev はアプリ開発現場の実務文脈、CS は計算機科学の学術文脈、LLM は応用/研究の文脈、Business はビジネスの文脈、Common は日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。\n"
                     # f"- Dev, CS, LLM, Business の例文は専門性の高い内容にする。{lemma} 以外にもその方向の専門的な語彙を複数含める。\n" # 一時停止中
                     "- Common の英例文は“ビジネス英語ではなく”カジュアルな日常会話のトーンで。友達/家族/同僚との軽いチャット想定。丁寧すぎる表現やフォーマルな語彙（therefore, thus, regarding, via など）は避け、口語（gonna, kinda, hey などは過度に使いすぎない範囲で可）、よくあるシーン（メッセ/通話/待ち合わせ/日常の小さな出来事）を取り入れる。\n"
@@ -250,6 +253,8 @@ class WordPackFlow:
                         antonyms=antonyms,
                         register=register,
                         notes_ja=notes_ja,
+                        term_overview_ja=(str(s.get("term_overview_ja") or "").strip() or None),
+                        term_core_ja=(str(s.get("term_core_ja") or "").strip() or None),
                     ))
                 if tmp_senses:
                     senses = tmp_senses

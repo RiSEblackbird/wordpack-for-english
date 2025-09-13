@@ -23,6 +23,8 @@ interface Sense {
   gloss_ja: string;
   definition_ja?: string | null;
   nuances_ja?: string | null;
+  term_overview_ja?: string | null;
+  term_core_ja?: string | null;
   patterns: string[];
   synonyms?: string[];
   antonyms?: string[];
@@ -570,6 +572,12 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                   {data.senses.map((s) => (
                     <li key={s.id}>
                       <div><strong>{s.gloss_ja}</strong></div>
+                      {s.term_core_ja ? (
+                        <div style={{ marginTop: 4, fontWeight: 600 }}>{s.term_core_ja}</div>
+                      ) : null}
+                      {s.term_overview_ja ? (
+                        <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{s.term_overview_ja}</div>
+                      ) : null}
                       {s.definition_ja ? (
                         <div style={{ marginTop: 4 }}>{s.definition_ja}</div>
                       ) : null}

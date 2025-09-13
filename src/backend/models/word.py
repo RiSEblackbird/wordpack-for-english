@@ -76,6 +76,11 @@ class Sense(BaseModel):
     # よりボリューミーな語義のための追加フィールド（すべて任意）
     definition_ja: Optional[str] = None
     nuances_ja: Optional[str] = None
+    # 名詞（特に専門用語）のときに概念解説を充実させる任意フィールド
+    # term_overview_ja: 用語の概要（3〜5文程度）
+    # term_core_ja: 用語の本質/本質的ポイント（1〜2文）
+    term_overview_ja: Optional[str] = None
+    term_core_ja: Optional[str] = None
     patterns: List[str] = Field(default_factory=list)
     synonyms: List[str] = Field(default_factory=list)
     antonyms: List[str] = Field(default_factory=list)
