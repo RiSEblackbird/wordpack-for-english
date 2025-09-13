@@ -18,10 +18,10 @@
 
 ### フロントエンドのテーマ切替（ライト/ダーク）
 
-- 既定は「ダークカラー」です。
-- 「設定」タブの「カラーテーマ」から「ダークカラー」「ライトカラー」を切替できます。
-- 選択はブラウザの `localStorage`（キー: `wp.theme`）に保存され、再訪時に復元されます。
-- 実装詳細: `body` に `theme-dark`/`theme-light` を付与し、CSS 変数（例: `--color-bg`, `--color-text`, `--color-border`, `--color-link`, `--color-surface`）で配色を管理。
+- 既定はダーク。
+- 「設定 > カラーテーマ」でダーク/ライトを切替。
+- 選択は `localStorage`（キー `wp.theme`）に保存・復元。
+- 実装: `body` に `theme-dark`/`theme-light`、CSS変数（`--color-*`）で配色管理。
 
 ---
 
@@ -82,13 +82,12 @@ docker compose up --build
 - フロントからの API 呼び出しは Vite のプロキシ設定で `http://backend:8000` に転送されます。
 
 OpenAI LLM統合:
-- 既定で `LLM_PROVIDER=openai` および `LLM_MODEL=gpt-4o-mini` を使用します。
-- RAG機能は無効化されており、OpenAI LLMが直接語義・用例・フィードバックを生成します。
-- 生成品質のため `LLM_MAX_TOKENS` を `.env` で調整できます（推奨 1500）。JSON 出力の途中切れを防止します。
- - フロントの設定タブに temperature 入力を追加しました（0.0〜1.0、デフォルト 0.6）。
-   - 補足: 0.6–0.8（文体の多様性）、語数厳密なら 0.3–0.5
- - WordPack パネルの［生成］右にモデル選択（gpt-4.1-mini / gpt-5-mini / gpt-4o-mini）を追加。選択したモデルと temperature は生成/再生成のAPIに渡されます（未指定時はバックエンド既定）。
-   - 注意: 現状バックエンドは Chat Completions を使用しており、gpt-5-mini の `reasoning`/`text` は未サポートです。選択しても内部で当該パラメータは無効化されます。安定運用は `gpt-4o-mini` を推奨。
+- 既定: `LLM_PROVIDER=openai`, `LLM_MODEL=gpt-4o-mini`。
+- RAGは無効。OpenAI LLMが直接生成（語義/用例/フィードバック）。
+- `.env` の `LLM_MAX_TOKENS` を調整（推奨1500、JSON途切れ防止）。
+- 設定タブに `temperature`（0.0–1.0、既定0.6）。
+- WordPackでモデル選択（gpt-4.1-mini / gpt-5-mini / gpt-4o-mini）。選択モデルと `temperature` をAPIへ（未指定は既定）。
+- 注意: 現在は Chat Completions。`gpt-5-mini` の `reasoning`/`text` は未適用。安定は `gpt-4o-mini` 推奨。
 
 ### 1-7. ログとトラブルシューティング（語義/例文が「なし」になる場合）
 - バックエンドは structlog による JSON 構造化ログを出力します（標準出力）。
@@ -109,8 +108,8 @@ OpenAI LLM統合:
 5. `wordpack_examples_built`/`wordpack_senses_built` の件数が 0 の場合、上流の LLM 出力の構造が仕様通りかチェック
 6. それでも改善しない場合は `STRICT_MODE=true` で実行し、解析失敗時に例外化して根因を特定
 
-厳格モードの空データ検出（エラー詳細）:
-- `STRICT_MODE=true` のとき、語義(senses) と例文(examples) がともに空の場合は 502 を返します。
+厳格モードの空データ検出:
+- `STRICT_MODE=true` で `senses`/`examples` が両方空なら 502。
 - レスポンス例:
   ```json
   {
@@ -122,13 +121,13 @@ OpenAI LLM統合:
     }
   }
   ```
-- 対応: `.env` の `LLM_TIMEOUT_MS` を増やす（例: 90000）、`LLM_MAX_TOKENS` を増やす（例: 1500–1800）、`LLM_MAX_RETRIES` を 2 へ、モデルを安定タグへ変更。
+- 対応: `LLM_TIMEOUT_MS`（例 90000）、`LLM_MAX_TOKENS`（1500–1800）、`LLM_MAX_RETRIES=2`、安定モデルへ。
 
 strict モードでのLLMエラー挙動:
 
-- LLM がタイムアウト/失敗した場合、または空出力/パース不能で `senses`/`examples` が得られない場合はエラー（5xx）になります。
-- 既定の LLM タイムアウトは 60 秒（`LLM_TIMEOUT_MS=60000`）。必要に応じて `.env` で調整してください。
-- OpenAI SDK 呼び出しには `timeout` を適用し、内部ラッパでリトライ/キャンセル処理を行っています。
+- タイムアウト/失敗や空出力/パース不能で `senses`/`examples` が得られない場合は 5xx。
+- 既定の LLM タイムアウトは 60 秒（`LLM_TIMEOUT_MS=60000`）。必要に応じて `.env` で調整。
+- OpenAI SDK 呼び出しは `timeout` 適用＋内部でリトライ/キャンセル。
 
 LLMエラーのHTTPマッピング（詳細化・新）:
 - 504 Gateway Timeout（`reason_code=TIMEOUT`）
@@ -141,8 +140,8 @@ LLMエラーのHTTPマッピング（詳細化・新）:
   - 意味: APIキー不備/権限不足。
   - 対処: `.env` の `OPENAI_API_KEY` を確認。コンテナ環境変数に反映されているか `docker compose exec backend env | grep OPENAI` 等で確認。
 
-バックエンドログ（構造化）には次が追加され、原因切り分けが容易になりました（新）:
-- `llm_complete_error` … `error_type` と `error`（例外メッセージの先頭）を出力
+バックエンドの構造化ログ（追加）:
+- `llm_complete_error` … `error_type` と `error`（例外メッセージ先頭）
 - `llm_complete_failed_all_retries` … 最終失敗時の `error_type`/`error`
 
 推奨値の目安:
