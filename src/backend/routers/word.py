@@ -7,11 +7,12 @@ from ..flows.word_pack import WordPackFlow
 from ..providers import ChromaClientFactory, get_llm_provider
 from ..config import settings
 from ..models.word import (
-    WordPackRequest, 
-    WordPack, 
-    WordPackListResponse, 
+    WordPackRequest,
+    WordPackCreateRequest,
+    WordPack,
+    WordPackListResponse,
     WordPackListItem,
-    WordPackRegenerateRequest
+    WordPackRegenerateRequest,
 )
 from ..srs import store
 from ..logging import logger
@@ -29,6 +30,51 @@ async def lookup_word() -> dict[str, object]:
     if settings.strict_mode:
         raise HTTPException(status_code=501, detail="Not Implemented: /api/word in strict mode")
     return {"definition": None, "examples": []}
+@router.post(
+    "/packs",
+    response_model=dict,
+    summary="空のWordPackを作成して保存",
+    response_description="作成されたWordPackのIDを返します",
+)
+async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
+    """生成を行わず、各情報を空としてWordPackを作成・保存する。
+
+    - 既存の生成フローやRAG/LLMには依存しない
+    - スキーマに適合する空のWordPack JSONを構築して保存
+    - 保存ID（wp:{lemma}:{短縮uuid}）を返す
+    """
+    lemma = req.lemma.strip()
+    if not lemma:
+        raise HTTPException(status_code=400, detail="lemma is required")
+
+    # スキーマ準拠の空WordPackを構築
+    empty_word_pack = WordPack(
+        lemma=lemma,
+        pronunciation={
+            "ipa_GA": None,
+            "ipa_RP": None,
+            "syllables": None,
+            "stress_index": None,
+            "linking_notes": [],
+        },
+        senses=[],
+        collocations={
+            "general": {"verb_object": [], "adj_noun": [], "prep_noun": []},
+            "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []},
+        },
+        contrast=[],
+        examples={"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []},
+        etymology={"note": "-", "confidence": "low"},
+        study_card="",
+        citations=[],
+        confidence="low",
+    )
+
+    word_pack_id = f"wp:{lemma}:{uuid.uuid4().hex[:8]}"
+    store.save_word_pack(word_pack_id, lemma, empty_word_pack.model_dump_json())
+
+    return {"id": word_pack_id}
+
 
 
 @router.post(

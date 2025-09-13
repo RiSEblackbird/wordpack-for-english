@@ -12,6 +12,15 @@ class RegenerateScope(str, Enum):
     collocations = "collocations"
 
 
+class WordPackCreateRequest(BaseModel):
+    """Request model for creating an empty WordPack entry without generation.
+
+    生成を行わず、空の各情報を持つ WordPack を保存するための最小入力。
+    """
+
+    lemma: str = Field(min_length=1, max_length=64, description="見出し語（1..64文字）")
+
+
 class WordPackRequest(BaseModel):
     """Request model for generating a word pack (MVP).
 

@@ -155,6 +155,41 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     }
   };
 
+  const createEmpty = async () => {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(true);
+    setLoadingInfo({ label: '空のWordPackを作成中', subtext: '内容の生成は行いません…' });
+    setMsg(null);
+    try {
+      const res = await fetchJson<{ id: string }>(`${settings.apiBase}/word/packs`, {
+        method: 'POST',
+        body: { lemma: lemma.trim() },
+        signal: ctrl.signal,
+        timeoutMs: settings.requestTimeoutMs,
+      });
+      setMsg({ kind: 'status', text: '空のWordPackを作成しました' });
+      setCurrentWordPackId(res.id);
+      // 直後に保存済みWordPack詳細を読み込んで表示
+      await loadWordPack(res.id);
+      // SRSメタを取得（既存処理の中でも実施されるが保険）
+      try {
+        const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(lemma.trim())}`);
+        setCardMeta(m);
+      } catch {
+        setCardMeta(null);
+      }
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      const m = e instanceof ApiError ? e.message : '空のWordPack作成に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+      setLoadingInfo(null);
+    }
+  };
+
   const grade = async (g: 0 | 1 | 2) => {
     if (!data?.lemma) return;
     abortRef.current?.abort();
@@ -379,6 +414,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           disabled={loading}
         />
         <button onClick={generate} disabled={loading || !lemma.trim()}>生成</button>
+        <button onClick={createEmpty} disabled={loading || !lemma.trim()} title="内容の生成を行わず、空のWordPackのみ保存">WordPackのみ作成</button>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           モデル
           <select value={model} onChange={(e) => setModel(e.target.value)} disabled={loading}>

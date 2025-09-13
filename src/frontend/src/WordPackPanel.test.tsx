@@ -12,6 +12,33 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
   function setupFetchMocks() {
     const mock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.endsWith('/api/word/packs') && init?.method === 'POST') {
+        const body = init?.body ? JSON.parse(init.body as string) : {};
+        const lemma = body.lemma || 'test';
+        return new Response(
+          JSON.stringify({ id: `wp:${lemma}:abcd1234` }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.startsWith('/api/word/packs/wp:') && (!init || (init && (!init.method || init.method === 'GET')))) {
+        // empty pack detail after creation
+        const lemma = url.split(':')[1]?.split(':')[0] || 'test';
+        return new Response(
+          JSON.stringify({
+            lemma,
+            pronunciation: { ipa_GA: null, ipa_RP: null, syllables: null, stress_index: null, linking_notes: [] },
+            senses: [],
+            collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
+            contrast: [],
+            examples: { Dev: [], CS: [], LLM: [], Business: [], Common: [] },
+            etymology: { note: '-', confidence: 'low' },
+            study_card: '',
+            citations: [],
+            confidence: 'low',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
       if (url.endsWith('/api/config') && (!init || (init && (!init.method || init.method === 'GET')))) {
         return new Response(
           JSON.stringify({ request_timeout_ms: 60000 }),
@@ -150,6 +177,33 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(bodies2.some((b) => b.model === 'gpt-5-mini' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
+  });
+
+  it('creates empty WordPack via the new button and shows it', async () => {
+    const fetchMock = setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.keyboard('{Alt>}{4}{/Alt}');
+    });
+
+    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    await act(async () => {
+      await user.clear(input);
+      await user.type(input, 'epsilon');
+      await user.click(screen.getByRole('button', { name: 'WordPackのみ作成' }));
+    });
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('空のWordPackを作成しました'));
+    // 概要セクションが表示され、学習カードは空文字
+    await waitFor(() => expect(screen.getByText('概要')).toBeInTheDocument());
+    expect(screen.getByText('学習カード要点')).toBeInTheDocument();
+    // 呼び出しURL検証
+    const urls = fetchMock.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));
+    expect(urls.some((u) => u.endsWith('/api/word/packs'))).toBe(true);
+    // 直後に詳細取得が走る
+    expect(urls.some((u) => /\/api\/word\/packs\/wp:epsilon:/.test(u))).toBe(true);
   });
 });
 

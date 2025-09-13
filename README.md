@@ -10,6 +10,7 @@
 - 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（例外辞書・辞書キャッシュ・タイムアウト付きフォールバック）
 - WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
 - **WordPack永続化機能**: 生成されたWordPackを自動保存し、一覧表示・削除が可能（再生成は `WordPack` パネルから実行）
+- **WordPackのみ作成（新）**: 内容生成を行わず、空のWordPackを保存できます（UI: 生成ボタン横）。
 - **例文UIの改善（新）**: 英文・訳文・文法解説をカード型で横並びグリッド表示。各項目に「英/訳/解説」ラベルを付け、可読性を向上。
 
 ### フロントエンドのテーマ切替（ライト/ダーク）
@@ -186,6 +187,11 @@ FastAPI アプリは `src/backend/main.py`。
     - `request_id`, `path`, `method`, `latency_ms`, `is_error`, `is_timeout`, `client_ip`, `user_agent`
 
 - `POST /api/word/pack`
+  
+- `POST /api/word/packs`（新）
+  - 内容生成を行わず、空のWordPackを作成してIDを返します。
+  - リクエスト例: `{ "lemma": "insight" }`
+  - レスポンス例: `{ "id": "wp:insight:a1b2c3d4" }`
   - 周辺知識パック生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RPを直接生成し `citations` と `confidence` を付与）。
   - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
   - 例文: Dev/CS/LLM/Business/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja? }`。カテゴリ定義は次の通り：
