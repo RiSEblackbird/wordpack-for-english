@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -121,6 +122,26 @@ class SRSSQLiteStore:
                 )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_lemma ON word_packs(lemma);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_created_at ON word_packs(created_at);")
+                # 例文を正規化して保存するテーブル（WordPack 1:多 Examples）
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS word_pack_examples (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        word_pack_id TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        position INTEGER NOT NULL,
+                        en TEXT NOT NULL,
+                        ja TEXT NOT NULL,
+                        grammar_ja TEXT,
+                        llm_model TEXT,
+                        llm_params TEXT,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
+                    );
+                    """
+                )
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack ON word_pack_examples(word_pack_id);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack_cat_pos ON word_pack_examples(word_pack_id, category, position);")
         finally:
             conn.close()
 
@@ -413,11 +434,35 @@ class SRSSQLiteStore:
 
     # --- WordPack永続化機能 ---
     def save_word_pack(self, word_pack_id: str, lemma: str, data: str) -> None:
-        """WordPackをデータベースに保存する。"""
+        """WordPackをデータベースに保存する。
+
+        入力の data(JSON) から examples を分離して正規化テーブルに保存し、
+        core 部分（examples を除く）を word_packs.data に保存する。
+        """
         now = datetime.utcnow().isoformat()
+        # JSON を解析し、examples を分離
+        try:
+            parsed = json.loads(data) if isinstance(data, str) else dict(data or {})
+        except Exception:
+            # 不正な JSON はそのまま保存（従来互換）
+            parsed = None
+        examples = None
+        core_json = data
+        if isinstance(parsed, dict):
+            try:
+                examples = parsed.get("examples")
+                if isinstance(examples, dict):
+                    # core から examples を取り除いて保存用 JSON を作る
+                    core = dict(parsed)
+                    core.pop("examples", None)
+                    core_json = json.dumps(core, ensure_ascii=False)
+            except Exception:
+                examples = None
+
         conn = self._connect()
         try:
             with conn:
+                # 1) core を upsert
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO word_packs(id, lemma, data, created_at, updated_at)
@@ -425,13 +470,44 @@ class SRSSQLiteStore:
                         COALESCE((SELECT created_at FROM word_packs WHERE id = ?), ?),
                         ?);
                     """,
-                    (word_pack_id, lemma, data, word_pack_id, now, now),
+                    (word_pack_id, lemma, core_json, word_pack_id, now, now),
                 )
+
+                # 2) examples が dict なら正規化テーブルを置き換え
+                if isinstance(examples, dict):
+                    conn.execute("DELETE FROM word_pack_examples WHERE word_pack_id = ?;", (word_pack_id,))
+                    categories = ["Dev", "CS", "LLM", "Business", "Common"]
+                    for cat in categories:
+                        arr = examples.get(cat) or []
+                        if not isinstance(arr, list):
+                            continue
+                        for pos, item in enumerate(arr):
+                            if not isinstance(item, dict):
+                                continue
+                            en = str(item.get("en") or "").strip()
+                            ja = str(item.get("ja") or "").strip()
+                            if not en or not ja:
+                                continue
+                            grammar_ja = (str(item.get("grammar_ja") or "").strip() or None)
+                            llm_model = (str(item.get("llm_model") or "").strip() or None)
+                            llm_params = (str(item.get("llm_params") or "").strip() or None)
+                            conn.execute(
+                                """
+                                INSERT INTO word_pack_examples(
+                                    word_pack_id, category, position, en, ja, grammar_ja, llm_model, llm_params, created_at
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                                """,
+                                (word_pack_id, cat, pos, en, ja, grammar_ja, llm_model, llm_params, now),
+                            )
         finally:
             conn.close()
 
     def get_word_pack(self, word_pack_id: str) -> Optional[tuple[str, str, str, str]]:
-        """WordPackをIDで取得する。戻り値: (lemma, data, created_at, updated_at)"""
+        """WordPackをIDで取得する。戻り値: (lemma, data_json, created_at, updated_at)
+
+        保存時に examples を分離しているため、ここで examples を結合して返す。
+        旧データ互換として、正規化テーブルに行が無い場合は data 内の examples を使用する。
+        """
         conn = self._connect()
         try:
             cur = conn.execute(
@@ -441,7 +517,57 @@ class SRSSQLiteStore:
             row = cur.fetchone()
             if row is None:
                 return None
-            return (row["lemma"], row["data"], row["created_at"], row["updated_at"])
+
+            lemma = row["lemma"]
+            core_json = row["data"]
+            created_at = row["created_at"]
+            updated_at = row["updated_at"]
+
+            # core を辞書化
+            try:
+                core = json.loads(core_json) if core_json else {}
+            except Exception:
+                core = {}
+
+            # 正規化テーブルから examples を再構築
+            examples: dict = {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}
+            ex_cur = conn.execute(
+                """
+                SELECT category, en, ja, grammar_ja, llm_model, llm_params
+                FROM word_pack_examples
+                WHERE word_pack_id = ?
+                ORDER BY category ASC, position ASC, id ASC;
+                """,
+                (word_pack_id,),
+            )
+            any_row = False
+            for ex_row in ex_cur.fetchall():
+                any_row = True
+                cat = ex_row["category"]
+                item = {
+                    "en": ex_row["en"],
+                    "ja": ex_row["ja"],
+                }
+                if ex_row["grammar_ja"]:
+                    item["grammar_ja"] = ex_row["grammar_ja"]
+                if ex_row["llm_model"]:
+                    item["llm_model"] = ex_row["llm_model"]
+                if ex_row["llm_params"]:
+                    item["llm_params"] = ex_row["llm_params"]
+                if cat in examples:
+                    examples[cat].append(item)
+            # 旧データ互換: 行が無い場合は core に残っている examples をそのまま採用
+            if any_row:
+                core["examples"] = examples
+            else:
+                try:
+                    ex_in_core = core.get("examples")
+                    if not isinstance(ex_in_core, dict):
+                        core["examples"] = {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}
+                except Exception:
+                    core["examples"] = {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}
+
+            return (lemma, json.dumps(core, ensure_ascii=False), created_at, updated_at)
         finally:
             conn.close()
 
@@ -464,6 +590,57 @@ class SRSSQLiteStore:
             with conn:
                 cur = conn.execute("DELETE FROM word_packs WHERE id = ?;", (word_pack_id,))
                 return cur.rowcount > 0
+        finally:
+            conn.close()
+
+    # --- WordPack Examples operations (optimized) ---
+    def delete_example(self, word_pack_id: str, category: str, index: int) -> Optional[int]:
+        """指定カテゴリ内の index の例文を削除し、残件数を返す。存在しなければ None。
+
+        位置の整列（position の詰め）も行う。
+        """
+        if index < 0:
+            return None
+        conn = self._connect()
+        try:
+            with conn:
+                # 行の存在確認とターゲット id の特定（position 順）
+                cur = conn.execute(
+                    """
+                    SELECT id FROM word_pack_examples
+                    WHERE word_pack_id = ? AND category = ?
+                    ORDER BY position ASC, id ASC
+                    LIMIT 1 OFFSET ?;
+                    """,
+                    (word_pack_id, category, index),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                target_id = int(row["id"])
+
+                # 削除
+                conn.execute("DELETE FROM word_pack_examples WHERE id = ?;", (target_id,))
+
+                # 位置の再採番（category 内で 0..N-1 に詰める）
+                cur2 = conn.execute(
+                    """
+                    SELECT id FROM word_pack_examples
+                    WHERE word_pack_id = ? AND category = ?
+                    ORDER BY position ASC, id ASC;
+                    """,
+                    (word_pack_id, category),
+                )
+                ids = [int(r["id"]) for r in cur2.fetchall()]
+                for new_pos, rid in enumerate(ids):
+                    conn.execute(
+                        "UPDATE word_pack_examples SET position = ? WHERE id = ?;",
+                        (new_pos, rid),
+                    )
+
+                # 残件数
+                remaining = len(ids)
+                return remaining
         finally:
             conn.close()
 

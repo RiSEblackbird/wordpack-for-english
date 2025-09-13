@@ -13,6 +13,7 @@ from ..models.word import (
     WordPackListResponse,
     WordPackListItem,
     WordPackRegenerateRequest,
+    ExampleCategory,
 )
 from ..srs import store
 from ..logging import logger
@@ -459,4 +460,38 @@ async def delete_word_pack(word_pack_id: str) -> dict[str, str]:
     
     return {"message": "WordPack deleted successfully"}
 
+
+
+@router.delete(
+    "/packs/{word_pack_id}/examples/{category}/{index}",
+    summary="保存済みWordPackから個々の例文を削除",
+    response_description="指定カテゴリ内の index の例文を削除します",
+)
+async def delete_example_from_word_pack(
+    word_pack_id: str,
+    category: ExampleCategory,
+    index: int,
+) -> dict[str, object]:
+    """保存済みWordPackから個々の例文を削除する（正規化テーブルを直接操作）。
+
+    - `category`: `Dev|CS|LLM|Business|Common`
+    - `index`: 0 始まり
+    - 成功時は残件数を返す
+    """
+    # WordPack 存在チェック（直接の存在確認 API が無いので get_word_pack で検証）
+    wp = store.get_word_pack(word_pack_id)
+    if wp is None:
+        raise HTTPException(status_code=404, detail="WordPack not found")
+
+    remaining = store.delete_example(word_pack_id, category.value, index)
+    if remaining is None:
+        # index 範囲外またはカテゴリ不一致とみなす
+        raise HTTPException(status_code=404, detail="Example index out of range")
+
+    return {
+        "message": "Example deleted",
+        "category": category.value,
+        "index": index,
+        "remaining": remaining,
+    }
 
