@@ -28,7 +28,6 @@ class SRSSQLiteStore:
     - grade: 2=correct, 1=partial, 0=wrong
     - ease is clamped into [1.5, 3.0]
     - due/interval/ease/repetitions updated transactionally; review history recorded
-    - default user/deck are seeded for MVP compatibility
     """
 
     def __init__(self, db_path: str, default_user_id: str = "default", default_deck_id: str = "default") -> None:
@@ -37,7 +36,6 @@ class SRSSQLiteStore:
         self.default_deck_id = default_deck_id
         self._ensure_dirs()
         self._init_db()
-        self._seed_if_empty()
 
     # --- low-level helpers ---
     def _connect(self) -> sqlite3.Connection:
@@ -145,50 +143,7 @@ class SRSSQLiteStore:
         finally:
             conn.close()
 
-    def _seed_if_empty(self) -> None:
-        conn = self._connect()
-        try:
-            cur = conn.execute("SELECT COUNT(1) AS c FROM cards;")
-            row = cur.fetchone()
-            if row and int(row["c"]) > 0:
-                return
-
-            now = datetime.utcnow()
-            seeds: List[tuple[str, str, str]] = [
-                ("w:converge", "converge", "to come together"),
-                ("w:assumption", "assumption", "a thing that is accepted as true"),
-                ("w:algorithm", "algorithm", "a step-by-step procedure"),
-                ("w:robust", "robust", "strong and healthy; resilient"),
-                ("w:tradeoff", "trade-off", "a balance achieved between two desirable but incompatible features"),
-                ("w:approximate", "approximate", "close to the actual, but not completely accurate"),
-                ("w:feasible", "feasible", "possible to do easily or conveniently"),
-                ("w:insight", "insight", "the capacity to gain an accurate understanding"),
-                ("w:via", "via", "traveling through (a place) en route"),
-                ("w:yield", "yield", "produce or provide"),
-            ]
-
-            with conn:
-                # seed user/deck
-                conn.execute(
-                    "INSERT OR IGNORE INTO users(id, created_at) VALUES (?, ?);",
-                    (self.default_user_id, now.isoformat()),
-                )
-                conn.execute(
-                    "INSERT OR IGNORE INTO decks(id, user_id, name, created_at) VALUES (?, ?, ?, ?);",
-                    (self.default_deck_id, self.default_user_id, "default", now.isoformat()),
-                )
-                for idx, (rid, front, back) in enumerate(seeds):
-                    due = (now - timedelta(days=(idx % 3))).isoformat()
-                    conn.execute(
-                        """
-                        INSERT OR REPLACE INTO cards(
-                            id, deck_id, front, back, repetitions, interval_days, ease, due_at, created_at
-                        ) VALUES (?, ?, ?, ?, 0, 0, 2.5, ?, ?);
-                        """,
-                        (rid, self.default_deck_id, front, back, due, now.isoformat()),
-                    )
-        finally:
-            conn.close()
+    
 
     # --- public API ---
     def get_today(self, limit: int = 5) -> List[ReviewItem]:
@@ -310,6 +265,15 @@ class SRSSQLiteStore:
             if cur.fetchone() is not None:
                 return
             with conn:
+                # lazily ensure default user/deck exist
+                conn.execute(
+                    "INSERT OR IGNORE INTO users(id, created_at) VALUES (?, ?);",
+                    (self.default_user_id, now.isoformat()),
+                )
+                conn.execute(
+                    "INSERT OR IGNORE INTO decks(id, user_id, name, created_at) VALUES (?, ?, ?, ?);",
+                    (self.default_deck_id, self.default_user_id, "default", now.isoformat()),
+                )
                 conn.execute(
                     "INSERT INTO cards(id, deck_id, front, back, repetitions, interval_days, ease, due_at, created_at) VALUES (?, ?, ?, ?, 0, 0, 2.5, ?, ?);",
                     (item_id, self.default_deck_id, front, back, now.isoformat(), now.isoformat()),
@@ -506,7 +470,6 @@ class SRSSQLiteStore:
         """WordPackをIDで取得する。戻り値: (lemma, data_json, created_at, updated_at)
 
         保存時に examples を分離しているため、ここで examples を結合して返す。
-        旧データ互換として、正規化テーブルに行が無い場合は data 内の examples を使用する。
         """
         conn = self._connect()
         try:
@@ -529,7 +492,7 @@ class SRSSQLiteStore:
             except Exception:
                 core = {}
 
-            # 正規化テーブルから examples を再構築
+            # 正規化テーブルから examples を再構築（存在しなければ空カテゴリを返す）
             examples: dict = {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}
             ex_cur = conn.execute(
                 """
@@ -540,9 +503,7 @@ class SRSSQLiteStore:
                 """,
                 (word_pack_id,),
             )
-            any_row = False
             for ex_row in ex_cur.fetchall():
-                any_row = True
                 cat = ex_row["category"]
                 item = {
                     "en": ex_row["en"],
@@ -556,16 +517,7 @@ class SRSSQLiteStore:
                     item["llm_params"] = ex_row["llm_params"]
                 if cat in examples:
                     examples[cat].append(item)
-            # 旧データ互換: 行が無い場合は core に残っている examples をそのまま採用
-            if any_row:
-                core["examples"] = examples
-            else:
-                try:
-                    ex_in_core = core.get("examples")
-                    if not isinstance(ex_in_core, dict):
-                        core["examples"] = {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}
-                except Exception:
-                    core["examples"] = {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}
+            core["examples"] = examples
 
             return (lemma, json.dumps(core, ensure_ascii=False), created_at, updated_at)
         finally:
