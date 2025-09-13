@@ -204,7 +204,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       // 直後に保存済みWordPack詳細を読み込んで表示
       await loadWordPack(res.id);
       // 詳細の読み込みまで完了したことを通知
-      updateNotification(notifId, { title: `【${l2}】の生成完了！`, status: 'success', message: '保存済みWordPackを読み込みました' });
+      updateNotification(notifId, { title: `【${l2}】の生成完了！`, status: 'success', message: '詳細読み込み完了' });
       // SRSメタを取得（既存処理の中でも実施されるが保険）
       try {
         const m = await fetchJson<CardMeta>(`${settings.apiBase}/review/card_by_lemma?lemma=${encodeURIComponent(lemma.trim())}`);
