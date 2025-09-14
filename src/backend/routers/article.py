@@ -18,6 +18,8 @@ from ..models.article import (
     ArticleListResponse,
     ArticleWordPackLink,
 )
+from ..observability import request_trace, span
+from ..flows.article_import import ArticleImportFlow
 
 
 router = APIRouter(tags=["article"])
@@ -88,107 +90,13 @@ def _post_filter_lemmas(raw: list[str]) -> list[str]:
 
 @router.post("/import", response_model=ArticleDetailResponse, response_model_exclude_none=True)
 async def import_article(req: ArticleImportRequest) -> ArticleDetailResponse:
-    if not req.text or not req.text.strip():
-        raise HTTPException(status_code=400, detail="text is required")
-
-    llm = get_llm_provider(
-        model_override=getattr(req, "model", None),
-        temperature_override=getattr(req, "temperature", None),
-        reasoning_override=getattr(req, "reasoning", None),
-        text_override=getattr(req, "text_opts", None),
-    )
-    original_text = req.text.strip()
-    prompt = _prompt_for_article_import(original_text)
-    out = llm.complete(prompt)
-    if not out:
-        raise HTTPException(status_code=502, detail="LLM returned empty content")
-
-    # JSON parse
-    try:
-        data = json.loads(out)
-    except Exception as exc:
-        logger.info("article_import_json_parse_failed", error=str(exc))
-        if settings.strict_mode:
-            raise HTTPException(status_code=502, detail="LLM JSON parse failed (strict mode)")
-        # 非 strict: 失敗時は最小構造で継続
-        data = {"lemmas": []}
-
-    lemmas: List[str] = []
-    try:
-        raw_list = [str(x) for x in (data.get("lemmas") or [])]
-        lemmas = _post_filter_lemmas(raw_list)
-    except Exception:
-        lemmas = []
-
-    title_en = str(data.get("title_en") or "Untitled").strip() or "Untitled"
-    # 英語原文は入力そのものを保持
-    body_en = original_text
-    body_ja = str(data.get("body_ja") or "").strip()
-    notes_ja = str(data.get("notes_ja") or "").strip() or None
-
-    # WordPack 存在確認/作成
-    links: list[ArticleWordPackLink] = []
-    for lemma in lemmas:
-        wp_id = store.find_word_pack_id_by_lemma(lemma)
-        status = "existing"
-        if wp_id is None:
-            # 空のWordPackを作成
-            empty_word_pack = WordPack(
-                lemma=lemma,
-                pronunciation={"ipa_GA": None, "ipa_RP": None, "syllables": None, "stress_index": None, "linking_notes": []},
-                senses=[],
-                collocations={"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
-                contrast=[],
-                examples={"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []},
-                etymology={"note": "-", "confidence": "low"},
-                study_card="",
-                citations=[],
-                confidence="low",
-            )
-            wp_id = f"wp:{lemma}:{uuid.uuid4().hex[:8]}"
-            store.save_word_pack(wp_id, lemma, empty_word_pack.model_dump_json())
-            status = "created"
-        # 簡易の is_empty 判定
-        is_empty = True
-        try:
-            result = store.get_word_pack(wp_id)
-            if result is not None:
-                _, data_json, _, _ = result
-                d = json.loads(data_json)
-                senses_empty = not d.get("senses")
-                ex = d.get("examples") or {}
-                examples_empty = all(not (ex.get(k) or []) for k in ["Dev","CS","LLM","Business","Common"])
-                study_empty = not bool((d.get("study_card") or "").strip())
-                is_empty = bool(senses_empty and examples_empty and study_empty)
-        except Exception:
-            is_empty = True
-        links.append(ArticleWordPackLink(word_pack_id=wp_id, lemma=lemma, status=status, is_empty=is_empty))
-
-    # 記事保存
-    article_id = f"art:{uuid.uuid4().hex[:12]}"
-    store.save_article(
-        article_id,
-        title_en=title_en,
-        body_en=body_en,
-        body_ja=body_ja,
-        notes_ja=notes_ja,
-        related_word_packs=[(l.word_pack_id, l.lemma, l.status) for l in links],
-    )
-    # 保存後のメタ（作成/更新時刻）を取得
-    meta = store.get_article(article_id)
-    created_at = meta[4] if meta else ""
-    updated_at = meta[5] if meta else ""
-
-    return ArticleDetailResponse(
-        id=article_id,
-        title_en=title_en,
-        body_en=body_en,
-        body_ja=body_ja,
-        notes_ja=notes_ja,
-        related_word_packs=links,
-        created_at=created_at,
-        updated_at=updated_at,
-    )
+    flow = ArticleImportFlow()
+    # ルータ層は薄く、Langfuse の親スパンを貼ってフローを呼び出す
+    from ..observability import request_trace
+    with request_trace(name="ArticleImportFlow", metadata={"endpoint": "/api/article/import"}) as ctx:
+        tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
+        with span(trace=tr, name="article.flow.run", input={"text_chars": len(req.text or "")}) as _:
+            return flow.run(req)
 
 
 @router.get("/", response_model=ArticleListResponse)

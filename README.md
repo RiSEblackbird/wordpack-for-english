@@ -397,6 +397,17 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
 - v2 クライアント互換時は `trace/span.update(input=..., output=...)` を使用します。
 - ダッシュボードに Input/Output が表示されない場合は、`LANGFUSE_ENABLED=true` とキー設定、ならびに `src/backend/observability.py` が v3 分岐で `set_attribute('input'|'output', ...)` を実行していることを確認してください。
 
+#### 6-2-1. 文章インポート（ArticleImportFlow）のトレース
+- `POST /api/article/import` は `ArticleImportFlow` によって LangGraph スタイルでオーケストレーションされ、各ステップに Langfuse スパンが付与されています。
+  - `article.build_prompt`: インポート用プロンプト生成（`prompt_chars`/必要に応じて `prompt_preview`）
+  - `article.llm.complete`: LLM 呼び出し
+  - `article.parse_json`: LLM 出力の JSON 解析（失敗時は 502。コードフェンスは自動除去）
+  - `article.filter_lemmas`: lemmas の簡易フィルタ
+  - `article.link_or_create_wordpacks`: 既存 WordPack 紐付け / 空パック新規作成
+  - `article.save_article`: 記事保存とメタ取得
+- ルータ層では親スパン `ArticleImportFlow` を開始し、その子として `article.flow.run` を貼ったうえでフロー本体を実行します。
+- 図は `docs/flows.md` の「ArticleImportFlow（文章インポート）」を参照してください。
+
 フルプロンプトの記録（任意・デフォルト無効）:
 - 既定では LLM スパンの `input` はサマリ（`prompt_chars` と `prompt_preview`）のみを送信します。
 - デバッグ目的でプロンプト全文を Langfuse に送るには `.env` に以下を設定:
@@ -418,3 +429,9 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
   - 抽出語のWordPack関連（既存がなければ空のWordPackを自動作成）
 - 一覧: `/api/article` で記事一覧、`/api/article/{id}` で詳細取得、`DELETE /api/article/{id}` で削除。
 - 関連WordPackカードの「生成」ボタンで `/api/word/packs/{word_pack_id}/regenerate` を呼び出し、生成完了後はUIが自動更新されます。
+
+### 文章インポートのエラーハンドリング（重要）
+- LLM出力はJSONである必要があります。Markdownのコードフェンス```json ... ```で囲まれた出力も自動で剥がして解析します。
+- 解析に失敗した場合は常に 502 を返し、記事は保存しません。
+- JSONであっても `body_ja`（日本語訳）が空、かつ `lemmas` が空のときは 502 を返し、記事は保存しません。
+- これにより、無内容な記事や関連語を持たない記事が保存される回りくどい失敗パスを排除しています。

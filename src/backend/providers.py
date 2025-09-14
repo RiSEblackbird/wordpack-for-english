@@ -229,6 +229,21 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
                             include_reasoning_text=is_reasoning_model,
                         )
                         content = _extract_text(resp)
+                        # 追加のデバッグログ（プレーンテキストのプレビューとハッシュ）
+                        try:
+                            import hashlib as _hf3
+                            logger.info(
+                                "llm_complete_preview",
+                                provider="openai",
+                                model=self._model,
+                                preview=(content or "")[:120],
+                                content_chars=len(content or ""),
+                                content_sha256=_hf3.sha256((content or "").encode("utf-8", errors="ignore")).hexdigest(),
+                                json_forced=bool(use_json_flag),
+                                param=token_param,
+                            )
+                        except Exception:
+                            pass
                         try:
                             if _s is not None:
                                 if hasattr(_s, "update"):
