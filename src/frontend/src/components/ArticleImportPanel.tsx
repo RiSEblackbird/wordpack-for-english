@@ -53,7 +53,15 @@ export const ArticleImportPanel: React.FC = () => {
         signal: ctrl.signal,
         timeoutMs: settings.requestTimeoutMs,
       });
-      setArticle(res);
+      // 直後に詳細を再取得して、保存完了時点の最新状態（リンクの is_empty など）に同期
+      let refreshed: ArticleDetailResponse | null = null;
+      try {
+        refreshed = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/${res.id}`);
+      } catch {
+        // 失敗時は POST の応答をそのまま使用
+        refreshed = res;
+      }
+      setArticle(refreshed);
       setMsg({ kind: 'status', text: '文章をインポートしました' });
       updateNotification(notifId, { title: '文章インポート完了', status: 'success', message: '詳細を表示します' });
       setDetailOpen(true);

@@ -392,6 +392,46 @@ Input:
             s = _link_or_create_wordpacks(s)  # type: ignore[name-defined]
             s = _save_article(s)  # type: ignore[name-defined]
 
+        # 最終応答は保存済みのDB値を読み直して返す（同期ズレ防止）
+        try:
+            aid = str(s.get("article_id") or "")
+            got = store.get_article(aid)
+            if got is not None:
+                title_en, body_en_db, body_ja_db, notes_ja_db, created_at, updated_at, links = got
+                link_models: list[ArticleWordPackLink] = [
+                    ArticleWordPackLink(word_pack_id=wp, lemma=lm, status=st, is_empty=True) for (wp, lm, st) in links
+                ]
+                # is_empty はUI用の推定のため簡易再判定
+                try:
+                    for i, (wp, lm, st) in enumerate(links):
+                        is_empty = True
+                        try:
+                            got_wp = store.get_word_pack(wp)
+                            if got_wp is not None:
+                                _, data_json, _, _ = got_wp
+                                d = json.loads(data_json)
+                                senses_empty = not d.get("senses")
+                                ex = d.get("examples") or {}
+                                examples_empty = all(not (ex.get(k) or []) for k in ["Dev","CS","LLM","Business","Common"]) 
+                                study_empty = not bool((d.get("study_card") or "").strip())
+                                is_empty = bool(senses_empty and examples_empty and study_empty)
+                        except Exception:
+                            is_empty = True
+                        link_models[i].is_empty = is_empty
+                except Exception:
+                    pass
+                return ArticleDetailResponse(
+                    id=aid,
+                    title_en=title_en or str(s.get("title_en") or "Untitled"),
+                    body_en=body_en_db or str(s.get("body_en") or ""),
+                    body_ja=body_ja_db or str(s.get("body_ja") or ""),
+                    notes_ja=(notes_ja_db or None),
+                    related_word_packs=link_models,
+                    created_at=created_at,
+                    updated_at=updated_at,
+                )
+        except Exception:
+            pass
         return ArticleDetailResponse(
             id=str(s.get("article_id")),
             title_en=str(s.get("title_en") or "Untitled"),
