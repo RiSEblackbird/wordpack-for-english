@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 
 from .config import settings
 from .logging import logger
+from .observability import get_langfuse, span
 
 try:
     import chromadb  # type: ignore
@@ -163,7 +164,9 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
         # 1) JSON + max_output_tokens（Responses API 正式）
         try:
             is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
-            resp = _call_with_param_fallback(use_json=True, token_param="max_output_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
+            lf_trace = getattr(get_langfuse(), "trace", None)
+            with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt)}):
+                resp = _call_with_param_fallback(use_json=True, token_param="max_output_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
             content = _extract_text(resp)
             logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=True)
             return content
@@ -173,7 +176,9 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
             if ("unsupported parameter" in text1 or "not supported" in text1) and "max_output_tokens" in text1:
                 try:
                     is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
-                    resp = _call_with_param_fallback(use_json=True, token_param="max_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
+                    lf_trace = getattr(get_langfuse(), "trace", None)
+                    with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt), "param":"max_tokens"}):
+                        resp = _call_with_param_fallback(use_json=True, token_param="max_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
                     content = _extract_text(resp)
                     logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=True, param="max_tokens")
                     return content
@@ -182,14 +187,18 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
             # JSON 指定が非対応 or その他 → 素応答へ
             try:
                 is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
-                resp = _call_with_param_fallback(use_json=False, token_param="max_output_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
+                lf_trace = getattr(get_langfuse(), "trace", None)
+                with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt), "json": False}):
+                    resp = _call_with_param_fallback(use_json=False, token_param="max_output_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
                 content = _extract_text(resp)
                 logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=False)
                 return content
             except Exception:
                 # さらに互換パラメータ（max_completion_tokens）での最後の試行
                 is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
-                resp = _call_with_param_fallback(use_json=False, token_param="max_completion_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
+                lf_trace = getattr(get_langfuse(), "trace", None)
+                with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt), "param":"max_completion_tokens"}):
+                    resp = _call_with_param_fallback(use_json=False, token_param="max_completion_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
                 content = _extract_text(resp)
                 logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=False, param="max_completion_tokens")
                 return content
@@ -613,7 +622,9 @@ def chroma_query_with_policy(
                 return col.query(query_texts=[query_text], n_results=n_results)
 
             start = time.time()
-            res = _with_timeout(_do_query, timeout_ms)
+            lf_trace = getattr(get_langfuse(), "trace", None)
+            with span(trace=None if lf_trace is None else lf_trace(name="RAG query"), name="chroma.query", input={"collection": collection, "n_results": n_results, "query_chars": len(query_text)}):
+                res = _with_timeout(_do_query, timeout_ms)
             _elapsed_ms = (time.time() - start) * 1000.0
             # ログは上位で行うことを想定（ここでは必要最小限）
             return res  # type: ignore[return-value]

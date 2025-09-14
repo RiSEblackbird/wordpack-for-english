@@ -16,6 +16,7 @@ from .config import settings  # noqa: F401 - imported for side effects or future
 from .logging import configure_logging, logger
 from .routers import health, word, config as cfg
 from .metrics import registry
+from .observability import request_trace
 from .config import settings
 from .middleware import RequestIDMiddleware, RateLimitMiddleware
 from .providers import shutdown_providers, ChromaClientFactory
@@ -62,28 +63,29 @@ async def access_log_and_metrics(request: Request, call_next):
     ua = request.headers.get("user-agent", "-")
     is_error = False
     is_timeout = False
-    try:
-        response = await call_next(request)
-        return response
-    except Exception as exc:
-        is_error = True
-        if (TimeoutException is not None and isinstance(exc, TimeoutException)) or isinstance(exc, asyncio.TimeoutError):
-            is_timeout = True
-        raise exc
-    finally:
-        latency_ms = (time.time() - start) * 1000
-        registry.record(path, latency_ms, is_error=is_error, is_timeout=is_timeout)
-        logger.info(
-            "request_complete",
-            path=path,
-            method=method,
-            latency_ms=latency_ms,
-            is_error=is_error,
-            is_timeout=is_timeout,
-            request_id=request_id,
-            client_ip=client_ip,
-            user_agent=ua,
-        )
+    with request_trace(name=f"HTTP {method} {path}", user_id=request.headers.get("x-user-id"), metadata={"request_id": request_id, "client_ip": client_ip, "user_agent": ua}):
+        try:
+            response = await call_next(request)
+            return response
+        except Exception as exc:
+            is_error = True
+            if (TimeoutException is not None and isinstance(exc, TimeoutException)) or isinstance(exc, asyncio.TimeoutError):
+                is_timeout = True
+            raise exc
+        finally:
+            latency_ms = (time.time() - start) * 1000
+            registry.record(path, latency_ms, is_error=is_error, is_timeout=is_timeout)
+            logger.info(
+                "request_complete",
+                path=path,
+                method=method,
+                latency_ms=latency_ms,
+                is_error=is_error,
+                is_timeout=is_timeout,
+                request_id=request_id,
+                client_ip=client_ip,
+                user_agent=ua,
+            )
 
 app.include_router(word.router, prefix="/api/word")  # 語彙関連エンドポイント
 app.include_router(health.router)  # ヘルスチェック

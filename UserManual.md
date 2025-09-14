@@ -167,6 +167,11 @@
   - Docker: `docker compose build --no-cache`
   - Vite 監視: Windows は `CHOKIDAR_USEPOLLING=1`（`docker-compose.yml` で設定可）
 
+#### B-6-1. Langfuse のトレースが記録されない
+- 現在は Langfuse v3（OpenTelemetry）対応済みです。
+- 症状: `WARNING ... langfuse_trace_api_missing` が出続ける／最初の数件のみ表示され以後が出ない場合、依存の不整合か環境変数の誤設定が考えられます。
+- 対応: `docker compose build --no-cache && docker compose up` を実行。必要に応じて `LANGFUSE_PUBLIC_KEY/SECRET_KEY/HOST` を再確認し、プロジェクトと日付フィルタを正しく選択してください。古い v2 を利用する場合は `requirements.txt` を v2 に固定してご利用ください。
+
 #### B-1-1. ポート競合の回避（Docker）
 - 既定ポートが使用中で起動できない場合は、ホスト公開ポートを環境変数で上書きできます。
   - 一時的に上書き:
@@ -201,4 +206,6 @@
 
 ### B-7. 運用のヒント（PR4）
 - レート制限/リクエストID/監視（p95, 件数, エラー, タイムアウト）/例外監視（Sentry）などを運用ルールとして維持
+- Langfuse（任意）: `.env` に `LANGFUSE_ENABLED=true`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`, `LANGFUSE_RELEASE` を設定すると、HTTP/LLM/RAG のトレースが送信されます。
+  - Strict モード時は上記キーと `langfuse` パッケージが必須。欠落時は起動でエラーになります。
 

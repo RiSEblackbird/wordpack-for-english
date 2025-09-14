@@ -13,6 +13,12 @@ services:
       - RAG_ENABLED=${RAG_ENABLED:-true}
       - AUTO_SEED_ON_STARTUP=${AUTO_SEED_ON_STARTUP:-true}
       - CHROMA_PERSIST_DIR=${CHROMA_PERSIST_DIR:-.chroma}
+      # Langfuse
+      - LANGFUSE_ENABLED=${LANGFUSE_ENABLED:-false}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST}
+      - LANGFUSE_RELEASE=${LANGFUSE_RELEASE:-wordpack-api@0.3.0}
     volumes:
       - ./:/app
     working_dir: /app

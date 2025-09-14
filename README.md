@@ -368,3 +368,26 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 補足（互換キーの無視）:
 - 旧サンプル/別アプリ由来のキー（例: `API_KEY`/`ALLOWED_ORIGINS` など）が `.env` に残っていても、`src/backend/config.py` は未使用の環境変数を無視する設定になっています（`extra="ignore"`）。
 - そのため Docker 環境でも、未使用キーが存在して起動が失敗することはありません。
+
+### 6-2. Langfuse の有効化（任意）
+
+Langfuse を有効化すると、HTTP リクエスト・LLM 呼び出し・RAG 近傍検索のトレース/スパンが送信されます。
+
+1) `.env` に以下を設定（`env.example` 参照）:
+```
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=...   # Langfuse Project の Public Key
+LANGFUSE_SECRET_KEY=...
+LANGFUSE_HOST=https://cloud.langfuse.com  # 自ホストの場合はそのURL
+LANGFUSE_RELEASE=wordpack-api@0.3.0
+```
+2) 依存が未導入ならインストール:
+```
+pip install -r requirements.txt
+```
+3) 起動後、Langfuse のダッシュボードでトレースを確認できます。
+
+注意:
+- Langfuse v3（OpenTelemetryベース）に対応しました。`requirements.txt` は v3 系を利用します。旧 v2 を使う場合は依存を固定し、`observability.py` の v3 分岐を無効化してください。
+
+Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、上記キーと `langfuse` パッケージは必須です（不足時は起動エラー）。
