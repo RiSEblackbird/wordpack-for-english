@@ -10,6 +10,7 @@ graph TD
     E --> F["WordPack Response（citations/confidence 付与）"];
 
     subgraph LangGraph_StateGraph
-        G[generate(category,count)] --> G
+        G[generate per category]
+        G --> G
     end
 ```
