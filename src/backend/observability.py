@@ -151,10 +151,13 @@ def span(*, trace: Any | None, name: str, input: Optional[Any] = None, metadata:
             return
         try:
             with cm as s:
-                # v3: 入力は属性 `input` に格納（Langfuse UI の Input 表示に対応）
-                if input is not None and hasattr(s, "set_attribute"):
+                # v3: 入力は update(input=...) を優先。未対応クライアントには属性でフォールバック。
+                if input is not None:
                     try:
-                        s.set_attribute("input", str(input)[:4000])  # type: ignore[call-arg]
+                        if hasattr(s, "update"):
+                            s.update(input=str(input)[:4000])  # type: ignore[call-arg]
+                        elif hasattr(s, "set_attribute"):
+                            s.set_attribute("input", str(input)[:4000])  # type: ignore[call-arg]
                     except Exception:
                         pass
                 if metadata and hasattr(s, "set_attribute"):
@@ -166,13 +169,23 @@ def span(*, trace: Any | None, name: str, input: Optional[Any] = None, metadata:
                 try:
                     yield s
                 except Exception as exc:
-                    if hasattr(s, "set_attribute"):
+                    if hasattr(s, "update"):
+                        try:
+                            s.update(metadata={"error": str(exc)[:500]})  # type: ignore[call-arg]
+                        except Exception:
+                            pass
+                    elif hasattr(s, "set_attribute"):
                         s.set_attribute("error", str(exc)[:500])  # type: ignore[call-arg]
                     raise
                 finally:
-                    if hasattr(s, "set_attribute"):
-                        duration_ms = (time.time() - start) * 1000.0
-                        s.set_attribute("duration_ms", duration_ms)  # type: ignore[call-arg]
+                    duration_ms = (time.time() - start) * 1000.0
+                    try:
+                        if hasattr(s, "update"):
+                            s.update(metadata={"duration_ms": duration_ms})  # type: ignore[call-arg]
+                        elif hasattr(s, "set_attribute"):
+                            s.set_attribute("duration_ms", duration_ms)  # type: ignore[call-arg]
+                    except Exception:
+                        pass
         finally:
             pass
         return
