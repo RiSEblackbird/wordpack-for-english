@@ -167,6 +167,8 @@ Input:
                 "body_ja": "",
                 "notes_ja": None,
             }
+            # 保存済みIDを閉包で保持（LangGraphの差分返却による欠落対策）
+            saved_article_id: Optional[str] = None
             # 入力の要点を構造化ログ
             import hashlib as _hf  # local import
             preview = original_text[:120]
@@ -314,6 +316,9 @@ Input:
 
                 with span(trace=None, name="article.save_article"):
                     article_id = f"art:{uuid.uuid4().hex[:12]}"
+                    # 閉包へも確実に退避
+                    nonlocal saved_article_id
+                    saved_article_id = article_id
                     store.save_article(
                         article_id,
                         title_en=title_en,
@@ -365,12 +370,8 @@ Input:
 
                 compiled = graph.compile()  # type: ignore[attr-defined]
                 out_state = compiled.invoke(state)  # type: ignore[attr-defined]
-                # LangGraph 実装差で差分のみ返るケースに備え、初期 state をマージ
-                if isinstance(out_state, dict):
-                    merged: _ArticleState = {**state, **out_state}  # type: ignore[misc]
-                    s = merged
-                else:
-                    s = state
+                # 差分返却の場合でも初期stateを混ぜて欠落させない。ただし初期stateではなく、out_stateをそのまま優先。
+                s = out_state if isinstance(out_state, dict) else state
             except Exception:
                 # LangGraph が使えない/非互換のときは順次実行
                 s = state
@@ -392,53 +393,67 @@ Input:
             s = _link_or_create_wordpacks(s)  # type: ignore[name-defined]
             s = _save_article(s)  # type: ignore[name-defined]
 
-        # 最終応答は保存済みのDB値を読み直して返す（同期ズレ防止）
+        # 最終応答は保存済みのDB値を読み直して返す（同期ズレ防止）。失敗時は明確にエラーを返す。
         try:
-            aid = str(s.get("article_id") or "")
+            # LangGraphの差分返却で state から key が落ちるケースに備え、閉包の saved_article_id を優先
+            try:
+                aid_local = locals().get("saved_article_id")  # type: ignore[assignment]
+            except Exception:
+                aid_local = None
+            aid = str((aid_local or s.get("article_id") or ""))
             got = store.get_article(aid)
-            if got is not None:
-                title_en, body_en_db, body_ja_db, notes_ja_db, created_at, updated_at, links = got
-                link_models: list[ArticleWordPackLink] = [
-                    ArticleWordPackLink(word_pack_id=wp, lemma=lm, status=st, is_empty=True) for (wp, lm, st) in links
-                ]
-                # is_empty はUI用の推定のため簡易再判定
-                try:
-                    for i, (wp, lm, st) in enumerate(links):
-                        is_empty = True
-                        try:
-                            got_wp = store.get_word_pack(wp)
-                            if got_wp is not None:
-                                _, data_json, _, _ = got_wp
-                                d = json.loads(data_json)
-                                senses_empty = not d.get("senses")
-                                ex = d.get("examples") or {}
-                                examples_empty = all(not (ex.get(k) or []) for k in ["Dev","CS","LLM","Business","Common"]) 
-                                study_empty = not bool((d.get("study_card") or "").strip())
-                                is_empty = bool(senses_empty and examples_empty and study_empty)
-                        except Exception:
-                            is_empty = True
-                        link_models[i].is_empty = is_empty
-                except Exception:
-                    pass
-                return ArticleDetailResponse(
-                    id=aid,
-                    title_en=title_en or str(s.get("title_en") or "Untitled"),
-                    body_en=body_en_db or str(s.get("body_en") or ""),
-                    body_ja=body_ja_db or str(s.get("body_ja") or ""),
-                    notes_ja=(notes_ja_db or None),
-                    related_word_packs=link_models,
-                    created_at=created_at,
-                    updated_at=updated_at,
+            if got is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        "message": "Failed to reload article after save",
+                        "reason_code": "ARTICLE_DB_RELOAD_NONE",
+                        "diagnostics": {"article_id": aid},
+                    },
                 )
-        except Exception:
-            pass
-        return ArticleDetailResponse(
-            id=str(s.get("article_id")),
-            title_en=str(s.get("title_en") or "Untitled"),
-            body_en=str(s.get("body_en") or ""),
-            body_ja=str(s.get("body_ja") or ""),
-            notes_ja=s.get("notes_ja"),
-            related_word_packs=s.get("links", []),
-            created_at=str(s.get("created_at") or ""),
-            updated_at=str(s.get("updated_at") or ""),
-        )
+            title_en, body_en_db, body_ja_db, notes_ja_db, created_at, updated_at, links = got
+            link_models: list[ArticleWordPackLink] = [
+                ArticleWordPackLink(word_pack_id=wp, lemma=lm, status=st, is_empty=True) for (wp, lm, st) in links
+            ]
+            # is_empty はUI用の推定のため簡易再判定
+            try:
+                for i, (wp, lm, st) in enumerate(links):
+                    is_empty = True
+                    try:
+                        got_wp = store.get_word_pack(wp)
+                        if got_wp is not None:
+                            _, data_json, _, _ = got_wp
+                            d = json.loads(data_json)
+                            senses_empty = not d.get("senses")
+                            ex = d.get("examples") or {}
+                            examples_empty = all(not (ex.get(k) or []) for k in ["Dev","CS","LLM","Business","Common"]) 
+                            study_empty = not bool((d.get("study_card") or "").strip())
+                            is_empty = bool(senses_empty and examples_empty and study_empty)
+                    except Exception:
+                        is_empty = True
+                    link_models[i].is_empty = is_empty
+            except Exception:
+                # is_empty の再計算に失敗しても致命ではない
+                pass
+
+            return ArticleDetailResponse(
+                id=aid,
+                title_en=title_en,
+                body_en=body_en_db,
+                body_ja=body_ja_db,
+                notes_ja=(notes_ja_db or None),
+                related_word_packs=link_models,
+                created_at=created_at,
+                updated_at=updated_at,
+            )
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    "message": "Exception while reloading article after save",
+                    "reason_code": "ARTICLE_DB_RELOAD_ERROR",
+                    "diagnostics": {"error": str(exc), "article_id": str(s.get("article_id") or "")},
+                },
+            )
