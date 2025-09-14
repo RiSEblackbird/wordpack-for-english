@@ -391,3 +391,8 @@ pip install -r requirements.txt
 - Langfuse v3（OpenTelemetryベース）に対応しました。`requirements.txt` は v3 系を利用します。旧 v2 を使う場合は依存を固定し、`observability.py` の v3 分岐を無効化してください。
 
 Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、上記キーと `langfuse` パッケージは必須です（不足時は起動エラー）。
+
+#### Input / Output の表示について
+- 本リポジトリでは、Langfuse v3 のスパン属性として `input` と `output` を付与します（HTTP 親スパンはリクエストの要点とレスポンスの要点、LLM/RAG スパンはプロンプト長や結果テキストなど）。
+- v2 クライアント互換時は `trace/span.update(input=..., output=...)` を使用します。
+- ダッシュボードに Input/Output が表示されない場合は、`LANGFUSE_ENABLED=true` とキー設定、ならびに `src/backend/observability.py` が v3 分岐で `set_attribute('input'|'output', ...)` を実行していることを確認してください。

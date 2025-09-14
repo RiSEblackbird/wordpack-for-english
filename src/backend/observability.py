@@ -151,6 +151,12 @@ def span(*, trace: Any | None, name: str, input: Optional[Any] = None, metadata:
             return
         try:
             with cm as s:
+                # v3: 入力は属性 `input` に格納（Langfuse UI の Input 表示に対応）
+                if input is not None and hasattr(s, "set_attribute"):
+                    try:
+                        s.set_attribute("input", str(input)[:4000])  # type: ignore[call-arg]
+                    except Exception:
+                        pass
                 if metadata and hasattr(s, "set_attribute"):
                     for k, v in (metadata or {}).items():
                         try:

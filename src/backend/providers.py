@@ -165,9 +165,17 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
         try:
             is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
             lf_trace = getattr(get_langfuse(), "trace", None)
-            with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt)}):
+            with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt)}) as _s:
                 resp = _call_with_param_fallback(use_json=True, token_param="max_output_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
-            content = _extract_text(resp)
+                content = _extract_text(resp)
+                try:
+                    if _s is not None:
+                        if hasattr(_s, "set_attribute"):
+                            _s.set_attribute("output", content[:4000])  # type: ignore[call-arg]
+                        elif hasattr(_s, "update"):
+                            _s.update(output=content[:4000])
+                except Exception:
+                    pass
             logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=True)
             return content
         except Exception as exc1:
@@ -177,9 +185,17 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
                 try:
                     is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
                     lf_trace = getattr(get_langfuse(), "trace", None)
-                    with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt), "param":"max_tokens"}):
+                    with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt), "param":"max_tokens"}) as _s:
                         resp = _call_with_param_fallback(use_json=True, token_param="max_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
-                    content = _extract_text(resp)
+                        content = _extract_text(resp)
+                        try:
+                            if _s is not None:
+                                if hasattr(_s, "set_attribute"):
+                                    _s.set_attribute("output", content[:4000])  # type: ignore[call-arg]
+                                elif hasattr(_s, "update"):
+                                    _s.update(output=content[:4000])
+                        except Exception:
+                            pass
                     logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=True, param="max_tokens")
                     return content
                 except Exception:
@@ -188,18 +204,34 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
             try:
                 is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
                 lf_trace = getattr(get_langfuse(), "trace", None)
-                with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt), "json": False}):
+                with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt), "json": False}) as _s:
                     resp = _call_with_param_fallback(use_json=False, token_param="max_output_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
-                content = _extract_text(resp)
+                    content = _extract_text(resp)
+                    try:
+                        if _s is not None:
+                            if hasattr(_s, "set_attribute"):
+                                _s.set_attribute("output", content[:4000])  # type: ignore[call-arg]
+                            elif hasattr(_s, "update"):
+                                _s.update(output=content[:4000])
+                    except Exception:
+                        pass
                 logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=False)
                 return content
             except Exception:
                 # さらに互換パラメータ（max_completion_tokens）での最後の試行
                 is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
                 lf_trace = getattr(get_langfuse(), "trace", None)
-                with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt), "param":"max_completion_tokens"}):
+                with span(trace=None if lf_trace is None else lf_trace(name="LLM call"), name="openai.responses.create", input={"model": self._model, "prompt_chars": len(prompt), "param":"max_completion_tokens"}) as _s:
                     resp = _call_with_param_fallback(use_json=False, token_param="max_completion_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
-                content = _extract_text(resp)
+                    content = _extract_text(resp)
+                    try:
+                        if _s is not None:
+                            if hasattr(_s, "set_attribute"):
+                                _s.set_attribute("output", content[:4000])  # type: ignore[call-arg]
+                            elif hasattr(_s, "update"):
+                                _s.update(output=content[:4000])
+                    except Exception:
+                        pass
                 logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=False, param="max_completion_tokens")
                 return content
 

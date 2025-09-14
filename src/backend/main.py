@@ -63,9 +63,41 @@ async def access_log_and_metrics(request: Request, call_next):
     ua = request.headers.get("user-agent", "-")
     is_error = False
     is_timeout = False
-    with request_trace(name=f"HTTP {method} {path}", user_id=request.headers.get("x-user-id"), metadata={"request_id": request_id, "client_ip": client_ip, "user_agent": ua}):
+    # 入力（クエリ等）は Langfuse の Input として記録
+    input_payload: dict[str, Any] = {
+        "path": path,
+        "method": method,
+        "query": dict(request.query_params) if request.query_params else {},
+    }
+    with request_trace(name=f"HTTP {method} {path}", user_id=request.headers.get("x-user-id"), metadata={"request_id": request_id, "client_ip": client_ip, "user_agent": ua}) as ctx:
+        try:
+            tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
+            # v3: set_attribute / v2: update(input=...)
+            try:
+                if tr is not None and hasattr(tr, "set_attribute"):
+                    tr.set_attribute("input", str(input_payload)[:4000])  # type: ignore[call-arg]
+                elif tr is not None and hasattr(tr, "update"):
+                    tr.update(input=input_payload)
+            except Exception:
+                pass
+        except Exception:
+            pass
         try:
             response = await call_next(request)
+            # 出力はステータス/ヘッダの要点のみ（ボディは副作用回避のため読まない）
+            try:
+                tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
+                output_payload = {
+                    "status": getattr(response, "status_code", None),
+                    "content_type": response.headers.get("content-type"),
+                    "content_length": response.headers.get("content-length"),
+                }
+                if tr is not None and hasattr(tr, "set_attribute"):
+                    tr.set_attribute("output", str(output_payload)[:4000])  # type: ignore[call-arg]
+                elif tr is not None and hasattr(tr, "update"):
+                    tr.update(output=output_payload)
+            except Exception:
+                pass
             return response
         except Exception as exc:
             is_error = True
