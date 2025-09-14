@@ -1,6 +1,7 @@
 from typing import Any, Optional, List, Callable
 import sys
 import time
+import contextvars
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 from .config import settings
@@ -254,7 +255,9 @@ def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
             last_exc: Exception | None = None
             for attempt in range(1, max(1, settings.llm_max_retries) + 1):
                 try:
-                    future = _llm_executor.submit(llm.complete, prompt)
+                    # OpenTelemetry コンテキストをスレッドに伝播
+                    _ctx = contextvars.copy_context()
+                    future = _llm_executor.submit(_ctx.run, llm.complete, prompt)
                     result = future.result(timeout=settings.llm_timeout_ms / 1000.0)
                     if result == "":
                         logger.info("llm_complete_empty", attempt=attempt, retries=settings.llm_max_retries)
