@@ -53,6 +53,8 @@ export const ArticleImportPanel: React.FC = () => {
       setArticle(refreshed);
       setMsg({ kind: 'status', text: '文章をインポートしました' });
       updateNotification(notifId, { title: '文章インポート完了', status: 'success', message: '詳細を表示します' });
+      // グローバルに記事更新イベントを通知（一覧の自動更新用）
+      try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
       setDetailOpen(true);
       try { setModalOpen(true); } catch {}
     } catch (e) {
@@ -88,6 +90,31 @@ export const ArticleImportPanel: React.FC = () => {
     }
   };
 
+  const deleteWordPack = async (wordPackId: string) => {
+    if (!article) return;
+    if (!confirm('このWordPackを削除しますか？')) return;
+    const ctrl = new AbortController();
+    setLoading(true);
+    setMsg(null);
+    try {
+      await fetchJson(`${settings.apiBase}/word/packs/${wordPackId}`, {
+        method: 'DELETE',
+        signal: ctrl.signal,
+        timeoutMs: settings.requestTimeoutMs,
+      });
+      // 記事詳細を再取得して関連WordPack一覧を最新化
+      const refreshed = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/${article.id}`);
+      setArticle(refreshed);
+      setMsg({ kind: 'status', text: 'WordPackを削除しました' });
+      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+    } catch (e) {
+      const m = e instanceof ApiError ? e.message : 'WordPackの削除に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section>
       <style>{`
@@ -120,6 +147,7 @@ export const ArticleImportPanel: React.FC = () => {
         title="インポート結果"
         onRegenerateWordPack={regenerateWordPack}
         onOpenWordPackPreview={(id) => { setWpPreviewId(id); setWpPreviewOpen(true); try { setModalOpen(true); } catch {} }}
+        onDeleteWordPack={deleteWordPack}
       />
 
       <Modal

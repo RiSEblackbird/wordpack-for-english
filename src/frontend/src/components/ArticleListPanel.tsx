@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { formatDateJst } from '../lib/date';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
@@ -87,7 +88,54 @@ export const ArticleListPanel: React.FC = () => {
     }
   };
 
+  const deleteWordPack = async (wordPackId: string) => {
+    if (!preview) return;
+    if (!confirm('このWordPackを削除しますか？')) return;
+    setLoading(true);
+    setMsg(null);
+    try {
+      await fetchJson(`${settings.apiBase}/word/packs/${wordPackId}`, { method: 'DELETE' });
+      const refreshed = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/${preview.id}`);
+      setPreview(refreshed);
+      setMsg({ kind: 'status', text: 'WordPackを削除しました' });
+      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+    } catch (e) {
+      const m = e instanceof ApiError ? e.message : 'WordPackの削除に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const regenerateWordPack = async (wordPackId: string) => {
+    if (!preview) return;
+    setLoading(true);
+    setMsg(null);
+    try {
+      await fetchJson(`${settings.apiBase}/word/packs/${wordPackId}/regenerate`, {
+        method: 'POST',
+      });
+      const refreshed = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/${preview.id}`);
+      setPreview(refreshed);
+      setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
+      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+    } catch (e) {
+      const m = e instanceof ApiError ? e.message : 'WordPackの再生成に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => { load(); return () => abortRef.current?.abort(); }, []);
+  // インポート完了などで記事が更新されたら、現在のオフセットで再読込
+  useEffect(() => {
+    const onUpdated = () => { load(offset); };
+    try { window.addEventListener('article:updated', onUpdated as EventListener); } catch {}
+    return () => {
+      try { window.removeEventListener('article:updated', onUpdated as EventListener); } catch {}
+    };
+  }, [offset]);
 
   const hasNext = offset + limit < total;
   const hasPrev = offset > 0;
@@ -110,7 +158,7 @@ export const ArticleListPanel: React.FC = () => {
               <strong style={{ flex: 1 }}>{it.title_en}</strong>
               <button onClick={(e) => { e.stopPropagation(); del(it.id); }} aria-label={`delete-article-${it.id}`}>削除</button>
             </div>
-            <div style={{ fontSize: '0.8em', color: 'var(--color-subtle)' }}>更新: {it.updated_at}</div>
+            <div style={{ fontSize: '0.8em', color: 'var(--color-subtle)' }}>更新: {formatDateJst(it.updated_at)}</div>
           </div>
         ))}
       </div>
@@ -127,6 +175,8 @@ export const ArticleListPanel: React.FC = () => {
         onClose={() => { setPreviewOpen(false); try { setModalOpen(false); } catch {} }}
         article={preview}
         title="文章プレビュー"
+        onRegenerateWordPack={regenerateWordPack}
+        onDeleteWordPack={deleteWordPack}
       />
     </section>
   );

@@ -26,6 +26,7 @@ interface Props {
   title?: string;
   onRegenerateWordPack?: (wordPackId: string) => void;
   onOpenWordPackPreview?: (wordPackId: string) => void;
+  onDeleteWordPack?: (wordPackId: string) => void;
 }
 
 export const ArticleDetailModal: React.FC<Props> = ({
@@ -35,6 +36,7 @@ export const ArticleDetailModal: React.FC<Props> = ({
   title = '文章詳細',
   onRegenerateWordPack,
   onOpenWordPackPreview,
+  onDeleteWordPack,
 }) => {
   return (
     <Modal
@@ -74,6 +76,15 @@ export const ArticleDetailModal: React.FC<Props> = ({
                   ) : null}
                   {onRegenerateWordPack ? (
                     <button onClick={() => onRegenerateWordPack(l.word_pack_id)} style={{ marginLeft: 'auto' }}>生成</button>
+                  ) : null}
+                  {onDeleteWordPack ? (
+                    <button
+                      onClick={() => onDeleteWordPack(l.word_pack_id)}
+                      aria-label={`delete-wordpack-${l.word_pack_id}`}
+                      style={{ marginLeft: 8, color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                    >
+                      削除
+                    </button>
                   ) : null}
                 </div>
               </div>
