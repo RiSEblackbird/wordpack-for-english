@@ -57,7 +57,29 @@ def get_langfuse() -> Any | None:
 
 
 @contextmanager
-def request_trace(*, name: str, user_id: Optional[str] = None, metadata: Optional[dict[str, Any]] = None) -> ContextManager[dict[str, Any]]:
+def request_trace(*, name: str, user_id: Optional[str] = None, metadata: Optional[dict[str, Any]] = None, path: Optional[str] = None) -> ContextManager[dict[str, Any]]:
+    # 一部のルート（例: /healthz）は観測対象から除外してノイズを減らす
+    try:
+        exclude = getattr(settings, "langfuse_exclude_paths", [])
+        p = path or (metadata or {}).get("path") if isinstance(metadata, dict) else None
+        if p and isinstance(exclude, list):
+            for pat in exclude:
+                try:
+                    if not isinstance(pat, str):
+                        continue
+                    if pat.endswith("*"):
+                        if p.startswith(pat[:-1]):
+                            yield {"trace": None}
+                            return
+                    elif p == pat:
+                        yield {"trace": None}
+                        return
+                except Exception:
+                    pass
+    except Exception:
+        # 例外時は除外せず通常通りに進める
+        pass
+
     lf = get_langfuse()
     start = time.time()
     # --- v3: context manager でスパンを開始し、その内側で処理を実行する ---
@@ -155,9 +177,9 @@ def span(*, trace: Any | None, name: str, input: Optional[Any] = None, metadata:
                 if input is not None:
                     try:
                         if hasattr(s, "update"):
-                            s.update(input=str(input)[:4000])  # type: ignore[call-arg]
+                            s.update(input=str(input)[:40000])  # type: ignore[call-arg]
                         elif hasattr(s, "set_attribute"):
-                            s.set_attribute("input", str(input)[:4000])  # type: ignore[call-arg]
+                            s.set_attribute("input", str(input)[:40000])  # type: ignore[call-arg]
                     except Exception:
                         pass
                 if metadata and hasattr(s, "set_attribute"):

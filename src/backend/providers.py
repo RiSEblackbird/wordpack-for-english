@@ -212,9 +212,9 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
                         try:
                             if _s is not None:
                                 if hasattr(_s, "update"):
-                                    _s.update(output=content[:4000])
+                                    _s.update(output=content[:40000])
                                 elif hasattr(_s, "set_attribute"):
-                                    _s.set_attribute("output", content[:4000])  # type: ignore[call-arg]
+                                    _s.set_attribute("output", content[:40000])  # type: ignore[call-arg]
                         except Exception:
                             pass
                         logger.info(

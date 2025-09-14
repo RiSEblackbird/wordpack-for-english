@@ -396,3 +396,7 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
 - 本リポジトリでは、Langfuse v3 のスパン属性として `input` と `output` を付与します（HTTP 親スパンはリクエストの要点とレスポンスの要点、LLM/RAG スパンはプロンプト長や結果テキストなど）。
 - v2 クライアント互換時は `trace/span.update(input=..., output=...)` を使用します。
 - ダッシュボードに Input/Output が表示されない場合は、`LANGFUSE_ENABLED=true` とキー設定、ならびに `src/backend/observability.py` が v3 分岐で `set_attribute('input'|'output', ...)` を実行していることを確認してください。
+
+##### ノイズ抑制（/healthz など）
+- 監視用の軽量エンドポイントはノイズになりやすいため、既定で `settings.langfuse_exclude_paths = ["/healthz", "/health", "/metrics*"]` を除外しています。
+- 完全一致または接頭一致（末尾`*`）に一致したパスはトレースを生成しません。`.env` から上書きしたい場合は、コード側の既定を編集するか、将来的な環境変数対応をご利用ください。

@@ -121,6 +121,11 @@ class Settings(BaseSettings):
     langfuse_secret_key: str | None = Field(default=None, description="Langfuse secret key")
     langfuse_host: str | None = Field(default=None, description="Langfuse host (e.g. https://cloud.langfuse.com)")
     langfuse_release: str | None = Field(default=None, description="Release/version tag for tracing")
+    # Langfuse 除外パス（完全一致 or 接頭一致のワイルドカード*対応）
+    langfuse_exclude_paths: list[str] = Field(
+        default=["/healthz", "/health", "/metrics*"],
+        description="Exclude paths from Langfuse tracing (exact or prefix*)",
+    )
 
     # --- Strict mode ---
     strict_mode: bool = Field(

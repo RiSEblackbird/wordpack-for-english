@@ -122,7 +122,7 @@
 - `.env` に `LANGFUSE_ENABLED=true` と各キーを設定し、`requirements.txt` の `langfuse` を導入してください。
 - 本アプリは Langfuse v3（OpenTelemetry）を使用します。
   - HTTP 親スパン: `input`（パス/メソッド/クエリ要点）と `output`（ステータス/ヘッダ要点）を属性で付与。
-  - LLM / RAG スパン: `input`（モデル・プロンプト長など）/ `output`（生成テキストの先頭〜最大4000文字）を属性で付与。
+  - LLM / RAG スパン: `input`（モデル・プロンプト長など）/ `output`（生成テキストの先頭〜最大40000文字）を属性で付与。
   - v2 クライアント互換パスでは `update(input=..., output=...)` を使用。
 - ダッシュボードで Input/Output が空の場合:
   1) `.env` のキー/ホスト設定を確認
