@@ -5,6 +5,7 @@ import { useNotifications } from '../NotificationsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { Modal } from './Modal';
 import { WordPackPanel } from './WordPackPanel';
+import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
 
 interface ArticleWordPackLink {
   word_pack_id: string;
@@ -13,16 +14,7 @@ interface ArticleWordPackLink {
   is_empty?: boolean;
 }
 
-interface ArticleDetailResponse {
-  id: string;
-  title_en: string;
-  body_en: string;
-  body_ja: string;
-  notes_ja?: string | null;
-  related_word_packs: ArticleWordPackLink[];
-  created_at?: string;
-  updated_at?: string;
-}
+type ArticleDetailResponse = ArticleDetailData;
 
 export const ArticleImportPanel: React.FC = () => {
   const { settings } = useSettings();
@@ -124,38 +116,15 @@ export const ArticleImportPanel: React.FC = () => {
         {msg && <div role={msg.kind}>{msg.text}</div>}
       </div>
 
-      <Modal
+      <ArticleDetailModal
         isOpen={!!article && detailOpen}
         onClose={() => { setDetailOpen(false); try { setModalOpen(false); } catch {} }}
+        article={article}
         title="インポート結果"
-      >
-        {article ? (
-          <div>
-            <h3 style={{ marginTop: 0 }}>{article.title_en}</h3>
-            <div style={{ whiteSpace: 'pre-wrap', margin: '0.5rem 0' }}>{article.body_en}</div>
-            <hr />
-            <div style={{ whiteSpace: 'pre-wrap', margin: '0.5rem 0' }}>{article.body_ja}</div>
-            {article.notes_ja ? (
-              <div style={{ marginTop: '0.5rem', color: 'var(--color-subtle)' }}>{article.notes_ja}</div>
-            ) : null}
-            <h4>関連WordPack</h4>
-            <div className="ai-wp-grid">
-              {article.related_word_packs.map((l) => (
-                <div key={l.word_pack_id} className="ai-card">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setWpPreviewId(l.word_pack_id); setWpPreviewOpen(true); try { setModalOpen(true); } catch {} }}>
-                      <strong>{l.lemma}</strong>
-                    </a>
-                    <span className="ai-badge">{l.status === 'created' ? '新規' : '既存'}</span>
-                    {l.is_empty ? <span className="ai-badge" style={{ background: '#fff3cd', borderColor: '#ffe08a', color: '#7a5b00' }}>空</span> : null}
-                    <button onClick={() => regenerateWordPack(l.word_pack_id)} style={{ marginLeft: 'auto' }}>生成</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </Modal>
+        showWordPackActions
+        onRegenerateWordPack={regenerateWordPack}
+        onOpenWordPackPreview={(id) => { setWpPreviewId(id); setWpPreviewOpen(true); try { setModalOpen(true); } catch {} }}
+      />
 
       <Modal
         isOpen={!!wpPreviewId && wpPreviewOpen}

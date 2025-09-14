@@ -430,6 +430,7 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
   - 抽出語のWordPack関連（既存がなければ空のWordPackを自動作成）
 - 一覧: `/api/article` で記事一覧、`/api/article/{id}` で詳細取得、`DELETE /api/article/{id}` で削除。
 - 関連WordPackカードの「生成」ボタンで `/api/word/packs/{word_pack_id}/regenerate` を呼び出し、生成完了後はUIが自動更新されます。
+ - フロントエンドの詳細表示は共通モーダル `ArticleDetailModal` を用いて実装しています。`ArticleImportPanel` と `ArticleListPanel` の双方で同一のUI/挙動を共有し、日本語訳の直下に解説 `notes_ja` が表示されます（一覧側は閲覧のみ、インポート側はWordPackの再生成・プレビュー操作を含む）。
 
 ### 文章インポートのエラーハンドリング（重要）
 - 各役割（タイトル/訳/解説/lemmas）は独立プロンプトで生成します。lemmas は JSON 配列、他は素のテキストを期待します（コードフェンスは自動剥離）。

@@ -3,6 +3,7 @@ import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { Modal } from './Modal';
+import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
 
 interface ArticleListItem {
   id: string;
@@ -18,16 +19,7 @@ interface ArticleListResponse {
   offset: number;
 }
 
-interface ArticleDetailResponse {
-  id: string;
-  title_en: string;
-  body_en: string;
-  body_ja: string;
-  notes_ja?: string | null;
-  related_word_packs: { word_pack_id: string; lemma: string; status: 'existing' | 'created' }[];
-  created_at: string;
-  updated_at: string;
-}
+type ArticleDetailResponse = ArticleDetailData;
 
 export const ArticleListPanel: React.FC = () => {
   const { settings } = useSettings();
@@ -130,26 +122,12 @@ export const ArticleListPanel: React.FC = () => {
         </div>
       )}
 
-      <Modal 
+      <ArticleDetailModal
         isOpen={previewOpen}
         onClose={() => { setPreviewOpen(false); try { setModalOpen(false); } catch {} }}
+        article={preview}
         title="文章プレビュー"
-      >
-        {preview ? (
-          <div>
-            <h3 style={{ marginTop: 0 }}>{preview.title_en}</h3>
-            <div style={{ whiteSpace: 'pre-wrap' }}>{preview.body_en}</div>
-            <hr />
-            <div style={{ whiteSpace: 'pre-wrap' }}>{preview.body_ja}</div>
-            <h4>関連WordPack</h4>
-            <ul>
-              {preview.related_word_packs.map((l) => (
-                <li key={l.word_pack_id}>{l.lemma} [{l.status}]</li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </Modal>
+      />
     </section>
   );
 };
