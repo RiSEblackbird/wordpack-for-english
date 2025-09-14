@@ -409,3 +409,12 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
 ##### ノイズ抑制（/healthz など）
 - 監視用の軽量エンドポイントはノイズになりやすいため、既定で `settings.langfuse_exclude_paths = ["/healthz", "/health", "/metrics*"]` を除外しています。
 - 完全一致または接頭一致（末尾`*`）に一致したパスはトレースを生成しません。`.env` から上書きしたい場合は、コード側の既定を編集するか、将来的な環境変数対応をご利用ください。
+
+## 文章インポート機能
+
+- フロントエンド: 新タブ「文章インポート」から、テキストエリアに文章を貼り付けて「インポート」を実行します。
+- バックエンド: `/api/article/import` でインポート処理を行い、以下をDBに保存します。
+  - 英語タイトル/英語本文/日本語訳/解説
+  - 抽出語のWordPack関連（既存がなければ空のWordPackを自動作成）
+- 一覧: `/api/article` で記事一覧、`/api/article/{id}` で詳細取得、`DELETE /api/article/{id}` で削除。
+- 関連WordPackカードの「生成」ボタンで `/api/word/packs/{word_pack_id}/regenerate` を呼び出し、生成完了後はUIが自動更新されます。

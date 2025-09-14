@@ -1,0 +1,157 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { useSettings } from '../SettingsContext';
+import { useModal } from '../ModalContext';
+import { fetchJson, ApiError } from '../lib/fetcher';
+import { Modal } from './Modal';
+
+interface ArticleListItem {
+  id: string;
+  title_en: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ArticleListResponse {
+  items: ArticleListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+interface ArticleDetailResponse {
+  id: string;
+  title_en: string;
+  body_en: string;
+  body_ja: string;
+  notes_ja?: string | null;
+  related_word_packs: { word_pack_id: string; lemma: string; status: 'existing' | 'created' }[];
+  created_at: string;
+  updated_at: string;
+}
+
+export const ArticleListPanel: React.FC = () => {
+  const { settings } = useSettings();
+  const { setModalOpen } = useModal();
+  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<ArticleListItem[]>([]);
+  const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [limit] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [preview, setPreview] = useState<ArticleDetailResponse | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const load = async (newOffset = 0) => {
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setLoading(true);
+    setMsg(null);
+    try {
+      const res = await fetchJson<ArticleListResponse>(`${settings.apiBase}/article?limit=${limit}&offset=${newOffset}`, { signal: ctrl.signal });
+      setItems(res.items);
+      setTotal(res.total);
+      setOffset(newOffset);
+      setMsg({ kind: 'status', text: `${res.items.length}件の文章を読み込みました` });
+    } catch (e) {
+      if (ctrl.signal.aborted) return;
+      const m = e instanceof ApiError ? e.message : '文章一覧の読み込みに失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const open = async (id: string) => {
+    setLoading(true);
+    setMsg(null);
+    try {
+      const res = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/${id}`);
+      setPreview(res);
+      setPreviewOpen(true);
+      try { setModalOpen(true); } catch {}
+    } catch (e) {
+      const m = e instanceof ApiError ? e.message : '文章の取得に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const del = async (id: string) => {
+    if (!confirm('この文章を削除しますか？')) return;
+    setLoading(true);
+    setMsg(null);
+    try {
+      await fetchJson(`${settings.apiBase}/article/${id}`, { method: 'DELETE' });
+      await load(offset);
+      setMsg({ kind: 'status', text: '削除しました' });
+    } catch (e) {
+      const m = e instanceof ApiError ? e.message : '削除に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); return () => abortRef.current?.abort(); }, []);
+
+  const hasNext = offset + limit < total;
+  const hasPrev = offset > 0;
+
+  return (
+    <section>
+      <style>{`
+        .al-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.5rem; }
+        .al-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem; background: var(--color-surface); cursor: pointer; }
+      `}</style>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2>インポート済み文章</h2>
+        <button onClick={() => load(offset)} disabled={loading}>更新</button>
+      </div>
+      {msg && <div role={msg.kind}>{msg.text}</div>}
+      <div className="al-grid">
+        {items.map((it) => (
+          <div key={it.id} className="al-card" onClick={() => open(it.id)}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <strong style={{ flex: 1 }}>{it.title_en}</strong>
+              <button onClick={(e) => { e.stopPropagation(); del(it.id); }} aria-label={`delete-article-${it.id}`}>削除</button>
+            </div>
+            <div style={{ fontSize: '0.8em', color: 'var(--color-subtle)' }}>更新: {it.updated_at}</div>
+          </div>
+        ))}
+      </div>
+      {(hasPrev || hasNext) && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
+          <button onClick={() => load(offset - limit)} disabled={!hasPrev || loading}>前へ</button>
+          <span>{offset + 1}-{Math.min(offset + limit, total)} / {total}件</span>
+          <button onClick={() => load(offset + limit)} disabled={!hasNext || loading}>次へ</button>
+        </div>
+      )}
+
+      <Modal 
+        isOpen={previewOpen}
+        onClose={() => { setPreviewOpen(false); try { setModalOpen(false); } catch {} }}
+        title="文章プレビュー"
+      >
+        {preview ? (
+          <div>
+            <h3 style={{ marginTop: 0 }}>{preview.title_en}</h3>
+            <div style={{ whiteSpace: 'pre-wrap' }}>{preview.body_en}</div>
+            <hr />
+            <div style={{ whiteSpace: 'pre-wrap' }}>{preview.body_ja}</div>
+            <h4>関連WordPack</h4>
+            <ul>
+              {preview.related_word_packs.map((l) => (
+                <li key={l.word_pack_id}>{l.lemma} [{l.status}]</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </Modal>
+    </section>
+  );
+};
+
+
