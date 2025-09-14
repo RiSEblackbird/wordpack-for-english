@@ -397,6 +397,15 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
 - v2 クライアント互換時は `trace/span.update(input=..., output=...)` を使用します。
 - ダッシュボードに Input/Output が表示されない場合は、`LANGFUSE_ENABLED=true` とキー設定、ならびに `src/backend/observability.py` が v3 分岐で `set_attribute('input'|'output', ...)` を実行していることを確認してください。
 
+フルプロンプトの記録（任意・デフォルト無効）:
+- 既定では LLM スパンの `input` はサマリ（`prompt_chars` と `prompt_preview`）のみを送信します。
+- デバッグ目的でプロンプト全文を Langfuse に送るには `.env` に以下を設定:
+  ```env
+  LANGFUSE_LOG_FULL_PROMPT=true
+  LANGFUSE_PROMPT_MAX_CHARS=40000
+  ```
+- 有効化時、スパン `input` に `prompt`（最大 `LANGFUSE_PROMPT_MAX_CHARS`）と `prompt_sha256` が含まれます。秘匿性の観点から本番では原則オフにしてください。
+
 ##### ノイズ抑制（/healthz など）
 - 監視用の軽量エンドポイントはノイズになりやすいため、既定で `settings.langfuse_exclude_paths = ["/healthz", "/health", "/metrics*"]` を除外しています。
 - 完全一致または接頭一致（末尾`*`）に一致したパスはトレースを生成しません。`.env` から上書きしたい場合は、コード側の既定を編集するか、将来的な環境変数対応をご利用ください。

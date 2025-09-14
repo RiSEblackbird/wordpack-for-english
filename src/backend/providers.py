@@ -176,10 +176,30 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
         # 単一スパン内で最適解を選んで1回で成功させる（必要時のみ内部で軽微な再試行）
         is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
         lf_trace = getattr(get_langfuse(), "trace", None)
+        # Langfuse: 入力ログは設定に応じて全文 or プレビュー
+        try:
+            import hashlib  # local import to avoid top-level cost
+        except Exception:
+            hashlib = None  # type: ignore
+        if getattr(settings, "langfuse_log_full_prompt", False):
+            maxc = int(getattr(settings, "langfuse_prompt_max_chars", 40000))
+            full_payload = {
+                "model": self._model,
+                "prompt_chars": len(prompt),
+                "prompt": prompt[:max(0, maxc)],
+            }
+            if hashlib is not None:
+                try:
+                    full_payload["prompt_sha256"] = hashlib.sha256(prompt.encode("utf-8", errors="ignore")).hexdigest()
+                except Exception:
+                    pass
+            span_input = full_payload
+        else:
+            span_input = {"model": self._model, "prompt_chars": len(prompt), "prompt_preview": prompt[:500]}
         with span(
             trace=None if lf_trace is None else lf_trace(name="LLM call"),
             name="openai.responses.create",
-            input={"model": self._model, "prompt_chars": len(prompt), "prompt_preview": prompt[:500]},
+            input=span_input,
         ) as _s:
             # 事前にSDKシグネチャを検査して初手の引数を決定
             try:

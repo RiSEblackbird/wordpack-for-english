@@ -126,6 +126,15 @@ class Settings(BaseSettings):
         default=["/healthz", "/health", "/metrics*"],
         description="Exclude paths from Langfuse tracing (exact or prefix*)",
     )
+    # Langfuse 入力ログの詳細度（LLM プロンプトの全文送信を制御）
+    langfuse_log_full_prompt: bool = Field(
+        default=False,
+        description="Send full LLM prompt to Langfuse in span input (disabled by default)",
+    )
+    langfuse_prompt_max_chars: int = Field(
+        default=40000,
+        description="Max characters to record for prompt/input to Langfuse",
+    )
 
     # --- Strict mode ---
     strict_mode: bool = Field(

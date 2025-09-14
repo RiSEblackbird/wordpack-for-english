@@ -124,6 +124,9 @@
   - HTTP 親スパン: `input`（パス/メソッド/クエリ要点）と `output`（ステータス/ヘッダ要点）を属性で付与。
   - LLM / RAG スパン: `input`（モデル・プロンプト長など）/ `output`（生成テキストの先頭〜最大40000文字）を属性で付与。
   - v2 クライアント互換パスでは `update(input=..., output=...)` を使用。
+- LLM プロンプト全文の記録（任意）:
+  - 既定ではプレビューのみ（`prompt_preview`）。`.env` で `LANGFUSE_LOG_FULL_PROMPT=true` を設定すると、`input.prompt` に全文（最大 `LANGFUSE_PROMPT_MAX_CHARS`）と `prompt_sha256` を付与します。
+  - 機微情報の観点から、本番では原則オフのまま運用してください。
 - ダッシュボードで Input/Output が空の場合:
   1) `.env` のキー/ホスト設定を確認
   2) `LANGFUSE_ENABLED=true` か確認
