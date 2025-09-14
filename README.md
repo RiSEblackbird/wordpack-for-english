@@ -397,6 +397,18 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
 - v2 クライアント互換時は `trace/span.update(input=..., output=...)` を使用します。
 - ダッシュボードに Input/Output が表示されない場合は、`LANGFUSE_ENABLED=true` とキー設定、ならびに `src/backend/observability.py` が v3 分岐で `set_attribute('input'|'output', ...)` を実行していることを確認してください。
 
+#### 6-2-1. 文章インポート（ArticleImportFlow）のトレース
+- `POST /api/article/import` は `ArticleImportFlow` によって LangGraph スタイルでオーケストレーションされ、各ステップに Langfuse スパンが付与されています。
+  - `article.title.prompt` / `article.title.llm`: 短い英語タイトル生成
+  - `article.translation.prompt` / `article.translation.llm`: 日本語訳生成（忠実訳）
+  - `article.explanation.prompt` / `article.explanation.llm`: 日本語解説生成（1–3文）
+  - `article.lemmas.prompt` / `article.lemmas.llm`: 教育的な lemmas/句の抽出（JSON配列）
+  - `article.filter_lemmas`: lemmas の簡易フィルタ
+  - `article.link_or_create_wordpacks`: 既存 WordPack 紐付け / 空パック新規作成
+  - `article.save_article`: 記事保存とメタ取得
+- ルータ層では親スパン `ArticleImportFlow` を開始し、その子として `article.flow.run` を貼ったうえでフロー本体を実行します。
+- 図は `docs/flows.md` の「ArticleImportFlow（文章インポート）」を参照してください。
+
 フルプロンプトの記録（任意・デフォルト無効）:
 - 既定では LLM スパンの `input` はサマリ（`prompt_chars` と `prompt_preview`）のみを送信します。
 - デバッグ目的でプロンプト全文を Langfuse に送るには `.env` に以下を設定:
@@ -409,3 +421,19 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
 ##### ノイズ抑制（/healthz など）
 - 監視用の軽量エンドポイントはノイズになりやすいため、既定で `settings.langfuse_exclude_paths = ["/healthz", "/health", "/metrics*"]` を除外しています。
 - 完全一致または接頭一致（末尾`*`）に一致したパスはトレースを生成しません。`.env` から上書きしたい場合は、コード側の既定を編集するか、将来的な環境変数対応をご利用ください。
+
+## 文章インポート機能
+
+- フロントエンド: 新タブ「文章インポート」から、テキストエリアに文章を貼り付けて「インポート」を実行します。
+- バックエンド: `/api/article/import` でインポート処理を行い、以下をDBに保存します。
+  - 英語タイトル/英語本文/日本語訳/解説
+  - 抽出語のWordPack関連（既存がなければ空のWordPackを自動作成）
+- 一覧: `/api/article` で記事一覧、`/api/article/{id}` で詳細取得、`DELETE /api/article/{id}` で削除。
+- 関連WordPackカードの「生成」ボタンで `/api/word/packs/{word_pack_id}/regenerate` を呼び出し、生成完了後はUIが自動更新されます。
+ - フロントエンドの詳細表示は共通モーダル `ArticleDetailModal` を用いて実装しています。`ArticleImportPanel` と `ArticleListPanel` の双方で同一のUI/挙動を共有し、日本語訳の直下に解説 `notes_ja` が表示されます。関連WordPackは常にカード表示で統一し、インポート直後は再生成/プレビュー操作が可能、一覧からの表示は閲覧専用です。
+
+### 文章インポートのエラーハンドリング（重要）
+- 各役割（タイトル/訳/解説/lemmas）は独立プロンプトで生成します。lemmas は JSON 配列、他は素のテキストを期待します（コードフェンスは自動剥離）。
+- lemmas のJSON解析に失敗した場合は lemmas を空扱いの上でフィルタを適用します（ダミーは生成しません）。
+- 最終的に「日本語訳が空」かつ「lemmas が空」の場合は 502 を返し、記事は保存しません。
+- これにより、無内容な記事や関連語を持たない記事が保存される回りくどい失敗パスを排除しています。

@@ -2,13 +2,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WordPackPanel } from './components/WordPackPanel';
 import { WordPackListPanel } from './components/WordPackListPanel';
+import { ArticleImportPanel } from './components/ArticleImportPanel';
+import { ArticleListPanel } from './components/ArticleListPanel';
 import { SettingsProvider } from './SettingsContext';
 import { ModalProvider } from './ModalContext';
 import { NotificationsProvider } from './NotificationsContext';
 import { NotificationsOverlay } from './components/NotificationsOverlay';
 import { useSettings } from './SettingsContext';
 
-type Tab = 'wordpack' | 'settings';
+type Tab = 'wordpack' | 'article' | 'settings';
 
 export const App: React.FC = () => {
   const [tab, setTab] = useState<Tab>('wordpack');
@@ -109,6 +111,7 @@ export const App: React.FC = () => {
         </header>
         <nav>
           <button onClick={() => setTab('wordpack')} aria-selected={tab === 'wordpack'}>WordPack</button>
+          <button onClick={() => setTab('article')} aria-selected={tab === 'article'}>文章インポート</button>
           <button onClick={() => setTab('settings')} aria-selected={tab === 'settings'}>設定</button>
         </nav>
         <main>
@@ -126,6 +129,13 @@ export const App: React.FC = () => {
             </>
           )}
           {tab === 'settings' && <SettingsPanel focusRef={focusRef} />}
+          {tab === 'article' && (
+            <>
+              <ArticleImportPanel />
+              <hr />
+              <ArticleListPanel />
+            </>
+          )}
         </main>
         <footer>
           <small>WordPack 英語学習</small>

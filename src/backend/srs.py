@@ -140,6 +140,40 @@ class SRSSQLiteStore:
                 )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack ON word_pack_examples(word_pack_id);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack_cat_pos ON word_pack_examples(word_pack_id, category, position);")
+
+                # --- Articles 永続化テーブル ---
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS articles (
+                        id TEXT PRIMARY KEY,
+                        title_en TEXT NOT NULL,
+                        body_en TEXT NOT NULL,
+                        body_ja TEXT NOT NULL,
+                        notes_ja TEXT,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    );
+                    """
+                )
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title_en);")
+                # Article と WordPack の関連（多対多）
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS article_word_packs (
+                        article_id TEXT NOT NULL,
+                        word_pack_id TEXT NOT NULL,
+                        lemma TEXT NOT NULL,
+                        status TEXT NOT NULL, -- 'existing' | 'created'
+                        created_at TEXT NOT NULL,
+                        PRIMARY KEY(article_id, word_pack_id),
+                        FOREIGN KEY(article_id) REFERENCES articles(id) ON DELETE CASCADE,
+                        FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
+                    );
+                    """
+                )
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_article ON article_word_packs(article_id);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_lemma ON article_word_packs(lemma);")
         finally:
             conn.close()
 
@@ -593,6 +627,142 @@ class SRSSQLiteStore:
                 # 残件数
                 remaining = len(ids)
                 return remaining
+        finally:
+            conn.close()
+
+
+    # --- WordPack helpers ---
+    def find_word_pack_id_by_lemma(self, lemma: str) -> Optional[str]:
+        """見出し語から既存のWordPack IDを1件返す（更新日時降順）。無ければNone。"""
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                """
+                SELECT id FROM word_packs
+                WHERE lemma = ?
+                ORDER BY updated_at DESC
+                LIMIT 1;
+                """,
+                (lemma,),
+            )
+            row = cur.fetchone()
+            return row["id"] if row is not None else None
+        finally:
+            conn.close()
+
+    # --- Articles operations ---
+    def save_article(
+        self,
+        article_id: str,
+        *,
+        title_en: str,
+        body_en: str,
+        body_ja: str,
+        notes_ja: str | None,
+        related_word_packs: list[tuple[str, str, str]] | None = None,
+    ) -> None:
+        """記事を保存（upsert）し、関連WordPackリンクも置き換える。
+
+        - related_word_packs: [(word_pack_id, lemma, status), ...]
+        """
+        now = datetime.utcnow().isoformat()
+        conn = self._connect()
+        try:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO articles(
+                        id, title_en, body_en, body_ja, notes_ja, created_at, updated_at
+                    ) VALUES (
+                        ?, ?, ?, ?, ?,
+                        COALESCE((SELECT created_at FROM articles WHERE id = ?), ?),
+                        ?
+                    );
+                    """,
+                    (
+                        article_id,
+                        title_en,
+                        body_en,
+                        body_ja,
+                        (notes_ja or ""),
+                        article_id,
+                        now,
+                        now,
+                    ),
+                )
+                if related_word_packs is not None:
+                    conn.execute("DELETE FROM article_word_packs WHERE article_id = ?;", (article_id,))
+                    for wp_id, lemma, status in related_word_packs:
+                        conn.execute(
+                            """
+                            INSERT INTO article_word_packs(article_id, word_pack_id, lemma, status, created_at)
+                            VALUES (?, ?, ?, ?, ?);
+                            """,
+                            (article_id, wp_id, lemma, status, now),
+                        )
+        finally:
+            conn.close()
+
+    def get_article(self, article_id: str) -> Optional[tuple[str, str, str, str, str, str, list[tuple[str, str, str]]]]:
+        """記事を取得し、関連WordPackリンク一覧を返す。
+
+        戻り値: (title_en, body_en, body_ja, notes_ja, created_at, updated_at, [(word_pack_id, lemma, status)])
+        """
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                "SELECT title_en, body_en, body_ja, notes_ja, created_at, updated_at FROM articles WHERE id = ?;",
+                (article_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            cur2 = conn.execute(
+                """
+                SELECT word_pack_id, lemma, status
+                FROM article_word_packs
+                WHERE article_id = ?
+                ORDER BY lemma ASC, word_pack_id ASC;
+                """,
+                (article_id,),
+            )
+            links = [(r["word_pack_id"], r["lemma"], r["status"]) for r in cur2.fetchall()]
+            return (
+                row["title_en"],
+                row["body_en"],
+                row["body_ja"],
+                row["notes_ja"],
+                row["created_at"],
+                row["updated_at"],
+                links,
+            )
+        finally:
+            conn.close()
+
+    def list_articles(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str]]:
+        """記事一覧: [(id, title_en, created_at, updated_at)] を返す。"""
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                """
+                SELECT id, title_en, created_at, updated_at
+                FROM articles
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?;
+                """,
+                (limit, offset),
+            )
+            return [(row["id"], row["title_en"], row["created_at"], row["updated_at"]) for row in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def delete_article(self, article_id: str) -> bool:
+        """記事を削除する（関連リンクも外部キーで削除）。"""
+        conn = self._connect()
+        try:
+            with conn:
+                cur = conn.execute("DELETE FROM articles WHERE id = ?;", (article_id,))
+                return cur.rowcount > 0
         finally:
             conn.close()
 
