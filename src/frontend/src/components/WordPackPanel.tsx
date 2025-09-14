@@ -4,6 +4,7 @@ import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { LoadingIndicator } from './LoadingIndicator';
 import { useNotifications } from '../NotificationsContext';
+import { Modal } from './Modal';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -63,7 +64,7 @@ interface WordPack {
 
 export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta }) => {
   const { settings, setSettings } = useSettings();
-  const { isModalOpen } = useModal();
+  const { isModalOpen, setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
@@ -76,6 +77,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [sessionStartAt] = useState<Date>(new Date());
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
   const [model, setModel] = useState<string>('gpt-5-mini');
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
@@ -149,6 +151,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setCurrentWordPackId(null); // 新規生成なのでIDはnull
       setMsg({ kind: 'status', text: 'WordPack を生成しました' });
       updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '新規生成が完了しました' });
+      // 生成完了後に詳細モーダルを自動表示
+      setDetailOpen(true);
+      try { setModalOpen(true); } catch {}
       try { onWordPackGenerated?.(null); } catch {}
     } catch (e) {
       if (ctrl.signal.aborted) return;
@@ -378,12 +383,324 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   useEffect(() => () => abortRef.current?.abort(), []);
 
 
+  const renderDetails = () => (
+    <div className="wp-container">
+      <nav className="wp-nav" aria-label="セクション">
+        {sectionIds.map((s) => (
+          <a key={s.id} href={`#${s.id}`}>{s.label}</a>
+        ))}
+        {/* 例文カテゴリへのショートカット */}
+        <a
+          href="#examples-Dev"
+          onClick={(e) => { e.preventDefault(); document.getElementById('examples-Dev')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+        >例文: Dev</a>
+        <a
+          href="#examples-CS"
+          onClick={(e) => { e.preventDefault(); document.getElementById('examples-CS')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+        >例文: CS</a>
+        <a
+          href="#examples-LLM"
+          onClick={(e) => { e.preventDefault(); document.getElementById('examples-LLM')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+        >例文: LLM</a>
+        <a
+          href="#examples-Business"
+          onClick={(e) => { e.preventDefault(); document.getElementById('examples-Business')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+        >例文: Business</a>
+        <a
+          href="#examples-Common"
+          onClick={(e) => { e.preventDefault(); document.getElementById('examples-Common')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+        >例文: Common</a>
+      </nav>
+
+      <div>
+        <section id="overview" className="wp-section">
+          <h3>概要</h3>
+          {selectedMeta ? (
+            <div className="kv" style={{ marginBottom: '0.5rem' }}>
+              <div>作成</div><div>{formatDate(selectedMeta.created_at)}</div>
+              <div>更新</div><div>{formatDate(selectedMeta.updated_at)}</div>
+            </div>
+          ) : null}
+          <div className="kv">
+            <div>見出し語</div>
+            <div><strong>{data!.lemma}</strong></div>
+          </div>
+          <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <strong style={{ color: 'var(--color-accent)' }}>📊 例文統計</strong>
+              <span style={{ fontSize: '1.1em', fontWeight: 'bold' }}>
+                総数 {(() => {
+                  const total = (data!.examples?.Dev?.length || 0) + 
+                               (data!.examples?.CS?.length || 0) + 
+                               (data!.examples?.LLM?.length || 0) + 
+                               (data!.examples?.Business?.length || 0) + 
+                               (data!.examples?.Common?.length || 0);
+                  return total;
+                })()}件
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.9em' }}>
+              {(['Dev','CS','LLM','Business','Common'] as const).map(cat => {
+                const count = data!.examples?.[cat]?.length || 0;
+                return (
+                  <span key={cat} style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '0.25rem',
+                    padding: '0.25rem 0.5rem',
+                    backgroundColor: count > 0 ? 'var(--color-accent-bg)' : 'var(--color-neutral-surface)',
+                    color: count > 0 ? 'var(--color-accent)' : 'var(--color-subtle)',
+                    borderRadius: '4px',
+                    border: `1px solid ${count > 0 ? 'var(--color-accent)' : 'var(--color-border)'}`
+                  }}>
+                    <span style={{ fontWeight: 'bold' }}>{cat}</span>
+                    <span style={{ fontSize: '0.85em' }}>{count}件</span>
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {currentWordPackId && (
+              <button 
+                onClick={() => regenerateWordPack(currentWordPackId)} 
+                disabled={loading}
+                style={{ marginLeft: 'auto', backgroundColor: 'var(--color-neutral-surface)' }}
+              >
+                再生成
+              </button>
+            )}
+          </div>
+          <div className="selfcheck" style={{ marginTop: '0.5rem' }}>
+            <div className={!reveal ? 'blurred' : ''}>
+              <div><strong>学習カード要点</strong></div>
+              <p>{data!.study_card}</p>
+            </div>
+            {!reveal && (
+              <div className="selfcheck-overlay" onClick={() => setReveal(true)} aria-label="セルフチェック解除">
+                <span>セルフチェック中… {count}</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section id="pronunciation" className="wp-section">
+          <h3>発音</h3>
+          <div className="kv mono">
+            <div>IPA (GA)</div><div>{data!.pronunciation?.ipa_GA ?? '-'}</div>
+            <div>IPA (RP)</div><div>{data!.pronunciation?.ipa_RP ?? '-'}</div>
+            <div>音節数</div><div>{data!.pronunciation?.syllables ?? '-'}</div>
+            <div>強勢インデックス</div><div>{data!.pronunciation?.stress_index ?? '-'}</div>
+            <div>リンキング</div><div>{data!.pronunciation?.linking_notes?.join('、') || '-'}</div>
+          </div>
+        </section>
+
+        <section id="senses" className="wp-section">
+          <h3>語義</h3>
+          {data!.senses?.length ? (
+            <ol>
+              {data!.senses.map((s) => (
+                <li key={s.id}>
+                  <div><strong>{s.gloss_ja}</strong></div>
+                  {s.term_core_ja ? (
+                    <div style={{ marginTop: 4, fontWeight: 600 }}>{s.term_core_ja}</div>
+                  ) : null}
+                  {s.term_overview_ja ? (
+                    <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{s.term_overview_ja}</div>
+                  ) : null}
+                  {s.definition_ja ? (
+                    <div style={{ marginTop: 4 }}>{s.definition_ja}</div>
+                  ) : null}
+                  {s.nuances_ja ? (
+                    <div style={{ marginTop: 4, color: '#555' }}>{s.nuances_ja}</div>
+                  ) : null}
+                  {s.patterns?.length ? (
+                    <div className="mono" style={{ marginTop: 4 }}>{s.patterns.join(' | ')}</div>
+                  ) : null}
+                  {(s.synonyms && s.synonyms.length) || (s.antonyms && s.antonyms.length) ? (
+                    <div style={{ marginTop: 4 }}>
+                      {s.synonyms?.length ? (
+                        <div><span style={{ color: '#555' }}>類義:</span> {s.synonyms.join(', ')}</div>
+                      ) : null}
+                      {s.antonyms?.length ? (
+                        <div><span style={{ color: '#555' }}>反義:</span> {s.antonyms.join(', ')}</div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {s.register ? (
+                    <div style={{ marginTop: 4 }}><span style={{ color: '#555' }}>レジスター:</span> {s.register}</div>
+                  ) : null}
+                  {s.notes_ja ? (
+                    <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{s.notes_ja}</div>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>なし</p>
+          )}
+        </section>
+
+        <section id="etymology" className="wp-section">
+          <h3>語源</h3>
+          <p>{data!.etymology?.note || '-'}</p>
+          <p>確度: {data!.etymology?.confidence}</p>
+        </section>
+
+        <section id="examples" className="wp-section">
+          <h3>
+            例文 
+            <span style={{ fontSize: '0.7em', fontWeight: 'normal', color: 'var(--color-subtle)', marginLeft: '0.5rem' }}>
+              (総数 {(() => {
+                const total = (data!.examples?.Dev?.length || 0) + 
+                             (data!.examples?.CS?.length || 0) + 
+                             (data!.examples?.LLM?.length || 0) + 
+                             (data!.examples?.Business?.length || 0) + 
+                             (data!.examples?.Common?.length || 0);
+                return total;
+              })()}件)
+            </span>
+          </h3>
+          <style>{`
+            .ex-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+            .ex-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem 0.75rem; background: var(--color-surface); }
+            .ex-label { display: inline-block; min-width: 3em; color: var(--color-subtle); font-size: 90%; }
+            .ex-en { font-weight: 600; line-height: 1.5; }
+            .ex-ja { color: var(--color-text); opacity: 0.9; margin-top: 2px; line-height: 1.6; }
+            .ex-grammar { color: var(--color-subtle); font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
+            .ex-level { font-weight: 600; margin: 0.25rem 0; color: var(--color-level); }
+          `}</style>
+          {(['Dev','CS','LLM','Business','Common'] as const).map((k) => (
+            <div key={k} id={`examples-${k}`} style={{ marginBottom: '0.5rem' }}>
+              <div className="ex-level" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>{k} ({data!.examples?.[k]?.length || 0}件)</span>
+                <button
+                  onClick={() => generateExamples(k)}
+                  disabled={!currentWordPackId || loading}
+                  aria-label={`generate-examples-${k}`}
+                  title={!currentWordPackId ? '保存済みWordPackのみ追加生成が可能です' : undefined}
+                  style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                >
+                  追加生成（2件）
+                </button>
+              </div>
+              {data!.examples?.[k]?.length ? (
+                <div className="ex-grid">
+                  {(data!.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
+                    <article key={i} className="ex-card" aria-label={`example-${k}-${i}`}>
+                      <div className="ex-en"><span className="ex-label">[{i + 1}] 英</span> {ex.en}</div>
+                      <div className="ex-ja"><span className="ex-label">訳</span> {ex.ja}</div>
+                      {ex.grammar_ja ? (
+                        <div className="ex-grammar"><span className="ex-label">解説</span> {ex.grammar_ja}</div>
+                      ) : null}
+                      {currentWordPackId ? (
+                        <div style={{ marginTop: 6 }}>
+                          <button
+                            onClick={() => deleteExample(k, i)}
+                            disabled={loading}
+                            aria-label={`delete-example-${k}-${i}`}
+                            style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                          >
+                            削除
+                          </button>
+                        </div>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : <p>なし</p>}
+            </div>
+          ))}
+        </section>
+
+        <section id="collocations" className="wp-section">
+          <h3>共起</h3>
+          <div>
+            <h4>一般</h4>
+            <div className="mono">VO: {data!.collocations?.general?.verb_object?.length ? data!.collocations.general.verb_object.map((t,i) => (
+              <React.Fragment key={i}>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data!.collocations.general.verb_object.length - 1 ? ', ' : ''}
+              </React.Fragment>
+            )) : '-'}</div>
+            <div className="mono">Adj+N: {data!.collocations?.general?.adj_noun?.length ? data!.collocations.general.adj_noun.map((t,i) => (
+              <React.Fragment key={i}>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data!.collocations.general.adj_noun.length - 1 ? ', ' : ''}
+              </React.Fragment>
+            )) : '-'}</div>
+            <div className="mono">Prep+N: {data!.collocations?.general?.prep_noun?.length ? data!.collocations.general.prep_noun.map((t,i) => (
+              <React.Fragment key={i}>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data!.collocations.general.prep_noun.length - 1 ? ', ' : ''}
+              </React.Fragment>
+            )) : '-'}</div>
+          </div>
+          <div>
+            <h4>アカデミック</h4>
+            <div className="mono">VO: {data!.collocations?.academic?.verb_object?.length ? data!.collocations.academic.verb_object.map((t,i) => (
+              <React.Fragment key={i}>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data!.collocations.academic.verb_object.length - 1 ? ', ' : ''}
+              </React.Fragment>
+            )) : '-'}</div>
+            <div className="mono">Adj+N: {data!.collocations?.academic?.adj_noun?.length ? data!.collocations.academic.adj_noun.map((t,i) => (
+              <React.Fragment key={i}>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data!.collocations.academic.adj_noun.length - 1 ? ', ' : ''}
+              </React.Fragment>
+            )) : '-'}</div>
+            <div className="mono">Prep+N: {data!.collocations?.academic?.prep_noun?.length ? data!.collocations.academic.prep_noun.map((t,i) => (
+              <React.Fragment key={i}>
+                <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data!.collocations.academic.prep_noun.length - 1 ? ', ' : ''}
+              </React.Fragment>
+            )) : '-'}</div>
+          </div>
+        </section>
+
+        <section id="contrast" className="wp-section">
+          <h3>対比</h3>
+          {data!.contrast?.length ? (
+            <ul>
+              {data!.contrast.map((c, i) => (
+                <li key={i}>
+                  <a href="#" onClick={(e) => { e.preventDefault(); setLemma(c.with); }} className="mono">{c.with}</a> — {c.diff_ja}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>なし</p>
+          )}
+        </section>
+
+        {/* 簡易インデックス（最近/よく見る順） */}
+
+        <section id="citations" className="wp-section">
+          <h3>引用</h3>
+          {data!.citations?.length ? (
+            <ol>
+              {data!.citations.map((c, i) => (
+                <li key={i}>
+                  <div>{c.text}</div>
+                  {c.meta ? <pre className="mono" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(c.meta, null, 2)}</pre> : null}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>なし</p>
+          )}
+        </section>
+
+        <section id="confidence" className="wp-section">
+          <h3>信頼度</h3>
+          <p>{data!.confidence}</p>
+        </section>
+
+      </div>
+    </div>
+  );
+
   return (
     <section>
       <style>{`
         .wp-container { display: grid; grid-template-columns: minmax(80px, 100px) 1fr; gap: 1rem; }
         .wp-nav { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; gap: 0.25rem; }
-        .wp-nav a { text-decoration: none; color: var(--color-link); }
+        .wp-nav a { text-decoration: none; color: var(--color-link); font-size: 0.7em; }
         .wp-section { padding-block: 0.25rem; border-top: 1px solid var(--color-border); }
         .blurred { filter: blur(6px); pointer-events: none; user-select: none; }
         .selfcheck { position: relative; border: 1px dashed var(--color-border); padding: 0.5rem; border-radius: 6px; }
@@ -449,298 +766,17 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       {/* グローバル通知に置き換えたため、パネル内のローディング表示は削除 */}
       {msg && <div role={msg.kind}>{msg.text}</div>}
 
-      {data && (
-        <div className="wp-container">
-          <nav className="wp-nav" aria-label="セクション">
-            {sectionIds.map((s) => (
-              <a key={s.id} href={`#${s.id}`}>{s.label}</a>
-            ))}
-          </nav>
-
-          <div>
-            <section id="overview" className="wp-section">
-              <h3>概要</h3>
-              {selectedMeta ? (
-                <div className="kv" style={{ marginBottom: '0.5rem' }}>
-                  <div>作成</div><div>{formatDate(selectedMeta.created_at)}</div>
-                  <div>更新</div><div>{formatDate(selectedMeta.updated_at)}</div>
-                </div>
-              ) : null}
-              <div className="kv">
-                <div>見出し語</div>
-                <div><strong>{data.lemma}</strong></div>
-              </div>
-              <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                  <strong style={{ color: 'var(--color-accent)' }}>📊 例文統計</strong>
-                  <span style={{ fontSize: '1.1em', fontWeight: 'bold' }}>
-                    総数 {(() => {
-                      const total = (data.examples?.Dev?.length || 0) + 
-                                   (data.examples?.CS?.length || 0) + 
-                                   (data.examples?.LLM?.length || 0) + 
-                                   (data.examples?.Business?.length || 0) + 
-                                   (data.examples?.Common?.length || 0);
-                      return total;
-                    })()}件
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.9em' }}>
-                  {(['Dev','CS','LLM','Business','Common'] as const).map(cat => {
-                    const count = data.examples?.[cat]?.length || 0;
-                    return (
-                      <span key={cat} style={{ 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        gap: '0.25rem',
-                        padding: '0.25rem 0.5rem',
-                        backgroundColor: count > 0 ? 'var(--color-accent-bg)' : 'var(--color-neutral-surface)',
-                        color: count > 0 ? 'var(--color-accent)' : 'var(--color-subtle)',
-                        borderRadius: '4px',
-                        border: `1px solid ${count > 0 ? 'var(--color-accent)' : 'var(--color-border)'}`
-                      }}>
-                        <span style={{ fontWeight: 'bold' }}>{cat}</span>
-                        <span style={{ fontSize: '0.85em' }}>{count}件</span>
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-              <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {currentWordPackId && (
-                  <button 
-                    onClick={() => regenerateWordPack(currentWordPackId)} 
-                    disabled={loading}
-                    style={{ marginLeft: 'auto', backgroundColor: 'var(--color-neutral-surface)' }}
-                  >
-                    再生成
-                  </button>
-                )}
-              </div>
-              <div className="selfcheck" style={{ marginTop: '0.5rem' }}>
-                <div className={!reveal ? 'blurred' : ''}>
-                  <div><strong>学習カード要点</strong></div>
-                  <p>{data.study_card}</p>
-                </div>
-                {!reveal && (
-                  <div className="selfcheck-overlay" onClick={() => setReveal(true)} aria-label="セルフチェック解除">
-                    <span>セルフチェック中… {count}</span>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section id="pronunciation" className="wp-section">
-              <h3>発音</h3>
-              <div className="kv mono">
-                <div>IPA (GA)</div><div>{data.pronunciation?.ipa_GA ?? '-'}</div>
-                <div>IPA (RP)</div><div>{data.pronunciation?.ipa_RP ?? '-'}</div>
-                <div>音節数</div><div>{data.pronunciation?.syllables ?? '-'}</div>
-                <div>強勢インデックス</div><div>{data.pronunciation?.stress_index ?? '-'}</div>
-                <div>リンキング</div><div>{data.pronunciation?.linking_notes?.join('、') || '-'}</div>
-              </div>
-            </section>
-
-            <section id="senses" className="wp-section">
-              <h3>語義</h3>
-              {data.senses?.length ? (
-                <ol>
-                  {data.senses.map((s) => (
-                    <li key={s.id}>
-                      <div><strong>{s.gloss_ja}</strong></div>
-                      {s.term_core_ja ? (
-                        <div style={{ marginTop: 4, fontWeight: 600 }}>{s.term_core_ja}</div>
-                      ) : null}
-                      {s.term_overview_ja ? (
-                        <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{s.term_overview_ja}</div>
-                      ) : null}
-                      {s.definition_ja ? (
-                        <div style={{ marginTop: 4 }}>{s.definition_ja}</div>
-                      ) : null}
-                      {s.nuances_ja ? (
-                        <div style={{ marginTop: 4, color: '#555' }}>{s.nuances_ja}</div>
-                      ) : null}
-                      {s.patterns?.length ? (
-                        <div className="mono" style={{ marginTop: 4 }}>{s.patterns.join(' | ')}</div>
-                      ) : null}
-                      {(s.synonyms && s.synonyms.length) || (s.antonyms && s.antonyms.length) ? (
-                        <div style={{ marginTop: 4 }}>
-                          {s.synonyms?.length ? (
-                            <div><span style={{ color: '#555' }}>類義:</span> {s.synonyms.join(', ')}</div>
-                          ) : null}
-                          {s.antonyms?.length ? (
-                            <div><span style={{ color: '#555' }}>反義:</span> {s.antonyms.join(', ')}</div>
-                          ) : null}
-                        </div>
-                      ) : null}
-                      {s.register ? (
-                        <div style={{ marginTop: 4 }}><span style={{ color: '#555' }}>レジスター:</span> {s.register}</div>
-                      ) : null}
-                      {s.notes_ja ? (
-                        <div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{s.notes_ja}</div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p>なし</p>
-              )}
-            </section>
-
-            <section id="etymology" className="wp-section">
-              <h3>語源</h3>
-              <p>{data.etymology?.note || '-'}</p>
-              <p>確度: {data.etymology?.confidence}</p>
-            </section>
-
-            
-
-            <section id="examples" className="wp-section">
-              <h3>
-                例文 
-                <span style={{ fontSize: '0.7em', fontWeight: 'normal', color: 'var(--color-subtle)', marginLeft: '0.5rem' }}>
-                  (総数 {(() => {
-                    const total = (data.examples?.Dev?.length || 0) + 
-                                 (data.examples?.CS?.length || 0) + 
-                                 (data.examples?.LLM?.length || 0) + 
-                                 (data.examples?.Business?.length || 0) + 
-                                 (data.examples?.Common?.length || 0);
-                    return total;
-                  })()}件)
-                </span>
-              </h3>
-              <style>{`
-                .ex-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
-                .ex-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem 0.75rem; background: var(--color-surface); }
-                .ex-label { display: inline-block; min-width: 3em; color: var(--color-subtle); font-size: 90%; }
-                .ex-en { font-weight: 600; line-height: 1.5; }
-                .ex-ja { color: var(--color-text); opacity: 0.9; margin-top: 2px; line-height: 1.6; }
-                .ex-grammar { color: var(--color-subtle); font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
-                .ex-level { font-weight: 600; margin: 0.25rem 0; color: var(--color-level); }
-              `}</style>
-              {(['Dev','CS','LLM','Business','Common'] as const).map((k) => (
-                <div key={k} style={{ marginBottom: '0.5rem' }}>
-                  <div className="ex-level" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span>{k} ({data.examples?.[k]?.length || 0}件)</span>
-                    {currentWordPackId ? (
-                      <button
-                        onClick={() => generateExamples(k)}
-                        disabled={loading}
-                        aria-label={`generate-examples-${k}`}
-                        style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                      >
-                        追加生成（2件）
-                      </button>
-                    ) : null}
-                  </div>
-                  {data.examples?.[k]?.length ? (
-                    <div className="ex-grid">
-                      {(data.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
-                        <article key={i} className="ex-card" aria-label={`example-${k}-${i}`}>
-                          <div className="ex-en"><span className="ex-label">[{i + 1}] 英</span> {ex.en}</div>
-                          <div className="ex-ja"><span className="ex-label">訳</span> {ex.ja}</div>
-                          {ex.grammar_ja ? (
-                            <div className="ex-grammar"><span className="ex-label">解説</span> {ex.grammar_ja}</div>
-                          ) : null}
-                          {currentWordPackId ? (
-                            <div style={{ marginTop: 6 }}>
-                              <button
-                                onClick={() => deleteExample(k, i)}
-                                disabled={loading}
-                                aria-label={`delete-example-${k}-${i}`}
-                                style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                              >
-                                削除
-                              </button>
-                            </div>
-                          ) : null}
-                        </article>
-                      ))}
-                    </div>
-                  ) : <p>なし</p>}
-                </div>
-              ))}
-            </section>
-
-            <section id="collocations" className="wp-section">
-              <h3>共起</h3>
-              <div>
-                <h4>一般</h4>
-                <div className="mono">VO: {data.collocations?.general?.verb_object?.length ? data.collocations.general.verb_object.map((t,i) => (
-                  <React.Fragment key={i}>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.general.verb_object.length - 1 ? ', ' : ''}
-                  </React.Fragment>
-                )) : '-'}</div>
-                <div className="mono">Adj+N: {data.collocations?.general?.adj_noun?.length ? data.collocations.general.adj_noun.map((t,i) => (
-                  <React.Fragment key={i}>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.general.adj_noun.length - 1 ? ', ' : ''}
-                  </React.Fragment>
-                )) : '-'}</div>
-                <div className="mono">Prep+N: {data.collocations?.general?.prep_noun?.length ? data.collocations.general.prep_noun.map((t,i) => (
-                  <React.Fragment key={i}>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.general.prep_noun.length - 1 ? ', ' : ''}
-                  </React.Fragment>
-                )) : '-'}</div>
-              </div>
-              <div>
-                <h4>アカデミック</h4>
-                <div className="mono">VO: {data.collocations?.academic?.verb_object?.length ? data.collocations.academic.verb_object.map((t,i) => (
-                  <React.Fragment key={i}>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.academic.verb_object.length - 1 ? ', ' : ''}
-                  </React.Fragment>
-                )) : '-'}</div>
-                <div className="mono">Adj+N: {data.collocations?.academic?.adj_noun?.length ? data.collocations.academic.adj_noun.map((t,i) => (
-                  <React.Fragment key={i}>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.academic.adj_noun.length - 1 ? ', ' : ''}
-                  </React.Fragment>
-                )) : '-'}</div>
-                <div className="mono">Prep+N: {data.collocations?.academic?.prep_noun?.length ? data.collocations.academic.prep_noun.map((t,i) => (
-                  <React.Fragment key={i}>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setLemma(t.split(' ').pop() || t); }}>{t}</a>{i < data.collocations.academic.prep_noun.length - 1 ? ', ' : ''}
-                  </React.Fragment>
-                )) : '-'}</div>
-              </div>
-            </section>
-
-            <section id="contrast" className="wp-section">
-              <h3>対比</h3>
-              {data.contrast?.length ? (
-                <ul>
-                  {data.contrast.map((c, i) => (
-                    <li key={i}>
-                      <a href="#" onClick={(e) => { e.preventDefault(); setLemma(c.with); }} className="mono">{c.with}</a> — {c.diff_ja}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>なし</p>
-              )}
-            </section>
-
-            {/* 簡易インデックス（最近/よく見る順） */}
-
-            <section id="citations" className="wp-section">
-              <h3>引用</h3>
-              {data.citations?.length ? (
-                <ol>
-                  {data.citations.map((c, i) => (
-                    <li key={i}>
-                      <div>{c.text}</div>
-                      {c.meta ? <pre className="mono" style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify(c.meta, null, 2)}</pre> : null}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p>なし</p>
-              )}
-            </section>
-
-            <section id="confidence" className="wp-section">
-              <h3>信頼度</h3>
-              <p>{data.confidence}</p>
-            </section>
-
-          </div>
-        </div>
+      {/* 詳細表示: 生成ワークフローでは内蔵モーダル、一覧モーダル内では素の内容のみを描画 */}
+      {selectedWordPackId ? (
+        data ? renderDetails() : null
+      ) : (
+        <Modal 
+          isOpen={!!data && detailOpen}
+          onClose={() => { setDetailOpen(false); try { setModalOpen(false); } catch {} }}
+          title="WordPack プレビュー"
+        >
+          {data ? renderDetails() : null}
+        </Modal>
       )}
     </section>
   );
