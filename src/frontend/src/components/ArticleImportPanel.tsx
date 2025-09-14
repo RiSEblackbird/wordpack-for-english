@@ -118,7 +118,6 @@ export const ArticleImportPanel: React.FC = () => {
         onClose={() => { setDetailOpen(false); try { setModalOpen(false); } catch {} }}
         article={article}
         title="インポート結果"
-        showWordPackActions
         onRegenerateWordPack={regenerateWordPack}
         onOpenWordPackPreview={(id) => { setWpPreviewId(id); setWpPreviewOpen(true); try { setModalOpen(true); } catch {} }}
       />
