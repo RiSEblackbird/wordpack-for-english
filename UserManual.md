@@ -118,6 +118,20 @@
   - 本番は `STRICT_MODE=true` 推奨（開発では `false` 可）
   - 途中切れ対策に `LLM_MAX_TOKENS` を 1200–1800（推奨1500）
 
+### B-10. オブザーバビリティ（Langfuse）
+- `.env` に `LANGFUSE_ENABLED=true` と各キーを設定し、`requirements.txt` の `langfuse` を導入してください。
+- 本アプリは Langfuse v3（OpenTelemetry）を使用します。
+  - HTTP 親スパン: `input`（パス/メソッド/クエリ要点）と `output`（ステータス/ヘッダ要点）を属性で付与。
+  - LLM / RAG スパン: `input`（モデル・プロンプト長など）/ `output`（生成テキストの先頭〜最大40000文字）を属性で付与。
+  - v2 クライアント互換パスでは `update(input=..., output=...)` を使用。
+- LLM プロンプト全文の記録（任意）:
+  - 既定ではプレビューのみ（`prompt_preview`）。`.env` で `LANGFUSE_LOG_FULL_PROMPT=true` を設定すると、`input.prompt` に全文（最大 `LANGFUSE_PROMPT_MAX_CHARS`）と `prompt_sha256` を付与します。
+  - 機微情報の観点から、本番では原則オフのまま運用してください。
+- ダッシュボードで Input/Output が空の場合:
+  1) `.env` のキー/ホスト設定を確認
+  2) `LANGFUSE_ENABLED=true` か確認
+  3) `src/backend/observability.py` の v3 分岐が有効（`set_attribute('input'|'output', ...)` 実行）であることを確認
+
 ### B-2. アーキテクチャと実装メモ
 - エンドポイント統合は `/api/*` に統一
 - LangGraph/OpenAI LLM 統合（RAG 無効化）
@@ -167,6 +181,11 @@
   - Docker: `docker compose build --no-cache`
   - Vite 監視: Windows は `CHOKIDAR_USEPOLLING=1`（`docker-compose.yml` で設定可）
 
+#### B-6-1. Langfuse のトレースが記録されない
+- 現在は Langfuse v3（OpenTelemetry）対応済みです。
+- 症状: `WARNING ... langfuse_trace_api_missing` が出続ける／最初の数件のみ表示され以後が出ない場合、依存の不整合か環境変数の誤設定が考えられます。
+- 対応: `docker compose build --no-cache && docker compose up` を実行。必要に応じて `LANGFUSE_PUBLIC_KEY/SECRET_KEY/HOST` を再確認し、プロジェクトと日付フィルタを正しく選択してください。古い v2 を利用する場合は `requirements.txt` を v2 に固定してご利用ください。
+
 #### B-1-1. ポート競合の回避（Docker）
 - 既定ポートが使用中で起動できない場合は、ホスト公開ポートを環境変数で上書きできます。
   - 一時的に上書き:
@@ -201,4 +220,6 @@
 
 ### B-7. 運用のヒント（PR4）
 - レート制限/リクエストID/監視（p95, 件数, エラー, タイムアウト）/例外監視（Sentry）などを運用ルールとして維持
+- Langfuse（任意）: `.env` に `LANGFUSE_ENABLED=true`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`, `LANGFUSE_RELEASE` を設定すると、HTTP/LLM/RAG のトレースが送信されます。
+  - Strict モード時は上記キーと `langfuse` パッケージが必須。欠落時は起動でエラーになります。
 

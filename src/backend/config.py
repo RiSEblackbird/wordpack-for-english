@@ -112,6 +112,29 @@ class Settings(BaseSettings):
         description="Per-user API requests per minute / ユーザ単位の毎分上限（X-User-Id）",
     )
     sentry_dsn: str | None = Field(default=None, description="Sentry DSN (enable if set)")
+    # Langfuse 観測基盤
+    langfuse_enabled: bool = Field(
+        default=False,
+        description="Enable Langfuse tracing/observability / Langfuse の有効化",
+    )
+    langfuse_public_key: str | None = Field(default=None, description="Langfuse public key")
+    langfuse_secret_key: str | None = Field(default=None, description="Langfuse secret key")
+    langfuse_host: str | None = Field(default=None, description="Langfuse host (e.g. https://cloud.langfuse.com)")
+    langfuse_release: str | None = Field(default=None, description="Release/version tag for tracing")
+    # Langfuse 除外パス（完全一致 or 接頭一致のワイルドカード*対応）
+    langfuse_exclude_paths: list[str] = Field(
+        default=["/healthz", "/health", "/metrics*"],
+        description="Exclude paths from Langfuse tracing (exact or prefix*)",
+    )
+    # Langfuse 入力ログの詳細度（LLM プロンプトの全文送信を制御）
+    langfuse_log_full_prompt: bool = Field(
+        default=False,
+        description="Send full LLM prompt to Langfuse in span input (disabled by default)",
+    )
+    langfuse_prompt_max_chars: int = Field(
+        default=40000,
+        description="Max characters to record for prompt/input to Langfuse",
+    )
 
     # --- Strict mode ---
     strict_mode: bool = Field(

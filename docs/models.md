@@ -48,6 +48,13 @@ UI補足: フロントで `gpt-5-mini` を選択した場合は `reasoning.effor
 
 ---
 
+## SDK差異への対応（1回呼び出し最適化）
+- OpenAI SDK の `responses.create` はバージョンにより受理する引数が異なることがあります（例: `response_format`, `max_output_tokens`）。
+- 本プロジェクトでは実行時に `inspect.signature(client.responses.create)` で受理可能な引数名を動的に検出し、未対応の引数は最初から付与しません。
+- そのため通常は1回のAPI呼び出しで完了し、未対応エラーによる再試行を避けます。必要に応じて `max_output_tokens`/`max_tokens`/`max_completion_tokens` の順で最小限の内部切替を行います。
+
+---
+
 ## 参考：なぜ `temperature` が「廃止扱い」なのか
 - 推論系モデル（o3/o4-mini/GPT-5系）では内部で思考トークンを別勘定し、その振る舞いを `reasoning.effort` 等で制御する設計に移行。多くの推論系で `temperature` は未サポート。
 - 非推論モデル（GPT-4.1系・4o系）では `temperature`/`top_p` が引き続きサポートされ、APIリファレンスでも調整指針（どちらか片方を調整）が示されています。

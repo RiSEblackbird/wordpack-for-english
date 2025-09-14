@@ -368,3 +368,44 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 補足（互換キーの無視）:
 - 旧サンプル/別アプリ由来のキー（例: `API_KEY`/`ALLOWED_ORIGINS` など）が `.env` に残っていても、`src/backend/config.py` は未使用の環境変数を無視する設定になっています（`extra="ignore"`）。
 - そのため Docker 環境でも、未使用キーが存在して起動が失敗することはありません。
+
+### 6-2. Langfuse の有効化（任意）
+
+Langfuse を有効化すると、HTTP リクエスト・LLM 呼び出し・RAG 近傍検索のトレース/スパンが送信されます。
+
+1) `.env` に以下を設定（`env.example` 参照）:
+```
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=...   # Langfuse Project の Public Key
+LANGFUSE_SECRET_KEY=...
+LANGFUSE_HOST=https://cloud.langfuse.com  # 自ホストの場合はそのURL
+LANGFUSE_RELEASE=wordpack-api@0.3.0
+```
+2) 依存が未導入ならインストール:
+```
+pip install -r requirements.txt
+```
+3) 起動後、Langfuse のダッシュボードでトレースを確認できます。
+
+注意:
+- Langfuse v3（OpenTelemetryベース）に対応しました。`requirements.txt` は v3 系を利用します。旧 v2 を使う場合は依存を固定し、`observability.py` の v3 分岐を無効化してください。
+
+Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、上記キーと `langfuse` パッケージは必須です（不足時は起動エラー）。
+
+#### Input / Output の表示について
+- 本リポジトリでは、Langfuse v3 のスパン属性として `input` と `output` を付与します（HTTP 親スパンはリクエストの要点とレスポンスの要点、LLM/RAG スパンはプロンプト長や結果テキストなど）。
+- v2 クライアント互換時は `trace/span.update(input=..., output=...)` を使用します。
+- ダッシュボードに Input/Output が表示されない場合は、`LANGFUSE_ENABLED=true` とキー設定、ならびに `src/backend/observability.py` が v3 分岐で `set_attribute('input'|'output', ...)` を実行していることを確認してください。
+
+フルプロンプトの記録（任意・デフォルト無効）:
+- 既定では LLM スパンの `input` はサマリ（`prompt_chars` と `prompt_preview`）のみを送信します。
+- デバッグ目的でプロンプト全文を Langfuse に送るには `.env` に以下を設定:
+  ```env
+  LANGFUSE_LOG_FULL_PROMPT=true
+  LANGFUSE_PROMPT_MAX_CHARS=40000
+  ```
+- 有効化時、スパン `input` に `prompt`（最大 `LANGFUSE_PROMPT_MAX_CHARS`）と `prompt_sha256` が含まれます。秘匿性の観点から本番では原則オフにしてください。
+
+##### ノイズ抑制（/healthz など）
+- 監視用の軽量エンドポイントはノイズになりやすいため、既定で `settings.langfuse_exclude_paths = ["/healthz", "/health", "/metrics*"]` を除外しています。
+- 完全一致または接頭一致（末尾`*`）に一致したパスはトレースを生成しません。`.env` から上書きしたい場合は、コード側の既定を編集するか、将来的な環境変数対応をご利用ください。

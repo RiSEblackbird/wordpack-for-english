@@ -1,10 +1,13 @@
 from typing import Any, Optional, List, Callable
+import inspect
 import sys
 import time
+import contextvars
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 from .config import settings
 from .logging import logger
+from .observability import get_langfuse, span
 
 try:
     import chromadb  # type: ignore
@@ -107,25 +110,35 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
             return (str(resp) or "").strip()
 
         def _create_with_params(*, use_json: bool, token_param: str, include_temperature: bool = True, include_reasoning_text: bool = False):
+            # SDKの関数シグネチャから対応引数を動的検出
+            try:
+                sig = inspect.signature(self._client.responses.create)  # type: ignore[attr-defined]
+                param_names = set(sig.parameters.keys())
+            except Exception:
+                param_names = set()
+            def supports(name: str) -> bool:
+                # **kwargsのみのケースは安全側で未対応扱い
+                return name in param_names
             kwargs: dict[str, Any] = {
                 "model": self._model,
                 "input": prompt,
-                "timeout": timeout_sec,
             }
-            if include_temperature:
+            if supports("timeout"):
+                kwargs["timeout"] = timeout_sec
+            if include_temperature and supports("temperature"):
                 kwargs["temperature"] = self._temperature
             if include_reasoning_text:
-                if self._reasoning:
+                if self._reasoning and supports("reasoning"):
                     kwargs["reasoning"] = self._reasoning
-                if self._text:
+                if self._text and supports("text"):
                     kwargs["text"] = self._text
-            if token_param == "max_output_tokens":
+            if token_param == "max_output_tokens" and supports("max_output_tokens"):
                 kwargs["max_output_tokens"] = max_tokens_value
-            elif token_param == "max_tokens":
+            elif token_param == "max_tokens" and supports("max_tokens"):
                 kwargs["max_tokens"] = max_tokens_value
-            elif token_param == "max_completion_tokens":
+            elif token_param == "max_completion_tokens" and supports("max_completion_tokens"):
                 kwargs["max_completion_tokens"] = max_tokens_value
-            if use_json:
+            if use_json and supports("response_format"):
                 kwargs["response_format"] = {"type": "json_object"}
             return self._client.responses.create(**kwargs)
 
@@ -160,39 +173,89 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
                     return _create_with_params(use_json=use_json, token_param=token_param, include_temperature=include_temperature, include_reasoning_text=False)
                 raise
 
-        # 1) JSON + max_output_tokens（Responses API 正式）
+        # 単一スパン内で最適解を選んで1回で成功させる（必要時のみ内部で軽微な再試行）
+        is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
+        lf_trace = getattr(get_langfuse(), "trace", None)
+        # Langfuse: 入力ログは設定に応じて全文 or プレビュー
         try:
-            is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
-            resp = _call_with_param_fallback(use_json=True, token_param="max_output_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
-            content = _extract_text(resp)
-            logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=True)
-            return content
-        except Exception as exc1:
-            text1 = (str(exc1) or "").lower()
-            # max_output_tokens 非対応 → max_tokens（互換）
-            if ("unsupported parameter" in text1 or "not supported" in text1) and "max_output_tokens" in text1:
+            import hashlib  # local import to avoid top-level cost
+        except Exception:
+            hashlib = None  # type: ignore
+        if getattr(settings, "langfuse_log_full_prompt", False):
+            maxc = int(getattr(settings, "langfuse_prompt_max_chars", 40000))
+            full_payload = {
+                "model": self._model,
+                "prompt_chars": len(prompt),
+                "prompt": prompt[:max(0, maxc)],
+            }
+            if hashlib is not None:
                 try:
-                    is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
-                    resp = _call_with_param_fallback(use_json=True, token_param="max_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
-                    content = _extract_text(resp)
-                    logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=True, param="max_tokens")
-                    return content
+                    full_payload["prompt_sha256"] = hashlib.sha256(prompt.encode("utf-8", errors="ignore")).hexdigest()
                 except Exception:
                     pass
-            # JSON 指定が非対応 or その他 → 素応答へ
+            span_input = full_payload
+        else:
+            span_input = {"model": self._model, "prompt_chars": len(prompt), "prompt_preview": prompt[:500]}
+        with span(
+            trace=None if lf_trace is None else lf_trace(name="LLM call"),
+            name="openai.responses.create",
+            input=span_input,
+        ) as _s:
+            # 事前にSDKシグネチャを検査して初手の引数を決定
             try:
-                is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
-                resp = _call_with_param_fallback(use_json=False, token_param="max_output_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
-                content = _extract_text(resp)
-                logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=False)
-                return content
+                sig0 = inspect.signature(self._client.responses.create)  # type: ignore[attr-defined]
+                pnames = set(sig0.parameters.keys())
             except Exception:
-                # さらに互換パラメータ（max_completion_tokens）での最後の試行
-                is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
-                resp = _call_with_param_fallback(use_json=False, token_param="max_completion_tokens", include_temperature=not is_reasoning_model, include_reasoning_text=is_reasoning_model)
-                content = _extract_text(resp)
-                logger.info("llm_complete_result", provider="openai", model=self._model, content_chars=len(content), json_forced=False, param="max_completion_tokens")
-                return content
+                pnames = set()
+            token_candidates: list[str] = []
+            if "max_output_tokens" in pnames:
+                token_candidates.append("max_output_tokens")
+            if "max_tokens" in pnames:
+                token_candidates.append("max_tokens")
+            if "max_completion_tokens" in pnames:
+                token_candidates.append("max_completion_tokens")
+            if not token_candidates:
+                token_candidates.append("max_output_tokens")  # 最終手段（_create_with_params側で未対応なら付与しない）
+            use_json_pref = "response_format" in pnames
+
+            last_exc: Exception | None = None
+            for use_json_flag in [use_json_pref, False] if use_json_pref else [False]:
+                for token_param in token_candidates:
+                    try:
+                        resp = _call_with_param_fallback(
+                            use_json=use_json_flag,
+                            token_param=token_param,
+                            include_temperature=not is_reasoning_model,
+                            include_reasoning_text=is_reasoning_model,
+                        )
+                        content = _extract_text(resp)
+                        try:
+                            if _s is not None:
+                                if hasattr(_s, "update"):
+                                    _s.update(output=content[:40000])
+                                elif hasattr(_s, "set_attribute"):
+                                    _s.set_attribute("output", content[:40000])  # type: ignore[call-arg]
+                        except Exception:
+                            pass
+                        logger.info(
+                            "llm_complete_result",
+                            provider="openai",
+                            model=self._model,
+                            content_chars=len(content),
+                            json_forced=bool(use_json_flag),
+                            param=token_param,
+                        )
+                        return content
+                    except Exception as exc:
+                        last_exc = exc
+                        low = (str(exc) or "").lower()
+                        # パラメータ非対応のエラーパターンは静かに次候補へ
+                        if ("unsupported parameter" in low or "not supported" in low or "unexpected keyword" in low):
+                            continue
+                        # それ以外の失敗は直ちに送出
+                        raise
+            # ここまで来るのは非対応連鎖で全て失敗した場合
+            raise last_exc if last_exc else RuntimeError("LLM call failed with unsupported params")
 
 
 
@@ -213,7 +276,9 @@ def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
             last_exc: Exception | None = None
             for attempt in range(1, max(1, settings.llm_max_retries) + 1):
                 try:
-                    future = _llm_executor.submit(llm.complete, prompt)
+                    # OpenTelemetry コンテキストをスレッドに伝播
+                    _ctx = contextvars.copy_context()
+                    future = _llm_executor.submit(_ctx.run, llm.complete, prompt)
                     result = future.result(timeout=settings.llm_timeout_ms / 1000.0)
                     if result == "":
                         logger.info("llm_complete_empty", attempt=attempt, retries=settings.llm_max_retries)
@@ -613,7 +678,9 @@ def chroma_query_with_policy(
                 return col.query(query_texts=[query_text], n_results=n_results)
 
             start = time.time()
-            res = _with_timeout(_do_query, timeout_ms)
+            lf_trace = getattr(get_langfuse(), "trace", None)
+            with span(trace=None if lf_trace is None else lf_trace(name="RAG query"), name="chroma.query", input={"collection": collection, "n_results": n_results, "query_chars": len(query_text)}):
+                res = _with_timeout(_do_query, timeout_ms)
             _elapsed_ms = (time.time() - start) * 1000.0
             # ログは上位で行うことを想定（ここでは必要最小限）
             return res  # type: ignore[return-value]

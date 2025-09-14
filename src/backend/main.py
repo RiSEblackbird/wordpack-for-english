@@ -16,6 +16,7 @@ from .config import settings  # noqa: F401 - imported for side effects or future
 from .logging import configure_logging, logger
 from .routers import health, word, config as cfg
 from .metrics import registry
+from .observability import request_trace
 from .config import settings
 from .middleware import RequestIDMiddleware, RateLimitMiddleware
 from .providers import shutdown_providers, ChromaClientFactory
@@ -62,28 +63,66 @@ async def access_log_and_metrics(request: Request, call_next):
     ua = request.headers.get("user-agent", "-")
     is_error = False
     is_timeout = False
-    try:
-        response = await call_next(request)
-        return response
-    except Exception as exc:
-        is_error = True
-        if (TimeoutException is not None and isinstance(exc, TimeoutException)) or isinstance(exc, asyncio.TimeoutError):
-            is_timeout = True
-        raise exc
-    finally:
-        latency_ms = (time.time() - start) * 1000
-        registry.record(path, latency_ms, is_error=is_error, is_timeout=is_timeout)
-        logger.info(
-            "request_complete",
-            path=path,
-            method=method,
-            latency_ms=latency_ms,
-            is_error=is_error,
-            is_timeout=is_timeout,
-            request_id=request_id,
-            client_ip=client_ip,
-            user_agent=ua,
-        )
+    # 入力（クエリ等）は Langfuse の Input として記録
+    input_payload: dict[str, Any] = {
+        "path": path,
+        "method": method,
+        "query": dict(request.query_params) if request.query_params else {},
+    }
+    with request_trace(
+        name=f"HTTP {method} {path}",
+        user_id=request.headers.get("x-user-id"),
+        metadata={"request_id": request_id, "client_ip": client_ip, "user_agent": ua, "path": path},
+        path=path,
+    ) as ctx:
+        try:
+            tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
+            # v3: set_attribute / v2: update(input=...)
+            try:
+                if tr is not None and hasattr(tr, "set_attribute"):
+                    tr.set_attribute("input", str(input_payload)[:40000])  # type: ignore[call-arg]
+                elif tr is not None and hasattr(tr, "update"):
+                    tr.update(input=input_payload)
+            except Exception:
+                pass
+        except Exception:
+            pass
+        try:
+            response = await call_next(request)
+            # 出力はステータス/ヘッダの要点のみ（ボディは副作用回避のため読まない）
+            try:
+                tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
+                output_payload = {
+                    "status": getattr(response, "status_code", None),
+                    "content_type": response.headers.get("content-type"),
+                    "content_length": response.headers.get("content-length"),
+                }
+                if tr is not None and hasattr(tr, "set_attribute"):
+                    tr.set_attribute("output", str(output_payload)[:40000])  # type: ignore[call-arg]
+                elif tr is not None and hasattr(tr, "update"):
+                    tr.update(output=output_payload)
+            except Exception:
+                pass
+            return response
+        except Exception as exc:
+            is_error = True
+            if (TimeoutException is not None and isinstance(exc, TimeoutException)) or isinstance(exc, asyncio.TimeoutError):
+                is_timeout = True
+            raise exc
+        finally:
+            latency_ms = (time.time() - start) * 1000
+            registry.record(path, latency_ms, is_error=is_error, is_timeout=is_timeout)
+            logger.info(
+                "request_complete",
+                path=path,
+                method=method,
+                latency_ms=latency_ms,
+                is_error=is_error,
+                is_timeout=is_timeout,
+                request_id=request_id,
+                client_ip=client_ip,
+                user_agent=ua,
+            )
 
 app.include_router(word.router, prefix="/api/word")  # 語彙関連エンドポイント
 app.include_router(health.router)  # ヘルスチェック
