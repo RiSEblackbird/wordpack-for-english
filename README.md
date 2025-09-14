@@ -399,9 +399,10 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
 
 #### 6-2-1. 文章インポート（ArticleImportFlow）のトレース
 - `POST /api/article/import` は `ArticleImportFlow` によって LangGraph スタイルでオーケストレーションされ、各ステップに Langfuse スパンが付与されています。
-  - `article.build_prompt`: インポート用プロンプト生成（`prompt_chars`/必要に応じて `prompt_preview`）
-  - `article.llm.complete`: LLM 呼び出し
-  - `article.parse_json`: LLM 出力の JSON 解析（失敗時は 502。コードフェンスは自動除去）
+  - `article.title.prompt` / `article.title.llm`: 短い英語タイトル生成
+  - `article.translation.prompt` / `article.translation.llm`: 日本語訳生成（忠実訳）
+  - `article.explanation.prompt` / `article.explanation.llm`: 日本語解説生成（1–3文）
+  - `article.lemmas.prompt` / `article.lemmas.llm`: 教育的な lemmas/句の抽出（JSON配列）
   - `article.filter_lemmas`: lemmas の簡易フィルタ
   - `article.link_or_create_wordpacks`: 既存 WordPack 紐付け / 空パック新規作成
   - `article.save_article`: 記事保存とメタ取得
@@ -431,7 +432,7 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
 - 関連WordPackカードの「生成」ボタンで `/api/word/packs/{word_pack_id}/regenerate` を呼び出し、生成完了後はUIが自動更新されます。
 
 ### 文章インポートのエラーハンドリング（重要）
-- LLM出力はJSONである必要があります。Markdownのコードフェンス```json ... ```で囲まれた出力も自動で剥がして解析します。
-- 解析に失敗した場合は常に 502 を返し、記事は保存しません。
-- JSONであっても `body_ja`（日本語訳）が空、かつ `lemmas` が空のときは 502 を返し、記事は保存しません。
+- 各役割（タイトル/訳/解説/lemmas）は独立プロンプトで生成します。lemmas は JSON 配列、他は素のテキストを期待します（コードフェンスは自動剥離）。
+- lemmas のJSON解析に失敗した場合は lemmas を空扱いの上でフィルタを適用します（ダミーは生成しません）。
+- 最終的に「日本語訳が空」かつ「lemmas が空」の場合は 502 を返し、記事は保存しません。
 - これにより、無内容な記事や関連語を持たない記事が保存される回りくどい失敗パスを排除しています。

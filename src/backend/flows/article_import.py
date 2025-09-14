@@ -21,9 +21,7 @@ from fastapi import HTTPException
 
 class _ArticleState(TypedDict, total=False):
     original_text: str
-    prompt: str
-    llm_output: str
-    parsed: Dict[str, Any]
+    # 以下は段階的生成の出力を保持する
     lemmas: List[str]
     links: List[ArticleWordPackLink]
     article_id: str
@@ -52,20 +50,46 @@ class ArticleImportFlow:
         "and","or","but","if","because","so","than","too","very","not","no","nor","also","then","there","here",
     }
 
-    def _prompt_for_article_import(self, text: str) -> str:
+    # ---- 役割別プロンプト（サブグラフ相当） ----
+    def _prompt_title(self, text: str) -> str:
         return (
-            """You will receive an English text. Return JSON only with these keys and nothing else.
-- title_en: A very short English title (<= 10 words).
-- body_ja: Faithful Japanese translation of the input text (do not summarize or paraphrase).
-- notes_ja: Short Japanese commentary (1-3 sentences), focusing on usage notes or context.
-- lemmas: Learning-worthy lemmas/phrases only (unique). STRICT FILTER: exclude function words
-  (articles, auxiliaries, copulas, simple pronouns, basic prepositions/conjunctions) and trivial tokens
-  like 'I', 'am', 'a', 'the', 'be', 'is', 'are', 'to', 'of', 'and', 'in', 'on', 'for', 'with', 'at', 'by', 'from', 'as'.
-  Include academic/professional terms and multi-word expressions (phrasal verbs, idioms, collocations).
-  Aim for ~5-30 items.
-IMPORTANT: Do NOT paraphrase or rewrite the input.
-Return JSON with keys: {"title_en", "body_ja", "notes_ja", "lemmas"}.
-Use the exact text inside the following markers as the input. Do not claim it is empty.
+            """Write a very short English title (<= 10 words) that faithfully reflects the input.
+Constraints:
+- Do not paraphrase the content beyond what is necessary for a concise title.
+- Output only the title text without quotes.
+Input:
+<INPUT_START>\n""" + text + """\n<INPUT_END>"""
+        )
+
+    def _prompt_translation(self, text: str) -> str:
+        return (
+            """Translate the input English text into Japanese faithfully.
+Constraints:
+- Do not summarize or paraphrase.
+- Keep the meaning accurate and complete.
+Output only the translated Japanese text without additional commentary.
+Input:
+<INPUT_START>\n""" + text + """\n<INPUT_END>"""
+        )
+
+    def _prompt_explanation(self, text: str) -> str:
+        return (
+            """Write a concise Japanese explanation (1-3 sentences) for the input English text.
+Focus on usage notes, key terms, or context that helps Japanese learners.
+Output only the explanation sentences without quotes.
+Input:
+<INPUT_START>\n""" + text + """\n<INPUT_END>"""
+        )
+
+    def _prompt_lemmas(self, text: str) -> str:
+        return (
+            """From the input English text, list learning-worthy lemmas and multi-word expressions.
+STRICT FILTER: exclude function words (articles, auxiliaries, copulas, simple pronouns, basic prepositions/conjunctions)
+and trivial tokens like I, am, a, the, be, is, are, to, of, and, in, on, for, with, at, by, from, as.
+Include academic/professional terms and multi-word expressions (phrasal verbs, idioms, collocations).
+Aim for ~5-30 items.
+Return a JSON array of strings. Example: ["supply chain", "mitigate", "trade-off"].
+Input:
 <INPUT_START>\n""" + text + """\n<INPUT_END>"""
         )
 
@@ -133,14 +157,15 @@ Use the exact text inside the following markers as the input. Do not claim it is
 
         try:
             graph = create_state_graph()
-            # 明示的スキーマに合わせた初期 state を作る
+            # 初期 state（段階出力を段階的に埋めていく）
             state: _ArticleState = {
                 "original_text": original_text,
-                "prompt": "",
-                "llm_output": "",
-                "parsed": {},
                 "lemmas": [],
                 "links": [],
+                "title_en": "",
+                "body_en": original_text,
+                "body_ja": "",
+                "notes_ja": None,
             }
             # 入力の要点を構造化ログ
             import hashlib as _hf  # local import
@@ -156,94 +181,85 @@ Use the exact text inside the following markers as the input. Do not claim it is
                     pass
             logger.info("article_import_start", **payload)
 
-            def _build_prompt(s: _ArticleState) -> _ArticleState:
-                txt = str(s.get("original_text") or "")
-                pr = self._prompt_for_article_import(txt)
-                try:
-                    if getattr(settings, "langfuse_log_full_prompt", False):
-                        payload = {"prompt_chars": len(pr), "prompt": pr[: int(getattr(settings, "langfuse_prompt_max_chars", 40000))]}
-                    else:
-                        payload = {"prompt_chars": len(pr), "prompt_preview": pr[:500]}
-                except Exception:
-                    payload = {"prompt_chars": len(pr)}
-                with span(trace=None, name="article.build_prompt", input=payload):
-                    s["prompt"] = pr
-                # 生成したプロンプトのメタをログ
-                try:
-                    import hashlib as _hf2
-                    logger.info(
-                        "article_import_prompt_built",
-                        prompt_chars=len(pr),
-                        prompt_sha256=_hf2.sha256(pr.encode("utf-8", errors="ignore")).hexdigest(),
-                    )
-                except Exception:
-                    logger.info("article_import_prompt_built", prompt_chars=len(pr))
-                return s
-
-            def _llm_call(s: _ArticleState) -> _ArticleState:
-                pr = s.get("prompt") or ""
-                if not pr:
-                    # スキーマ保全の観点で、ここで再計算するのではなくエラーにする
-                    raise HTTPException(status_code=500, detail="prompt missing before LLM call (graph state loss)")
-                logger.info("article_import_llm_call", prompt_chars=len(pr))
-                with span(trace=None, name="article.llm.complete", input={"prompt_chars": len(pr)}):
+            # ---- 役割別 生成ノード ----
+            def _generate_title(s: _ArticleState) -> _ArticleState:
+                # LangGraph の最小スキーマで state から "original_text" が脱落する場合があるため、
+                # クロージャの original_text を直接参照する。
+                txt = original_text
+                pr = self._prompt_title(txt)
+                payload = {"prompt_chars": len(pr), "prompt_preview": pr[:200]}
+                with span(trace=None, name="article.title.prompt", input=payload):
+                    pass
+                with span(trace=None, name="article.title.llm", input={"prompt_chars": len(pr)}):
                     out = llm.complete(pr)
-                if not out:
-                    raise HTTPException(status_code=502, detail="LLM returned empty content")
-                s["llm_output"] = out
-                logger.info(
-                    "article_import_llm_result",
-                    content_chars=len(out or ""),
-                    starts_with_brace=str(out).lstrip().startswith("{"),
-                )
+                t = str(out or "").strip()
+                t = self._strip_code_fences(t)
+                # 安全側: 空なら Untitled（UI互換）。ダミー生成ではなく保存時に明示化するだけ。
+                s["title_en"] = t or "Untitled"
+                logger.info("article_import_title_generated", title_len=len(s["title_en"]))
                 return s
 
-            def _parse_json(s: _ArticleState) -> _ArticleState:
-                raw = s.get("llm_output")
-                with span(trace=None, name="article.parse_json", input={"output_chars": len(str(raw) or "")}):
-                    try:
-                        cleaned = self._strip_code_fences(str(raw))
-                        data = json.loads(cleaned)
-                    except Exception as exc:
-                        logger.info("article_import_json_parse_failed", error=str(exc))
-                        # LLM出力がJSONでない場合は保存せずにエラー応答（非strictでも）
-                        raise HTTPException(status_code=502, detail="LLM JSON parse failed")
-                s["parsed"] = data
-                try:
-                    keys = list(data.keys())[:10] if isinstance(data, dict) else []
-                    lem_ct = len((data or {}).get("lemmas", [])) if isinstance(data, dict) else 0
-                    logger.info("article_import_parsed", keys=keys, lemmas_in_json=lem_ct)
-                except Exception:
+            def _generate_translation(s: _ArticleState) -> _ArticleState:
+                txt = original_text
+                pr = self._prompt_translation(txt)
+                with span(trace=None, name="article.translation.prompt", input={"prompt_chars": len(pr)}):
                     pass
-                # 検証: 本文とlemmasが共に空ならエラーにする（保存しない）
-                try:
-                    if not isinstance(data, dict):
-                        raise HTTPException(status_code=502, detail="LLM JSON is not an object")
-                    body_ja_text = str((data or {}).get("body_ja", ""))
-                    body_ja_nonempty = bool(body_ja_text.strip())
-                    lem_list = (data or {}).get("lemmas") or []
-                    if not isinstance(lem_list, list):
-                        lem_list = []
-                    lem_ct2 = len(lem_list)
-                    if not body_ja_nonempty and lem_ct2 == 0:
-                        logger.info("article_import_validation_failed", reason="empty_body_ja_and_lemmas")
-                        raise HTTPException(status_code=502, detail="LLM returned empty translation and lemmas")
-                except Exception:
+                with span(trace=None, name="article.translation.llm", input={"prompt_chars": len(pr)}):
+                    out = llm.complete(pr)
+                ja = str(out or "").strip()
+                ja = self._strip_code_fences(ja)
+                s["body_ja"] = ja
+                logger.info("article_import_translation_generated", body_ja_chars=len(ja))
+                return s
+
+            def _generate_explanation(s: _ArticleState) -> _ArticleState:
+                txt = original_text
+                pr = self._prompt_explanation(txt)
+                with span(trace=None, name="article.explanation.prompt", input={"prompt_chars": len(pr)}):
                     pass
+                with span(trace=None, name="article.explanation.llm", input={"prompt_chars": len(pr)}):
+                    out = llm.complete(pr)
+                note = str(out or "").strip()
+                note = self._strip_code_fences(note)
+                s["notes_ja"] = note or None
+                logger.info("article_import_explanation_generated", notes_ja_chars=len(note or ""))
+                return s
+
+            def _parse_lemmas_json(raw: str) -> List[str]:
+                try:
+                    cleaned = self._strip_code_fences(str(raw))
+                    data = json.loads(cleaned)
+                    if isinstance(data, list):
+                        return [str(x) for x in data]
+                    if isinstance(data, dict) and isinstance(data.get("lemmas"), list):
+                        return [str(x) for x in data.get("lemmas", [])]
+                except Exception as exc:
+                    logger.info("article_import_lemmas_json_parse_failed", error=str(exc))
+                return []
+
+            def _generate_lemmas(s: _ArticleState) -> _ArticleState:
+                txt = original_text
+                pr = self._prompt_lemmas(txt)
+                with span(trace=None, name="article.lemmas.prompt", input={"prompt_chars": len(pr)}):
+                    pass
+                with span(trace=None, name="article.lemmas.llm", input={"prompt_chars": len(pr)}):
+                    out = llm.complete(pr)
+                raw_list = _parse_lemmas_json(str(out or ""))
+                s["lemmas"] = raw_list
+                logger.info("article_import_lemmas_generated", count=len(raw_list))
                 return s
 
             def _filter_lemmas(s: _ArticleState) -> _ArticleState:
-                data = s.get("parsed", {})
                 with span(trace=None, name="article.filter_lemmas"):
                     try:
-                        raw_list = [str(x) for x in (data.get("lemmas") or [])]  # type: ignore[assignment]
+                        raw_list = [str(x) for x in (s.get("lemmas") or [])]
                         lemmas = self._post_filter_lemmas(raw_list)
                     except Exception:
                         lemmas = []
                 s["lemmas"] = lemmas
                 logger.info(
                     "article_import_lemmas_filtered",
-                    input_count=len((data or {}).get("lemmas", [])) if isinstance(data, dict) else 0,
+                    input_count=len((raw_list if 'raw_list' in locals() else [])),
                     output_count=len(lemmas),
                 )
                 return s
@@ -291,12 +307,10 @@ Use the exact text inside the following markers as the input. Do not claim it is
                 return s
 
             def _save_article(s: _ArticleState) -> _ArticleState:
-                data = s.get("parsed", {})
-                title_en = str(data.get("title_en") or "Untitled").strip() or "Untitled"
-                # original_text は LangGraph の最終stateで脱落する場合があるため外側の値を直接採用
-                body_en = original_text
-                body_ja = str(data.get("body_ja") or "").strip()
-                notes_ja = str(data.get("notes_ja") or "").strip() or None
+                title_en = str(s.get("title_en") or "Untitled").strip() or "Untitled"
+                body_en = original_text  # 英語原文はそのまま
+                body_ja = str(s.get("body_ja") or "").strip()
+                notes_ja = str(s.get("notes_ja") or "").strip() or None
 
                 with span(trace=None, name="article.save_article"):
                     article_id = f"art:{uuid.uuid4().hex[:12]}"
@@ -330,20 +344,22 @@ Use the exact text inside the following markers as the input. Do not claim it is
                 )
                 return s
 
-            # ノード登録
+            # ノード登録（役割別サブグラフ風の逐次構成）
             try:
                 # StateGraph API 差異に耐える登録
-                graph.add_node("build_prompt", _build_prompt)  # type: ignore[attr-defined]
-                graph.add_node("llm_call", _llm_call)  # type: ignore[attr-defined]
-                graph.add_node("parse_json", _parse_json)  # type: ignore[attr-defined]
+                graph.add_node("generate_title", _generate_title)  # type: ignore[attr-defined]
+                graph.add_node("generate_translation", _generate_translation)  # type: ignore[attr-defined]
+                graph.add_node("generate_explanation", _generate_explanation)  # type: ignore[attr-defined]
+                graph.add_node("generate_lemmas", _generate_lemmas)  # type: ignore[attr-defined]
                 graph.add_node("filter_lemmas", _filter_lemmas)  # type: ignore[attr-defined]
                 graph.add_node("link_or_create", _link_or_create_wordpacks)  # type: ignore[attr-defined]
                 graph.add_node("save_article", _save_article)  # type: ignore[attr-defined]
 
-                graph.set_entry_point("build_prompt")  # type: ignore[attr-defined]
-                graph.add_edge("build_prompt", "llm_call")  # type: ignore[attr-defined]
-                graph.add_edge("llm_call", "parse_json")  # type: ignore[attr-defined]
-                graph.add_edge("parse_json", "filter_lemmas")  # type: ignore[attr-defined]
+                graph.set_entry_point("generate_title")  # type: ignore[attr-defined]
+                graph.add_edge("generate_title", "generate_translation")  # type: ignore[attr-defined]
+                graph.add_edge("generate_translation", "generate_explanation")  # type: ignore[attr-defined]
+                graph.add_edge("generate_explanation", "generate_lemmas")  # type: ignore[attr-defined]
+                graph.add_edge("generate_lemmas", "filter_lemmas")  # type: ignore[attr-defined]
                 graph.add_edge("filter_lemmas", "link_or_create")  # type: ignore[attr-defined]
                 graph.add_edge("link_or_create", "save_article")  # type: ignore[attr-defined]
 
@@ -358,18 +374,20 @@ Use the exact text inside the following markers as the input. Do not claim it is
             except Exception:
                 # LangGraph が使えない/非互換のときは順次実行
                 s = state
-                s = _build_prompt(s)
-                s = _llm_call(s)
-                s = _parse_json(s)
+                s = _generate_title(s)
+                s = _generate_translation(s)
+                s = _generate_explanation(s)
+                s = _generate_lemmas(s)
                 s = _filter_lemmas(s)
                 s = _link_or_create_wordpacks(s)
                 s = _save_article(s)
         except Exception:
             # グラフ初期化失敗時の最終フォールバック
             s = _ArticleState(original_text=original_text)
-            s = _build_prompt(s)  # type: ignore[name-defined]
-            s = _llm_call(s)  # type: ignore[name-defined]
-            s = _parse_json(s)  # type: ignore[name-defined]
+            s = _generate_title(s)  # type: ignore[name-defined]
+            s = _generate_translation(s)  # type: ignore[name-defined]
+            s = _generate_explanation(s)  # type: ignore[name-defined]
+            s = _generate_lemmas(s)  # type: ignore[name-defined]
             s = _filter_lemmas(s)  # type: ignore[name-defined]
             s = _link_or_create_wordpacks(s)  # type: ignore[name-defined]
             s = _save_article(s)  # type: ignore[name-defined]
