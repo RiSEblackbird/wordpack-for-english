@@ -17,7 +17,7 @@ from ..models.word import (
     WordPackRegenerateRequest,
     ExampleCategory,
 )
-from ..srs import store
+from ..store import store
 from ..logging import logger
 from pydantic import BaseModel, Field
 from typing import Optional, Any

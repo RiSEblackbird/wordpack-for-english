@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from ..config import settings
 from ..logging import logger
 from ..providers import get_llm_provider
-from ..srs import store
+from ..store import store
 from ..models.word import WordPack
 from ..models.article import (
     ArticleImportRequest,
