@@ -36,7 +36,7 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false }
       }}
       onMouseLeave={(e) => {
         if (!disabled) {
-          e.currentTarget.style.background = 'rgb(230, 199, 152)';
+          e.currentTarget.style.background = 'rgb(234, 230, 217)';
         }
       }}
     >
