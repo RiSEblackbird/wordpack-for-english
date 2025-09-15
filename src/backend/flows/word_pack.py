@@ -77,8 +77,7 @@ class WordPackFlow:
     """Word pack generation flow (no dummy outputs).
 
     単語学習パックを生成するフロー。ダミー生成は行わず、取得できない情報は
-    可能な限り空（未設定）で返す。RAG が有効かつ引用が得られない場合は、
-    strict モードではエラーを送出する。
+    可能な限り空（未設定）で返す。strict モードでは不正な生成結果はエラーを送出する。
     """
 
     def __init__(self, chroma_client: Any | None = None, *, llm: Any | None = None, llm_info: Optional[dict[str, Any]] = None) -> None:
@@ -176,10 +175,6 @@ class WordPackFlow:
             llm_data is None or (isinstance(llm_data, dict) and not llm_data.get("senses"))
         ):
             raise RuntimeError("LLM returned no usable data (strict mode)")
-
-        # RAG strict モードで引用がない場合はエラーを発生
-        if settings.rag_enabled and settings.strict_mode and not citations:
-            raise RuntimeError("No citations available in RAG strict mode")
 
         return {"lemma": lemma, "citations": citations, "llm_data": llm_data}
 

@@ -141,7 +141,7 @@ async def _on_shutdown() -> None:
 async def _on_startup_seed() -> None:
     # 起動時自動シード（任意）: STRICT_MODE=true でも、明示フラグがtrueなら最小シードを投入
     try:
-        if settings.auto_seed_on_startup and settings.rag_enabled:
+        if settings.auto_seed_on_startup:
             client = ChromaClientFactory().create_client()
             if client is None:
                 return
@@ -155,5 +155,5 @@ async def _on_startup_seed() -> None:
                 seed_domain_terms(client)
                 logger.info("auto_seed", mode="minimal")
     except Exception as exc:
-        # strict モードでも起動継続。RAG は依存未満で424が返るため、API全体の起動は止めない
+        # strict モードでも起動継続。
         logger.warning("auto_seed_failed", error=repr(exc))

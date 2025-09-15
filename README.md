@@ -91,7 +91,7 @@ docker compose up --build
 
 OpenAI LLM統合:
 - 既定: `LLM_PROVIDER=openai`, `LLM_MODEL=gpt-4o-mini`。
-- RAGは無効。OpenAI LLMが直接生成（語義/用例/フィードバック）。
+- OpenAI LLMが直接生成（語義/用例/フィードバック）。
 - `.env` の `LLM_MAX_TOKENS` を調整（推奨1500、JSON途切れ防止）。
 - 設定タブに `temperature`（0.0–1.0、既定0.6）。
 - WordPackでモデル選択（gpt-4.1-mini / gpt-5-mini / gpt-4o-mini）。選択モデルと `temperature` をAPIへ（未指定は既定）。
@@ -321,10 +321,10 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 - カバレッジ閾値は `pytest.ini` に設定（60%）。必要に応じて上書き可。
 - テスト構成:
   - `tests/test_api.py` … API基本動作（LangGraph/Chroma はスタブ）
-  - `tests/test_integration_rag.py` … LangGraph/Chroma 統合（最小シードで近傍と `citations`/`confidence` を検証）
+  - `tests/test_integration_rag.py` … LangGraph統合（OpenAI LLMで `citations`/`confidence` を検証）
   - `tests/test_e2e_backend_frontend.py` … フロント→バックE2E相当のAPIフロー（正常/異常系の健全性）
   - `tests/test_load_and_regression.py` … 軽負荷スモークとスキーマ回帰チェック
-    - PR4 追加: RAG 有効/無効の双方で基本SLA（少数リクエストで5秒以内）を検証。`X-Request-ID` ヘッダの付与も確認。
+    - PR4 追加: 基本SLA（少数リクエストで5秒以内）を検証。`X-Request-ID` ヘッダの付与も確認。
 
 フロントエンド単体テスト（Vitest/jsdom）:
 - `src/frontend/vitest.setup.ts` で `window.matchMedia` のポリフィルを提供しています。jsdom には `matchMedia` がないため、コンポーネントの幅検知（`(min-width: 900px)`）でエラーにならないようにしています。
@@ -332,7 +332,6 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 
 注意:
 - 統合テストはローカルの Chroma クライアント（`chromadb`）を利用し、フィクスチャでテスト専用ディレクトリに最小シードを投入します（環境変数 `CHROMA_PERSIST_DIR` を内部使用）。
-- RAG は `settings.rag_enabled` に従います。既定 `True`。
 - LLM プロバイダはアプリ内でシングルトンとしてキャッシュされ、タイムアウト/リトライの実行には共有スレッドプールを使用します。FastAPI のシャットダウンイベントで安全に解放されます。
 
 ---
@@ -346,8 +345,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
     - `llm_timeout_ms` / `llm_max_retries`
     - `embedding_provider` … 既定 `openai`
     - `embedding_model` … 既定 `text-embedding-3-small`
-  - RAG/Chroma:
-    - `rag_enabled`, `rag_timeout_ms`, `rag_max_retries`, `rag_rate_limit_per_min`
+  - Chroma:
     - `chroma_persist_dir`, `chroma_server_url`
   - APIキー:
     - `openai_api_key`
@@ -379,7 +377,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 
 ### 6-2. Langfuse の有効化（任意）
 
-Langfuse を有効化すると、HTTP リクエスト・LLM 呼び出し・RAG 近傍検索のトレース/スパンが送信されます。
+Langfuse を有効化すると、HTTP リクエストと LLM 呼び出しのトレース/スパンが送信されます。
 
 1) `.env` に以下を設定（`env.example` 参照）:
 ```
@@ -401,7 +399,7 @@ pip install -r requirements.txt
 Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、上記キーと `langfuse` パッケージは必須です（不足時は起動エラー）。
 
 #### Input / Output の表示について
-- 本リポジトリでは、Langfuse v3 のスパン属性として `input` と `output` を付与します（HTTP 親スパンはリクエストの要点とレスポンスの要点、LLM/RAG スパンはプロンプト長や結果テキストなど）。
+- 本リポジトリでは、Langfuse v3 のスパン属性として `input` と `output` を付与します（HTTP 親スパンはリクエストの要点とレスポンスの要点、LLM スパンはプロンプト長や結果テキストなど）。
 - v2 クライアント互換時は `trace/span.update(input=..., output=...)` を使用します。
 - ダッシュボードに Input/Output が表示されない場合は、`LANGFUSE_ENABLED=true` とキー設定、ならびに `src/backend/observability.py` が v3 分岐で `set_attribute('input'|'output', ...)` を実行していることを確認してください。
 

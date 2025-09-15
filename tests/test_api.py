@@ -41,7 +41,7 @@ def test_word_pack(client):
     body = resp.json()
     assert body["lemma"] == "converge"
     assert "senses" in body
-    # RAG導入後のフィールド
+    # 生成結果の基本フィールド
     assert "citations" in body and "confidence" in body
 
 
@@ -77,55 +77,33 @@ def test_review_stats_removed(client):
     assert client.get("/api/review/stats").status_code in (404, 405)
 
 
-def test_word_pack_returns_424_when_rag_strict_and_no_citations(monkeypatch):
-    # strict + RAG を有効化し、chromadb を外して依存未満を再現
-    import os, sys, importlib, types
-    # 退避
-    prev_strict = os.environ.get("STRICT_MODE")
-    prev_rag = os.environ.get("RAG_ENABLED")
-    prev_openai = os.environ.get("OPENAI_API_KEY")
+def test_word_pack_strict_llm_json_parse_failure_to_502(monkeypatch):
+    import os, sys, importlib
+    # Strict を有効化し、LLM が壊れたJSONを返す状況を作る
+    monkeypatch.setenv("STRICT_MODE", "true")
+    # 既存LLMインスタンスをクリア
     try:
-        monkeypatch.setenv("STRICT_MODE", "true")
-        monkeypatch.setenv("RAG_ENABLED", "true")
-        sys.modules.pop("chromadb", None)
-        # backend.config / backend.providers / backend.main をリロードして settings を反映
-        for m in ["backend.config", "backend.providers", "backend.main"]:
-            if m in sys.modules:
-                importlib.reload(sys.modules[m])
-        # LLM を完全モック化してキー不要にする
-        import backend.providers as providers_mod
-        class _StubLLM:
-            def complete(self, prompt: str) -> str:
-                # 新スキーマ準拠（空配列）
-                return '{"examples": []}'
-        providers_mod._LLM_INSTANCE = _StubLLM()
-        from backend.main import app
-        from fastapi.testclient import TestClient
-        client = TestClient(app)
-        r = client.post("/api/word/pack", json={"lemma": "nohit"})
-        assert r.status_code == 424
-        body = r.json()
-        assert "detail" in body
-    finally:
-        # 元の環境に戻す（テスト汚染回避）
-        if prev_strict is None:
-            os.environ.pop("STRICT_MODE", None)
-        else:
-            os.environ["STRICT_MODE"] = prev_strict
-        if prev_rag is None:
-            os.environ.pop("RAG_ENABLED", None)
-        else:
-            os.environ["RAG_ENABLED"] = prev_rag
-        if prev_openai is None:
-            os.environ.pop("OPENAI_API_KEY", None)
-        else:
-            os.environ["OPENAI_API_KEY"] = prev_openai or ""
-        # chromadb を最低限のスタブに戻す
-        sys.modules.setdefault("chromadb", types.SimpleNamespace())
-        # 関連モジュールを非厳格に戻した環境で再ロード
-        for m in ["backend.config", "backend.providers", "backend.main"]:
-            if m in sys.modules:
-                importlib.reload(sys.modules[m])
+        import backend.providers as providers
+        providers._LLM_INSTANCE = None
+    except Exception:
+        pass
+    for m in ["backend.providers", "backend.main"]:
+        if m in sys.modules:
+            importlib.reload(sys.modules[m])
+    from backend import main as backend_main
+    from fastapi.testclient import TestClient
+    # LLM を壊れたJSON返却に固定
+    import backend.providers as providers_mod
+
+    class _StubLLM:
+        def complete(self, prompt: str) -> str:
+            return "{ not a json }"
+
+    providers_mod._LLM_INSTANCE = _StubLLM()
+
+    client = TestClient(backend_main.app)
+    r = client.post("/api/word/pack", json={"lemma": "no_data"})
+    assert r.status_code == 502
 
 
 def test_review_popular_removed(client):
@@ -267,7 +245,7 @@ def test_word_pack_strict_empty_llm(monkeypatch):
     """STRICT_MODE で LLM が空文字を返した場合、5xx となることを確認。
 
     ルータは内部で例外をリレーズするため、FastAPI の既定ハンドラで 500 になる。
-    （RAG 依存不足時の 424 は別テストで担保済み）
+    （依存不足系の424は廃止）
     """
     import os, sys
     import importlib
@@ -310,7 +288,7 @@ def test_article_wordpack_link_persists_after_regeneration(monkeypatch):
     import os, sys, types, importlib
     # 非 strict でローカルLLM（空応答）にして高速安定化
     monkeypatch.setenv("STRICT_MODE", "false")
-    monkeypatch.setenv("RAG_ENABLED", "false")
+    # 廃止
     # langgraph/chromadb を最低限スタブ
     lg_mod = types.ModuleType("langgraph")
     graph_mod = types.ModuleType("langgraph.graph")

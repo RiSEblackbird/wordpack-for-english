@@ -9,8 +9,6 @@ from fastapi.testclient import TestClient
 @pytest.fixture(scope="module")
 def client_with_openai_llm():
     """OpenAI LLMを使用するテストクライアント"""
-    # RAGを無効化し、OpenAI LLMを使用する設定
-    os.environ["RAG_ENABLED"] = "false"
     os.environ["LLM_PROVIDER"] = "openai"
     os.environ["LLM_MODEL"] = "gpt-4o-mini"
     os.environ["STRICT_MODE"] = "false"
@@ -24,7 +22,7 @@ def client_with_openai_llm():
 
     # 設定反映のため関連モジュールをリロード
     import importlib
-    for m in ["backend.config", "backend.providers", "backend.main"]:
+    for m in ["backend.providers", "backend.main"]:
         if m in sys.modules:
             importlib.reload(sys.modules[m])
 

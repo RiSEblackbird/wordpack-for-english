@@ -136,7 +136,7 @@
 - `.env` に `LANGFUSE_ENABLED=true` と各キーを設定し、`requirements.txt` の `langfuse` を導入してください。
 - 本アプリは Langfuse v3（OpenTelemetry）を使用します。
   - HTTP 親スパン: `input`（パス/メソッド/クエリ要点）と `output`（ステータス/ヘッダ要点）を属性で付与。
-  - LLM / RAG スパン: `input`（モデル・プロンプト長など）/ `output`（生成テキストの先頭〜最大40000文字）を属性で付与。
+  - LLM スパン: `input`（モデル・プロンプト長など）/ `output`（生成テキストの先頭〜最大40000文字）を属性で付与。
   - v2 クライアント互換パスでは `update(input=..., output=...)` を使用。
 - LLM プロンプト全文の記録（任意）:
   - 既定ではプレビューのみ（`prompt_preview`）。`.env` で `LANGFUSE_LOG_FULL_PROMPT=true` を設定すると、`input.prompt` に全文（最大 `LANGFUSE_PROMPT_MAX_CHARS`）と `prompt_sha256` を付与します。
@@ -148,9 +148,9 @@
 
 ### B-2. アーキテクチャと実装メモ
 - エンドポイント統合は `/api/*` に統一
-- LangGraph/OpenAI LLM 統合（RAG 無効化）
+- LangGraph/OpenAI LLM 統合
   - `WordPackFlow`、`ReadingAssistFlow`、`FeedbackFlow` は OpenAI LLM を直接使用し、`citations`/`confidence`（Enum: low/medium/high）を付与
-  - RAG は無効化し ChromaDB 依存を削除
+  - ChromaDB 依存は削除
 - 発音生成は `src/backend/pronunciation.py` に統一
   - cmudict/g2p-en 利用時は精度向上、未導入時は例外辞書+規則フォールバック（タイムアウト制御）
 
@@ -234,7 +234,7 @@
 
 ### B-7. 運用のヒント（PR4）
 - レート制限/リクエストID/監視（p95, 件数, エラー, タイムアウト）/例外監視（Sentry）などを運用ルールとして維持
-- Langfuse（任意）: `.env` に `LANGFUSE_ENABLED=true`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`, `LANGFUSE_RELEASE` を設定すると、HTTP/LLM/RAG のトレースが送信されます。
+- Langfuse（任意）: `.env` に `LANGFUSE_ENABLED=true`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`, `LANGFUSE_RELEASE` を設定すると、HTTP/LLM のトレースが送信されます。
   - Strict モード時は上記キーと `langfuse` パッケージが必須。欠落時は起動でエラーになります。
 
 ## 文章インポートの使い方

@@ -133,13 +133,13 @@ def seed_from_jsonl(client: Any, *, word_snippets_path: Path | None = None, doma
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Seed ChromaDB collections for RAG")
+    parser = argparse.ArgumentParser(description="Seed ChromaDB collections")
     parser.add_argument("--persist", default=None, help="Chroma persist directory (overrides settings)")
     parser.add_argument("--word-jsonl", default=None, help="Path to word_snippets JSONL")
     parser.add_argument("--terms-jsonl", default=None, help="Path to domain_terms JSONL")
     args = parser.parse_args()
 
-    persist_dir = args.persist or settings.chroma_persist_dir
+    persist_dir = args.persist or ".chroma"
     client = ChromaClientFactory(persist_directory=persist_dir).create_client()
     if client is None:
         print("ChromaDB is not available. Skipping seeding.")
