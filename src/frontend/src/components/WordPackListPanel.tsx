@@ -6,6 +6,45 @@ import { Modal } from './Modal';
 import { WordPackPanel } from './WordPackPanel';
 import { LoadingIndicator } from './LoadingIndicator';
 
+// 削除ボタンの共通コンポーネント
+interface DeleteButtonProps {
+  onClick: (e: React.MouseEvent) => void;
+  disabled?: boolean;
+}
+
+const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false }) => {
+  return (
+    <button 
+      className="danger" 
+      onClick={onClick}
+      disabled={disabled}
+      style={{ 
+        padding: '0.07rem 0.2rem', 
+        fontSize: '0.40em', 
+        border: '1px solid #d32f2f', 
+        borderRadius: '4px', 
+        background: 'rgb(234, 230, 217)', 
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        color: '#d32f2f',
+        marginLeft: 'auto',
+        opacity: disabled ? 0.6 : 1
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.background = '#ffebee';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.background = 'rgb(230, 199, 152)';
+        }
+      }}
+    >
+      削除
+    </button>
+  );
+};
+
 interface WordPackListItem {
   id: string;
   lemma: string;
@@ -296,24 +335,10 @@ export const WordPackListPanel: React.FC = () => {
                       <h3 className="wp-card-title">
                         {wp.lemma}
                       </h3>
-                      <button 
-                        className="danger" 
+                      <DeleteButton 
                         onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
-                        style={{ 
-                          padding: '0.20rem 0.5rem', 
-                          fontSize: '0.45em', 
-                          border: '1px solid #d32f2f', 
-                          borderRadius: '4px', 
-                          background: 'rgb(230, 199, 152)', 
-                          cursor: 'pointer',
-                          color: '#d32f2f',
-                          marginLeft: 'auto'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = '#ffebee'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
-                      >
-                        削除
-                      </button>
+                        disabled={loading}
+                      />
                     </div>
                     <div className="wp-card-meta">
                       <div>作成: {formatDate(wp.created_at)}</div>
@@ -375,24 +400,10 @@ export const WordPackListPanel: React.FC = () => {
                   >
                     <span className="wp-index-title">{wp.lemma}</span>
                     <span className="wp-index-meta">更新: {formatDate(wp.updated_at)}{wp.is_empty ? ' / 例文未生成' : ` / 例文: ${getTotalExamples(wp)}件`}</span>
-                    <button 
-                      className="danger" 
+                    <DeleteButton 
                       onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
-                      style={{ 
-                        padding: '0.25rem 0.5rem', 
-                        fontSize: '0.75em', 
-                        border: '1px solid #d32f2f', 
-                        borderRadius: '4px', 
-                        background: 'white', 
-                        cursor: 'pointer',
-                        color: '#d32f2f',
-                        marginLeft: 'auto'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#ffebee'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
-                    >
-                      削除
-                    </button>
+                      disabled={loading}
+                    />
                   </div>
                 ))}
               </div>
