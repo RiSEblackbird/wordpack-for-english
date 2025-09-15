@@ -37,7 +37,7 @@ export const App: React.FC = () => {
     <SettingsProvider>
       <ModalProvider>
         <NotificationsProvider>
-        <div>
+        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
         <ThemeApplier />
         <style>{`
           /* テーマ変数 */
@@ -80,7 +80,7 @@ export const App: React.FC = () => {
           main, header, footer, nav { padding: 0.5rem; }
         `}</style>
         <header>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ height: '50px', display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <h1>WordPack</h1>
             <a 
               href="https://github.com/RiSEblackbird/wordpack-for-english" 
@@ -137,7 +137,7 @@ export const App: React.FC = () => {
             </>
           )}
         </main>
-        <footer>
+        <footer style={{ padding: '0.5rem', marginTop: '10rem' }}>
           <small>WordPack 英語学習</small>
         </footer>
           <NotificationsOverlay />
