@@ -456,12 +456,13 @@ def get_embedding_provider() -> Any:
 class ChromaClientFactory:
     """Factory for creating a ChromaDB client and collections.
 
-    RAG 用に `word_snippets` と `domain_terms` の 2 コレクションを扱うことを想定。
-    実環境では永続ストアのパスやサーバーモードの URL を環境変数で指定する。
+    `word_snippets` と `domain_terms` の 2 コレクションを扱うことを想定。
+    実環境では永続ストアのパスやサーバーモードの URL を設定で指定する。
     """
 
     def __init__(self, persist_directory: Optional[str] = None) -> None:
-        self.persist_directory = persist_directory or settings.chroma_persist_dir
+        # 設定依存を避け、デフォルトはローカルディレクトリ
+        self.persist_directory = persist_directory or ".chroma"
 
     def create_client(self) -> Any | None:
         key = f"url:{getattr(settings, 'chroma_server_url', None) or ''}|persist:{self.persist_directory}"
@@ -474,9 +475,9 @@ class ChromaClientFactory:
             return client
         # ランタイムで chromadb が利用不可（モジュール未登録/未インストール）ならフォールバック
         if chromadb is None or "chromadb" not in sys.modules:  # pragma: no cover - tests may stub
-            if settings.strict_mode and settings.rag_enabled:
+            if settings.strict_mode:
                 # strict ではライブラリ欠如を許容しない
-                raise RuntimeError("chromadb module is required when RAG is enabled (strict mode)")
+                raise RuntimeError("chromadb module is required (strict mode)")
             # 非 strict: フォールバックとして常にメモリ内クライアントを返す
             client = _InMemoryChromaClient(get_embedding_provider())
             _CLIENT_CACHE[key] = client
@@ -498,7 +499,7 @@ class ChromaClientFactory:
                 except Exception:
                     underlying = None
         if underlying is None:
-            if settings.strict_mode and settings.rag_enabled:
+            if settings.strict_mode:
                 # strict では初期化失敗も許容しない
                 raise RuntimeError("Failed to initialize Chroma client (strict mode)")
             # 非 strict: フォールバックで進行
@@ -605,49 +606,8 @@ class _InMemoryChromaClient:
         return self._collections[name]
 
 
-# --- RAG 標準化（レート制御/タイムアウト/再試行/フォールバック） ---
-
-# コレクション名の定義（スキーマ設計）
 COL_WORD_SNIPPETS = "word_snippets"
 COL_DOMAIN_TERMS = "domain_terms"
-
-
-class TokenBucketRateLimiter:
-    """簡易トークンバケット（毎分上限）。スレッドセーフな最小実装。
-
-    過剰なクエリを抑制し、上位APIのレートと課金を守る目的（将来の外部APIにも流用可能）。
-    """
-
-    def __init__(self, capacity_per_minute: int) -> None:
-        self.capacity = max(1, capacity_per_minute)
-        self.tokens = self.capacity
-        self.refill_interval = 60.0
-        self.last_refill = time.time()
-
-    def allow(self) -> bool:
-        now = time.time()
-        elapsed = now - self.last_refill
-        if elapsed >= self.refill_interval:
-            # 1分単位で満タンにリフィル（簡易）
-            self.tokens = self.capacity
-            self.last_refill = now
-        if self.tokens > 0:
-            self.tokens -= 1
-            return True
-        return False
-
-
-_rag_rate_limiter = TokenBucketRateLimiter(settings.rag_rate_limit_per_min)
-_rag_executor = ThreadPoolExecutor(max_workers=4)
-
-
-def _with_timeout(func: Callable[[], Any], timeout_ms: int) -> Any:
-    """別スレッドで実行してタイムアウトを適用。"""
-    future = _rag_executor.submit(func)
-    try:
-        return future.result(timeout=timeout_ms / 1000.0)
-    except FuturesTimeout:
-        raise TimeoutError("RAG query timed out")
 
 
 def shutdown_providers() -> None:
@@ -657,53 +617,9 @@ def shutdown_providers() -> None:
         _llm_executor.shutdown(wait=False, cancel_futures=True)  # type: ignore[call-arg]
     except Exception:
         pass
-    try:
-        _rag_executor.shutdown(wait=False, cancel_futures=True)  # type: ignore[call-arg]
-    except Exception:
-        pass
     _LLM_INSTANCE = None
 
 
-def chroma_query_with_policy(
-    client: Any,
-    *,
-    collection: str,
-    query_text: str,
-    n_results: int = 3,
-    timeout_ms: int | None = None,
-    max_retries: int | None = None,
-) -> dict[str, Any] | None:
-    """Chroma 近傍検索にレート制限/タイムアウト/リトライ/フォールバックを適用。
-
-    失敗時は None を返す。成功時は Chroma の dict 応答を返す。
-    """
-    if not settings.rag_enabled or client is None:
-        return None
-    timeout_ms = timeout_ms if timeout_ms is not None else settings.rag_timeout_ms
-    max_retries = max_retries if max_retries is not None else settings.rag_max_retries
-    if not _rag_rate_limiter.allow():
-        # レート制限に達した場合は静かにフォールバック
-        return None
-
-    last_exc: Exception | None = None
-    for attempt in range(1, max_retries + 1):
-        try:
-            def _do_query() -> Any:
-                col = client.get_or_create_collection(name=collection)
-                return col.query(query_texts=[query_text], n_results=n_results)
-
-            start = time.time()
-            lf_trace = getattr(get_langfuse(), "trace", None)
-            with span(trace=None if lf_trace is None else lf_trace(name="RAG query"), name="chroma.query", input={"collection": collection, "n_results": n_results, "query_chars": len(query_text)}):
-                res = _with_timeout(_do_query, timeout_ms)
-            _elapsed_ms = (time.time() - start) * 1000.0
-            # ログは上位で行うことを想定（ここでは必要最小限）
-            return res  # type: ignore[return-value]
-        except Exception as exc:  # includes TimeoutError
-            last_exc = exc
-            if attempt >= max_retries:
-                break
-            # 短いバックオフ
-            time.sleep(0.05 * attempt)
-    # 最終失敗はフォールバック（None）
+def chroma_query_with_policy(*args: Any, **kwargs: Any) -> dict[str, Any] | None:
+    """Compatibility stub: vector search feature is removed. Always returns None."""
     return None

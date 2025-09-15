@@ -6,7 +6,7 @@ from datetime import datetime
 from functools import partial
 
 from ..flows.word_pack import WordPackFlow
-from ..providers import ChromaClientFactory, get_llm_provider
+from ..providers import get_llm_provider
 from ..config import settings
 from ..models.word import (
     WordPackRequest,
@@ -44,7 +44,7 @@ async def lookup_word() -> dict[str, object]:
 async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
     """生成を行わず、各情報を空としてWordPackを作成・保存する。
 
-    - 既存の生成フローやRAG/LLMには依存しない
+    - 既存の生成フローやLLMには依存しない
     - スキーマに適合する空のWordPack JSONを構築して保存
     - 保存ID（wp:{lemma}:{短縮uuid}）を返す
     """
@@ -94,31 +94,11 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
 
     指定した語について、発音・語義・共起・対比・例文・語源などを
     まとめた学習パックを生成して返す。ダミーは生成せず、取得できない
-    情報は空値で返す（RAG 有効かつ strict のときは引用不足で失敗）。
+    情報は空値で返す。
     生成されたWordPackは自動的にデータベースに保存される。
     """
-    # RAG が有効なときのみ Chroma を接続（初期化失敗は後段で 424 にマップ）
-    try:
-        chroma_client = ChromaClientFactory().create_client() if settings.rag_enabled else None
-    except RuntimeError as exc:
-        msg = str(exc)
-        if (
-            settings.rag_enabled
-            and settings.strict_mode
-            and (
-                "chromadb module is required" in msg.lower()
-                or "failed to initialize chroma client" in msg.lower()
-            )
-        ):
-            raise HTTPException(
-                status_code=424,
-                detail={
-                    "message": "RAG dependency not ready or no citations (strict mode)",
-                    "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
-                },
-            ) from exc
-        # それ以外は再送出
-        raise
+    # 近傍検索クライアントは使用しない
+    chroma_client = None
     # リクエストでモデル/パラメータが指定されていればオーバーライド
     llm = get_llm_provider(
         model_override=getattr(req, 'model', None),
@@ -185,23 +165,6 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
         return word_pack
     except RuntimeError as exc:
         msg = str(exc)
-        # RAG が有効かつ strict で引用ゼロなど、依存不足に起因するエラーは 424 に変換
-        if (
-            settings.rag_enabled
-            and settings.strict_mode
-            and (
-                "no citations" in msg.lower()
-                or "chromadb module is required" in msg.lower()
-                or "failed to initialize chroma client" in msg.lower()
-            )
-        ):
-            raise HTTPException(
-                status_code=424,
-                detail={
-                    "message": "RAG dependency not ready or no citations (strict mode)",
-                    "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
-                },
-            ) from exc
         # strict モードでの LLM JSON パース失敗を 502 に明示マップ
         low = msg.lower()
         if "failed to parse llm json" in low and settings.strict_mode:
@@ -344,27 +307,8 @@ async def regenerate_word_pack(
     
     lemma, _, _, _ = result
     
-    # RAG が有効なときのみ Chroma を接続
-    try:
-        chroma_client = ChromaClientFactory().create_client() if settings.rag_enabled else None
-    except RuntimeError as exc:
-        msg = str(exc)
-        if (
-            settings.rag_enabled
-            and settings.strict_mode
-            and (
-                "chromadb module is required" in msg.lower()
-                or "failed to initialize chroma client" in msg.lower()
-            )
-        ):
-            raise HTTPException(
-                status_code=424,
-                detail={
-                    "message": "RAG dependency not ready or no citations (strict mode)",
-                    "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
-                },
-            ) from exc
-        raise
+    # 近傍検索クライアントは使用しない
+    chroma_client = None
     
     # リクエストでモデル/パラメータが指定されていればオーバーライド
     llm = get_llm_provider(
@@ -410,22 +354,6 @@ async def regenerate_word_pack(
         return word_pack
     except RuntimeError as exc:
         msg = str(exc)
-        if (
-            settings.rag_enabled
-            and settings.strict_mode
-            and (
-                "no citations" in msg.lower()
-                or "chromadb module is required" in msg.lower()
-                or "failed to initialize chroma client" in msg.lower()
-            )
-        ):
-            raise HTTPException(
-                status_code=424,
-                detail={
-                    "message": "RAG dependency not ready or no citations (strict mode)",
-                    "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
-                },
-            ) from exc
         # strict モードでの LLM JSON パース失敗を 502 に明示マップ
         low = msg.lower()
         if "failed to parse llm json" in low and settings.strict_mode:

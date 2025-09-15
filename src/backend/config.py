@@ -46,23 +46,7 @@ class Settings(BaseSettings):
         description="Max tokens for LLM completion output / LLM出力の最大トークン数",
     )
 
-    # --- RAG 制御（導入のみ・フラグで無効化可） ---
-    rag_enabled: bool = Field(
-        default=False,
-        description="Enable RAG pipeline / RAG 機能の有効化スイッチ",
-    )
-    rag_timeout_ms: int = Field(
-        default=1500,
-        description="Per-attempt timeout for vector queries (ms) / 近傍クエリの試行毎タイムアウト(ms)",
-    )
-    rag_max_retries: int = Field(
-        default=2,
-        description="Max retries for vector queries / 近傍クエリの最大リトライ回数",
-    )
-    rag_rate_limit_per_min: int = Field(
-        default=120,
-        description="Rate limit for RAG queries per minute / RAGクエリの毎分上限",
-    )
+    # （削除済み）
 
     # --- Auto seed on startup (optional) ---
     auto_seed_on_startup: bool = Field(
@@ -78,15 +62,7 @@ class Settings(BaseSettings):
         description="Optional JSONL path for domain_terms to seed on startup / 起動時シード用のdomain_terms JSONL",
     )
 
-    # --- Chroma 設定（永続ディレクトリ or 将来のリモート URL） ---
-    chroma_persist_dir: str = Field(
-        default=".chroma",
-        description="Chroma persistent storage directory / Chroma 永続ディレクトリ",
-    )
-    chroma_server_url: str | None = Field(
-        default=None,
-        description="Optional Chroma server URL / 任意の Chroma サーバURL（未指定ならローカル）",
-    )
+    # （Chroma 設定は削除）
 
     # --- API Keys ---
     openai_api_key: str | None = Field(default=None, description="OpenAI API Key")

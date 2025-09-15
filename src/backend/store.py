@@ -47,9 +47,9 @@ class AppSQLiteStore:
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=10.0, isolation_level=None, check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        with conn:  # autocommit on PRAGMA
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA foreign_keys=ON;")
+        with conn:  # autocommit on pragma
+            conn.execute("pragma journal_mode=WAL;")
+            conn.execute("pragma foreign_keys=ON;")
         return conn
 
     def _ensure_dirs(self) -> None:

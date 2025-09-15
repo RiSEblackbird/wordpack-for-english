@@ -54,24 +54,13 @@ def test_progress_and_grade_lemma_regression(client):
     assert j2.get("ok") is True and "next_due" in j2
 
 
-def test_sla_with_and_without_rag(client):
-    """RAG有効/無効の両モードで、基本SLA(少数リクエストで5秒以内)を満たす。"""
+def test_sla_word_pack_smoke(client):
+    """基本SLA(少数リクエストで5秒以内)を満たす。"""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-    # RAG 有効
-    import backend.config as cfg
-    cfg.settings.rag_enabled = True
     start = time.time()
-    for _ in range(5):
+    for _ in range(10):
         assert client.post("/api/word/pack", json={"lemma": "sla"}).status_code == 200
-    elapsed_on = time.time() - start
-    assert elapsed_on < 5.0
-
-    # RAG 無効
-    cfg.settings.rag_enabled = False
-    start = time.time()
-    for _ in range(5):
-        assert client.post("/api/word/pack", json={"lemma": "sla"}).status_code == 200
-    elapsed_off = time.time() - start
-    assert elapsed_off < 5.0
+    elapsed = time.time() - start
+    assert elapsed < 5.0
 
 
