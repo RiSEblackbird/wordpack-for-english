@@ -95,7 +95,15 @@ export const WordPackListPanel: React.FC = () => {
   
   // グリッドの可視幅に基づき列数を算出（最大4列）
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const [columnCount, setColumnCount] = useState<number>(1);
+  const getColumnCountFromWindow = (w: number): number => {
+    if (w >= 1600) return 4;
+    if (w >= 1200) return 3;
+    if (w >= 900) return 2;
+    return 1;
+  };
+  const [columnCount, setColumnCount] = useState<number>(() =>
+    typeof window === 'undefined' ? 1 : getColumnCountFromWindow(window.innerWidth)
+  );
 
   const computeColumnCount = (width: number): number => {
     // 1列あたりの最小想定幅（px）。項目の可読性を保つための経験値。
@@ -107,7 +115,19 @@ export const WordPackListPanel: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const el = gridRef.current;
-    if (!el) return;
+    const fallbackUpdate = () => setColumnCount(getColumnCountFromWindow(window.innerWidth));
+    if (!el) {
+      // 次フレームでrefが入ることがあるため再試行
+      requestAnimationFrame(() => {
+        const n = gridRef.current;
+        if (n) {
+          setColumnCount(computeColumnCount(n.clientWidth));
+        } else {
+          fallbackUpdate();
+        }
+      });
+      return;
+    }
     const update = () => setColumnCount(computeColumnCount(el.clientWidth));
     update();
     let ro: ResizeObserver | null = null;
@@ -120,7 +140,7 @@ export const WordPackListPanel: React.FC = () => {
       if (ro) ro.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, [gridRef]);
+  }, [gridRef, viewMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -290,7 +310,7 @@ export const WordPackListPanel: React.FC = () => {
         .wp-view-toggle { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; }
         .wp-toggle-btn { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
         .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; }
-        .wp-index-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; padding: 0.5rem 2.5rem; }
+        .wp-index-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; padding: 0.5rem 0.0rem; }
         @media (min-width: 900px) and (max-width: 1199px) {
           .wp-index-grid { grid-template-columns: 1fr 1fr; }
         }

@@ -155,10 +155,10 @@ export const ArticleListPanel: React.FC = () => {
         {items.map((it) => (
           <div key={it.id} className="al-card" onClick={() => open(it.id)}>
             <div style={{ display: 'flex', gap: 8 }}>
-              <strong style={{ flex: 1 }}>{it.title_en}</strong>
+              <strong style={{ flex: 1, fontSize: '12px' }}>{it.title_en}</strong>
               <button onClick={(e) => { e.stopPropagation(); del(it.id); }} aria-label={`delete-article-${it.id}`}>削除</button>
             </div>
-            <div style={{ fontSize: '0.8em', color: 'var(--color-subtle)' }}>更新: {formatDateJst(it.updated_at)}</div>
+            <div style={{ fontSize: '10px', color: 'var(--color-subtle)' }}>更新: {formatDateJst(it.updated_at)}</div>
           </div>
         ))}
       </div>

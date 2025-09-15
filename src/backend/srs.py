@@ -569,6 +569,75 @@ class SRSSQLiteStore:
         finally:
             conn.close()
 
+    def count_word_packs(self) -> int:
+        """WordPack総件数を返す。"""
+        conn = self._connect()
+        try:
+            cur = conn.execute("SELECT COUNT(1) AS c FROM word_packs;")
+            row = cur.fetchone()
+            return int(row["c"]) if row is not None else 0
+        finally:
+            conn.close()
+
+    def list_word_packs_with_flags(
+        self, limit: int = 50, offset: int = 0
+    ) -> List[tuple[str, str, str, str, bool, Optional[dict]]]:
+        """一覧取得のための軽量フラグ/集計付きリストを返す。
+
+        戻り値: [(id, lemma, created_at, updated_at, is_empty, examples_count_dict|None), ...]
+
+        - is_empty: examples と study_card/senses の有無に依存するが、一覧は軽量化のため
+          examples の件数のみで空判定の近似値を算出する。
+        - examples_count_dict: {category: count}
+        """
+        conn = self._connect()
+        try:
+            cur = conn.execute(
+                """
+                SELECT wp.id, wp.lemma, wp.created_at, wp.updated_at,
+                       SUM(CASE WHEN wpe.category = 'Dev' THEN 1 ELSE 0 END) AS cnt_dev,
+                       SUM(CASE WHEN wpe.category = 'CS' THEN 1 ELSE 0 END) AS cnt_cs,
+                       SUM(CASE WHEN wpe.category = 'LLM' THEN 1 ELSE 0 END) AS cnt_llm,
+                       SUM(CASE WHEN wpe.category = 'Business' THEN 1 ELSE 0 END) AS cnt_biz,
+                       SUM(CASE WHEN wpe.category = 'Common' THEN 1 ELSE 0 END) AS cnt_common
+                FROM word_packs wp
+                LEFT JOIN word_pack_examples wpe ON wpe.word_pack_id = wp.id
+                GROUP BY wp.id
+                ORDER BY wp.created_at DESC
+                LIMIT ? OFFSET ?;
+                """,
+                (limit, offset),
+            )
+            items: List[tuple[str, str, str, str, bool, Optional[dict]]] = []
+            for row in cur.fetchall():
+                cnt_dev = int(row["cnt_dev"] or 0)
+                cnt_cs = int(row["cnt_cs"] or 0)
+                cnt_llm = int(row["cnt_llm"] or 0)
+                cnt_biz = int(row["cnt_biz"] or 0)
+                cnt_common = int(row["cnt_common"] or 0)
+                total_examples = cnt_dev + cnt_cs + cnt_llm + cnt_biz + cnt_common
+                is_empty = total_examples == 0
+                examples_count = {
+                    "Dev": cnt_dev,
+                    "CS": cnt_cs,
+                    "LLM": cnt_llm,
+                    "Business": cnt_biz,
+                    "Common": cnt_common,
+                }
+                items.append(
+                    (
+                        row["id"],
+                        row["lemma"],
+                        row["created_at"],
+                        row["updated_at"],
+                        is_empty,
+                        examples_count,
+                    )
+                )
+            return items
+        finally:
+            conn.close()
+
     def delete_word_pack(self, word_pack_id: str) -> bool:
         """WordPackを削除する。成功時True、存在しない場合False。"""
         conn = self._connect()

@@ -269,56 +269,22 @@ async def list_word_packs(
     offset: int = Query(default=0, ge=0, description="オフセット"),
 ) -> WordPackListResponse:
     """保存済みWordPackの一覧を取得する。"""
-    items_data = store.list_word_packs(limit=limit, offset=offset)
+    items_with_flags = store.list_word_packs_with_flags(limit=limit, offset=offset)
     items: list[WordPackListItem] = []
-    for item in items_data:
-        wp_id, lemma, created_at, updated_at = item
-        # 可能であれば簡易に空判定と例文数計算（保存データを軽量に読み出し）
-        is_empty = False
-        examples_count = None
-        try:
-            result = store.get_word_pack(wp_id)
-            if result is not None:
-                _, data_json, _, _ = result
-                try:
-                    d = json.loads(data_json)
-                    # 空判定: sensesが0、examplesの全カテゴリが空、study_cardが空文字相当
-                    senses_empty = not d.get("senses")
-                    ex = d.get("examples") or {}
-                    examples_empty = all(not (ex.get(k) or []) for k in ["Dev","CS","LLM","Business","Common"])
-                    study_empty = not bool((d.get("study_card") or "").strip())
-                    is_empty = bool(senses_empty and examples_empty and study_empty)
-                    
-                    # 例文数の計算
-                    examples_count = {
-                        "Dev": len(ex.get("Dev", [])),
-                        "CS": len(ex.get("CS", [])),
-                        "LLM": len(ex.get("LLM", [])),
-                        "Business": len(ex.get("Business", [])),
-                        "Common": len(ex.get("Common", [])),
-                    }
-                except Exception:
-                    is_empty = False
-                    examples_count = None
-        except Exception:
-            is_empty = False
-            examples_count = None
-
+    for wp_id, lemma, created_at, updated_at, is_empty, examples_count in items_with_flags:
         items.append(
             WordPackListItem(
                 id=wp_id,
                 lemma=lemma,
                 created_at=created_at,
                 updated_at=updated_at,
-                is_empty=is_empty,
+                is_empty=bool(is_empty),
                 examples_count=examples_count,
             )
         )
-    
-    # 総件数を取得（簡易実装：実際のプロダクションでは別途カウントクエリが必要）
-    total_items = store.list_word_packs(limit=10000, offset=0)
-    total = len(total_items)
-    
+
+    total = store.count_word_packs()
+
     return WordPackListResponse(
         items=items,
         total=total,
