@@ -1,0 +1,55 @@
+---
+description: >
+  USE WHEN: コードの設計/実装/レビュー全般
+  GOAL: 変更容易性と可観測性を両立した読みやすいコード
+  OUTPUT: 明確な責務分割・一貫API・十分なログとテスト
+globs: []
+alwaysApply: true
+---
+
+## Constraints（原則）
+1. DRY: 知識の重複を排除（2回で抽出検討、3回で抽出必須）。設定は環境変数/設定モジュールに一元化。
+2. KISS: 最小実装、分岐3階層以内、早期return、過度な抽象化禁止。
+3. SoC: UI/Service/Domain/Infra を分離。横断関心はミドルウェアで注入。
+4. SRP: モジュールは単一の変更理由。曖昧名の分割。
+5. YAGNI: 需要が現れるまで実装しない（セキュリティ/可観測性は例外で最低限先行）。
+6. POLA: 直感に反しないAPI。非同期はPromise/asyncで統一。破壊的操作は明示名。
+7. OCP: 条件分岐の増殖ではなく戦略/ポリモーフィズムで拡張。
+8. エラーハンドリング/可観測性: 例外 or Result 型で明示。構造化ログ（level,event,context）。
+9. テスト規約: Unit厚く、Integration必要十分、E2Eは重要動線のみ。
+10. 依存と構成: 未使用依存は削除。12-factor準拠。
+11. 可読性: 命名は意味で説明。副作用は名前に反映。コメントは「なぜ」。
+
+## Procedure
+1) 契約/型→公開API→実装→テスト→ドキュメントの順で進める。
+2) 先に失敗パスと境界値の扱いを決め、ログのキー（event, request_id）を設計。
+3) 複雑化したら分割し、重複は共通化。モジュール間の結合を最小化。
+
+## Patterns
+- Guard節で早期return、深いネストを避ける。
+- 入出力スキーマで境界を固定し、モックは契約に同期。
+- 構造化ログ＋メトリクス（p95, errors, timeouts）。
+
+## Examples
+// Good: 早期returnと命名で意図を明確化（TypeScript）
+```ts
+export function calculateDiscount(price: number, userRank: 'gold'|'silver'|'standard'): number {
+  if (price <= 0) return 0;
+  const rate = userRank === 'gold' ? 0.2 : userRank === 'silver' ? 0.1 : 0;
+  return Math.round(price * (1 - rate));
+}
+```
+
+// Bad: 深いネストと曖昧な命名
+```ts
+export function proc(p, r) {
+  let x = p;
+  if (p > 0) {
+    if (r === 'g') { x = p * 0.8 } else if (r === 's') { x = p * 0.9 }
+  }
+  return Math.round(x);
+}
+```
+
+## References
+- @README.md

@@ -1,0 +1,55 @@
+---
+description: >
+  USE WHEN: すべてのテスト/品質ゲートを定義・確認するとき
+  GOAL: 再現性と観測性を備えた健全なテストスイート
+  OUTPUT: 決定性・分離・カバレッジ閾値・配置・観測の遵守
+globs: []
+alwaysApply: true
+---
+
+## Constraints（共通ポリシー）
+- ピラミッド: Unit(多) > Integration(中) > E2E(少)。E2Eは重要動線のみ。
+- スタイル: AAA/Given-When-Then。1テスト=1観点（分岐はパラメタライズ）。
+- 決定性: 時刻/乱数/ネットワーク固定（フェイクタイマ/シード/HTTPモック）。
+- 分離: 並列実行で干渉禁止（一時ファイル/ポート/DB名前空間をテスト単位で分離）。
+- カバレッジ目安: 行・ステートメント>=80%、分岐>=70%（E2E除外）。閾値はCIでゲート。
+- 可観測性: 期待値/HTTPコード/UIテキスト/例外型を具体化。主要ユースケースにメトリクス埋め込み。
+- 配置: 対象コード近傍（`__tests__`や`*.test.*`）。E2Eは専用ディレクトリ。
+- Flaky撲滅: 一時スキップ放置禁止。待機/リトライは明示。原因（非同期/競合）を修正。
+
+## Procedure
+1) 成功/失敗/境界の3系統を最小で用意。
+2) 非決定要素（時刻/乱数/HTTP）を固定。
+3) 並列実行時の衝突（ポート/一時ファイル/DB）を個別化。
+4) 観測点（ログ/メトリクス）をアサート可能な最小単位で露出。
+
+## Success Criteria
+- ローカルとCIで同じ結果になる。
+- 主要エンドポイントのp95/エラーレートが継続測定される。
+- カバレッジ閾値が満たされ、赤字の不安定テストが無い。
+
+## Examples
+// Good: React Testing Library（意味的アサーション）
+```ts
+import { render, screen } from '@testing-library/react'
+import { describe, it, expect } from 'vitest'
+import { SettingsPanel } from '@/components/SettingsPanel'
+
+describe('SettingsPanel', () => {
+  it('toggles pronunciation', () => {
+    render(<SettingsPanel />)
+    const checkbox = screen.getByRole('checkbox', { name: /発音/i })
+    expect(checkbox).toBeInTheDocument()
+  })
+})
+```
+
+// Bad: 実装詳細への結合（クラス名・タイミング依存）
+```ts
+const el = document.querySelector('.x123');
+setTimeout(() => expect(el!.className.includes('active')).toBe(true), 10)
+```
+
+## References
+- @pytest.ini
+- @src/frontend/vitest.setup.ts
