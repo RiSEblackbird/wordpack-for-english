@@ -1,0 +1,36 @@
+---
+description: >
+  USE WHEN: バックエンド（FastAPI/Python）のテストを書く/直すとき
+  GOAL: ドメイン厳密・I/O抽象化・契約検証を徹底
+  OUTPUT: 単体（ビジネスロジック厳密）＋結合（実DB/シミュレータ）＋契約テスト
+globs:
+  - "src/backend/**/*.py"
+  - "tests/**/*.py"
+alwaysApply: true
+---
+
+## Constraints
+- ドメイン/サービス層は外部I/Oを抽象化し、例外/再試行/冪等性/境界値を単体で厳密に検証。
+- データ層の結合テストは実行可能なDB/シミュレータで CRUD/トランザクション/ユニーク制約を確認。
+- マイグレーションは空DB→最新の適用と起動検証を含める。
+- APIはスキーマ/契約を基準に検証（構造/型/必須性/エラーフォーマット/認証・認可/レート制御）。
+- 外部連携（メール/キュー/他API）はモック＋リトライ/フォールバックの動作を検証。
+- 主要エンドポイントは軽量パフォーマンス回帰（p95応答/エラーレート）をCIで比較。
+
+## Examples
+// Good: 例外型・HTTPコードを具体化
+```py
+from fastapi.testclient import TestClient
+from backend.main import app
+
+client = TestClient(app)
+
+def test_healthz_ok():
+    r = client.get('/healthz')
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok"}
+```
+
+## References
+- @tests/test_api.py
+- @tests/test_integration_rag.py

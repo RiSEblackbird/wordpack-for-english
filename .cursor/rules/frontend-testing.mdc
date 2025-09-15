@@ -1,0 +1,43 @@
+---
+description: >
+  USE WHEN: フロントエンド（React/TS）のテストを書く/直すとき
+  GOAL: ユーザー視点の意味的アサーションで安定テストを実現
+  OUTPUT: 役割/ラベル/テキストに基づくテストとHTTPモック
+globs:
+  - "src/frontend/src/**/*.tsx"
+  - "src/frontend/**/*.test.tsx"
+alwaysApply: true
+---
+
+## Constraints
+- ユーザー視点（Role/Label/Text）で要素を取得。実装詳細（内部関数/CSSクラス名）に結合しない。
+- 非同期UIは `await` 等で安定化。タイマはフェイク化。
+- スナップショットは小さな静的UIのみに限定。
+- 入力/フォームはバリデーション/エラーメッセージを含め成功・失敗・境界を網羅。
+- 通信はHTTPモック層で成功/失敗/タイムアウト/権限エラーを再現。
+- 状態遷移（Store/Reducer/フォーマッタ/バリデータ）は純粋関数として単体優先。
+- 重要動線のE2Eはクリティカル経路に限定。
+- アクセシビリティ: 自動チェック（ルール違反ゼロ）＋ role/aria の意味検証。
+
+## Examples
+// Good: 意味的アサーション
+```ts
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { SettingsPanel } from '@/components/SettingsPanel'
+
+test('発音トグルを切り替えられる', async () => {
+  render(<SettingsPanel />)
+  const checkbox = screen.getByRole('checkbox', { name: /発音/i })
+  await userEvent.click(checkbox)
+  expect(checkbox).toBeChecked()
+})
+```
+
+// Bad: クラス名依存
+```ts
+document.querySelector('.toggle').click()
+```
+
+## References
+- @src/frontend/vitest.setup.ts

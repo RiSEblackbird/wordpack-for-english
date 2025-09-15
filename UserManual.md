@@ -103,6 +103,16 @@
 
 本パートは開発・運用に必要な情報のみをまとめています。一般ユーザーは読む必要はありません。
 
+#### 開発時の自動ルール（MDC）
+`.cursor/rules/*.mdc` に常時適用（alwaysApply: true）の実務ルールを定義しています。
+- 推論様式: `base-reasoning-and-communication.mdc`
+- コーディング原則: `base-coding-principles.mdc`
+- 品質ゲート/テスト基本: `base-quality-gates.mdc`
+- フロントエンド検証: `frontend-testing.mdc`
+- バックエンド検証: `backend-testing.mdc`
+- 改修/変更管理: `maintenance-and-change-management.mdc`
+- ドキュメント作成: `docs-authoring.mdc`
+
 ### B-1. ローカル実行（開発用）
 - 必要環境: Python 3.11+（venv 推奨）, Node.js 18+
 - 依存インストール:

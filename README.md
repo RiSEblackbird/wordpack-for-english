@@ -101,6 +101,19 @@ OpenAI LLM統合:
 
 ---
 
+### 1-x. プロジェクト内の自動ルール（MDC）
+本リポジトリは `.cursor/rules/*.mdc` に、生成/改修時の最小限かつ実務的なルールを常時適用（alwaysApply: true）で定義しています。
+
+- `base-reasoning-and-communication.mdc` … 結論先出し/根拠/検算などの推論様式
+- `base-coding-principles.mdc` … DRY/KISS/SoC/SRP/YAGNI/POLA/OCP と可観測性
+- `base-quality-gates.mdc` … 決定性・分離・カバレッジ・意味的アサーション
+- `frontend-testing.mdc` … 役割/ラベル/テキストに基づくUIテストとHTTPモック
+- `backend-testing.mdc` … ドメイン厳密・契約テスト・軽量性能回帰
+- `maintenance-and-change-management.mdc` … 差分駆動・契約先行・理由明記
+- `docs-authoring.mdc` … README/UserManualの更新規約（現状のみを正確に記述）
+
+既存の `minimum.mdc` 等は上記へ統合済みです。
+
 ## 2. ディレクトリ構成（抜粋）
 ```
 app/                     # 追加のサンプルFastAPIアプリ（静的配信デモ等）
