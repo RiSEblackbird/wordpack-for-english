@@ -4,8 +4,6 @@ import re
 
 from . import create_state_graph
 
-# ChromaDB import removed - RAG functionality disabled
-
 from ..models.word import (
     WordPack,
     Sense,
@@ -22,24 +20,57 @@ from ..models.common import ConfidenceLevel, Citation
 from ..pronunciation import generate_pronunciation
 from ..logging import logger
 from ..config import settings
-# RAG imports removed - functionality disabled
 
 
-def _category_guidelines_text() -> str:
-    """各カテゴリの例文ガイドライン（自然さ・一貫性のため）。"""
+# --- 例文生成プロンプト: Notes 分割（共通/カテゴリ別） ---
+def _examples_common_notes_text() -> str:
+    """カテゴリ共通の Notes。カテゴリ固有の規定は含めない。"""
     return (
-        "カテゴリ別ガイドライン（Dev/CS/LLM/Business/Common に厳格適用）:\n"
-        "- Dev: ソフトウェア開発の文脈を扱う。\n"
-        "  実務的で具体、学術調は避ける。\n"
-        "- CS: 計算機科学の学術文脈。\n"
-        "  精密・中立・フォーマル。\n"
-        "- LLM: 機械学習/LLM 文脈。\n"
-        "  用語は技術的/学術的に正確、マーケ調は避ける。\n"
-        "- Business: ビジネス文脈（関係者/指標/KPI/スケジュール/トレードオフ/調整/戦略/財務/マーケティング）。\n"
-        "  丁寧で簡潔、スラング禁止。\n"
-        "- Common: 日常会話（友人/同僚とのチャット・通話/待ち合わせ/日常の小さな出来事/小さなやり取り）。\n"
-        "  ビジネス/過度なフォーマル語彙は避け、軽い口語を適度に用いる（下品表現は不可）。\n"
+        "Notes: \n"
+        "- gloss_ja / definition_ja / nuances_ja / grammar_ja / notes_ja は日本語。\n"
+        "- もし対象語が名詞（一般名詞/固有名詞）や専門用語である場合、\n"
+        "  term_overview_ja（3〜5文の概要）と term_core_ja（3〜5文の本質）を必ず日本語で記述する。\n"
+        "  名詞以外（動詞/形容詞など）の場合、これら2つのキーは省略してよい。\n"
+        "- 例文は自然で、約55語（±5語）の英文にする。各英例文には必ず対象語（lemma）を含める。\n"
+        "- 本リクエストでは Target category のみを生成し、件数は末尾の Override 指示に厳密に従う。\n"
+        "- 各例文の grammar_ja は2段落の詳細解説にする：\n"
+        "  1) 品詞分解：形態素/句を『／』で区切り、語の後に【品詞/統語役割】を付す。必要に応じて句の内部構造も『＝』で示す（例：I【代/主】／sent【動/過去】／the documents【名/目】／via email【前置詞句＝via(前)+email(名)：手段】／to ensure quick delivery【不定詞句＝to+ensure(動)+quick(形)+delivery(名)：目的】）。\n"
+        "  2) 解説：文の核（S/V/O/C）、修飾関係（手段/目的/時/理由など）、冠詞・可算/不可算の扱い等を日本語で簡潔に説明。\n"
+        "- 『動詞+前置詞』のような表層的ラベルだけの説明は禁止。具体的に機能・役割まで述べる。\n"
     )
+
+def _examples_category_notes_text(category: ExampleCategory) -> str:
+    """カテゴリ固有の Notes（対象カテゴリのみに適用）。"""
+    base_map: dict[ExampleCategory, str] = {
+        ExampleCategory.Dev: (
+            "カテゴリ別ガイドライン（Target のみに適用）：\n"
+            "- Dev: ソフトウェア開発の文脈。実務的で具体、学術調は避ける。\n"
+        ),
+        ExampleCategory.CS: (
+            "カテゴリ別ガイドライン（Target のみに適用）：\n"
+            "- CS: 計算機科学の学術文脈。精密・中立・フォーマル。\n"
+        ),
+        ExampleCategory.LLM: (
+            "カテゴリ別ガイドライン（Target のみに適用）：\n"
+            "- LLM: 機械学習/LLM 文脈。用語は技術的/学術的に正確、マーケ調は避ける。\n"
+        ),
+        ExampleCategory.Business: (
+            "カテゴリ別ガイドライン（Target のみに適用）：\n"
+            "- Business: ビジネス文脈（関係者/指標/KPI/スケジュール/トレードオフ/調整/戦略/財務/マーケティング）。丁寧で簡潔、スラング禁止。\n"
+        ),
+        ExampleCategory.Common: (
+            "カテゴリ別ガイドライン（Target のみに適用）：\n"
+            "- Common: 日常会話（友人/同僚とのチャット・通話/待ち合わせ/日常の小さな出来事/小さなやり取り）。ビジネス/過度なフォーマル語彙は避け、軽い口語を適度に用いる（下品表現は不可）。\n"
+        ),
+    }
+    extra_common: str = (
+        "- Common の英例文は“ビジネス英語ではなく”カジュアルな日常会話のトーンで。友達/家族/同僚との軽いチャット想定。丁寧すぎる表現やフォーマルな語彙（therefore, thus, regarding, via など）は避け、口語（gonna, kinda, hey などは過度に使いすぎない範囲で可）、よくあるシーン（メッセ/通話/待ち合わせ/日常の小さな出来事）を取り入れる。\n"
+        "- Common は短い感嘆や相づち・依頼も自然に含めてよい（e.g., Could you shoot me a text?, Mind sending me the link?）。ただしスラングや下品な表現は避ける。\n"
+    )
+    text = base_map.get(category, "")
+    if category is ExampleCategory.Common:
+        text += extra_common
+    return text
 
 
 class WordPackFlow:
@@ -417,25 +448,9 @@ class WordPackFlow:
             "}\n"
         )
 
-        # Notes 部（正の原文）
-        notes = (
-            "Notes: \n"
-            "- gloss_ja / definition_ja / nuances_ja / grammar_ja / notes_ja は日本語。\n"
-            "- もし対象語が名詞（一般名詞/固有名詞）や専門用語である場合、\n"
-            "  term_overview_ja（3〜5文の概要）と term_core_ja（3〜5文の本質）を必ず日本語で記述する。\n"
-            "  名詞以外（動詞/形容詞など）の場合、これら2つのキーは省略してよい。\n"
-            "- 例文は自然で、約55語（±5語）の英文にする。各英例文には必ず対象語（lemma）を含める。\n"
-            "- 本リクエストでは Target category のみを生成し、件数は末尾の Override 指示に厳密に従う。\n"
-            "- Dev はアプリ開発現場の実務文脈、CS は計算機科学の学術文脈、LLM は応用/研究の文脈、Business はビジネスの文脈、Common は日常会話のカジュアルなやり取り（友人・同僚との雑談/チャット等）。\n"
-            "- Common の英例文は“ビジネス英語ではなく”カジュアルな日常会話のトーンで。友達/家族/同僚との軽いチャット想定。丁寧すぎる表現やフォーマルな語彙（therefore, thus, regarding, via など）は避け、口語（gonna, kinda, hey などは過度に使いすぎない範囲で可）、よくあるシーン（メッセ/通話/待ち合わせ/日常の小さな出来事）を取り入れる。\n"
-            "- Common は短い感嘆や相づち・依頼も自然に含めてよい（e.g., Could you shoot me a text?, Mind sending me the link?）。ただしスラングや下品な表現は避ける。\n"
-            "- 各例文の grammar_ja は2段落の詳細解説にする：\n"
-            "  1) 品詞分解：形態素/句を『／』で区切り、語の後に【品詞/統語役割】を付す。必要に応じて句の内部構造も『＝』で示す（例：I【代/主】／sent【動/過去】／the documents【名/目】／via email【前置詞句＝via(前)+email(名)：手段】／to ensure quick delivery【不定詞句＝to+ensure(動)+quick(形)+delivery(名)：目的】）。\n"
-            "  2) 解説：文の核（S/V/O/C）、修飾関係（手段/目的/時/理由など）、冠詞・可算/不可算の扱い等を日本語で簡潔に説明。\n"
-            "- 『動詞+前置詞』のような表層的ラベルだけの説明は禁止。具体的に機能・役割まで述べる。\n"
-        )
-
-        category_rules = _category_guidelines_text()
+        # Notes を共通とカテゴリ別に分割
+        notes_common = _examples_common_notes_text()
+        category_notes = _examples_category_notes_text(category)
         enforce = "Apply these category-specific rules to the Target category only.\n"
 
         # カテゴリを明示し、このリクエストでは当該カテゴリのみ生成する旨を指定
@@ -446,7 +461,19 @@ class WordPackFlow:
             f"Override: examples must be exactly {count} items.\n"
         )
 
-        return header + notes + category_rules + enforce + tail
+        prompt = header + notes_common + category_notes + enforce + tail
+        # プロンプト長だけをログ（全文は Langfuse オプションで別途制御）
+        try:
+            logger.info(
+                "wordpack_examples_prompt_built",
+                lemma=lemma,
+                category=category.value,
+                count=count,
+                prompt_chars=len(prompt),
+            )
+        except Exception:
+            pass
+        return prompt
 
     def _parse_examples_json(self, raw: str) -> list[dict[str, str]]:
         import json as _json
