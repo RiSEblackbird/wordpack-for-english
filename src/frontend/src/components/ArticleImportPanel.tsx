@@ -119,7 +119,7 @@ export const ArticleImportPanel: React.FC = () => {
     <section>
       <style>{`
         .ai-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
-        .ai-textarea { width: 100%; min-height: 10rem; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px; }
+        .ai-textarea { width: 60%; min-height: 5rem; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px; }
         .ai-wp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.5rem; }
         .ai-card { border: 1px solid var(--color-border); border-radius: 6px; padding: 0.5rem; background: var(--color-surface); }
         .ai-badge { font-size: 0.75em; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid var(--color-border); }
