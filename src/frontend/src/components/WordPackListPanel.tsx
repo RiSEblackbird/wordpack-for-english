@@ -10,17 +10,16 @@ import { LoadingIndicator } from './LoadingIndicator';
 interface DeleteButtonProps {
   onClick: (e: React.MouseEvent) => void;
   disabled?: boolean;
-  disableHover?: boolean;
 }
 
-const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false, disableHover = false }) => {
+const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false }) => {
   return (
     <button 
       className="danger" 
       onClick={onClick}
       disabled={disabled}
       style={{ 
-        padding: '0.07rem 0.2rem', 
+        padding: '0.04rem 0.07rem', 
         fontSize: '0.40em', 
         border: '1px solid #d32f2f', 
         borderRadius: '4px', 
@@ -31,13 +30,13 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false, 
         opacity: disabled ? 0.6 : 1
       }}
       onMouseEnter={(e) => {
-        if (!disabled && !disableHover) {
+        if (!disabled) {
           e.currentTarget.style.background = '#ffebee';
         }
       }}
       onMouseLeave={(e) => {
-        if (!disabled && !disableHover) {
-          e.currentTarget.style.background = 'rgb(234, 230, 217)';
+        if (!disabled) {
+          e.currentTarget.style.background = 'rgb(230, 199, 152)';
         }
       }}
     >
@@ -235,14 +234,13 @@ export const WordPackListPanel: React.FC = () => {
         .wp-view-toggle { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
         .wp-toggle-btn { padding: 0.4rem 0.8rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
         .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; }
-        .wp-index-grid { display: grid; grid-template-columns: 1fr; gap: 0.25rem; padding: 0.5rem 5.5rem; }
+        .wp-index-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; padding: 0.5rem 5.5rem; }
         @media (min-width: 900px) {
           .wp-index-grid { grid-template-columns: 1fr 1fr; }
         }
-        .wp-index-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.6rem; border-bottom: 1px solid #eee; cursor: pointer; background: transparent; border-radius: 4px; }
-        .wp-index-item:hover { background: #f9f9f9; }
+        .wp-index-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0.3rem; border-bottom: 1px solid #eee; cursor: pointer; background: transparent; border-radius: 4px; }
         .wp-index-title { font-size: 0.75em; font-weight: bold; color:rgb(233, 233, 233); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .wp-index-meta { font-size: 0.25em; color: #666; }
+        .wp-index-meta { font-size: 0.10em; color: #666; }
         @media (max-width: 640px) { 
           .wp-list-grid { grid-template-columns: 1fr; }
           .wp-card-header { flex-direction: column; align-items: flex-start; }
@@ -400,11 +398,10 @@ export const WordPackListPanel: React.FC = () => {
                     }}
                   >
                     <span className="wp-index-title">{wp.lemma}</span>
-                    <span className="wp-index-meta">更新: {formatDate(wp.updated_at)}{wp.is_empty ? ' / 例文未生成' : ` / 例文: ${getTotalExamples(wp)}件`}</span>
+                    <span className="wp-index-meta">更新: {formatDate(wp.updated_at)}{wp.is_empty ? ' / 未' : ` / 例文: ${getTotalExamples(wp)}件`}</span>
                     <DeleteButton 
                       onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
                       disabled={loading}
-                      disableHover={true}
                     />
                   </div>
                 ))}
