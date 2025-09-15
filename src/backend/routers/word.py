@@ -202,8 +202,19 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
                     "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
                 },
             ) from exc
-        # LLM 系のエラー分類（providers で付与）
+        # strict モードでの LLM JSON パース失敗を 502 に明示マップ
         low = msg.lower()
+        if "failed to parse llm json" in low and settings.strict_mode:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "message": "LLM output JSON parse failed (strict mode)",
+                    "reason_code": "LLM_JSON_PARSE",
+                    "diagnostics": {"lemma": req.lemma},
+                    "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
+                },
+            ) from exc
+        # LLM 系のエラー分類（providers で付与）
         if "reason_code=" in msg:
             if "reason_code=TIMEOUT" in msg:
                 raise HTTPException(
@@ -413,6 +424,18 @@ async def regenerate_word_pack(
                 detail={
                     "message": "RAG dependency not ready or no citations (strict mode)",
                     "hint": "Chroma にインデックスを投入してください: python -m backend.indexing --persist .chroma",
+                },
+            ) from exc
+        # strict モードでの LLM JSON パース失敗を 502 に明示マップ
+        low = msg.lower()
+        if "failed to parse llm json" in low and settings.strict_mode:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "message": "LLM output JSON parse failed (strict mode)",
+                    "reason_code": "LLM_JSON_PARSE",
+                    "diagnostics": {"lemma": lemma},
+                    "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
                 },
             ) from exc
         reason_code = getattr(exc, "reason_code", None)

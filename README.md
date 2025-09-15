@@ -71,6 +71,7 @@ docker compose up --build
   - backend: `uvicorn --reload` + ボリュームマウント `.:/app`
   - frontend: Vite dev サーバ + ボリュームマウント `src/frontend:/app`
 - フロントからの API 呼び出しは Vite のプロキシ設定で `http://backend:8000` に転送されます。
+  - フロントエンドでは、生成/再生成/削除の完了時に `wordpack:updated` を発火し、保存済み一覧が自動更新されます。進捗や成功/失敗は右下の通知カードに表示されます。
 
 ポート競合の回避（新）:
 - 既定で Backend は `8000`、Frontend は `5173` を公開します。既に使用中の場合は、以下のいずれかで上書きできます。
@@ -255,8 +256,10 @@ FastAPI アプリは `src/backend/main.py`。
 
 - `POST /api/word/packs/{word_pack_id}/regenerate`
   - 既存のWordPackを再生成。指定されたIDのWordPackを上書き更新。
-  - リクエスト例: `{ "pronunciation_enabled": true, "regenerate_scope": "all" }`
+  - リクエスト例: `{ "pronunciation_enabled": true, "regenerate_scope": "all" }`（空オブジェクト `{}` も可。※ボディ必須）
   - レスポンス: 再生成されたWordPackオブジェクト
+  - エラー（strictモード）:
+    - LLM出力のJSON解析に失敗: `502`（`reason_code=LLM_JSON_PARSE`, `hint` と `diagnostics.lemma` を含む）
 
 - `DELETE /api/word/packs/{word_pack_id}`
   - 指定されたIDのWordPackを削除。

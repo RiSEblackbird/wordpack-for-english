@@ -219,6 +219,15 @@ export const WordPackListPanel: React.FC = () => {
     return () => abortRef.current?.abort();
   }, []);
 
+  // WordPackの生成/再生成/削除完了時のグローバルイベントで最新化
+  useEffect(() => {
+    const onUpdated = () => { loadWordPacks(offset); };
+    try { window.addEventListener('wordpack:updated', onUpdated as EventListener); } catch {}
+    return () => {
+      try { window.removeEventListener('wordpack:updated', onUpdated as EventListener); } catch {}
+    };
+  }, [offset]);
+
   const formatDate = (dateStr: string) => {
     try {
       const hasTZ = /[Zz]|[+-]\d{2}:?\d{2}$/.test(dateStr);

@@ -3,6 +3,7 @@ import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { useNotifications } from '../NotificationsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
+import { regenerateWordPackRequest } from '../lib/wordpack';
 import { Modal } from './Modal';
 import { WordPackPanel } from './WordPackPanel';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
@@ -69,24 +70,36 @@ export const ArticleImportPanel: React.FC = () => {
 
   const regenerateWordPack = async (wordPackId: string) => {
     if (!article) return;
+    const lemma = (() => {
+      try { return article.related_word_packs.find((l) => l.word_pack_id === wordPackId)?.lemma || 'WordPack'; } catch { return 'WordPack'; }
+    })();
     const ctrl = new AbortController();
-    const notifId = addNotification({ title: 'WordPack生成中...', message: '内容を生成しています', status: 'progress' });
     try {
-      await fetchJson(`${settings.apiBase}/word/packs/${wordPackId}/regenerate`, {
-        method: 'POST',
-        body: {},
-        signal: ctrl.signal,
-        timeoutMs: settings.requestTimeoutMs,
+      await regenerateWordPackRequest({
+        apiBase: settings.apiBase,
+        wordPackId,
+        settings: {
+          pronunciationEnabled: settings.pronunciationEnabled,
+          regenerateScope: settings.regenerateScope,
+          requestTimeoutMs: settings.requestTimeoutMs,
+          temperature: settings.temperature,
+          reasoningEffort: settings.reasoningEffort,
+          textVerbosity: settings.textVerbosity,
+        },
+        model: 'gpt-5-mini',
+        lemma,
+        notify: { add: addNotification, update: updateNotification },
+        abortSignal: ctrl.signal,
+        messages: {
+          progress: 'WordPackを再生成しています',
+          success: '再生成が完了しました',
+          failure: undefined, // ApiError.message を優先
+        },
       });
-      // 生成完了後、記事詳細を再取得して最新の is_empty 状態に更新
       const refreshed = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/${article.id}`);
       setArticle(refreshed);
-      updateNotification(notifId, { title: '生成完了', status: 'success', message: 'WordPackを更新しました' });
-      // グローバル更新イベントを発火（WordPack一覧が開いていれば反映用）
-      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
-    } catch (e) {
-      const m = e instanceof ApiError ? e.message : 'WordPackの生成に失敗しました';
-      updateNotification(notifId, { title: '生成失敗', status: 'error', message: m });
+    } catch {
+      // 通知は内部で完結
     }
   };
 

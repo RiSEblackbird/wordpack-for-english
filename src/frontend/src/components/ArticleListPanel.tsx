@@ -3,6 +3,8 @@ import { formatDateJst } from '../lib/date';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
+import { useNotifications } from '../NotificationsContext';
+import { regenerateWordPackRequest } from '../lib/wordpack';
 import { Modal } from './Modal';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
 
@@ -25,6 +27,7 @@ type ArticleDetailResponse = ArticleDetailData;
 export const ArticleListPanel: React.FC = () => {
   const { settings } = useSettings();
   const { setModalOpen } = useModal();
+  const { add: addNotification, update: updateNotification } = useNotifications();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<ArticleListItem[]>([]);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
@@ -111,14 +114,35 @@ export const ArticleListPanel: React.FC = () => {
     if (!preview) return;
     setLoading(true);
     setMsg(null);
+    const lemma = (() => {
+      try { return preview.related_word_packs.find((l) => l.word_pack_id === wordPackId)?.lemma || 'WordPack'; } catch { return 'WordPack'; }
+    })();
+    const ctrl = new AbortController();
     try {
-      await fetchJson(`${settings.apiBase}/word/packs/${wordPackId}/regenerate`, {
-        method: 'POST',
+      await regenerateWordPackRequest({
+        apiBase: settings.apiBase,
+        wordPackId,
+        settings: {
+          pronunciationEnabled: settings.pronunciationEnabled,
+          regenerateScope: settings.regenerateScope,
+          requestTimeoutMs: settings.requestTimeoutMs,
+          temperature: settings.temperature,
+          reasoningEffort: settings.reasoningEffort,
+          textVerbosity: settings.textVerbosity,
+        },
+        model: 'gpt-5-mini',
+        lemma,
+        notify: { add: addNotification, update: updateNotification },
+        abortSignal: ctrl.signal,
+        messages: {
+          progress: 'WordPackを再生成しています',
+          success: '再生成が完了しました',
+          failure: undefined, // ApiError.message を優先
+        },
       });
       const refreshed = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/${preview.id}`);
       setPreview(refreshed);
       setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
-      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
     } catch (e) {
       const m = e instanceof ApiError ? e.message : 'WordPackの再生成に失敗しました';
       setMsg({ kind: 'alert', text: m });

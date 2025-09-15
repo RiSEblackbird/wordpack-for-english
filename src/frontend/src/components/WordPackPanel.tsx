@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
+import { regenerateWordPackRequest } from '../lib/wordpack';
 import { LoadingIndicator } from './LoadingIndicator';
 import { useNotifications } from '../NotificationsContext';
 import { Modal } from './Modal';
@@ -145,12 +146,13 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           return base;
         })(),
         signal: ctrl.signal,
-        timeoutMs: settings.requestTimeoutMs,
+        timeoutMs: Math.max(settings.requestTimeoutMs, 300000),
       });
       setData(res);
       setCurrentWordPackId(null); // 新規生成なのでIDはnull
       setMsg({ kind: 'status', text: 'WordPack を生成しました' });
       updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '新規生成が完了しました' });
+      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
       // 生成完了後に詳細モーダルを自動表示
       setDetailOpen(true);
       try { setModalOpen(true); } catch {}
@@ -182,12 +184,13 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         method: 'POST',
         body: { lemma: lemma.trim() },
         signal: ctrl.signal,
-        timeoutMs: settings.requestTimeoutMs,
+        timeoutMs: Math.max(settings.requestTimeoutMs, 300000),
       });
       setCurrentWordPackId(res.id);
       // 直後に保存済みWordPack詳細を読み込んで表示
       await loadWordPack(res.id);
       try { onWordPackGenerated?.(res.id); } catch {}
+      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
       // 詳細の読み込みまで完了したことを通知
       updateNotification(notifId, { title: `【${l2}】の生成完了！`, status: 'success', message: '詳細読み込み完了' });
     } catch (e) {
@@ -239,39 +242,42 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
-    const lemma3 = data?.lemma || '(unknown)';
-    const notifId = addNotification({ title: `【${lemma3}】の生成処理中...`, message: 'WordPackを再生成しています', status: 'progress' });
+    const lemma3 = data?.lemma || 'WordPack';
     setMsg(null);
     setData(null);
     setReveal(false);
     setCount(3);
     try {
-      const res = await fetchJson<WordPack>(`${settings.apiBase}/word/packs/${wordPackId}/regenerate`, {
-        method: 'POST',
-        body: (() => {
-          const base: any = {
-            pronunciation_enabled: settings.pronunciationEnabled,
-            regenerate_scope: settings.regenerateScope,
-            model,
-          };
-          if ((model || '').toLowerCase() === 'gpt-5-mini') {
-            base.reasoning = { effort: settings.reasoningEffort || 'minimal' };
-            base.text = { verbosity: settings.textVerbosity || 'medium' };
-          } else {
-            base.temperature = settings.temperature;
-          }
-          return base;
-        })(),
+      await regenerateWordPackRequest({
+        apiBase: settings.apiBase,
+        wordPackId,
+        settings: {
+          pronunciationEnabled: settings.pronunciationEnabled,
+          regenerateScope: settings.regenerateScope,
+          requestTimeoutMs: settings.requestTimeoutMs,
+          temperature: settings.temperature,
+          reasoningEffort: settings.reasoningEffort,
+          textVerbosity: settings.textVerbosity,
+        },
+        model,
+        lemma: lemma3,
+        notify: { add: addNotification, update: updateNotification },
+        abortSignal: ctrl.signal,
+        messages: {
+          progress: 'WordPackを再生成しています',
+          success: '再生成が完了しました',
+          failure: 'WordPackの再生成に失敗しました',
+        },
+      });
+      // 再生成後に最新詳細を取得して反映
+      const refreshed = await fetchJson<WordPack>(`${settings.apiBase}/word/packs/${wordPackId}`, {
         signal: ctrl.signal,
         timeoutMs: settings.requestTimeoutMs,
       });
-      setData(res);
+      setData(refreshed);
       setCurrentWordPackId(wordPackId);
       setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
-      updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '再生成が完了しました' });
-      try {
-        onWordPackGenerated?.(wordPackId);
-      } catch {}
+      try { onWordPackGenerated?.(wordPackId); } catch {}
     } catch (e) {
       if (ctrl.signal.aborted) return;
       let m = e instanceof ApiError ? e.message : 'WordPackの再生成に失敗しました';
@@ -279,7 +285,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         m = '再生成がタイムアウトしました（サーバ側で処理継続の可能性）。時間をおいて再試行してください。';
       }
       setMsg({ kind: 'alert', text: m });
-      updateNotification(notifId, { title: `【${lemma3}】の生成失敗`, status: 'error', message: `再生成に失敗しました（${m}）` });
     } finally {
       setLoading(false);
       setLoadingInfo(null);
