@@ -318,6 +318,59 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     }
   };
 
+  const importArticleFromExample = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common', index: number) => {
+    try {
+      const ex = data?.examples?.[category]?.[index];
+      if (!ex || !ex.en) {
+        setMsg({ kind: 'alert', text: '例文が見つかりません' });
+        return;
+      }
+      const ctrl = new AbortController();
+      const lemma5 = data?.lemma || '(unknown)';
+      const notifId = addNotification({ title: `【${lemma5}】文章インポート中...`, message: '当該の例文を元に記事を生成しています', status: 'progress' });
+      await fetchJson<{ id: string }>(`${settings.apiBase}/article/import`, {
+        method: 'POST',
+        body: { text: ex.en },
+        signal: ctrl.signal,
+        timeoutMs: settings.requestTimeoutMs,
+      });
+      updateNotification(notifId, { title: '文章インポート完了', status: 'success', message: '記事一覧を更新しました' });
+      try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
+      setMsg({ kind: 'status', text: '例文から文章インポートを実行しました' });
+    } catch (e) {
+      const m = e instanceof ApiError ? e.message : '文章インポートに失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    }
+  };
+
+  const copyExampleText = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common', index: number) => {
+    try {
+      const ex = data?.examples?.[category]?.[index];
+      if (!ex || !ex.en) {
+        setMsg({ kind: 'alert', text: '例文が見つかりません' });
+        return;
+      }
+      const text = ex.en;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      addNotification({ title: 'コピー完了', message: '例文をクリップボードにコピーしました', status: 'success' });
+    } catch (e) {
+      const m = e instanceof ApiError ? e.message : 'コピーに失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    }
+  };
+
   const generateExamples = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common') => {
     if (!currentWordPackId) return;
     // 例文追加生成はバックグラウンド取得を許可し、モーダル閉鎖でも継続させるため
@@ -599,7 +652,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                         <div className="ex-grammar"><span className="ex-label">解説</span> {ex.grammar_ja}</div>
                       ) : null}
                       {currentWordPackId ? (
-                        <div style={{ marginTop: 6 }}>
+                        <div style={{ marginTop: 6, display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
                           <button
                             onClick={() => deleteExample(k, i)}
                             disabled={loading}
@@ -607,6 +660,22 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                             style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
                           >
                             削除
+                          </button>
+                          <button
+                            onClick={() => importArticleFromExample(k, i)}
+                            disabled={loading}
+                            aria-label={`import-article-from-example-${k}-${i}`}
+                            style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                          >
+                            文章インポート
+                          </button>
+                          <button
+                            onClick={() => copyExampleText(k, i)}
+                            disabled={loading}
+                            aria-label={`copy-example-${k}-${i}`}
+                            style={{ fontSize: '0.85em', color: '#2e7d32', border: '1px solid #2e7d32', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                          >
+                            コピー
                           </button>
                         </div>
                       ) : null}
