@@ -49,7 +49,6 @@ export const ArticleListPanel: React.FC = () => {
       setItems(res.items);
       setTotal(res.total);
       setOffset(newOffset);
-      setMsg({ kind: 'status', text: `${res.items.length}件の文章を読み込みました` });
     } catch (e) {
       if (ctrl.signal.aborted) return;
       const m = e instanceof ApiError ? e.message : '文章一覧の読み込みに失敗しました';

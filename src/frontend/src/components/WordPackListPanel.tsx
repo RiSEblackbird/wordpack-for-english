@@ -178,7 +178,6 @@ export const WordPackListPanel: React.FC = () => {
       setWordPacks(res.items);
       setTotal(res.total);
       setOffset(newOffset);
-      setMsg({ kind: 'status', text: `${res.items.length}件のWordPackを読み込みました` });
     } catch (e) {
       if (ctrl.signal.aborted) return;
       const m = e instanceof ApiError ? e.message : 'WordPack一覧の読み込みに失敗しました';

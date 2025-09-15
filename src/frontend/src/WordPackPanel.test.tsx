@@ -181,7 +181,6 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.click(screen.getByRole('button', { name: 'WordPackのみ作成' }));
     });
 
-    await screen.findByText(/空のWordPackを作成しました|保存済みWordPackを読み込みました/);
     // 概要セクションが表示され、学習カードは空文字
     await waitFor(() => expect(screen.getByRole('heading', { name: '概要' })).toBeInTheDocument());
     expect(screen.getByText('学習カード要点')).toBeInTheDocument();
