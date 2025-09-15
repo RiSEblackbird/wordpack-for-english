@@ -6,6 +6,45 @@ import { Modal } from './Modal';
 import { WordPackPanel } from './WordPackPanel';
 import { LoadingIndicator } from './LoadingIndicator';
 
+// 削除ボタンの共通コンポーネント
+interface DeleteButtonProps {
+  onClick: (e: React.MouseEvent) => void;
+  disabled?: boolean;
+}
+
+const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false }) => {
+  return (
+    <button 
+      className="danger" 
+      onClick={onClick}
+      disabled={disabled}
+      style={{ 
+        padding: '0.04rem 0.07rem', 
+        fontSize: '0.40em', 
+        border: '1px solid #d32f2f', 
+        borderRadius: '4px', 
+        background: 'rgb(234, 230, 217)', 
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        color: '#d32f2f',
+        marginLeft: 'auto',
+        opacity: disabled ? 0.6 : 1
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.background = '#ffebee';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.background = 'rgb(234, 230, 217)';
+        }
+      }}
+    >
+      削除
+    </button>
+  );
+};
+
 interface WordPackListItem {
   id: string;
   lemma: string;
@@ -39,13 +78,42 @@ export const WordPackListPanel: React.FC = () => {
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [limit] = useState(20);
+  const [limit] = useState(200);
   const abortRef = useRef<AbortController | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewWordPackId, setPreviewWordPackId] = useState<string | null>(null);
   const modalFocusRef = useRef<HTMLElement>(null);
   const [sortKey, setSortKey] = useState<SortKey>('updated_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  type ViewMode = 'card' | 'list';
+  const [viewMode, setViewMode] = useState<ViewMode>('card');
+  // 2カラム時に列優先で並べるための幅検知
+  const [isWide, setIsWide] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(min-width: 900px)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia('(min-width: 900px)');
+    const handler = (e: MediaQueryListEvent) => setIsWide(e.matches);
+    // Safari 対応のため addListener/removeListener フォールバック
+    // 実装仕様上の説明のみをコメントとして記述
+    // 主要ブラウザでの互換性を確保する
+    if (mql.addEventListener) {
+      mql.addEventListener('change', handler);
+    } else if ((mql as any).addListener) {
+      (mql as any).addListener(handler);
+    }
+    setIsWide(mql.matches);
+    return () => {
+      if (mql.removeEventListener) {
+        mql.removeEventListener('change', handler);
+      } else if ((mql as any).removeListener) {
+        (mql as any).removeListener(handler);
+      }
+    };
+  }, []);
 
   const loadWordPacks = async (newOffset: number = 0) => {
     abortRef.current?.abort();
@@ -190,6 +258,16 @@ export const WordPackListPanel: React.FC = () => {
         .wp-pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
         .wp-pagination button:hover:not(:disabled) { background: #f5f5f5; }
         .wp-empty { text-align: center; color: #666; padding: 2rem; }
+        .wp-view-toggle { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+        .wp-toggle-btn { padding: 0.4rem 0.8rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
+        .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; }
+        .wp-index-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; padding: 0.5rem 5.5rem; }
+        @media (min-width: 900px) {
+          .wp-index-grid { grid-template-columns: 1fr 1fr; }
+        }
+        .wp-index-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0.3rem; border-bottom: 1px solid #eee; cursor: pointer; background: transparent; border-radius: 4px; }
+        .wp-index-title { font-size: 0.75em; font-weight: bold; color:rgb(233, 233, 233); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .wp-index-meta { font-size: 0.10em; color: #666; }
         @media (max-width: 640px) { 
           .wp-list-grid { grid-template-columns: 1fr; }
           .wp-card-header { flex-direction: column; align-items: flex-start; }
@@ -203,6 +281,23 @@ export const WordPackListPanel: React.FC = () => {
           <button onClick={() => loadWordPacks(offset)} disabled={loading}>
             更新
           </button>
+        </div>
+
+        <div className="wp-view-toggle" role="group" aria-label="表示モード">
+          <button
+            type="button"
+            className="wp-toggle-btn"
+            aria-pressed={viewMode === 'card'}
+            onClick={() => setViewMode('card')}
+            title="カード表示"
+          >カード</button>
+          <button
+            type="button"
+            className="wp-toggle-btn"
+            aria-pressed={viewMode === 'list'}
+            onClick={() => setViewMode('list')}
+            title="リスト表示（索引）"
+          >リスト</button>
         </div>
 
         <div className="wp-sort-controls">
@@ -249,86 +344,102 @@ export const WordPackListPanel: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="wp-list-grid">
-              {sortedWordPacks.map((wp) => (
-                <div
-                  key={wp.id}
-                  className="wp-card"
-                  data-testid="wp-card"
-                  onClick={() => { 
-                    setPreviewWordPackId(wp.id); 
-                    setPreviewOpen(true);
-                    setModalOpen(true);
-                  }}
-                >
-                  <div className="wp-card-header">
-                    <h3 className="wp-card-title">
-                      {wp.lemma}
-                    </h3>
-                    <button 
-                      className="danger" 
-                      onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
-                      style={{ 
-                        padding: '0.25rem 0.5rem', 
-                        fontSize: '0.75em', 
-                        border: '1px solid #d32f2f', 
-                        borderRadius: '4px', 
-                        background: 'white', 
-                        cursor: 'pointer',
-                        color: '#d32f2f',
-                        marginLeft: 'auto'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = '#ffebee'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
-                    >
-                      削除
-                    </button>
-                  </div>
-                  <div className="wp-card-meta">
-                    <div>作成: {formatDate(wp.created_at)}</div>
-                    <div>更新: {formatDate(wp.updated_at)}</div>
-                    {wp.is_empty ? (
-                      <div style={{ marginTop: '0.5rem', fontSize: '0.8em' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          padding: '0.1rem 0.3rem',
-                          backgroundColor: '#fff3cd',
-                          color: '#7a5b00',
-                          borderRadius: '3px',
-                          border: '1px solid #ffe08a',
-                          fontSize: '0.75em'
-                        }}>
-                          例文未生成
-                        </span>
-                      </div>
-                    ) : wp.examples_count && (
-                      <div style={{ marginTop: '0.3rem', fontSize: '0.2em' }}>
-                        <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                          {Object.entries(wp.examples_count).map(([category, count]) => (
-                            <span key={category} style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.10rem',
-                              padding: '0.1rem 0.2rem',
-                              backgroundColor: count > 0 ? '#e3f2fd' : '#f5f5f5',
-                              color: count > 0 ? '#1565c0' : '#666',
-                              borderRadius: '3px',
-                              border: `1px solid ${count > 0 ? '#1565c0' : '#ddd'}`,
-                              fontSize: '0.40em'
-                            }}>
-                              <span style={{ fontWeight: 'bold' }}>{category}</span>
-                              <span>{count}</span>
-                            </span>
-                          ))}
+            {viewMode === 'card' ? (
+              <div className="wp-list-grid">
+                {sortedWordPacks.map((wp) => (
+                  <div
+                    key={wp.id}
+                    className="wp-card"
+                    data-testid="wp-card"
+                    onClick={() => { 
+                      setPreviewWordPackId(wp.id); 
+                      setPreviewOpen(true);
+                      setModalOpen(true);
+                    }}
+                  >
+                    <div className="wp-card-header">
+                      <h3 className="wp-card-title">
+                        {wp.lemma}
+                      </h3>
+                      <DeleteButton 
+                        onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
+                        disabled={loading}
+                      />
+                    </div>
+                    <div className="wp-card-meta">
+                      <div>作成: {formatDate(wp.created_at)}</div>
+                      <div>更新: {formatDate(wp.updated_at)}</div>
+                      {wp.is_empty ? (
+                        <div style={{ marginTop: '0.5rem', fontSize: '0.8em' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                            padding: '0.1rem 0.3rem',
+                            backgroundColor: '#fff3cd',
+                            color: '#7a5b00',
+                            borderRadius: '3px',
+                            border: '1px solid #ffe08a',
+                            fontSize: '0.75em'
+                          }}>
+                            例文未生成
+                          </span>
                         </div>
-                      </div>
-                    )}
+                      ) : wp.examples_count && (
+                        <div style={{ marginTop: '0.3rem', fontSize: '0.2em' }}>
+                          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                            {Object.entries(wp.examples_count).map(([category, count]) => (
+                              <span key={category} style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.10rem',
+                                padding: '0.1rem 0.2rem',
+                                backgroundColor: count > 0 ? '#e3f2fd' : '#f5f5f5',
+                                color: count > 0 ? '#1565c0' : '#666',
+                                borderRadius: '3px',
+                                border: `1px solid ${count > 0 ? '#1565c0' : '#ddd'}`,
+                                fontSize: '0.40em'
+                              }}>
+                                <span style={{ fontWeight: 'bold' }}>{category}</span>
+                                <span>{count}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div
+                className="wp-index-grid"
+                style={isWide ? {
+                  gridAutoFlow: 'column',
+                  gridTemplateRows: `repeat(${Math.max(1, Math.ceil(sortedWordPacks.length / 2))}, auto)`,
+                } : undefined}
+              >
+                {sortedWordPacks.map((wp) => (
+                  <div
+                    key={wp.id}
+                    className="wp-index-item"
+                    data-testid="wp-index-item"
+                    onClick={() => { 
+                      setPreviewWordPackId(wp.id); 
+                      setPreviewOpen(true);
+                      setModalOpen(true);
+                    }}
+                  >
+                    <span className="wp-index-title">{wp.lemma}</span>
+                    <span className="wp-index-meta">{wp.is_empty ? ' / 未' : ` / 例文: ${getTotalExamples(wp)}件`}</span>
+                    <DeleteButton 
+                      onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
+                      disabled={loading}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
 
             {(hasPrev || hasNext) && (
               <div className="wp-pagination">

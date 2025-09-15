@@ -265,7 +265,7 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     response_description="保存済みWordPackの一覧を返します",
 )
 async def list_word_packs(
-    limit: int = Query(default=50, ge=1, le=100, description="取得件数上限"),
+    limit: int = Query(default=50, ge=1, le=200, description="取得件数上限"),
     offset: int = Query(default=0, ge=0, description="オフセット"),
 ) -> WordPackListResponse:
     """保存済みWordPackの一覧を取得する。"""

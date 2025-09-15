@@ -7,7 +7,7 @@
 - フロントエンド: React + TypeScript + Vite、単一ページ/2パネル構成（WordPack/設定）
 - 発音強化（M5）: cmudict/g2p-en による IPA・音節・強勢推定（例外辞書・辞書キャッシュ・タイムアウト付きフォールバック）
 - WordPack 再生成の粒度指定（M5）: 全体/例文のみ/コロケのみ の選択（Enum化済み）
-- **WordPack永続化機能**: 生成されたWordPackを自動保存し、WordPackタブ下部の一覧で閲覧・削除が可能（再生成は `WordPack` セクションから実行）
+- **WordPack永続化機能**: 生成されたWordPackを自動保存し、WordPackタブ下部の一覧で閲覧・削除が可能（再生成は `WordPack` セクションから実行）。一覧はカード表示に加えて索引風のリスト表示（2列・画面幅に応じて1/2列）に切替可能。ページサイズは既定200件。
 - **WordPackのみ作成（新）**: 内容生成を行わず、空のWordPackを保存できます（UI: 生成ボタン横）。
 - **例文UIの改善（新）**: 英文・訳文・文法解説をカード型で表示。各項目に「英/訳/解説」ラベルを付け、可読性を向上。
  - **例文の個別削除（新）**: 保存済みWordPackの詳細画面から、特定カテゴリ内の任意の例文を個別に削除できます。
@@ -228,7 +228,7 @@ FastAPI アプリは `src/backend/main.py`。
 
 - `GET /api/word/packs`
   - 保存済みWordPackの一覧を取得。ページネーション対応。
-  - クエリ: `?limit=<int>&offset=<int>`（例: `?limit=20&offset=0`）
+  - クエリ: `?limit=<int>&offset=<int>`（例: `?limit=200&offset=0`）
   - レスポンス例:
     ```json
     {
@@ -321,6 +321,10 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - `tests/test_e2e_backend_frontend.py` … フロント→バックE2E相当のAPIフロー（正常/異常系の健全性）
   - `tests/test_load_and_regression.py` … 軽負荷スモークとスキーマ回帰チェック
     - PR4 追加: RAG 有効/無効の双方で基本SLA（少数リクエストで5秒以内）を検証。`X-Request-ID` ヘッダの付与も確認。
+
+フロントエンド単体テスト（Vitest/jsdom）:
+- `src/frontend/vitest.setup.ts` で `window.matchMedia` のポリフィルを提供しています。jsdom には `matchMedia` がないため、コンポーネントの幅検知（`(min-width: 900px)`）でエラーにならないようにしています。
+- ポリフィルは `addEventListener`/`removeEventListener` とレガシー `addListener`/`removeListener` の双方に対応するダミー実装です（常に `matches=false`）。UIロジックは初期値に依存せず、レンダリング後の振る舞いをアサートしてください。
 
 注意:
 - 統合テストはローカルの Chroma クライアント（`chromadb`）を利用し、フィクスチャでテスト専用ディレクトリに最小シードを投入します（環境変数 `CHROMA_PERSIST_DIR` を内部使用）。
