@@ -460,13 +460,19 @@ class SRSSQLiteStore:
         conn = self._connect()
         try:
             with conn:
-                # 1) core を upsert
+                # 1) core を upsert（REPLACE を使わず、リンクのカスケード削除を回避）
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO word_packs(id, lemma, data, created_at, updated_at)
-                    VALUES (?, ?, ?, 
+                    INSERT INTO word_packs(id, lemma, data, created_at, updated_at)
+                    VALUES (
+                        ?, ?, ?,
                         COALESCE((SELECT created_at FROM word_packs WHERE id = ?), ?),
-                        ?);
+                        ?
+                    )
+                    ON CONFLICT(id) DO UPDATE SET
+                        lemma = excluded.lemma,
+                        data = excluded.data,
+                        updated_at = excluded.updated_at;
                     """,
                     (word_pack_id, lemma, core_json, word_pack_id, now, now),
                 )

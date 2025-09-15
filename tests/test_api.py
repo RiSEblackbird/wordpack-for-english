@@ -296,3 +296,53 @@ def test_word_pack_strict_empty_llm(monkeypatch):
     client = TestClient(backend_main.app)
     r = client.post("/api/word/pack", json={"lemma": "no_data"})
     assert 500 <= r.status_code < 600
+
+
+def test_article_wordpack_link_persists_after_regeneration(monkeypatch):
+    """記事詳細の関連WordPackが再生成後も消えないことを検証する回帰テスト。
+
+    現象: 文章プレビューモーダルで [生成] 実行→完了後に再度開くと関連WordPackが一覧から消えることがある。
+    原因候補: SQLite の INSERT OR REPLACE により ON DELETE CASCADE 相当の副作用で
+              link テーブルが一時的に解消されるケース。
+    本テストでは、記事をインポートし、関連WordPackのうち1件を再生成した後に
+    記事詳細取得でリンクが保持されていることを確認する。
+    """
+    import os, sys, types, importlib
+    # 非 strict でローカルLLM（空応答）にして高速安定化
+    monkeypatch.setenv("STRICT_MODE", "false")
+    monkeypatch.setenv("RAG_ENABLED", "false")
+    # langgraph/chromadb を最低限スタブ
+    lg_mod = types.ModuleType("langgraph")
+    graph_mod = types.ModuleType("langgraph.graph")
+    graph_mod.StateGraph = object
+    lg_mod.graph = graph_mod
+    sys.modules.setdefault("langgraph", lg_mod)
+    sys.modules.setdefault("langgraph.graph", graph_mod)
+    sys.modules.setdefault("chromadb", types.SimpleNamespace())
+    # 設定反映リロード
+    for m in ["backend.config", "backend.providers", "backend.main"]:
+        if m in sys.modules:
+            importlib.reload(sys.modules[m])
+    from backend.main import app
+    from fastapi.testclient import TestClient
+    client = TestClient(app)
+
+    # 1) 記事を簡易インポート（本文だけでOK）
+    r_imp = client.post("/api/article/import", json={"text": "This is about caching layer and session invalidation under load."})
+    assert r_imp.status_code == 200
+    art = r_imp.json()
+    art_id = art["id"]
+    assert art["related_word_packs"]
+    first_link = art["related_word_packs"][0]
+    wp_id = first_link["word_pack_id"]
+
+    # 2) 関連WordPackの1件を再生成
+    r_regen = client.post(f"/api/word/packs/{wp_id}/regenerate", json={"pronunciation_enabled": True, "regenerate_scope": "all"})
+    assert r_regen.status_code == 200
+
+    # 3) 記事詳細を再取得し、リンクが残っていること
+    r_get = client.get(f"/api/article/{art_id}")
+    assert r_get.status_code == 200
+    art2 = r_get.json()
+    ids = [x["word_pack_id"] for x in art2.get("related_word_packs", [])]
+    assert wp_id in ids
