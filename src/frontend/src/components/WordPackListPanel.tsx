@@ -10,9 +10,10 @@ import { LoadingIndicator } from './LoadingIndicator';
 interface DeleteButtonProps {
   onClick: (e: React.MouseEvent) => void;
   disabled?: boolean;
+  disableHover?: boolean;
 }
 
-const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false }) => {
+const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false, disableHover = false }) => {
   return (
     <button 
       className="danger" 
@@ -30,13 +31,13 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false }
         opacity: disabled ? 0.6 : 1
       }}
       onMouseEnter={(e) => {
-        if (!disabled) {
+        if (!disabled && !disableHover) {
           e.currentTarget.style.background = '#ffebee';
         }
       }}
       onMouseLeave={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.background = 'rgb(230, 199, 152)';
+        if (!disabled && !disableHover) {
+          e.currentTarget.style.background = 'rgb(234, 230, 217)';
         }
       }}
     >
@@ -403,6 +404,7 @@ export const WordPackListPanel: React.FC = () => {
                     <DeleteButton 
                       onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
                       disabled={loading}
+                      disableHover={true}
                     />
                   </div>
                 ))}
