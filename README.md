@@ -238,7 +238,8 @@ FastAPI アプリは `src/backend/main.py`。
           "lemma": "converge",
           "created_at": "2025-01-01T12:34:56.000Z",
           "updated_at": "2025-01-01T12:34:56.000Z",
-          "is_empty": true
+          "is_empty": true,
+          "examples_count": {"Dev":0, "CS":0, "LLM":0, "Business":0, "Common":0}
         }
       ],
       "total": 1,
