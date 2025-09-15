@@ -87,11 +87,40 @@ export const WordPackListPanel: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   type ViewMode = 'card' | 'list';
   const [viewMode, setViewMode] = useState<ViewMode>('card');
-  // 2カラム時に列優先で並べるための幅検知
+  // 複数カラム時に列優先で並べるための幅検知
   const [isWide, setIsWide] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(min-width: 900px)').matches;
   });
+  
+  // グリッドの可視幅に基づき列数を算出（最大4列）
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const [columnCount, setColumnCount] = useState<number>(1);
+
+  const computeColumnCount = (width: number): number => {
+    // 1列あたりの最小想定幅（px）。項目の可読性を保つための経験値。
+    const MIN_COL_WIDTH = 320;
+    const count = Math.floor(width / MIN_COL_WIDTH);
+    return Math.min(4, Math.max(1, count));
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const el = gridRef.current;
+    if (!el) return;
+    const update = () => setColumnCount(computeColumnCount(el.clientWidth));
+    update();
+    let ro: ResizeObserver | null = null;
+    if ('ResizeObserver' in window) {
+      ro = new ResizeObserver(() => update());
+      ro.observe(el);
+    }
+    window.addEventListener('resize', update);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [gridRef]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -261,9 +290,15 @@ export const WordPackListPanel: React.FC = () => {
         .wp-view-toggle { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; }
         .wp-toggle-btn { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
         .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; }
-        .wp-index-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; padding: 0.5rem 5.5rem; }
-        @media (min-width: 900px) {
+        .wp-index-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; padding: 0.5rem 2.5rem; }
+        @media (min-width: 900px) and (max-width: 1199px) {
           .wp-index-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media (min-width: 1200px) and (max-width: 1599px) {
+          .wp-index-grid { grid-template-columns: 1fr 1fr 1fr; }
+        }
+        @media (min-width: 1600px) {
+          .wp-index-grid { grid-template-columns: 1fr 1fr 1fr 1fr; }
         }
         .wp-index-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0.3rem; border-bottom: 1px solid #eee; cursor: pointer; background: transparent; border-radius: 4px; }
         .wp-index-title { font-size: 0.75em; font-weight: bold; color:rgb(233, 233, 233); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -412,11 +447,15 @@ export const WordPackListPanel: React.FC = () => {
               </div>
             ) : (
               <div
+                ref={gridRef}
                 className="wp-index-grid"
-                style={isWide ? {
-                  gridAutoFlow: 'column',
-                  gridTemplateRows: `repeat(${Math.max(1, Math.ceil(sortedWordPacks.length / 2))}, auto)`,
-                } : undefined}
+                style={{
+                  gridTemplateColumns: `repeat(${Math.max(1, columnCount)}, 1fr)`,
+                  ...(columnCount > 1 ? {
+                    gridAutoFlow: 'column',
+                    gridTemplateRows: `repeat(${Math.max(1, Math.ceil(sortedWordPacks.length / Math.max(1, columnCount)))}, auto)`,
+                  } : {}),
+                }}
               >
                 {sortedWordPacks.map((wp) => (
                   <div
