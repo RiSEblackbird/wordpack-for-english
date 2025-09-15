@@ -223,7 +223,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       });
       setData(res);
       setCurrentWordPackId(wordPackId);
-      setMsg({ kind: 'status', text: '保存済みWordPackを読み込みました' });
     } catch (e) {
       if (ctrl.signal.aborted) return;
       let m = e instanceof ApiError ? e.message : 'WordPackの読み込みに失敗しました';
@@ -473,16 +472,16 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       <div>
         <section id="overview" className="wp-section">
           <h3>概要</h3>
+          <div className="kv" style={{ fontSize: '1.7em', marginBottom: '0.8rem' }}>
+            <div>見出し語</div>
+            <div><strong>{data!.lemma}</strong></div>
+          </div>
           {selectedMeta ? (
-            <div className="kv" style={{ marginBottom: '0.5rem' }}>
+            <div className="kv" style={{ marginBottom: '0.5rem', fontSize: '0.7em' }}>
               <div>作成</div><div>{formatDate(selectedMeta.created_at)}</div>
               <div>更新</div><div>{formatDate(selectedMeta.updated_at)}</div>
             </div>
           ) : null}
-          <div className="kv">
-            <div>見出し語</div>
-            <div><strong>{data!.lemma}</strong></div>
-          </div>
           <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <strong style={{ color: 'var(--color-accent)' }}>📊 例文統計</strong>
