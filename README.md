@@ -322,6 +322,10 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - `tests/test_load_and_regression.py` … 軽負荷スモークとスキーマ回帰チェック
     - PR4 追加: RAG 有効/無効の双方で基本SLA（少数リクエストで5秒以内）を検証。`X-Request-ID` ヘッダの付与も確認。
 
+フロントエンド単体テスト（Vitest/jsdom）:
+- `src/frontend/vitest.setup.ts` で `window.matchMedia` のポリフィルを提供しています。jsdom には `matchMedia` がないため、コンポーネントの幅検知（`(min-width: 900px)`）でエラーにならないようにしています。
+- ポリフィルは `addEventListener`/`removeEventListener` とレガシー `addListener`/`removeListener` の双方に対応するダミー実装です（常に `matches=false`）。UIロジックは初期値に依存せず、レンダリング後の振る舞いをアサートしてください。
+
 注意:
 - 統合テストはローカルの Chroma クライアント（`chromadb`）を利用し、フィクスチャでテスト専用ディレクトリに最小シードを投入します（環境変数 `CHROMA_PERSIST_DIR` を内部使用）。
 - RAG は `settings.rag_enabled` に従います。既定 `True`。
