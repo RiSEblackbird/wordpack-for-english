@@ -352,8 +352,8 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
   - APIキー:
     - `openai_api_key`
     - `voyage_api_key`（将来）
-  - SRS（SQLite）
-    - `srs_db_path`, `srs_max_today`
+  - ストレージ（SQLite）
+    - `srs_db_path`, `srs_max_today`（SRSカード/WordPack/記事を同一DBに保存）
   - `.env` を読み込みます。サンプル: `env.example`
   - 運用/監視（PR4）
     - `rate_limit_per_min_ip`, `rate_limit_per_min_user` … API レート制限（IP/ユーザ毎・毎分）

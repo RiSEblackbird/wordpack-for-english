@@ -22,9 +22,15 @@ class ReviewItem:
     due_at: datetime = field(default_factory=lambda: datetime.utcnow())
 
 
-class SRSSQLiteStore:
-    """SQLite-backed SRS store implementing a simplified SM-2 with history.
+class AppSQLiteStore:
+    """SQLite-backed application store.
 
+    Responsibilities:
+    - Spaced Repetition (SRS) cards and reviews (simplified SM-2)
+    - WordPack persistence with normalized examples
+    - Articles persistence and WordPack links
+
+    Notes:
     - grade: 2=correct, 1=partial, 0=wrong
     - ease is clamped into [1.5, 3.0]
     - due/interval/ease/repetitions updated transactionally; review history recorded
@@ -105,8 +111,8 @@ class SRSSQLiteStore:
                     """
                 )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_cards_due_at ON cards(due_at);")
-                
-                # WordPack永続化テーブル
+
+                # WordPack 永続化テーブル
                 conn.execute(
                     """
                     CREATE TABLE IF NOT EXISTS word_packs (
@@ -120,7 +126,7 @@ class SRSSQLiteStore:
                 )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_lemma ON word_packs(lemma);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_created_at ON word_packs(created_at);")
-                # 例文を正規化して保存するテーブル（WordPack 1:多 Examples）
+                # 例文正規化テーブル（WordPack 1:多 Examples）
                 conn.execute(
                     """
                     CREATE TABLE IF NOT EXISTS word_pack_examples (
@@ -141,7 +147,7 @@ class SRSSQLiteStore:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack ON word_pack_examples(word_pack_id);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack_cat_pos ON word_pack_examples(word_pack_id, category, position);")
 
-                # --- Articles 永続化テーブル ---
+                # Articles 永続化テーブル
                 conn.execute(
                     """
                     CREATE TABLE IF NOT EXISTS articles (
@@ -177,9 +183,7 @@ class SRSSQLiteStore:
         finally:
             conn.close()
 
-    
-
-    # --- public API ---
+    # --- public API: SRS ---
     def get_today(self, limit: int = 5) -> List[ReviewItem]:
         now = datetime.utcnow().isoformat()
         conn = self._connect()
@@ -285,7 +289,6 @@ class SRSSQLiteStore:
             raise
         finally:
             conn.close()
-
 
     def ensure_card(self, item_id: str, front: str, back: str) -> None:
         """Ensure a card exists; create if missing with defaults.
@@ -430,7 +433,7 @@ class SRSSQLiteStore:
         finally:
             conn.close()
 
-    # --- WordPack永続化機能 ---
+    # --- WordPack 永続化機能 ---
     def save_word_pack(self, word_pack_id: str, lemma: str, data: str) -> None:
         """WordPackをデータベースに保存する。
 
@@ -705,7 +708,6 @@ class SRSSQLiteStore:
         finally:
             conn.close()
 
-
     # --- WordPack helpers ---
     def find_word_pack_id_by_lemma(self, lemma: str) -> Optional[str]:
         """見出し語から既存のWordPack IDを1件返す（更新日時降順）。無ければNone。"""
@@ -841,7 +843,6 @@ class SRSSQLiteStore:
         finally:
             conn.close()
 
-
     def append_examples(self, word_pack_id: str, category: str, items: List[dict]) -> int:
         """指定カテゴリに例文を末尾追記し、追加件数を返す。
 
@@ -897,6 +898,10 @@ class SRSSQLiteStore:
             conn.close()
 
 
+# Backward-compatibility alias (class name)
+SRSSQLiteStore = AppSQLiteStore
+
 # module-level singleton store (wired to settings)
-store = SRSSQLiteStore(db_path=settings.srs_db_path)
+store = AppSQLiteStore(db_path=settings.srs_db_path)
+
 
