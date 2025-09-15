@@ -87,6 +87,33 @@ export const WordPackListPanel: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   type ViewMode = 'card' | 'list';
   const [viewMode, setViewMode] = useState<ViewMode>('card');
+  // 2カラム時に列優先で並べるための幅検知
+  const [isWide, setIsWide] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(min-width: 900px)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia('(min-width: 900px)');
+    const handler = (e: MediaQueryListEvent) => setIsWide(e.matches);
+    // Safari 対応のため addListener/removeListener フォールバック
+    // 実装仕様上の説明のみをコメントとして記述
+    // 主要ブラウザでの互換性を確保する
+    if (mql.addEventListener) {
+      mql.addEventListener('change', handler);
+    } else if ((mql as any).addListener) {
+      (mql as any).addListener(handler);
+    }
+    setIsWide(mql.matches);
+    return () => {
+      if (mql.removeEventListener) {
+        mql.removeEventListener('change', handler);
+      } else if ((mql as any).removeListener) {
+        (mql as any).removeListener(handler);
+      }
+    };
+  }, []);
 
   const loadWordPacks = async (newOffset: number = 0) => {
     abortRef.current?.abort();
@@ -385,7 +412,13 @@ export const WordPackListPanel: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div className="wp-index-grid">
+              <div
+                className="wp-index-grid"
+                style={isWide ? {
+                  gridAutoFlow: 'column',
+                  gridTemplateRows: `repeat(${Math.max(1, Math.ceil(sortedWordPacks.length / 2))}, auto)`,
+                } : undefined}
+              >
                 {sortedWordPacks.map((wp) => (
                   <div
                     key={wp.id}
@@ -398,7 +431,7 @@ export const WordPackListPanel: React.FC = () => {
                     }}
                   >
                     <span className="wp-index-title">{wp.lemma}</span>
-                    <span className="wp-index-meta">更新: {formatDate(wp.updated_at)}{wp.is_empty ? ' / 未' : ` / 例文: ${getTotalExamples(wp)}件`}</span>
+                    <span className="wp-index-meta">{wp.is_empty ? ' / 未' : ` / 例文: ${getTotalExamples(wp)}件`}</span>
                     <DeleteButton 
                       onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
                       disabled={loading}
