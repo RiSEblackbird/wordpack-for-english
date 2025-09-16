@@ -119,9 +119,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   );
 
   const generate = async () => {
+    // 直前のフォアグラウンド処理は中断するが、生成処理自体はバックグラウンド継続を許可する
+    // （タブ移動/アンマウントしても通知を完了に更新できるように、abortRef には紐付けない）
     abortRef.current?.abort();
     const ctrl = new AbortController();
-    abortRef.current = ctrl;
     setLoading(true);
     const l = lemma.trim();
     // 生成開始時に入力をクリアし、次の入力がすぐできるようにフォーカスを戻す
@@ -154,9 +155,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
         timeoutMs: settings.requestTimeoutMs,
       });
-      setData(res);
-      setCurrentWordPackId(null); // 新規生成なのでIDはnull
-      setMsg({ kind: 'status', text: 'WordPack を生成しました' });
+      if (mountedRef.current) {
+        setData(res);
+        setCurrentWordPackId(null); // 新規生成なのでIDはnull
+        setMsg({ kind: 'status', text: 'WordPack を生成しました' });
+      }
       updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '新規生成が完了しました' });
       try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
       // 生成完了後の自動モーダル表示は行わない（ユーザー操作を阻害しないため）
@@ -167,11 +170,13 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       if (e instanceof ApiError && e.status === 0 && /aborted|timed out/i.test(e.message)) {
         m = 'タイムアウトしました（サーバ側で処理継続の可能性があります）。時間をおいて更新または保存済みを開いてください。';
       }
-      setMsg({ kind: 'alert', text: m });
+      if (mountedRef.current) setMsg({ kind: 'alert', text: m });
       updateNotification(notifId, { title: `【${l}】の生成失敗`, status: 'error', message: `新規生成に失敗しました（${m}）` });
     } finally {
-      setLoading(false);
-      setLoadingInfo(null);
+      if (mountedRef.current) {
+        setLoading(false);
+        setLoadingInfo(null);
+      }
     }
   };
 
