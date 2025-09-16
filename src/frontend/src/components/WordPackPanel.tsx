@@ -123,6 +123,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     abortRef.current = ctrl;
     setLoading(true);
     const l = lemma.trim();
+    // 生成開始時に入力をクリアし、次の入力がすぐできるようにフォーカスを戻す
+    setLemma('');
+    try { focusRef.current?.focus(); } catch {}
     const notifId = addNotification({ title: `【${l}】の生成処理中...`, message: '新規のWordPackを生成しています（LLM応答の受信と解析を待機中）', status: 'progress' });
     setMsg(null);
     setData(null);
@@ -133,7 +136,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         method: 'POST',
         body: (() => {
           const base: any = {
-            lemma: lemma.trim(),
+            lemma: l,
             pronunciation_enabled: settings.pronunciationEnabled,
             regenerate_scope: settings.regenerateScope,
             model,
@@ -797,10 +800,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           value={lemma}
           onChange={(e) => setLemma(e.target.value)}
           placeholder="見出し語を入力"
-          disabled={loading}
         />
-        <button onClick={generate} disabled={loading || !lemma.trim()}>生成</button>
-        <button onClick={createEmpty} disabled={loading || !lemma.trim()} title="内容の生成を行わず、空のWordPackのみ保存">WordPackのみ作成</button>
+        <button onClick={generate} disabled={!lemma.trim()}>生成</button>
+        <button onClick={createEmpty} disabled={!lemma.trim()} title="内容の生成を行わず、空のWordPackのみ保存">WordPackのみ作成</button>
         <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           モデル
           <select value={model} onChange={(e) => setModel(e.target.value)} disabled={loading}>
