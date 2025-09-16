@@ -23,7 +23,7 @@ export const ArticleImportPanel: React.FC = () => {
   const { add: addNotification, update: updateNotification } = useNotifications();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
-  const [genLoading, setGenLoading] = useState(false);
+  const [genRunning, setGenRunning] = useState(0);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [article, setArticle] = useState<ArticleDetailResponse | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -151,7 +151,7 @@ export const ArticleImportPanel: React.FC = () => {
         />
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button onClick={importArticle} disabled={loading || !text.trim()}>インポート</button>
-          <select value={category} onChange={(e) => setCategory(e.target.value as any)} disabled={genLoading}>
+          <select value={category} onChange={(e) => setCategory(e.target.value as any)}>
             <option value="Dev">Dev</option>
             <option value="CS">CS</option>
             <option value="LLM">LLM</option>
@@ -162,12 +162,13 @@ export const ArticleImportPanel: React.FC = () => {
             onClick={async () => {
               setMsg(null);
               setArticle(null);
-              setGenLoading(true);
+              setGenRunning((n) => n + 1);
               const notifId = addNotification({ title: `【${category}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress' });
               try {
                 const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
                   method: 'POST',
                   body: { category },
+                  // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
                   timeoutMs: settings.requestTimeoutMs,
                 });
                 updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました` });
@@ -178,12 +179,11 @@ export const ArticleImportPanel: React.FC = () => {
                 setMsg({ kind: 'alert', text: m });
                 updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message: m });
               } finally {
-                setGenLoading(false);
+                setGenRunning((n) => Math.max(0, n - 1));
               }
             }}
-            disabled={genLoading}
           >
-            生成＆インポート
+            生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
           </button>
         </div>
         {msg && <div role={msg.kind}>{msg.text}</div>}

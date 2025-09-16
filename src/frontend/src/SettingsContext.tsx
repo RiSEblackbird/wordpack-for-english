@@ -29,13 +29,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       pronunciationEnabled: true,
       regenerateScope: 'all',
       autoAdvanceAfterGrade: false,
-      requestTimeoutMs: 60000,
+      // 初期描画直後のズレを避けるため、保守的に長めの既定値。実値は /api/config で即同期。
+      requestTimeoutMs: 360000,
       temperature: 0.6,
       reasoningEffort: 'minimal',
       textVerbosity: 'medium',
       theme: savedTheme === 'light' ? 'light' : 'dark',
     };
   });
+  const [ready, setReady] = useState<boolean>(false);
 
   // 起動時にバックエンドの実行時設定でタイムアウトを同期
   useEffect(() => {
@@ -57,7 +59,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // eslint-disable-next-line no-console
         console.error('[Settings] /api/config の取得に失敗しました。envと同期できていません。', err);
       }
-    })();
+    })().finally(() => { if (!aborted) setReady(true); });
     return () => {
       aborted = true;
     };
@@ -66,6 +68,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     try { localStorage.setItem('wp.theme', settings.theme); } catch { /* ignore */ }
   }, [settings.theme]);
+  if (!ready) {
+    return (
+      <SettingsContext.Provider value={{ settings, setSettings }}>
+        <div style={{ padding: '0.5rem', opacity: 0.8 }}>Loading settings...</div>
+      </SettingsContext.Provider>
+    );
+  }
   return (
     <SettingsContext.Provider value={{ settings, setSettings }}>
       {children}

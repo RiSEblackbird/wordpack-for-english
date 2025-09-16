@@ -23,6 +23,8 @@ from ..flows.article_import import ArticleImportFlow
 from ..models.word import ExampleCategory
 from pydantic import BaseModel, Field
 from ..flows.category_generate_import import CategoryGenerateAndImportFlow
+import anyio
+from functools import partial
 
 
 router = APIRouter(tags=["article"])
@@ -180,6 +182,8 @@ async def generate_and_import_examples(req: CategoryGenerateImportRequest) -> di
     with request_trace(name="CategoryGenerateAndImportFlow", metadata={"endpoint": "/api/article/generate_and_import"}) as ctx:
         tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
         with span(trace=tr, name="article.category_generate_and_import", input={"category": req.category.value}):
-            return flow.run(req.category)
+            # フローは同期実装のため、イベントループをブロックしないようスレッドにオフロード
+            result = await anyio.to_thread.run_sync(partial(flow.run, req.category))
+            return result
 
 

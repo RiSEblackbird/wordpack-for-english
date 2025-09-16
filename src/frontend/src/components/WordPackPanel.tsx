@@ -146,7 +146,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           return base;
         })(),
         signal: ctrl.signal,
-        timeoutMs: Math.max(settings.requestTimeoutMs, 300000),
+        // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
+        timeoutMs: settings.requestTimeoutMs,
       });
       setData(res);
       setCurrentWordPackId(null); // 新規生成なのでIDはnull
@@ -184,7 +185,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         method: 'POST',
         body: { lemma: lemma.trim() },
         signal: ctrl.signal,
-        timeoutMs: Math.max(settings.requestTimeoutMs, 300000),
+        // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
+        timeoutMs: settings.requestTimeoutMs,
       });
       setCurrentWordPackId(res.id);
       // 直後に保存済みWordPack詳細を読み込んで表示

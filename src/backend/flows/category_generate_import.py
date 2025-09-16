@@ -12,6 +12,7 @@ from ..store import store
 from ..models.word import WordPack, ExampleCategory
 from ..flows.word_pack import WordPackFlow
 from ..flows.article_import import ArticleImportFlow
+from ..observability import span
 
 
 class CategoryGenerateAndImportFlow:
@@ -54,7 +55,14 @@ class CategoryGenerateAndImportFlow:
         attempted: List[str] = []
         for _ in range(max_retries):
             prompt = self._prompt_lemma(category, attempted)
-            out = self._llm.complete(prompt)
+            # 観測: プロンプトと LLM 呼び出し
+            try:
+                with span(trace=None, name="category.pick_lemma.prompt", input={"prompt_chars": len(prompt), "category": category.value, "attempted": len(attempted)}):
+                    pass
+            except Exception:
+                pass
+            with span(trace=None, name="category.pick_lemma.llm", input={"prompt_chars": len(prompt)}):
+                out = self._llm.complete(prompt)
             try:
                 data = json.loads((out or "").strip().strip("`"))
                 lemma_raw = str(data.get("lemma") or "").strip()
@@ -81,7 +89,8 @@ class CategoryGenerateAndImportFlow:
         })
 
     def _ensure_empty_wordpack(self, lemma: str) -> str:
-        existing = store.find_word_pack_id_by_lemma(lemma)
+        with span(trace=None, name="category.ensure_wordpack.lookup", input={"lemma": lemma}):
+            existing = store.find_word_pack_id_by_lemma(lemma)
         if existing is not None:
             return existing
         empty_word_pack = WordPack(
@@ -97,13 +106,15 @@ class CategoryGenerateAndImportFlow:
             confidence="low",
         )
         wp_id = f"wp:{lemma}:{uuid.uuid4().hex[:8]}"
-        store.save_word_pack(wp_id, lemma, empty_word_pack.model_dump_json())
+        with span(trace=None, name="category.ensure_wordpack.create", input={"lemma": lemma}):
+            store.save_word_pack(wp_id, lemma, empty_word_pack.model_dump_json())
         return wp_id
 
     def _generate_two_examples(self, lemma: str, category: ExampleCategory) -> List[dict]:
         flow = WordPackFlow(chroma_client=None, llm=self._llm, llm_info=self._llm_info)
         plan = {category: 2}
-        gen = flow.generate_examples_for_categories(lemma, plan)
+        with span(trace=None, name="category.generate_examples", input={"lemma": lemma, "category": category.value, "count": 2}):
+            gen = flow.generate_examples_for_categories(lemma, plan)
         items_model = gen.get(category, [])
         items: List[dict] = []
         for it in items_model:
@@ -122,14 +133,16 @@ class CategoryGenerateAndImportFlow:
         lemma = self._choose_new_lemma(category)
         wp_id = self._ensure_empty_wordpack(lemma)
         items = self._generate_two_examples(lemma, category)
-        store.append_examples(wp_id, category.value, items)
+        with span(trace=None, name="category.save_examples", input={"word_pack_id": wp_id, "category": category.value, "count": len(items)}):
+            store.append_examples(wp_id, category.value, items)
 
         # Import each example as an article
         article_ids: List[str] = []
         art_flow = ArticleImportFlow()
         for ex in items:
             try:
-                res = art_flow.run(type("Req", (), {"text": ex.get("en"), "model": None, "temperature": None, "reasoning": None, "text_opts": None})())  # lightweight shim
+                with span(trace=None, name="category.import_article", input={"lemma": lemma, "category": category.value, "text_chars": len(str(ex.get("en") or ""))}):
+                    res = art_flow.run(type("Req", (), {"text": ex.get("en"), "model": None, "temperature": None, "reasoning": None, "text_opts": None})())  # lightweight shim
                 article_ids.append(res.id)
             except Exception:
                 # Skip failed imports but continue
