@@ -79,6 +79,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
   const [model, setModel] = useState<string>('gpt-5-mini');
   const [detailOpen, setDetailOpen] = useState(false);
+  const mountedRef = useRef(true);
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
@@ -239,15 +240,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   };
 
   const regenerateWordPack = async (wordPackId: string) => {
-    abortRef.current?.abort();
+    // 再生成はバックグラウンド継続を許可するため、モーダル閉鎖/アンマウントで中断しない
     const ctrl = new AbortController();
-    abortRef.current = ctrl;
     setLoading(true);
     const lemma3 = data?.lemma || 'WordPack';
-    setMsg(null);
-    setData(null);
-    setReveal(false);
-    setCount(3);
+    if (mountedRef.current) setMsg(null);
     try {
       await regenerateWordPackRequest({
         apiBase: settings.apiBase,
@@ -270,14 +267,18 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           failure: 'WordPackの再生成に失敗しました',
         },
       });
-      // 再生成後に最新詳細を取得して反映
-      const refreshed = await fetchJson<WordPack>(`${settings.apiBase}/word/packs/${wordPackId}`, {
-        signal: ctrl.signal,
-        timeoutMs: settings.requestTimeoutMs,
-      });
-      setData(refreshed);
-      setCurrentWordPackId(wordPackId);
-      setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
+      // 再生成後に最新詳細を取得して反映（アンマウント済みならリフレッシュはスキップ）
+      if (mountedRef.current) {
+        const refreshed = await fetchJson<WordPack>(`${settings.apiBase}/word/packs/${wordPackId}`, {
+          signal: ctrl.signal,
+          timeoutMs: settings.requestTimeoutMs,
+        });
+        if (mountedRef.current) {
+          setData(refreshed);
+          setCurrentWordPackId(wordPackId);
+          setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
+        }
+      }
       try { onWordPackGenerated?.(wordPackId); } catch {}
     } catch (e) {
       if (ctrl.signal.aborted) return;
@@ -285,10 +286,12 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       if (e instanceof ApiError && e.status === 0 && /aborted|timed out/i.test(e.message)) {
         m = '再生成がタイムアウトしました（サーバ側で処理継続の可能性）。時間をおいて再試行してください。';
       }
-      setMsg({ kind: 'alert', text: m });
+      if (mountedRef.current) setMsg({ kind: 'alert', text: m });
     } finally {
-      setLoading(false);
-      setLoadingInfo(null);
+      if (mountedRef.current) {
+        setLoading(false);
+        setLoadingInfo(null);
+      }
     }
   };
 
@@ -439,7 +442,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     };
   }, [data, reveal]);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; abortRef.current?.abort(); };
+  }, []);
 
 
   const renderDetails = () => (
