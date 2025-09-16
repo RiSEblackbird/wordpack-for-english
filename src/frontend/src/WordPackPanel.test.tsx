@@ -129,15 +129,8 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     });
 
     await screen.findByText('WordPack を生成しました');
-    // study_card 内容が表示される
-    expect(screen.getByText('学習カード要点')).toBeInTheDocument();
-
-    // 例文カードUI: 英/訳/解説ラベルのうち「解説」が表示されること
-    // （モック例文には grammar_ja が含まれている）
-    expect(screen.getAllByText(/解説/).length).toBeGreaterThan(0);
-
-    // 例文統計の見出しが表示される（総数はダイナミック）
-    expect(screen.getByRole('heading', { name: /例文 \(総数 \d+件\)/ })).toBeInTheDocument();
+    // 自動でプレビューモーダルは開かれない
+    expect(screen.queryByRole('dialog', { name: 'WordPack プレビュー' })).not.toBeInTheDocument();
 
     // fetch が正しいエンドポイントで呼ばれていること（採点APIは呼ばれない）
     const urls = fetchMock.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));
