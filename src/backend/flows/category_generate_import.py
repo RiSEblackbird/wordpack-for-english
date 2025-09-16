@@ -1,0 +1,145 @@
+from __future__ import annotations
+
+from typing import Any, List, Optional, Tuple
+import json
+import uuid
+
+from fastapi import HTTPException
+
+from ..providers import get_llm_provider
+from ..logging import logger
+from ..store import store
+from ..models.word import WordPack, ExampleCategory
+from ..flows.word_pack import WordPackFlow
+from ..flows.article_import import ArticleImportFlow
+
+
+class CategoryGenerateAndImportFlow:
+    """Orchestrates: generate one lemma for a category -> ensure empty WordPack ->
+    generate 2 examples for the category -> import each example as an article.
+
+    - Avoids duplicates by checking existing WordPack by lemma; retries up to 3 times.
+    - Uses existing flows for examples and article import to keep contracts consistent.
+    """
+
+    def __init__(self, *, model: Optional[str] = None, temperature: Optional[float] = None, reasoning: Optional[dict] = None, text: Optional[dict] = None) -> None:
+        self._llm = get_llm_provider(
+            model_override=model,
+            temperature_override=temperature,
+            reasoning_override=reasoning,
+            text_override=text,
+        )
+        self._llm_info = {
+            "model": model,
+            "params": None,
+        }
+
+    def _prompt_lemma(self, category: ExampleCategory, attempted: List[str]) -> str:
+        attempted_list = ", ".join(attempted) if attempted else "(none)"
+        return (
+            "You are selecting a domain-relevant English lemma for example generation.\n"
+            f"Target category: {category.value}.\n"
+            "Return ONLY one JSON object with exactly one key: {\"lemma\": \"...\"}. No prose.\n"
+            "Guidelines:\n"
+            "- The lemma must be strongly relevant to the target category (Dev, CS, LLM, Business, Common).\n"
+            "- Include both mainstream and niche technical terms across attempts to avoid repetition bias.\n"
+            "- Single word preferred; multi-word expressions allowed if they are common collocations or domain terms.\n"
+            "- Length 1..64 chars. Use ASCII letters, hyphens, apostrophes, and spaces only.\n"
+            "- Avoid ultra-generic function words and trivial tokens.\n"
+            "- Do NOT output a previously attempted lemma: " + attempted_list + "\n"
+            "Output JSON only."
+        )
+
+    def _choose_new_lemma(self, category: ExampleCategory, max_retries: int = 3) -> str:
+        attempted: List[str] = []
+        for _ in range(max_retries):
+            prompt = self._prompt_lemma(category, attempted)
+            out = self._llm.complete(prompt)
+            try:
+                data = json.loads((out or "").strip().strip("`"))
+                lemma_raw = str(data.get("lemma") or "").strip()
+            except Exception:
+                lemma_raw = ""
+            lemma = lemma_raw.lower()
+            # basic normalization
+            if not lemma or len(lemma) > 64:
+                attempted.append(lemma_raw or "")
+                continue
+            if not all((ch.isalpha() or ch in {"-", "'", " "}) for ch in lemma):
+                attempted.append(lemma)
+                continue
+            # reject duplicates
+            if store.find_word_pack_id_by_lemma(lemma) is not None:
+                attempted.append(lemma)
+                continue
+            logger.info("category_pick_lemma", category=category.value, lemma=lemma)
+            return lemma
+        raise HTTPException(status_code=409, detail={
+            "message": "No unique lemma could be chosen after retries",
+            "reason_code": "LEMMA_DUPLICATE_OR_INVALID",
+            "attempted": attempted,
+        })
+
+    def _ensure_empty_wordpack(self, lemma: str) -> str:
+        existing = store.find_word_pack_id_by_lemma(lemma)
+        if existing is not None:
+            return existing
+        empty_word_pack = WordPack(
+            lemma=lemma,
+            pronunciation={"ipa_GA": None, "ipa_RP": None, "syllables": None, "stress_index": None, "linking_notes": []},
+            senses=[],
+            collocations={"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
+            contrast=[],
+            examples={"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []},
+            etymology={"note": "-", "confidence": "low"},
+            study_card="",
+            citations=[],
+            confidence="low",
+        )
+        wp_id = f"wp:{lemma}:{uuid.uuid4().hex[:8]}"
+        store.save_word_pack(wp_id, lemma, empty_word_pack.model_dump_json())
+        return wp_id
+
+    def _generate_two_examples(self, lemma: str, category: ExampleCategory) -> List[dict]:
+        flow = WordPackFlow(chroma_client=None, llm=self._llm, llm_info=self._llm_info)
+        plan = {category: 2}
+        gen = flow.generate_examples_for_categories(lemma, plan)
+        items_model = gen.get(category, [])
+        items: List[dict] = []
+        for it in items_model:
+            items.append({
+                "en": it.en,
+                "ja": it.ja,
+                "grammar_ja": it.grammar_ja,
+                "llm_model": it.llm_model,
+                "llm_params": it.llm_params,
+            })
+        if len(items) < 2:
+            raise HTTPException(status_code=502, detail="LLM returned insufficient examples")
+        return items[:2]
+
+    def run(self, category: ExampleCategory) -> dict:
+        lemma = self._choose_new_lemma(category)
+        wp_id = self._ensure_empty_wordpack(lemma)
+        items = self._generate_two_examples(lemma, category)
+        store.append_examples(wp_id, category.value, items)
+
+        # Import each example as an article
+        article_ids: List[str] = []
+        art_flow = ArticleImportFlow()
+        for ex in items:
+            try:
+                res = art_flow.run(type("Req", (), {"text": ex.get("en"), "model": None, "temperature": None, "reasoning": None, "text_opts": None})())  # lightweight shim
+                article_ids.append(res.id)
+            except Exception:
+                # Skip failed imports but continue
+                logger.info("category_example_import_failed", lemma=lemma, category=category.value)
+        return {
+            "lemma": lemma,
+            "word_pack_id": wp_id,
+            "category": category.value,
+            "generated_examples": len(items),
+            "article_ids": article_ids,
+        }
+
+

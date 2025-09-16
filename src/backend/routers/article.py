@@ -20,6 +20,9 @@ from ..models.article import (
 )
 from ..observability import request_trace, span
 from ..flows.article_import import ArticleImportFlow
+from ..models.word import ExampleCategory
+from pydantic import BaseModel, Field
+from ..flows.category_generate_import import CategoryGenerateAndImportFlow
 
 
 router = APIRouter(tags=["article"])
@@ -153,5 +156,30 @@ async def delete_article(article_id: str) -> dict[str, str]:
     if not ok:
         raise HTTPException(status_code=404, detail="Article not found")
     return {"message": "Article deleted"}
+
+
+class CategoryGenerateImportRequest(BaseModel):
+    category: ExampleCategory = Field(description="例文カテゴリ")
+    model: str | None = None
+    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
+    reasoning: dict | None = None
+    text: dict | None = None
+
+
+@router.post("/generate_and_import")
+async def generate_and_import_examples(req: CategoryGenerateImportRequest) -> dict[str, object]:
+    """選択カテゴリに関連する語を1つ生成し、空のWordPackを作成、
+    当該カテゴリの例文を2件生成して保存し、それぞれを文章インポートに渡して記事化する。
+    """
+    flow = CategoryGenerateAndImportFlow(
+        model=getattr(req, "model", None),
+        temperature=getattr(req, "temperature", None),
+        reasoning=getattr(req, "reasoning", None),
+        text=getattr(req, "text", None),
+    )
+    with request_trace(name="CategoryGenerateAndImportFlow", metadata={"endpoint": "/api/article/generate_and_import"}) as ctx:
+        tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
+        with span(trace=tr, name="article.category_generate_and_import", input={"category": req.category.value}):
+            return flow.run(req.category)
 
 

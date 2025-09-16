@@ -324,3 +324,62 @@ def test_article_wordpack_link_persists_after_regeneration(monkeypatch):
     art2 = r_get.json()
     ids = [x["word_pack_id"] for x in art2.get("related_word_packs", [])]
     assert wp_id in ids
+
+
+def test_category_generate_and_import_endpoint(client, monkeypatch):
+    """カテゴリ別の生成＆インポートの簡易テスト。
+
+    - LLM をスタブして決定的に動作させる
+    - 返却値に lemma/word_pack_id/article_ids が含まれること
+    - 該当WordPackに例文が2件以上追加されていること
+    - 作成された記事が取得できること
+    """
+    import json as _json
+    import backend.providers as providers_mod
+
+    class _StubLLM:
+        def complete(self, prompt: str) -> str:
+            p = (prompt or "")
+            # 例文生成プロンプト（スキーマに examples のみ）
+            if ("\"examples\"" in p) and ("Schema" in p):
+                return _json.dumps({
+                    "examples": [
+                        {"en": "Cache invalidation is one of the two hard things in CS.", "ja": "キャッシュ無効化はCSで難題の一つ。", "grammar_ja": "SVC。"},
+                        {"en": "We cache API responses to improve latency under load.", "ja": "負荷時のレイテンシ改善のためAPIレスポンスをキャッシュする。", "grammar_ja": "SVO。"},
+                    ]
+                })
+            # カテゴリ別：単一 lemma を返すプロンプト
+            if ("Return ONLY one JSON object" in p) and ("\"lemma\"" in p):
+                return '{"lemma":"cache"}'
+            # 記事インポート系の補助（lemmas抽出など）
+            if ("lemmas" in p) and ("Return JSON" in p):
+                return '["cache","invalidation"]'
+            # タイトル/訳/説明等はプレーンテキストで十分
+            return "ok"
+
+    # 共有LLMインスタンスをスタブで上書き
+    providers_mod._LLM_INSTANCE = _StubLLM()
+
+    r = client.post("/api/article/generate_and_import", json={"category": "Dev"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["lemma"] == "cache"
+    assert body["generated_examples"] >= 2
+    assert isinstance(body.get("word_pack_id"), str) and body["word_pack_id"].startswith("wp:")
+    assert isinstance(body.get("article_ids"), list) and len(body["article_ids"]) >= 1
+
+    # 記事が取得できること
+    first_article_id = body["article_ids"][0]
+    r_get = client.get(f"/api/article/{first_article_id}")
+    assert r_get.status_code == 200
+
+    # WordPack 一覧から該当 lemma を探し、例文が2件以上あること
+    r_list = client.get("/api/word/packs")
+    assert r_list.status_code == 200
+    items = r_list.json().get("items", [])
+    pack_id = next((it["id"] for it in items if it.get("lemma") == "cache"), None)
+    assert pack_id, "generated word pack not found in list"
+    r_wp = client.get(f"/api/word/packs/{pack_id}")
+    assert r_wp.status_code == 200
+    wp = r_wp.json()
+    assert len(wp.get("examples", {}).get("Dev", [])) >= 2

@@ -23,11 +23,13 @@ export const ArticleImportPanel: React.FC = () => {
   const { add: addNotification, update: updateNotification } = useNotifications();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [genLoading, setGenLoading] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [article, setArticle] = useState<ArticleDetailResponse | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [wpPreviewOpen, setWpPreviewOpen] = useState(false);
   const [wpPreviewId, setWpPreviewId] = useState<string | null>(null);
+  const [category, setCategory] = useState<'Dev'|'CS'|'LLM'|'Business'|'Common'>('Common');
   const abortRef = useRef<AbortController | null>(null);
 
   const importArticle = async () => {
@@ -149,6 +151,40 @@ export const ArticleImportPanel: React.FC = () => {
         />
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button onClick={importArticle} disabled={loading || !text.trim()}>インポート</button>
+          <select value={category} onChange={(e) => setCategory(e.target.value as any)} disabled={genLoading}>
+            <option value="Dev">Dev</option>
+            <option value="CS">CS</option>
+            <option value="LLM">LLM</option>
+            <option value="Business">Business</option>
+            <option value="Common">Common</option>
+          </select>
+          <button
+            onClick={async () => {
+              setMsg(null);
+              setArticle(null);
+              setGenLoading(true);
+              const notifId = addNotification({ title: `【${category}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress' });
+              try {
+                const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
+                  method: 'POST',
+                  body: { category },
+                  timeoutMs: settings.requestTimeoutMs,
+                });
+                updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました` });
+                try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
+                setMsg({ kind: 'status', text: '生成＆インポートを実行しました' });
+              } catch (e) {
+                const m = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
+                setMsg({ kind: 'alert', text: m });
+                updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message: m });
+              } finally {
+                setGenLoading(false);
+              }
+            }}
+            disabled={genLoading}
+          >
+            生成＆インポート
+          </button>
         </div>
         {msg && <div role={msg.kind}>{msg.text}</div>}
       </div>
