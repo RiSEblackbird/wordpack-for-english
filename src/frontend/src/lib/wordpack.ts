@@ -58,7 +58,8 @@ export async function regenerateWordPackRequest(params: {
       method: 'POST',
       body,
       signal: abortSignal,
-      timeoutMs: Math.max(settings.requestTimeoutMs, 300000),
+      // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
+      timeoutMs: settings.requestTimeoutMs,
     });
 
     notify.update(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: messages?.success || '処理が完了しました' });
