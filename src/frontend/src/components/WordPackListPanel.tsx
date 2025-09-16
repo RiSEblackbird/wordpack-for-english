@@ -87,6 +87,13 @@ export const WordPackListPanel: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   type ViewMode = 'card' | 'list';
   const [viewMode, setViewMode] = useState<ViewMode>('card');
+  // 表示絞り込み（例文生成状況）と検索（単語名）
+  type GenerationFilter = 'all' | 'generated' | 'not_generated';
+  const [generationFilter, setGenerationFilter] = useState<GenerationFilter>('all');
+  type SearchMode = 'prefix' | 'suffix' | 'contains';
+  const [searchMode, setSearchMode] = useState<SearchMode>('contains');
+  const [searchInput, setSearchInput] = useState<string>('');
+  const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(null);
   // 複数カラム時に列優先で並べるための幅検知
   const [isWide, setIsWide] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -250,6 +257,31 @@ export const WordPackListPanel: React.FC = () => {
     return Object.values(wp.examples_count).reduce((sum, count) => sum + count, 0);
   };
 
+  const matchString = (text: string, query: string, mode: SearchMode): boolean => {
+    const t = text.toLowerCase();
+    const q = query.toLowerCase();
+    if (!q) return true;
+    if (mode === 'prefix') return t.startsWith(q);
+    if (mode === 'suffix') return t.endsWith(q);
+    return t.includes(q);
+  };
+
+  const filterWordPacks = (packs: WordPackListItem[]): WordPackListItem[] => {
+    return packs.filter((wp) => {
+      const total = getTotalExamples(wp);
+      if (generationFilter === 'generated' && total <= 0) return false;
+      if (generationFilter === 'not_generated' && total > 0) return false;
+      if (appliedSearch && appliedSearch.value.trim().length > 0) {
+        if (!matchString(wp.lemma || '', appliedSearch.value.trim(), appliedSearch.mode)) return false;
+      }
+      return true;
+    });
+  };
+
+  const handleApplySearch = () => {
+    setAppliedSearch({ mode: searchMode, value: searchInput.trim() });
+  };
+
   const sortWordPacks = (packs: WordPackListItem[]): WordPackListItem[] => {
     return [...packs].sort((a, b) => {
       let aValue: string | number;
@@ -288,7 +320,8 @@ export const WordPackListPanel: React.FC = () => {
     }
   };
 
-  const sortedWordPacks = sortWordPacks(wordPacks);
+  const filteredWordPacks = filterWordPacks(wordPacks);
+  const sortedWordPacks = sortWordPacks(filteredWordPacks);
 
   const hasNext = offset + limit < total;
   const hasPrev = offset > 0;
@@ -303,6 +336,10 @@ export const WordPackListPanel: React.FC = () => {
         .wp-sort-button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; }
         .wp-sort-button:hover { background: #f5f5f5; }
         .wp-sort-button.active { background: #e3f2fd; border-color: #2196f3; }
+        .wp-filter-select { padding: 0.25rem; border: 1px solid #ccc; border-radius: 4px; background: white; }
+        .wp-search-input { padding: 0.25rem; border: 1px solid #ccc; border-radius: 4px; }
+        .wp-search-button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
+        .wp-search-button:hover { background: #f5f5f5; }
         .wp-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
         .wp-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.4rem; background:rgb(173, 159, 211); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
         .wp-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.2rem; }
@@ -390,6 +427,47 @@ export const WordPackListPanel: React.FC = () => {
           >
             ↑
           </button>
+          {/* ここから右側に追加機能（①表示絞り込み、②検索） */}
+          <label htmlFor="gen-filter" style={{ marginLeft: '0.5rem' }}>表示絞り込み:</label>
+          <select
+            id="gen-filter"
+            className="wp-filter-select"
+            value={generationFilter}
+            onChange={(e) => setGenerationFilter(e.target.value as any)}
+            aria-label="例文生成状況で絞り込み"
+          >
+            <option value="all">-</option>
+            <option value="generated">生成済</option>
+            <option value="not_generated">未生成</option>
+          </select>
+
+          <label htmlFor="search-mode" style={{ marginLeft: '0.5rem' }}>検索:</label>
+          <select
+            id="search-mode"
+            className="wp-filter-select"
+            value={searchMode}
+            onChange={(e) => setSearchMode(e.target.value as any)}
+            aria-label="検索方法"
+          >
+            <option value="prefix">前方一致</option>
+            <option value="suffix">後方一致</option>
+            <option value="contains">部分一致</option>
+          </select>
+          <input
+            type="text"
+            className="wp-search-input"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="検索する文字列"
+            aria-label="検索文字列"
+            onKeyDown={(e) => { if (e.key === 'Enter') handleApplySearch(); }}
+          />
+          <button
+            type="button"
+            className="wp-search-button"
+            onClick={handleApplySearch}
+            title="検索"
+          >検索</button>
         </div>
 
         {loading && (
