@@ -73,6 +73,7 @@ interface WordPackListResponse {
 export const WordPackListPanel: React.FC = () => {
   const { settings } = useSettings();
   const { setModalOpen } = useModal();
+  const STORAGE_KEY = 'wp.list.ui_state.v1';
   const [wordPacks, setWordPacks] = useState<WordPackListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
@@ -170,6 +171,52 @@ export const WordPackListPanel: React.FC = () => {
       }
     };
   }, []);
+
+  // --- UI状態の保存/復元（sessionStorage） ---
+  type PersistedState = {
+    sortKey: SortKey;
+    sortOrder: SortOrder;
+    viewMode: ViewMode;
+    generationFilter: GenerationFilter;
+    searchMode: SearchMode;
+    searchInput: string;
+    appliedSearch: { mode: SearchMode; value: string } | null;
+    offset: number;
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = sessionStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw) as Partial<PersistedState>;
+      if (s.sortKey) setSortKey(s.sortKey);
+      if (s.sortOrder) setSortOrder(s.sortOrder);
+      if (s.viewMode) setViewMode(s.viewMode);
+      if (s.generationFilter) setGenerationFilter(s.generationFilter);
+      if (s.searchMode) setSearchMode(s.searchMode);
+      if (typeof s.searchInput === 'string') setSearchInput(s.searchInput);
+      if (s.appliedSearch) setAppliedSearch(s.appliedSearch);
+      if (typeof s.offset === 'number' && Number.isFinite(s.offset) && s.offset >= 0) setOffset(s.offset);
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const p: PersistedState = {
+      sortKey,
+      sortOrder,
+      viewMode,
+      generationFilter,
+      searchMode,
+      searchInput,
+      appliedSearch,
+      offset,
+    };
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch {}
+  }, [sortKey, sortOrder, viewMode, generationFilter, searchMode, searchInput, appliedSearch, offset]);
 
   const loadWordPacks = async (newOffset: number = 0) => {
     abortRef.current?.abort();
