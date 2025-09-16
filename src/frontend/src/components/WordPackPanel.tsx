@@ -80,6 +80,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [model, setModel] = useState<string>('gpt-5-mini');
   const [detailOpen, setDetailOpen] = useState(false);
   const mountedRef = useRef(true);
+  const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
@@ -158,9 +159,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setMsg({ kind: 'status', text: 'WordPack を生成しました' });
       updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '新規生成が完了しました' });
       try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
-      // 生成完了後に詳細モーダルを自動表示
-      setDetailOpen(true);
-      try { setModalOpen(true); } catch {}
+      // 生成完了後の自動モーダル表示は行わない（ユーザー操作を阻害しないため）
       try { onWordPackGenerated?.(null); } catch {}
     } catch (e) {
       if (ctrl.signal.aborted) return;
@@ -794,55 +793,57 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         @media (max-width: 840px) { .wp-container { grid-template-columns: 1fr; } }
       `}</style>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-        <input
-          ref={focusRef as React.RefObject<HTMLInputElement>}
-          value={lemma}
-          onChange={(e) => setLemma(e.target.value)}
-          placeholder="見出し語を入力"
-        />
-        <button onClick={generate} disabled={!lemma.trim()}>生成</button>
-        <button onClick={createEmpty} disabled={!lemma.trim()} title="内容の生成を行わず、空のWordPackのみ保存">WordPackのみ作成</button>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          モデル
-          <select value={model} onChange={(e) => setModel(e.target.value)} disabled={loading}>
-            <option value="gpt-5-mini">gpt-5-mini</option>
-            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-            <option value="gpt-4o-mini">gpt-4o-mini</option>
-          </select>
-        </label>
-        {(model || '').toLowerCase() === 'gpt-5-mini' && (
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              reasoning.effort
-              <select
-                aria-label="reasoning.effort"
-                value={settings.reasoningEffort || 'minimal'}
-                onChange={(e) => setSettings({ ...settings, reasoningEffort: e.target.value as any })}
-                disabled={loading}
-              >
-                <option value="minimal">minimal</option>
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-              </select>
-            </label>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              text.verbosity
-              <select
-                aria-label="text.verbosity"
-                value={settings.textVerbosity || 'medium'}
-                onChange={(e) => setSettings({ ...settings, textVerbosity: e.target.value as any })}
-                disabled={loading}
-              >
-                <option value="low">low</option>
-                <option value="medium">medium</option>
-                <option value="high">high</option>
-              </select>
-            </label>
-          </div>
-        )}
-      </div>
+      {!isInModalView && (
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+          <input
+            ref={focusRef as React.RefObject<HTMLInputElement>}
+            value={lemma}
+            onChange={(e) => setLemma(e.target.value)}
+            placeholder="見出し語を入力"
+          />
+          <button onClick={generate} disabled={!lemma.trim()}>生成</button>
+          <button onClick={createEmpty} disabled={!lemma.trim()} title="内容の生成を行わず、空のWordPackのみ保存">WordPackのみ作成</button>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            モデル
+            <select value={model} onChange={(e) => setModel(e.target.value)} disabled={loading}>
+              <option value="gpt-5-mini">gpt-5-mini</option>
+              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+            </select>
+          </label>
+          {(model || '').toLowerCase() === 'gpt-5-mini' && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                reasoning.effort
+                <select
+                  aria-label="reasoning.effort"
+                  value={settings.reasoningEffort || 'minimal'}
+                  onChange={(e) => setSettings({ ...settings, reasoningEffort: e.target.value as any })}
+                  disabled={loading}
+                >
+                  <option value="minimal">minimal</option>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                text.verbosity
+                <select
+                  aria-label="text.verbosity"
+                  value={settings.textVerbosity || 'medium'}
+                  onChange={(e) => setSettings({ ...settings, textVerbosity: e.target.value as any })}
+                  disabled={loading}
+                >
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </label>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 進捗ヘッダー */}
 
