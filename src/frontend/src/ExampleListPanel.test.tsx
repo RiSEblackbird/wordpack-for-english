@@ -58,9 +58,10 @@ describe('ExampleListPanel pagination offset behavior', () => {
 
     const user = userEvent.setup();
 
-    // 例文一覧タブへ
+    // 例文一覧タブへ（設定ロード完了を待ってボタンが出てからクリック）
+    const examplesTabBtn = await screen.findByRole('button', { name: '例文一覧' });
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '例文一覧' }));
+      await user.click(examplesTabBtn);
     });
 
     // 初期ロードのレンジ表記とボタン状態
