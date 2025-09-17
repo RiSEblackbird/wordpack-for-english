@@ -64,8 +64,8 @@ describe('ExampleListPanel pagination offset behavior', () => {
       await user.click(examplesTabBtn);
     });
 
-    // 初期ロードのレンジ表記とボタン状態
-    await waitFor(() => expect(screen.getByText(/例文一覧/)).toBeInTheDocument());
+    // 初期ロードのレンジ表記とボタン状態（見出しをheadingロールで特定）
+    await screen.findByRole('heading', { name: '例文一覧' });
     // limit=200, total=450, offset=0 => 1-200 / 450件
     const range1 = await screen.findByText(/1-200 \/ 450件/);
     expect(range1).toBeInTheDocument();
