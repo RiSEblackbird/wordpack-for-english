@@ -16,6 +16,8 @@ from ..models.word import (
     WordPackListItem,
     WordPackRegenerateRequest,
     ExampleCategory,
+    ExampleListResponse,
+    ExampleListItem,
 )
 from ..store import store
 from ..logging import logger
@@ -510,8 +512,52 @@ async def generate_examples_for_word_pack(
         }
     except HTTPException:
         raise
-    except Exception as exc:
-        # 統合フロー以外の経路は廃止
-        raise HTTPException(status_code=502, detail=f"Failed to generate examples (unified flow): {exc}")
 
-    
+
+@router.get(
+    "/examples",
+    response_model=ExampleListResponse,
+    summary="例文一覧を取得（WordPackを横断）",
+)
+async def list_examples(
+    limit: int = Query(default=50, ge=1, le=200, description="取得件数上限"),
+    offset: int = Query(default=0, ge=0, description="オフセット"),
+    order_by: str = Query(default="created_at", description="created_at|pack_updated_at|lemma|category"),
+    order_dir: str = Query(default="desc", description="asc|desc"),
+    search: Optional[str] = Query(default=None, description="英文に対する検索文字列（部分一致等）"),
+    search_mode: str = Query(default="contains", description="prefix|suffix|contains"),
+    category: Optional[ExampleCategory] = Query(default=None, description="カテゴリで絞り込み"),
+) -> ExampleListResponse:
+    """`word_pack_examples` を元に横断的な例文一覧を返す。"""
+    # 取得
+    items_raw = store.list_examples(
+        limit=limit,
+        offset=offset,
+        order_by=order_by,
+        order_dir=order_dir,
+        search=search,
+        search_mode=search_mode,
+        category=category.value if category is not None else None,
+    )
+    total = store.count_examples(
+        search=search,
+        search_mode=search_mode,
+        category=category.value if category is not None else None,
+    )
+
+    items: list[ExampleListItem] = []
+    for (rid, wp_id, lemma, cat, en, ja, grammar_ja, created_at, pack_updated_at) in items_raw:
+        items.append(
+            ExampleListItem(
+                id=rid,
+                word_pack_id=wp_id,
+                lemma=lemma,
+                category=ExampleCategory(cat),
+                en=en,
+                ja=ja,
+                grammar_ja=grammar_ja,
+                created_at=created_at,
+                word_pack_updated_at=pack_updated_at,
+            )
+        )
+    return ExampleListResponse(items=items, total=total, limit=limit, offset=offset)

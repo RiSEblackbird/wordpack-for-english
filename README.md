@@ -293,10 +293,41 @@ FastAPI アプリは `src/backend/main.py`。
   - レスポンス例: `{ "message": "Examples generated and appended", "added": 2, "category": "Dev", "items": [{"en":"...","ja":"..."}] }`
   - `model/temperature/reasoning/text` は任意。未指定時はサーバ既定（環境変数）を使用。
 
+- `GET /api/word/examples`（新）
+  - 例文をWordPack横断で一覧取得。
+  - クエリ:
+    - `limit=<int>`（1–200, 既定50）
+    - `offset=<int>`（0–）
+    - `order_by=created_at|pack_updated_at|lemma|category`（既定: `created_at`）
+    - `order_dir=asc|desc`（既定: `desc`）
+    - `search=<string>` + `search_mode=prefix|suffix|contains`（英文に対する検索）
+    - `category=Dev|CS|LLM|Business|Common`（任意）
+  - レスポンス例:
+    ```json
+    {
+      "items": [
+        {
+          "id": 123,
+          "word_pack_id": "wp:insight:a1b2c3",
+          "lemma": "insight",
+          "category": "Dev",
+          "en": "We gained insight after refactoring modules and reviewing logs.",
+          "ja": "モジュールのリファクタリングとログ確認の後に洞察を得た。",
+          "grammar_ja": "第3文型",
+          "created_at": "2025-01-01T12:34:56.000Z",
+          "word_pack_updated_at": "2025-01-02T08:00:00.000Z"
+        }
+      ],
+      "total": 1,
+      "limit": 50,
+      "offset": 0
+    }
+    ```
+
 ---
 
 ## 4. フロントエンド UI 概要
-単一ページで以下の2タブを切替。初期表示は「WordPack」タブ。
+単一ページで以下のタブを切替。初期表示は「WordPack」タブ。
 
 - WordPack（`WordPackPanel.tsx`）
   - 見出し語を入力→`生成`。使用API: `POST /api/word/pack`
@@ -310,6 +341,12 @@ FastAPI アプリは `src/backend/main.py`。
   - 発音の有効/無効トグル（M5）
   - 再生成スコープ選択（`全体/例文のみ/コロケのみ`）（M5, Enum）
   - （採点機能は廃止しました）
+ 
+ - 例文一覧（`ExampleListPanel.tsx`）（新）
+   - 保存済みの例文をWordPack横断で一覧表示（カード/リスト切替）。
+   - 並び替え（例文作成日時/WordPack更新/単語名/カテゴリ）、検索（前方/後方/部分一致）、カテゴリ絞り込み。
+   - カード/リストに「訳表示」ボタンを備え、原文下に日本語訳を展開。
+   - クリックで詳細モーダル（原文/訳/解説）を表示。
 
 アクセシビリティ/操作:
 - Alt+1..2 でタブ切替（1=WordPack, 2=設定）。`/` で主要入力へフォーカス

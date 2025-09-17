@@ -136,6 +136,26 @@ class Etymology(BaseModel):
     confidence: ConfidenceLevel = ConfidenceLevel.low
 
 
+# --- Example listing API models ---
+class ExampleListItem(BaseModel):
+    id: int
+    word_pack_id: str
+    lemma: str
+    category: ExampleCategory
+    en: str
+    ja: str
+    grammar_ja: Optional[str] = None
+    created_at: str
+    word_pack_updated_at: Optional[str] = None
+
+
+class ExampleListResponse(BaseModel):
+    items: list[ExampleListItem]
+    total: int
+    limit: int
+    offset: int
+
+
 class Pronunciation(BaseModel):
     ipa_GA: Optional[str] = None
     ipa_RP: Optional[str] = None

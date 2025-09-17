@@ -898,6 +898,132 @@ class AppSQLiteStore:
             conn.close()
 
 
+    def count_examples(
+        self,
+        *,
+        search: str | None = None,
+        search_mode: str = "contains",
+        category: str | None = None,
+    ) -> int:
+        """正規化テーブルの例文総数（フィルタ適用後）を返す。"""
+        conn = self._connect()
+        try:
+            where_clauses: list[str] = []
+            params: list[object] = []
+            if isinstance(category, str) and category:
+                where_clauses.append("wpe.category = ?")
+                params.append(category)
+            if isinstance(search, str) and search.strip():
+                q = search.strip()
+                if search_mode == "prefix":
+                    where_clauses.append("LOWER(wpe.en) LIKE LOWER(?)")
+                    params.append(f"{q}%")
+                elif search_mode == "suffix":
+                    where_clauses.append("LOWER(wpe.en) LIKE LOWER(?)")
+                    params.append(f"%{q}")
+                else:
+                    where_clauses.append("LOWER(wpe.en) LIKE LOWER(?)")
+                    params.append(f"%{q}%")
+            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            cur = conn.execute(
+                f"""
+                SELECT COUNT(1) AS c
+                FROM word_pack_examples wpe
+                JOIN word_packs wp ON wp.id = wpe.word_pack_id
+                {where_sql};
+                """,
+                tuple(params),
+            )
+            row = cur.fetchone()
+            return int(row["c"] or 0)
+        finally:
+            conn.close()
+
+
+    def list_examples(
+        self,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        order_by: str = "created_at",
+        order_dir: str = "desc",
+        search: str | None = None,
+        search_mode: str = "contains",
+        category: str | None = None,
+    ) -> list[tuple[int, str, str, str, str, str | None, str, str | None]]:
+        """例文一覧（WordPack結合）を返す。
+
+        戻り値: [(id, word_pack_id, lemma, category, en, grammar_ja, created_at, word_pack_updated_at)]
+        """
+        # ORDER BY の安全なマッピング
+        order_map = {
+            "created_at": "wpe.created_at",
+            "pack_updated_at": "wp.updated_at",
+            "lemma": "wp.lemma",
+            "category": "wpe.category",
+        }
+        order_col = order_map.get(order_by, "wpe.created_at")
+        order_dir_sql = "DESC" if str(order_dir).lower() == "desc" else "ASC"
+
+        conn = self._connect()
+        try:
+            where_clauses: list[str] = []
+            params: list[object] = []
+            if isinstance(category, str) and category:
+                where_clauses.append("wpe.category = ?")
+                params.append(category)
+            if isinstance(search, str) and search.strip():
+                q = search.strip()
+                if search_mode == "prefix":
+                    where_clauses.append("LOWER(wpe.en) LIKE LOWER(?)")
+                    params.append(f"{q}%")
+                elif search_mode == "suffix":
+                    where_clauses.append("LOWER(wpe.en) LIKE LOWER(?)")
+                    params.append(f"%{q}")
+                else:
+                    where_clauses.append("LOWER(wpe.en) LIKE LOWER(?)")
+                    params.append(f"%{q}%")
+            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+            cur = conn.execute(
+                f"""
+                SELECT
+                    wpe.id AS id,
+                    wpe.word_pack_id AS word_pack_id,
+                    wp.lemma AS lemma,
+                    wpe.category AS category,
+                    wpe.en AS en,
+                    wpe.ja AS ja,
+                    wpe.grammar_ja AS grammar_ja,
+                    wpe.created_at AS created_at,
+                    wp.updated_at AS pack_updated_at
+                FROM word_pack_examples wpe
+                JOIN word_packs wp ON wp.id = wpe.word_pack_id
+                {where_sql}
+                ORDER BY {order_col} {order_dir_sql}, wpe.id ASC
+                LIMIT ? OFFSET ?;
+                """,
+                tuple(params + [limit, offset]),
+            )
+            items: list[tuple[int, str, str, str, str, str | None, str, str | None]] = []
+            for r in cur.fetchall():
+                items.append(
+                    (
+                        int(r["id"]),
+                        r["word_pack_id"],
+                        r["lemma"],
+                        r["category"],
+                        r["en"],
+                        r["ja"],
+                        r["grammar_ja"],
+                        r["created_at"],
+                        r["pack_updated_at"],
+                    )
+                )
+            return items
+        finally:
+            conn.close()
+
 # Backward-compatibility alias (class name)
 SRSSQLiteStore = AppSQLiteStore
 
