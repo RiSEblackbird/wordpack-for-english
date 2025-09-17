@@ -88,10 +88,10 @@ export const ExampleListPanel: React.FC = () => {
     return next;
   });
 
-  const buildQuery = () => {
+  const buildQuery = (o: number) => {
     const sp = new URLSearchParams();
     sp.set('limit', String(limit));
-    sp.set('offset', String(offset));
+    sp.set('offset', String(o));
     sp.set('order_by', sortKey);
     sp.set('order_dir', sortOrder);
     if (appliedSearch && appliedSearch.value) {
@@ -102,14 +102,14 @@ export const ExampleListPanel: React.FC = () => {
     return sp.toString();
   };
 
-  const load = async (newOffset: number = 0) => {
+  const load = async (newOffset: number = offset) => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
     setMsg(null);
     try {
-      const q = buildQuery();
+      const q = buildQuery(newOffset);
       const res = await fetchJson<ExampleListResponse>(`${settings.apiBase}/word/examples?${q}`, { signal: ctrl.signal });
       setItems(res.items);
       setTotal(res.total);
