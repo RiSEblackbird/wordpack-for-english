@@ -3,6 +3,7 @@ import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { Modal } from './Modal';
+import { ListControls } from './ListControls';
 import { WordPackPanel } from './WordPackPanel';
 import { LoadingIndicator } from './LoadingIndicator';
 
@@ -447,75 +448,39 @@ export const WordPackListPanel: React.FC = () => {
           >リスト</button>
         </div>
 
-        <div className="wp-sort-controls">
-          <label htmlFor="sort-select">並び順:</label>
-          <select 
-            id="sort-select"
-            className="wp-sort-select"
-            value={sortKey}
-            onChange={(e) => handleSortChange(e.target.value as SortKey)}
-          >
-            <option value="updated_at">更新日時</option>
-            <option value="created_at">作成日時</option>
-            <option value="lemma">単語名</option>
-            <option value="total_examples">例文数</option>
-          </select>
-          <button 
-            className={`wp-sort-button ${sortOrder === 'desc' ? 'active' : ''}`}
-            onClick={() => setSortOrder('desc')}
-            title="降順"
-          >
-            ↓
-          </button>
-          <button 
-            className={`wp-sort-button ${sortOrder === 'asc' ? 'active' : ''}`}
-            onClick={() => setSortOrder('asc')}
-            title="昇順"
-          >
-            ↑
-          </button>
-          {/* ここから右側に追加機能（①表示絞り込み、②検索） */}
-          <label htmlFor="gen-filter" style={{ marginLeft: '0.5rem' }}>表示絞り込み:</label>
-          <select
-            id="gen-filter"
-            className="wp-filter-select"
-            value={generationFilter}
-            onChange={(e) => setGenerationFilter(e.target.value as any)}
-            aria-label="例文生成状況で絞り込み"
-          >
-            <option value="all">-</option>
-            <option value="generated">生成済</option>
-            <option value="not_generated">未生成</option>
-          </select>
-
-          <label htmlFor="search-mode" style={{ marginLeft: '0.5rem' }}>検索:</label>
-          <select
-            id="search-mode"
-            className="wp-filter-select"
-            value={searchMode}
-            onChange={(e) => setSearchMode(e.target.value as any)}
-            aria-label="検索方法"
-          >
-            <option value="prefix">前方一致</option>
-            <option value="suffix">後方一致</option>
-            <option value="contains">部分一致</option>
-          </select>
-          <input
-            type="text"
-            className="wp-search-input"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="検索する文字列"
-            aria-label="検索文字列"
-            onKeyDown={(e) => { if (e.key === 'Enter') handleApplySearch(); }}
-          />
-          <button
-            type="button"
-            className="wp-search-button"
-            onClick={handleApplySearch}
-            title="検索"
-          >検索</button>
-        </div>
+        <ListControls<SortKey>
+          sortKey={sortKey}
+          sortOptions={[
+            { value: 'updated_at', label: '更新日時' },
+            { value: 'created_at', label: '作成日時' },
+            { value: 'lemma', label: '単語名' },
+            { value: 'total_examples', label: '例文数' },
+          ]}
+          onChangeSortKey={(key) => handleSortChange(key)}
+          sortOrder={sortOrder}
+          onChangeSortOrder={setSortOrder}
+          searchMode={searchMode}
+          onChangeSearchMode={setSearchMode as any}
+          searchInput={searchInput}
+          onChangeSearchInput={setSearchInput}
+          onApplySearch={handleApplySearch}
+          filtersRight={(
+            <>
+              <label htmlFor="gen-filter" style={{ marginLeft: '0.5rem' }}>表示絞り込み:</label>
+              <select
+                id="gen-filter"
+                className="wp-filter-select"
+                value={generationFilter}
+                onChange={(e) => setGenerationFilter(e.target.value as any)}
+                aria-label="例文生成状況で絞り込み"
+              >
+                <option value="all">-</option>
+                <option value="generated">生成済</option>
+                <option value="not_generated">未生成</option>
+              </select>
+            </>
+          )}
+        />
 
         {loading && (
           <LoadingIndicator

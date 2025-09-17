@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WordPackPanel } from './components/WordPackPanel';
 import { WordPackListPanel } from './components/WordPackListPanel';
+import { ExampleListPanel } from './components/ExampleListPanel';
 import { ArticleImportPanel } from './components/ArticleImportPanel';
 import { ArticleListPanel } from './components/ArticleListPanel';
 import { SettingsProvider } from './SettingsContext';
@@ -10,7 +11,7 @@ import { NotificationsProvider } from './NotificationsContext';
 import { NotificationsOverlay } from './components/NotificationsOverlay';
 import { useSettings } from './SettingsContext';
 
-type Tab = 'wordpack' | 'article' | 'settings';
+type Tab = 'wordpack' | 'article' | 'examples' | 'settings';
 
 export const App: React.FC = () => {
   const [tab, setTab] = useState<Tab>('wordpack');
@@ -112,6 +113,7 @@ export const App: React.FC = () => {
         <nav>
           <button onClick={() => setTab('wordpack')} aria-selected={tab === 'wordpack'}>WordPack</button>
           <button onClick={() => setTab('article')} aria-selected={tab === 'article'}>文章インポート</button>
+          <button onClick={() => setTab('examples')} aria-selected={tab === 'examples'}>例文一覧</button>
           <button onClick={() => setTab('settings')} aria-selected={tab === 'settings'}>設定</button>
         </nav>
         <main>
@@ -134,6 +136,11 @@ export const App: React.FC = () => {
               <ArticleImportPanel />
               <hr />
               <ArticleListPanel />
+            </>
+          )}
+          {tab === 'examples' && (
+            <>
+              <ExampleListPanel />
             </>
           )}
         </main>
