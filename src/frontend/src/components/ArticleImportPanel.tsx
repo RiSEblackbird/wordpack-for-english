@@ -18,7 +18,7 @@ interface ArticleWordPackLink {
 type ArticleDetailResponse = ArticleDetailData;
 
 export const ArticleImportPanel: React.FC = () => {
-  const { settings } = useSettings();
+  const { settings, setSettings } = useSettings();
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
   const [text, setText] = useState('');
@@ -32,6 +32,8 @@ export const ArticleImportPanel: React.FC = () => {
   const [category, setCategory] = useState<'Dev'|'CS'|'LLM'|'Business'|'Common'>('Common');
   const abortRef = useRef<AbortController | null>(null);
 
+  const [model, setModel] = useState<string>('gpt-5-mini');
+
   const importArticle = async () => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -42,6 +44,14 @@ export const ArticleImportPanel: React.FC = () => {
     const notifId = addNotification({ title: '文章インポート中...', message: 'LLMで要約と語彙抽出を実行しています', status: 'progress' });
     try {
       const body: any = { text: text.trim() };
+      // WordPackPanel と同様のモデル選択ロジック
+      body.model = model;
+      if ((model || '').toLowerCase() === 'gpt-5-mini') {
+        body.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+        body.text_opts = { verbosity: settings.textVerbosity || 'medium' };
+      } else {
+        body.temperature = settings.temperature;
+      }
       const res = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/import`, {
         method: 'POST',
         body,
@@ -149,7 +159,7 @@ export const ArticleImportPanel: React.FC = () => {
           onChange={(e) => setText(e.target.value)}
           disabled={loading}
         />
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <button onClick={importArticle} disabled={loading || !text.trim()}>インポート</button>
           <select value={category} onChange={(e) => setCategory(e.target.value as any)}>
             <option value="Dev">Dev</option>
@@ -165,9 +175,18 @@ export const ArticleImportPanel: React.FC = () => {
               setGenRunning((n) => n + 1);
               const notifId = addNotification({ title: `【${category}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress' });
               try {
+                const reqBody: any = { category };
+                // generate_and_import は text キーで受け取る
+                reqBody.model = model;
+                if ((model || '').toLowerCase() === 'gpt-5-mini') {
+                  reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+                  reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
+                } else {
+                  reqBody.temperature = settings.temperature;
+                }
                 const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
                   method: 'POST',
-                  body: { category },
+                  body: reqBody,
                   // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
                   timeoutMs: settings.requestTimeoutMs,
                 });
@@ -185,6 +204,45 @@ export const ArticleImportPanel: React.FC = () => {
           >
             生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
           </button>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            モデル
+            <select value={model} onChange={(e) => setModel(e.target.value)} disabled={loading}>
+              <option value="gpt-5-mini">gpt-5-mini</option>
+              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+            </select>
+          </label>
+          {(model || '').toLowerCase() === 'gpt-5-mini' && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                reasoning.effort
+                <select
+                  aria-label="reasoning.effort"
+                  value={settings.reasoningEffort || 'minimal'}
+                  onChange={(e) => setSettings({ ...settings, reasoningEffort: e.target.value as any })}
+                  disabled={loading}
+                >
+                  <option value="minimal">minimal</option>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </label>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                text.verbosity
+                <select
+                  aria-label="text.verbosity"
+                  value={settings.textVerbosity || 'medium'}
+                  onChange={(e) => setSettings({ ...settings, textVerbosity: e.target.value as any })}
+                  disabled={loading}
+                >
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </label>
+            </div>
+          )}
         </div>
         {msg && <div role={msg.kind}>{msg.text}</div>}
       </div>
