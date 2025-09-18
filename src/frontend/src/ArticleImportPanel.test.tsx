@@ -37,6 +37,8 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
             title_en: 'Title',
             body_en: 'Body EN',
             body_ja: 'Body JA',
+            llm_model: 'gpt-5-mini',
+            llm_params: 'reasoning.effort=minimal;text.verbosity=medium',
             related_word_packs: [],
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },

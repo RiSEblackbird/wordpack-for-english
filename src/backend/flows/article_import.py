@@ -31,6 +31,8 @@ class _ArticleState(TypedDict, total=False):
     body_en: str
     body_ja: str
     notes_ja: Optional[str]
+    llm_model: Optional[str]
+    llm_params: Optional[str]
     created_at: str
     updated_at: str
 
@@ -154,6 +156,21 @@ Input:
             reasoning_override=getattr(req, "reasoning", None),
             text_override=getattr(req, "text_opts", None),
         )
+        # UI/契約と整合する LLM パラメータ表示用の簡易連結
+        def _fmt_llm_params() -> str | None:
+            parts: list[str] = []
+            try:
+                if getattr(req, 'temperature', None) is not None:
+                    parts.append(f"temperature={float(req.temperature):.2f}")
+                r = getattr(req, 'reasoning', None) or {}
+                if isinstance(r, dict) and r.get('effort'):
+                    parts.append(f"reasoning.effort={r.get('effort')}")
+                t = getattr(req, 'text_opts', None) or {}
+                if isinstance(t, dict) and t.get('verbosity'):
+                    parts.append(f"text.verbosity={t.get('verbosity')}")
+            except Exception:
+                pass
+            return ";".join(parts) if parts else None
 
         original_text = req.text.strip()
 
@@ -315,6 +332,8 @@ Input:
                 body_en = original_text  # 英語原文はそのまま
                 body_ja = str(s.get("body_ja") or "").strip()
                 notes_ja = str(s.get("notes_ja") or "").strip() or None
+                llm_model = str(s.get("llm_model") or "").strip() or None
+                llm_params = str(s.get("llm_params") or "").strip() or None
 
                 with span(trace=None, name="article.save_article"):
                     article_id = f"art:{uuid.uuid4().hex[:12]}"
@@ -327,6 +346,8 @@ Input:
                         body_en=body_en,
                         body_ja=body_ja,
                         notes_ja=notes_ja,
+                        llm_model=llm_model,
+                        llm_params=llm_params,
                         related_word_packs=[(l.word_pack_id, l.lemma, l.status) for l in s.get("links", [])],
                     )
                     meta = store.get_article(article_id)
@@ -383,6 +404,12 @@ Input:
                 s = _generate_lemmas(s)
                 s = _filter_lemmas(s)
                 s = _link_or_create_wordpacks(s)
+                # LLM 情報を state に反映
+                try:
+                    s["llm_model"] = getattr(req, 'model', None) or settings.llm_model
+                    s["llm_params"] = _fmt_llm_params()
+                except Exception:
+                    pass
                 s = _save_article(s)
         except Exception:
             # グラフ初期化失敗時の最終フォールバック
@@ -393,6 +420,12 @@ Input:
             s = _generate_lemmas(s)  # type: ignore[name-defined]
             s = _filter_lemmas(s)  # type: ignore[name-defined]
             s = _link_or_create_wordpacks(s)  # type: ignore[name-defined]
+            # LLM 情報を state に反映
+            try:
+                s["llm_model"] = getattr(req, 'model', None) or settings.llm_model
+                s["llm_params"] = _fmt_llm_params()
+            except Exception:
+                pass
             s = _save_article(s)  # type: ignore[name-defined]
 
         # 最終応答は保存済みのDB値を読み直して返す（同期ズレ防止）。失敗時は明確にエラーを返す。
@@ -413,7 +446,7 @@ Input:
                         "diagnostics": {"article_id": aid},
                     },
                 )
-            title_en, body_en_db, body_ja_db, notes_ja_db, created_at, updated_at, links = got
+            title_en, body_en_db, body_ja_db, notes_ja_db, llm_model_db, llm_params_db, created_at, updated_at, links = got
             link_models: list[ArticleWordPackLink] = [
                 ArticleWordPackLink(word_pack_id=wp, lemma=lm, status=st, is_empty=True) for (wp, lm, st) in links
             ]
@@ -444,6 +477,8 @@ Input:
                 body_en=body_en_db,
                 body_ja=body_ja_db,
                 notes_ja=(notes_ja_db or None),
+                llm_model=(llm_model_db or None),
+                llm_params=(llm_params_db or None),
                 related_word_packs=link_models,
                 created_at=created_at,
                 updated_at=updated_at,

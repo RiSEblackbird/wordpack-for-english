@@ -34,6 +34,9 @@ class Article(BaseModel):
     body_en: str
     body_ja: str
     notes_ja: Optional[str] = None
+    # LLM 情報（任意）
+    llm_model: Optional[str] = None
+    llm_params: Optional[str] = None
     related_word_packs: List[ArticleWordPackLink] = Field(default_factory=list)
 
 

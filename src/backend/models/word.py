@@ -193,6 +193,9 @@ class WordPack(BaseModel):
     study_card: str
     citations: List[Citation] = Field(default_factory=list)
     confidence: ConfidenceLevel = ConfidenceLevel.low
+    # 生成に使用したAIのメタ（任意）
+    llm_model: Optional[str] = Field(default=None)
+    llm_params: Optional[str] = Field(default=None)
 
 
 class WordPackListItem(BaseModel):

@@ -156,6 +156,8 @@ class AppSQLiteStore:
                         body_en TEXT NOT NULL,
                         body_ja TEXT NOT NULL,
                         notes_ja TEXT,
+                        llm_model TEXT,
+                        llm_params TEXT,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
                     );
@@ -163,6 +165,15 @@ class AppSQLiteStore:
                 )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title_en);")
+                # 既存DBに列を追加（後方互換マイグレーション）
+                try:
+                    conn.execute("ALTER TABLE articles ADD COLUMN llm_model TEXT;")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE articles ADD COLUMN llm_params TEXT;")
+                except Exception:
+                    pass
                 # Article と WordPack の関連（多対多）
                 conn.execute(
                     """
@@ -736,6 +747,8 @@ class AppSQLiteStore:
         body_en: str,
         body_ja: str,
         notes_ja: str | None,
+        llm_model: str | None = None,
+        llm_params: str | None = None,
         related_word_packs: list[tuple[str, str, str]] | None = None,
     ) -> None:
         """記事を保存（upsert）し、関連WordPackリンクも置き換える。
@@ -749,9 +762,9 @@ class AppSQLiteStore:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO articles(
-                        id, title_en, body_en, body_ja, notes_ja, created_at, updated_at
+                        id, title_en, body_en, body_ja, notes_ja, llm_model, llm_params, created_at, updated_at
                     ) VALUES (
-                        ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?,
                         COALESCE((SELECT created_at FROM articles WHERE id = ?), ?),
                         ?
                     );
@@ -762,6 +775,8 @@ class AppSQLiteStore:
                         body_en,
                         body_ja,
                         (notes_ja or ""),
+                        (llm_model or None),
+                        (llm_params or None),
                         article_id,
                         now,
                         now,
@@ -780,15 +795,15 @@ class AppSQLiteStore:
         finally:
             conn.close()
 
-    def get_article(self, article_id: str) -> Optional[tuple[str, str, str, str, str, str, list[tuple[str, str, str]]]]:
+    def get_article(self, article_id: str) -> Optional[tuple[str, str, str, str | None, str | None, str, str, list[tuple[str, str, str]]]]:
         """記事を取得し、関連WordPackリンク一覧を返す。
 
-        戻り値: (title_en, body_en, body_ja, notes_ja, created_at, updated_at, [(word_pack_id, lemma, status)])
+        戻り値: (title_en, body_en, body_ja, notes_ja, llm_model, llm_params, created_at, updated_at, [(word_pack_id, lemma, status)])
         """
         conn = self._connect()
         try:
             cur = conn.execute(
-                "SELECT title_en, body_en, body_ja, notes_ja, created_at, updated_at FROM articles WHERE id = ?;",
+                "SELECT title_en, body_en, body_ja, notes_ja, llm_model, llm_params, created_at, updated_at FROM articles WHERE id = ?;",
                 (article_id,),
             )
             row = cur.fetchone()
@@ -809,6 +824,8 @@ class AppSQLiteStore:
                 row["body_en"],
                 row["body_ja"],
                 row["notes_ja"],
+                row["llm_model"],
+                row["llm_params"],
                 row["created_at"],
                 row["updated_at"],
                 links,

@@ -123,7 +123,7 @@ async def get_article(article_id: str) -> ArticleDetailResponse:
     result = store.get_article(article_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Article not found")
-    title_en, body_en, body_ja, notes_ja, created_at, updated_at, links = result
+    title_en, body_en, body_ja, notes_ja, llm_model, llm_params, created_at, updated_at, links = result
     link_models: list[ArticleWordPackLink] = []
     for (wp_id, lemma, status) in links:
         is_empty = True
@@ -146,6 +146,8 @@ async def get_article(article_id: str) -> ArticleDetailResponse:
         body_en=body_en,
         body_ja=body_ja,
         notes_ja=notes_ja,
+        llm_model=llm_model,
+        llm_params=llm_params,
         related_word_packs=link_models,
         created_at=created_at,
         updated_at=updated_at,
