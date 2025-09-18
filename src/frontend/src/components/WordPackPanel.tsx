@@ -42,7 +42,7 @@ interface Collocations { general: CollocationLists; academic: CollocationLists }
 
 interface ContrastItem { with: string; diff_ja: string }
 
-interface ExampleItem { en: string; ja: string; grammar_ja?: string }
+interface ExampleItem { en: string; ja: string; grammar_ja?: string; llm_model?: string; llm_params?: string }
 interface Examples { Dev: ExampleItem[]; CS: ExampleItem[]; LLM: ExampleItem[]; Business: ExampleItem[]; Common: ExampleItem[] }
 
 interface Etymology { note: string; confidence: 'low' | 'medium' | 'high' }
@@ -78,6 +78,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [sessionStartAt] = useState<Date>(new Date());
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
   const [model, setModel] = useState<string>('gpt-5-mini');
+  // 直近のAIメタ（一覧メタ or 例文メタから推定表示）
+  const [aiMeta, setAiMeta] = useState<{ model?: string | null; params?: string | null } | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const mountedRef = useRef(true);
   const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
@@ -233,6 +235,19 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       });
       setData(res);
       setCurrentWordPackId(wordPackId);
+      // 例文に付与された llm_model/llm_params からAI情報を推測
+      try {
+        const cats: (keyof Examples)[] = ['Dev','CS','LLM','Business','Common'];
+        for (const c of cats) {
+          const arr = (res as any)?.examples?.[c] || [];
+          for (const it of arr) {
+            if (it && (it as any).llm_model) {
+              setAiMeta({ model: (it as any).llm_model || null, params: (it as any).llm_params || null });
+              throw new Error('break');
+            }
+          }
+        }
+      } catch {}
     } catch (e) {
       if (ctrl.signal.aborted) return;
       let m = e instanceof ApiError ? e.message : 'WordPackの読み込みに失敗しました';
@@ -495,6 +510,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             <div className="kv" style={{ marginBottom: '0.5rem', fontSize: '0.7em' }}>
               <div>作成</div><div>{formatDate(selectedMeta.created_at)}</div>
               <div>更新</div><div>{formatDate(selectedMeta.updated_at)}</div>
+              {aiMeta?.model ? (<><div>AIモデル</div><div>{aiMeta.model}</div></>) : null}
+              {aiMeta?.params ? (<><div>AIパラメータ</div><div>{aiMeta.params}</div></>) : null}
             </div>
           ) : null}
           <div style={{ marginTop: '0.75rem', padding: '0.75rem', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: '8px' }}>

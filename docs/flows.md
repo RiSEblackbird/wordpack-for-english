@@ -25,7 +25,7 @@ graph TD
     EX --> LM[Lemma Subgraph: generate_lemmas];
     LM --> FL[filter_lemmas: 句優先/機能語除外/記号除外/重複排除];
     FL --> LC[link_or_create: 既存WordPack紐付け/なければ空パック作成];
-    LC --> SA[save_article: 記事保存・メタ取得];
+    LC --> SA[save_article: 記事保存・メタ取得（llm_model/llm_paramsを含む）];
     SA --> R[ArticleDetailResponse];
 
     subgraph Langfuse Spans

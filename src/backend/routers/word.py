@@ -146,6 +146,15 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
             )
         )
         
+        # 生成に使用した LLM 情報を WordPack に反映
+        try:
+            if getattr(word_pack, 'llm_model', None) is None:
+                setattr(word_pack, 'llm_model', llm_info.get('model'))
+            if getattr(word_pack, 'llm_params', None) is None:
+                setattr(word_pack, 'llm_params', llm_info.get('params'))
+        except Exception:
+            pass
+        
         # WordPackをデータベースに保存
         word_pack_id = f"wp:{req.lemma}:{uuid.uuid4().hex[:8]}"
         word_pack_data = word_pack.model_dump_json()
@@ -348,6 +357,15 @@ async def regenerate_word_pack(
                 regenerate_scope=req.regenerate_scope,
             )
         )
+        
+        # 生成に使用した LLM 情報を反映
+        try:
+            if getattr(word_pack, 'llm_model', None) is None:
+                setattr(word_pack, 'llm_model', llm_info.get('model'))
+            if getattr(word_pack, 'llm_params', None) is None:
+                setattr(word_pack, 'llm_params', llm_info.get('params'))
+        except Exception:
+            pass
         
         # 再生成されたWordPackをデータベースに保存（既存のIDで上書き）
         word_pack_data = word_pack.model_dump_json()

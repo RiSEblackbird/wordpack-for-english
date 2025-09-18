@@ -14,6 +14,9 @@ export interface ArticleDetailData {
   body_en: string;
   body_ja: string;
   notes_ja?: string | null;
+  // 生成に使用したAI情報（任意）
+  llm_model?: string | null;
+  llm_params?: string | null;
   related_word_packs: ArticleWordPackLink[];
   created_at?: string;
   updated_at?: string;
@@ -71,6 +74,12 @@ export const ArticleDetailModal: React.FC<Props> = ({
           <div style={{ whiteSpace: 'pre-wrap', margin: '0.5rem 0' }}>{article.body_ja}</div>
           {article.notes_ja ? (
             <div style={{ marginTop: '0.5rem', color: 'var(--color-subtle)' }}>{article.notes_ja}</div>
+          ) : null}
+          {(article.llm_model || article.llm_params) ? (
+            <div className="kv" style={{ marginTop: '0.5rem', fontSize: '0.8em', color: 'var(--color-subtle)' }}>
+              {article.llm_model ? (<><div>AIモデル</div><div>{article.llm_model}</div></>) : null}
+              {article.llm_params ? (<><div>AIパラメータ</div><div>{article.llm_params}</div></>) : null}
+            </div>
           ) : null}
           <h4>関連WordPack</h4>
           <div className="ai-wp-grid">

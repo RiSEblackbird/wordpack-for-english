@@ -94,6 +94,7 @@ describe('WordPackListPanel modal preview', () => {
             study_card: `study of delta`,
             citations: [{ text: 'citation' }],
             confidence: 'medium',
+            // For UI rendering of AI info under 更新 row (from list meta)
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
@@ -131,6 +132,7 @@ describe('WordPackListPanel modal preview', () => {
             study_card: `study of alpha`,
             citations: [{ text: 'citation' }],
             confidence: 'medium',
+            // For UI rendering of AI info under 更新 row (from list meta)
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );

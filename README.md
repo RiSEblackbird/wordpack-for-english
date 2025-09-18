@@ -91,13 +91,19 @@ docker compose up --build
 注意:
 - コンテナ内のバックエンドは常にコンテナ内ポート `8000` で待ち受けます（ヘルスチェックも `http://127.0.0.1:8000/healthz`）。ホスト側での公開ポートのみ `BACKEND_PORT` で変更されます。
 
-OpenAI LLM統合:
+OpenAI LLM統合（Responses API）:
 - 既定: `LLM_PROVIDER=openai`, `LLM_MODEL=gpt-4o-mini`。
-- OpenAI LLMが直接生成（語義/用例/フィードバック）。
-- `.env` の `LLM_MAX_TOKENS` を調整（推奨1500、JSON途切れ防止）。
-- 設定タブに `temperature`（0.0–1.0、既定0.6）。
-- WordPackでモデル選択（gpt-4.1-mini / gpt-5-mini / gpt-4o-mini）。選択モデルと `temperature` をAPIへ（未指定は既定）。
-- 注意: 現在は Chat Completions。`gpt-5-mini` の `reasoning`/`text` は未適用。安定は `gpt-4o-mini` 推奨。
+- WordPack/文章インポートは OpenAI Responses API ベースで生成。
+- `.env` の `LLM_MAX_TOKENS` を調整（推奨1500、JSON途中切れ防止）。
+- UIのモデル選択（gpt-4.1-mini / gpt-5-mini / gpt-4o-mini）に応じて送信パラメータが変化:
+  - gpt-5-mini（推論系）: `reasoning.effort`, `text.verbosity`（`temperature` は通常未使用）
+  - gpt-4.1-mini / gpt-4o-mini（sampling系）: `temperature`（設定タブの値）
+  - 未指定時はサーバ既定を使用
+  - SDK未対応のパラメータは自動で外して再試行
+
+LLM メタ情報の保存/返却:
+- WordPack: 生成/再生成時に使用した `llm_model`/`llm_params` をレスポンスに含め、DBへ保存
+- 文章（Article）: インポート時に使用した `llm_model`/`llm_params` を保存し、`GET /api/article/{id}` で返却
 
 ---
 
