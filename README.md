@@ -95,8 +95,8 @@ OpenAI LLM統合（Responses API）:
 - 既定: `LLM_PROVIDER=openai`, `LLM_MODEL=gpt-4o-mini`。
 - WordPack/文章インポートは OpenAI Responses API ベースで生成。
 - `.env` の `LLM_MAX_TOKENS` を調整（推奨1500、JSON途中切れ防止）。
-- UIのモデル選択（gpt-4.1-mini / gpt-5-mini / gpt-4o-mini）に応じて送信パラメータが変化:
-  - gpt-5-mini（推論系）: `reasoning.effort`, `text.verbosity`（`temperature` は通常未使用）
+- UIのモデル選択（gpt-4.1-mini / gpt-5-mini / gpt-5-nano / gpt-4o-mini）に応じて送信パラメータが変化:
+  - gpt-5-mini / gpt-5-nano（推論系）: `reasoning.effort`, `text.verbosity`（`temperature` は通常未使用）
   - gpt-4.1-mini / gpt-4o-mini（sampling系）: `temperature`（設定タブの値）
   - 未指定時はサーバ既定を使用
   - SDK未対応のパラメータは自動で外して再試行
@@ -295,7 +295,7 @@ FastAPI アプリは `src/backend/main.py`。
 - `POST /api/word/packs/{word_pack_id}/examples/{category}/generate`（新）
   - 保存済みWordPackに、指定カテゴリの例文を「2件」追加生成し保存します。
   - 生成時は入力トークン削減のため、既存の例文データをプロンプトに含めません。
-  - リクエスト例: `{ "model": "gpt-5-mini", "reasoning": { "effort": "minimal" }, "text": { "verbosity": "medium" } }`
+  - リクエスト例: `{ "model": "gpt-5-mini", "reasoning": { "effort": "minimal" }, "text": { "verbosity": "medium" } }` または `{ "model": "gpt-5-nano", "reasoning": { "effort": "minimal" }, "text": { "verbosity": "medium" } }`
   - レスポンス例: `{ "message": "Examples generated and appended", "added": 2, "category": "Dev", "items": [{"en":"...","ja":"..."}] }`
   - `model/temperature/reasoning/text` は任意。未指定時はサーバ既定（環境変数）を使用。
 

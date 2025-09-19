@@ -174,7 +174,7 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
                 raise
 
         # 単一スパン内で最適解を選んで1回で成功させる（必要時のみ内部で軽微な再試行）
-        is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini"}
+        is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini", "gpt-5-nano"}
         lf_trace = getattr(get_langfuse(), "trace", None)
         # Langfuse: 入力ログは設定に応じて全文 or プレビュー
         try:

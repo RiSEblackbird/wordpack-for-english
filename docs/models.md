@@ -4,17 +4,17 @@
 
 ## 本プロジェクトで制御できるパラメータ（Responses API）
 - gpt-4o-mini / gpt-4.1-mini: `temperature`, `max_output_tokens`（= `.env: LLM_MAX_TOKENS`）
-- gpt-5-mini: `reasoning.effort`, `text.verbosity`, `max_output_tokens`（`temperature` は通常無効）
+- gpt-5-mini / gpt-5-nano: `reasoning.effort`, `text.verbosity`, `max_output_tokens`（`temperature` は通常無効）
 
-**結論**: gpt-5-mini は推論系（reasoning）モデルで、Responses API で `reasoning`/`text` を利用します。gpt-4.1-mini と gpt-4o-mini は従来どおり `temperature` が有効です。
+**結論**: gpt-5-mini / gpt-5-nano は推論系（reasoning）モデルで、Responses API で `reasoning`/`text` を利用します。gpt-4.1-mini と gpt-4o-mini は従来どおり `temperature` が有効です。
 
-UI補足: フロントで `gpt-5-mini` を選択した場合は `reasoning.effort`/`text.verbosity` がバックエンドに渡され有効化されます。非推論系では `temperature` が有効です。
+UI補足: フロントで `gpt-5-mini` または `gpt-5-nano` を選択した場合は `reasoning.effort`/`text.verbosity` がバックエンドに渡され有効化されます。非推論系では `temperature` が有効です。
 
 ---
 
 ## モデル別の設定例
 
-### gpt-5-mini（reasoning系：`temperature`は通常無効）
+### gpt-5-mini / gpt-5-nano（reasoning系：`temperature`は通常無効）
 ```json
 {
   "model": "gpt-5-mini",
@@ -44,7 +44,7 @@ UI補足: フロントで `gpt-5-mini` を選択した場合は `reasoning.effor
 
 ## 80語×10文タスク向けの微調整ヒント
 - 語数の安定化: Responses API の Structured Outputs や JSON スキーマで `minItems=10`/`maxItems=10`、各文 `word_count` を 70–90 などで制約すると安定します（どのモデルでも可）。
-- gpt-5-mini を使うときは `temperature` ではなく `reasoning.effort` を段階的に上げ下げして文のまとまり・一貫性を調整（例: `minimal`→高速量産、`low/medium`→表現の精緻化）。
+- gpt-5-mini / gpt-5-nano を使うときは `temperature` ではなく `reasoning.effort` を段階的に上げ下げして文のまとまり・一貫性を調整（例: `minimal`→高速量産、`low/medium`→表現の精緻化）。
 
 ---
 

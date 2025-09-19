@@ -47,7 +47,7 @@ export async function regenerateWordPackRequest(params: {
       regenerate_scope: settings.regenerateScope,
       model,
     };
-    if ((model || '').toLowerCase() === 'gpt-5-mini') {
+    if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
       body.reasoning = { effort: settings.reasoningEffort || 'minimal' };
       body.text = { verbosity: settings.textVerbosity || 'medium' };
     } else {

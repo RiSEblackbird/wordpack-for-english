@@ -115,6 +115,43 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(genBodies.some((b) => b.model === 'gpt-5-mini' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
   });
+
+  it('sends reasoning params for gpt-5-nano on both import and generate_and_import', async () => {
+    const fetchMock = setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '文章インポート' }));
+    });
+
+    const modelSelect = await screen.findByLabelText('モデル');
+    await act(async () => {
+      await user.selectOptions(modelSelect, 'gpt-5-nano');
+    });
+    // 追加UIが表示される
+    expect(screen.getByLabelText('reasoning.effort')).toBeInTheDocument();
+    expect(screen.getByLabelText('text.verbosity')).toBeInTheDocument();
+
+    const textarea = screen.getByPlaceholderText('文章を貼り付け（日本語/英語）');
+    await act(async () => {
+      await user.type(textarea, 'hello world nano');
+      await user.click(screen.getByRole('button', { name: 'インポート' }));
+    });
+
+    const importBodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/import') : ((c[0] as URL).toString().endsWith('/api/article/import'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(importBodies.some((b) => b.model === 'gpt-5-nano' && b.reasoning && b.text_opts && !('temperature' in b))).toBe(true);
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /生成＆インポート/ }));
+    });
+    const genBodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/generate_and_import') : ((c[0] as URL).toString().endsWith('/api/article/generate_and_import'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(genBodies.some((b) => b.model === 'gpt-5-nano' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
+  });
 });
 
 
