@@ -32,7 +32,7 @@ export const ArticleImportPanel: React.FC = () => {
   const [category, setCategory] = useState<'Dev'|'CS'|'LLM'|'Business'|'Common'>('Common');
   const abortRef = useRef<AbortController | null>(null);
 
-  const [model, setModel] = useState<string>('gpt-5-mini');
+  const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
 
   const importArticle = async () => {
     abortRef.current?.abort();
@@ -98,7 +98,7 @@ export const ArticleImportPanel: React.FC = () => {
           reasoningEffort: settings.reasoningEffort,
           textVerbosity: settings.textVerbosity,
         },
-        model: 'gpt-5-mini',
+        model,
         lemma,
         notify: { add: addNotification, update: updateNotification },
         abortSignal: ctrl.signal,
@@ -206,7 +206,11 @@ export const ArticleImportPanel: React.FC = () => {
           </button>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             モデル
-            <select value={model} onChange={(e) => setModel(e.target.value)} disabled={loading}>
+            <select
+              value={model}
+              onChange={(e) => { const v = e.target.value; setModel(v); setSettings({ ...settings, model: v }); }}
+              disabled={loading}
+            >
               <option value="gpt-5-mini">gpt-5-mini</option>
               <option value="gpt-5-nano">gpt-5-nano</option>
               <option value="gpt-4.1-mini">gpt-4.1-mini</option>

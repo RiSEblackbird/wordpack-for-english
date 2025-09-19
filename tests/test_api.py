@@ -45,6 +45,31 @@ def test_word_pack(client):
     assert "citations" in body and "confidence" in body
 
 
+def test_word_pack_llm_model_updates_on_generate_and_regenerate(client):
+    # 1) 生成時に model を上書きし、llm_model に反映されること
+    r_gen = client.post("/api/word/pack", json={"lemma": "alpha", "model": "gpt-4o-mini", "temperature": 0.5})
+    assert r_gen.status_code == 200
+    wp = r_gen.json()
+    assert wp.get("llm_model") == "gpt-4o-mini"
+    # 2) 保存済み一覧から ID を取得
+    r_list = client.get("/api/word/packs")
+    assert r_list.status_code == 200
+    items = r_list.json().get("items", [])
+    pack_id = next((it["id"] for it in items if it.get("lemma") == "alpha"), None)
+    assert pack_id, "generated pack not found"
+    # 3) 再生成で model を別値に上書きし、llm_model が更新されること
+    r_regen = client.post(f"/api/word/packs/{pack_id}/regenerate", json={
+        "pronunciation_enabled": True,
+        "regenerate_scope": "all",
+        "model": "gpt-5-nano",
+        "reasoning": {"effort": "minimal"},
+        "text": {"verbosity": "medium"},
+    })
+    assert r_regen.status_code == 200
+    wp2 = r_regen.json()
+    assert wp2.get("llm_model") == "gpt-5-nano"
+
+
 def test_word_lookup(client):
     resp = client.get("/api/word")
     assert resp.status_code == 200

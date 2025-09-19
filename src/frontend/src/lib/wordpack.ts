@@ -33,24 +33,26 @@ export async function regenerateWordPackRequest(params: {
   abortSignal?: AbortSignal;
   messages?: RegenerateWordPackMessages;
 }): Promise<void> {
-  const { apiBase, wordPackId, settings, model = 'gpt-5-mini', lemma = 'WordPack', notify, abortSignal, messages } = params;
+  const { apiBase, wordPackId, settings, model, lemma = 'WordPack', notify, abortSignal, messages } = params;
 
   const notifId = notify.add({
     title: `【${lemma}】の生成処理中...`,
     message: messages?.progress || '処理を実行しています（LLM応答の受信と解析を待機中）',
     status: 'progress',
+    model: model || undefined,
   });
 
   try {
     const body: any = {
       pronunciation_enabled: settings.pronunciationEnabled,
       regenerate_scope: settings.regenerateScope,
-      model,
+      // モデル未指定時はサーバ既定に任せる（キー自体を省略）
+      ...(model ? { model } : {}),
     };
     if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
       body.reasoning = { effort: settings.reasoningEffort || 'minimal' };
       body.text = { verbosity: settings.textVerbosity || 'medium' };
-    } else {
+    } else if (model) {
       body.temperature = settings.temperature;
     }
 
@@ -62,11 +64,11 @@ export async function regenerateWordPackRequest(params: {
       timeoutMs: settings.requestTimeoutMs,
     });
 
-    notify.update(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: messages?.success || '処理が完了しました' });
+    notify.update(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: messages?.success || '処理が完了しました', model: model || undefined });
     try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
   } catch (e) {
     const m = messages?.failure || (e instanceof ApiError ? e.message : '処理に失敗しました');
-    notify.update(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: m });
+    notify.update(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: m, model: model || undefined });
     throw e;
   }
 }
