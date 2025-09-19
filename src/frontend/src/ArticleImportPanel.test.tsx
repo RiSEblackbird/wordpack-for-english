@@ -84,7 +84,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/import') : ((c[0] as URL).toString().endsWith('/api/article/import'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(calls.length).toBeGreaterThan(0);
-    expect(calls.some((b) => b.model === 'gpt-4o-mini' && typeof b.temperature === 'number' && !('reasoning' in b) && !('text_opts' in b) === false)).toBe(true);
+    expect(calls.some((b) => b.model === 'gpt-4o-mini' && typeof b.temperature === 'number' && !('reasoning' in b) && !('text_opts' in b))).toBe(true);
   });
 
   it('sends reasoning/text_opts for gpt-5-mini on import, and reasoning/text on generate_and_import', async () => {
