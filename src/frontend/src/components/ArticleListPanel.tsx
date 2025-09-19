@@ -129,7 +129,8 @@ export const ArticleListPanel: React.FC = () => {
           reasoningEffort: settings.reasoningEffort,
           textVerbosity: settings.textVerbosity,
         },
-        model: 'gpt-5-mini',
+        // 設定からモデルを渡す（未設定ならサーバ既定に委ねる）
+        model: settings.model,
         lemma,
         notify: { add: addNotification, update: updateNotification },
         abortSignal: ctrl.signal,

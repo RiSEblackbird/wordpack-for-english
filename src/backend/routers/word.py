@@ -146,12 +146,10 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
             )
         )
         
-        # 生成に使用した LLM 情報を WordPack に反映
+        # 生成に使用した LLM 情報を WordPack に反映（常に最新で上書き）
         try:
-            if getattr(word_pack, 'llm_model', None) is None:
-                setattr(word_pack, 'llm_model', llm_info.get('model'))
-            if getattr(word_pack, 'llm_params', None) is None:
-                setattr(word_pack, 'llm_params', llm_info.get('params'))
+            setattr(word_pack, 'llm_model', llm_info.get('model'))
+            setattr(word_pack, 'llm_params', llm_info.get('params'))
         except Exception:
             pass
         
@@ -358,12 +356,10 @@ async def regenerate_word_pack(
             )
         )
         
-        # 生成に使用した LLM 情報を反映
+        # 生成に使用した LLM 情報を反映（常に最新で上書き）
         try:
-            if getattr(word_pack, 'llm_model', None) is None:
-                setattr(word_pack, 'llm_model', llm_info.get('model'))
-            if getattr(word_pack, 'llm_params', None) is None:
-                setattr(word_pack, 'llm_params', llm_info.get('params'))
+            setattr(word_pack, 'llm_model', llm_info.get('model'))
+            setattr(word_pack, 'llm_params', llm_info.get('params'))
         except Exception:
             pass
         

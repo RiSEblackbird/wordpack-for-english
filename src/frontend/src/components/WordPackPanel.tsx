@@ -77,7 +77,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const abortRef = useRef<AbortController | null>(null);
   const [sessionStartAt] = useState<Date>(new Date());
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
-  const [model, setModel] = useState<string>('gpt-5-mini');
+  const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
   // 直近のAIメタ（一覧メタ or 例文メタから推定表示）
   const [aiMeta, setAiMeta] = useState<{ model?: string | null; params?: string | null } | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -145,7 +145,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             regenerate_scope: settings.regenerateScope,
             model,
           };
-          if ((model || '').toLowerCase() === 'gpt-5-mini') {
+          if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
             base.reasoning = { effort: settings.reasoningEffort || 'minimal' };
             base.text = { verbosity: settings.textVerbosity || 'medium' };
           } else {
@@ -411,7 +411,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         method: 'POST',
         body: (() => {
           const base: any = { model };
-          if ((model || '').toLowerCase() === 'gpt-5-mini') {
+          if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
             base.reasoning = { effort: settings.reasoningEffort || 'minimal' };
             base.text = { verbosity: settings.textVerbosity || 'medium' };
           } else {
@@ -827,13 +827,18 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           <button onClick={createEmpty} disabled={!lemma.trim()} title="内容の生成を行わず、空のWordPackのみ保存">WordPackのみ作成</button>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             モデル
-            <select value={model} onChange={(e) => setModel(e.target.value)} disabled={loading}>
+            <select
+              value={model}
+              onChange={(e) => { const v = e.target.value; setModel(v); setSettings({ ...settings, model: v }); }}
+              disabled={loading}
+            >
               <option value="gpt-5-mini">gpt-5-mini</option>
+              <option value="gpt-5-nano">gpt-5-nano</option>
               <option value="gpt-4.1-mini">gpt-4.1-mini</option>
               <option value="gpt-4o-mini">gpt-4o-mini</option>
             </select>
           </label>
-          {(model || '').toLowerCase() === 'gpt-5-mini' && (
+          {(((model || '').toLowerCase() === 'gpt-5-mini') || ((model || '').toLowerCase() === 'gpt-5-nano')) && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 reasoning.effort

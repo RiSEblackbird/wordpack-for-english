@@ -50,7 +50,7 @@ export const NotificationsOverlay: React.FC = () => {
           <div>
             <div className="ntf-title">{n.title}</div>
             {n.message ? <div className="ntf-msg">{n.message}</div> : null}
-            <div className="ntf-time">{timeLabel} {formatElapsed(elapsedMs)}</div>
+            <div className="ntf-time">{timeLabel} {formatElapsed(elapsedMs)}{n.model ? ` (${n.model})` : ''}</div>
           </div>
           <button className="ntf-close" aria-label="閉じる" onClick={() => remove(n.id)}>✕</button>
         </div>

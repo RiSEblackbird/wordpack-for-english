@@ -166,3 +166,49 @@ def test_openai_reasoning_param_fallback_on_unexpected_keyword(monkeypatch):
 
     out = llm.complete("ping")
     assert isinstance(out, str) and "\"senses\"" in out
+
+
+def test_openai_reasoning_param_fallback_on_unexpected_keyword_nano(monkeypatch):
+    """gpt-5-nano でも reasoning/text を付与→SDK未対応なら自動で外して再試行する。"""
+    monkeypatch.setenv("STRICT_MODE", "false")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5-nano")
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy-realistic-key")
+
+    from importlib import reload
+    import backend.config
+    import backend.providers
+    reload(backend.config)
+    reload(backend.providers)
+
+    class _DummyMessage:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class _DummyChoice:
+        def __init__(self, content: str) -> None:
+            self.message = _DummyMessage(content)
+
+    class _DummyResp:
+        def __init__(self, content: str) -> None:
+            self.choices = [_DummyChoice(content)]
+
+    class _DummyResponses:
+        def create(self, **kwargs):  # type: ignore[no-untyped-def]
+            if "reasoning" in kwargs or "text" in kwargs:
+                raise TypeError("Responses.create() got an unexpected keyword argument 'reasoning'")
+            return _DummyResp('{"senses": [{"id": "s1", "gloss_ja": "ok"}], "examples": {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}}')
+
+    class DummyOpenAI:
+        def __init__(self, api_key: str) -> None:  # type: ignore[no-untyped-def]
+            self.responses = _DummyResponses()
+
+    backend.providers.OpenAI = DummyOpenAI  # type: ignore[assignment]
+
+    from backend.providers import get_llm_provider
+    llm = get_llm_provider(
+        reasoning_override={"effort": "high"},
+        text_override={"verbosity": "high"},
+    )
+    out = llm.complete("ping")
+    assert isinstance(out, str) and "\"senses\"" in out

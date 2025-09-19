@@ -6,7 +6,7 @@ router = APIRouter()
 
 
 @router.get("/config")
-def get_runtime_config() -> dict[str, int]:
+def get_runtime_config() -> dict[str, object]:
     """Expose runtime config needed by the frontend.
 
     フロントエンドが同期すべき実行時設定を返す。現状は
@@ -15,6 +15,7 @@ def get_runtime_config() -> dict[str, int]:
     """
     return {
         "request_timeout_ms": settings.llm_timeout_ms,
+        "llm_model": settings.llm_model,
     }
 
 

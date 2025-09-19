@@ -9,12 +9,13 @@ export interface NotificationItem {
   status: NotificationStatus;
   createdAt: number;
   updatedAt: number;
+  model?: string; // 任意: 使用モデル名（表示用）
 }
 
 interface NotificationsContextValue {
   notifications: NotificationItem[];
-  add: (input: { title: string; message?: string; status?: NotificationStatus; id?: string }) => string;
-  update: (id: string, patch: Partial<Pick<NotificationItem, 'title' | 'message' | 'status'>>) => void;
+  add: (input: { title: string; message?: string; status?: NotificationStatus; id?: string; model?: string }) => string;
+  update: (id: string, patch: Partial<Pick<NotificationItem, 'title' | 'message' | 'status' | 'model'>>) => void;
   remove: (id: string) => void;
   clearAll: () => void;
 }
@@ -61,6 +62,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode } & { p
       status: input.status || 'progress',
       createdAt: now,
       updatedAt: now,
+      model: input.model,
     };
     setNotifications((prev) => {
       const next = [...prev, item];

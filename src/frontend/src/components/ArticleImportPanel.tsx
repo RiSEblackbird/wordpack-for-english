@@ -32,7 +32,7 @@ export const ArticleImportPanel: React.FC = () => {
   const [category, setCategory] = useState<'Dev'|'CS'|'LLM'|'Business'|'Common'>('Common');
   const abortRef = useRef<AbortController | null>(null);
 
-  const [model, setModel] = useState<string>('gpt-5-mini');
+  const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
 
   const importArticle = async () => {
     abortRef.current?.abort();
@@ -46,7 +46,7 @@ export const ArticleImportPanel: React.FC = () => {
       const body: any = { text: text.trim() };
       // WordPackPanel と同様のモデル選択ロジック
       body.model = model;
-      if ((model || '').toLowerCase() === 'gpt-5-mini') {
+      if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
         body.reasoning = { effort: settings.reasoningEffort || 'minimal' };
         body.text_opts = { verbosity: settings.textVerbosity || 'medium' };
       } else {
@@ -98,7 +98,7 @@ export const ArticleImportPanel: React.FC = () => {
           reasoningEffort: settings.reasoningEffort,
           textVerbosity: settings.textVerbosity,
         },
-        model: 'gpt-5-mini',
+        model,
         lemma,
         notify: { add: addNotification, update: updateNotification },
         abortSignal: ctrl.signal,
@@ -178,7 +178,7 @@ export const ArticleImportPanel: React.FC = () => {
                 const reqBody: any = { category };
                 // generate_and_import は text キーで受け取る
                 reqBody.model = model;
-                if ((model || '').toLowerCase() === 'gpt-5-mini') {
+                if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
                   reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
                   reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
                 } else {
@@ -206,13 +206,18 @@ export const ArticleImportPanel: React.FC = () => {
           </button>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             モデル
-            <select value={model} onChange={(e) => setModel(e.target.value)} disabled={loading}>
+            <select
+              value={model}
+              onChange={(e) => { const v = e.target.value; setModel(v); setSettings({ ...settings, model: v }); }}
+              disabled={loading}
+            >
               <option value="gpt-5-mini">gpt-5-mini</option>
+              <option value="gpt-5-nano">gpt-5-nano</option>
               <option value="gpt-4.1-mini">gpt-4.1-mini</option>
               <option value="gpt-4o-mini">gpt-4o-mini</option>
             </select>
           </label>
-          {(model || '').toLowerCase() === 'gpt-5-mini' && (
+          {(((model || '').toLowerCase() === 'gpt-5-mini') || ((model || '').toLowerCase() === 'gpt-5-nano')) && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
               <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 reasoning.effort

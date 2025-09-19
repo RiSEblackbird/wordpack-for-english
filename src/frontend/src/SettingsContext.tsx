@@ -6,6 +6,8 @@ export interface Settings {
   regenerateScope: 'all' | 'examples' | 'collocations';
   autoAdvanceAfterGrade: boolean;
   requestTimeoutMs: number;
+  // 選択中のLLMモデル（UI全体で共有）。未設定時はサーバの既定を同期。
+  model?: string;
   temperature: number;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   textVerbosity?: 'low' | 'medium' | 'high';
@@ -24,6 +26,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const savedTheme = (() => {
       try { return localStorage.getItem('wp.theme') || undefined; } catch { return undefined; }
     })();
+    const savedModel = (() => {
+      try { return localStorage.getItem('wp.model') || undefined; } catch { return undefined; }
+    })();
     return {
       apiBase: '/api',
       pronunciationEnabled: true,
@@ -31,6 +36,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       autoAdvanceAfterGrade: false,
       // 初期描画直後のズレを避けるため、保守的に長めの既定値。実値は /api/config で即同期。
       requestTimeoutMs: 360000,
+      model: savedModel,
       temperature: 0.6,
       reasoningEffort: 'minimal',
       textVerbosity: 'medium',
@@ -48,10 +54,14 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (!res.ok) {
           throw new Error(`Failed to load /api/config: ${res.status}`);
         }
-        const json = (await res.json()) as { request_timeout_ms?: number };
+        const json = (await res.json()) as { request_timeout_ms?: number; llm_model?: string };
         const ms = json.request_timeout_ms;
         if (!aborted && typeof ms === 'number' && Number.isFinite(ms)) {
           setSettings((prev) => ({ ...prev, requestTimeoutMs: ms }));
+        }
+        const m = (json as any).llm_model;
+        if (!aborted && typeof m === 'string' && m) {
+          setSettings((prev) => ({ ...prev, model: prev.model || m }));
         }
       } catch (err) {
         // 画面に明示せず、コンソールに詳細を出す（ユーザーの運用で把握可能）
@@ -68,6 +78,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     try { localStorage.setItem('wp.theme', settings.theme); } catch { /* ignore */ }
   }, [settings.theme]);
+  // モデルの永続化
+  useEffect(() => {
+    if (settings.model) {
+      try { localStorage.setItem('wp.model', settings.model); } catch { /* ignore */ }
+    }
+  }, [settings.model]);
   if (!ready) {
     return (
       <SettingsContext.Provider value={{ settings, setSettings }}>
