@@ -62,8 +62,9 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
+    const importTab = await screen.findByRole('button', { name: '文章インポート' });
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '文章インポート' }));
+      await user.click(importTab);
     });
 
     // モデルUIが表示される
@@ -91,8 +92,9 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
+    const importTab = await screen.findByRole('button', { name: '文章インポート' });
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '文章インポート' }));
+      await user.click(importTab);
     });
 
     // gpt-5-mini 選択で追加UIが表示
@@ -129,8 +131,9 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
+    const importTab = await screen.findByRole('button', { name: '文章インポート' });
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '文章インポート' }));
+      await user.click(importTab);
     });
 
     const modelSelect = await screen.findByLabelText('モデル');
@@ -166,8 +169,9 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
+    const importTab = await screen.findByRole('button', { name: '文章インポート' });
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '文章インポート' }));
+      await user.click(importTab);
     });
 
     const modelSelect = await screen.findByLabelText('モデル');
@@ -196,8 +200,9 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
+    const importTab = await screen.findByRole('button', { name: '文章インポート' });
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '文章インポート' }));
+      await user.click(importTab);
     });
 
     const modelSelect = await screen.findByLabelText('モデル');
