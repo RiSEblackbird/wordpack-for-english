@@ -108,8 +108,11 @@ Input:
 
     def _prompt_explanation(self, text: str) -> str:
         return (
-            """Write a concise Japanese explanation (1-3 sentences) for the input English text.
-Focus on usage notes, key terms, or context that helps Japanese learners.
+            """Write a detailed Japanese explanation (2-4 sentences) for the input English text.
+Prioritize grammar analysis: name key sentence structures, tense/aspect/voice choices, and explain why they are used.
+Highlight idioms, phrasal verbs, collocations, and set phrases with their nuance and usage restrictions.
+If a technical term appears, briefly clarify how it functions inside the sentence.
+Keep the explanation instructional and concrete for university-educated learners.
 Output only the explanation sentences without quotes.
 Input:
 <INPUT_START>\n""" + text + """\n<INPUT_END>"""
