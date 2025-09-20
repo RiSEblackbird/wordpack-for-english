@@ -55,14 +55,11 @@ export const ArticleDetailModal: React.FC<Props> = ({
   const generationDuration = React.useMemo(() => {
     if (!article) return null;
     const durationValue = article.generation_duration_ms;
-    if (typeof durationValue === 'number' && Number.isFinite(durationValue)) {
-      const label = formatDurationMs(durationValue);
-      if (label && label.trim()) {
-        return label;
-      }
-      if (durationValue === 0) {
-        return '0秒';
-      }
+    const hasDbDuration = typeof durationValue === 'number' && Number.isFinite(durationValue);
+    if (hasDbDuration) {
+      const label = formatDurationMs(durationValue as number);
+      if (label && label.trim()) return label;
+      if ((durationValue as number) === 0) return '0秒';
     }
     const start = article.generation_started_at || article.created_at;
     const end = article.generation_completed_at || article.updated_at;
@@ -70,12 +67,10 @@ export const ArticleDetailModal: React.FC<Props> = ({
     const diff = calculateDurationMs(start, end);
     if (diff === null) return null;
     const label = formatDurationMs(diff);
-    if (label && label.trim()) {
-      return label;
-    }
-    if (diff === 0) {
-      return '0秒';
-    }
+    if (label && label.trim()) return label;
+    // フォールバック計算で 0ms 相当になった場合は「計測不可」とする（DB未記録時のみ）
+    if (diff === 0 && !hasDbDuration) return '計測不可';
+    if (diff === 0) return '0秒';
     return null;
   }, [article]);
 
@@ -92,18 +87,15 @@ export const ArticleDetailModal: React.FC<Props> = ({
       Business: 'Business（ビジネス）',
       Common: 'Common（日常）',
     };
-    const categoryLabel = (() => {
-      const raw = (article.generation_category || '').trim();
-      if (!raw) return '未指定';
-      return categoryMap[raw as keyof typeof categoryMap] || raw;
-    })();
+    const rawCategory = (article.generation_category || '').trim();
+    const categoryLabel = rawCategory ? (categoryMap[rawCategory as keyof typeof categoryMap] || rawCategory) : '';
     const modelLabel = (article.llm_model || '').trim() || '未記録';
     const paramsLabel = (article.llm_params || '').trim() || '未記録';
 
     rows.push({ label: '作成', value: created });
     rows.push({ label: '更新', value: updated });
     rows.push({ label: '生成所要時間', value: durationLabel });
-    rows.push({ label: '生成カテゴリ', value: categoryLabel });
+    rows.push({ label: '生成カテゴリ', value: (categoryLabel || '未指定') });
     rows.push({ label: 'AIモデル', value: modelLabel });
     rows.push({ label: 'AIパラメータ', value: paramsLabel });
     return rows;

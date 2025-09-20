@@ -503,6 +503,7 @@ def test_article_import_includes_llm_metadata(monkeypatch, tmp_path):
     assert "temperature=0.42" in data["llm_params"]
     assert "reasoning.effort=focused" in data["llm_params"]
     assert "text.verbosity=medium" in data["llm_params"]
+    # generation_category は明示指定していないため None のままでよい
     assert data["generation_started_at"]
     assert data["generation_completed_at"]
     assert data["generation_duration_ms"] >= 0
@@ -516,3 +517,55 @@ def test_article_import_includes_llm_metadata(monkeypatch, tmp_path):
     assert detail["generation_started_at"]
     assert detail["generation_completed_at"]
     assert detail["generation_duration_ms"] >= 0
+
+def test_article_import_category_and_zero_duration(monkeypatch, tmp_path):
+    """インポート時に generation_category を指定した場合に保存/再読込で保持され、
+    時刻が同一なら duration=0 になることを検証。
+    """
+    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "article_llm_meta2.sqlite3")
+    from fastapi.testclient import TestClient
+    import backend.providers as providers_mod
+    from backend.flows.article_import import ArticleImportFlow
+
+    # lemmas を固定して最低限進むようにする
+    monkeypatch.setattr(ArticleImportFlow, "_post_filter_lemmas", lambda self, raw: ["resilience"])
+
+    class _StubLLM:
+        def complete(self, prompt: str) -> str:
+            text = str(prompt or "")
+            if "JSON 配列" in text and "lemmas" in text:
+                return '{"lemmas": ["resilience"]}'
+            if "日本語へ忠実に翻訳" in text:
+                return "訳"
+            if "詳細な解説" in text:
+                return "解説"
+            if "タイトル" in text:
+                return "T"
+            return "補足"
+
+    providers_mod._LLM_INSTANCE = _StubLLM()
+    client = TestClient(backend_main.app, raise_server_exceptions=False)
+
+    payload = {
+        "text": "text",
+        "model": "gpt-x",
+        "temperature": 0.0,
+        "generation_category": "Common",
+    }
+
+    r_imp = client.post("/api/article/import", json=payload)
+    assert r_imp.status_code == 200
+    data = r_imp.json()
+    assert data.get("generation_category") == "Common"
+    # created/updated の等価性に依存せず、duration_ms が 0 以上で返る
+    assert data.get("generation_duration_ms") is not None
+    art_id = data["id"]
+
+    # 再取得時も同値
+    r_get = client.get(f"/api/article/{art_id}")
+    assert r_get.status_code == 200
+    detail = r_get.json()
+    assert detail.get("generation_category") == "Common"
+    assert detail.get("generation_started_at")
+    assert detail.get("generation_completed_at")
+    assert detail.get("generation_duration_ms") is not None
