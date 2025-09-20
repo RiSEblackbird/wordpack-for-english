@@ -120,6 +120,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     await act(async () => {
       await user.click(screen.getByRole('button', { name: /生成＆インポート/ }));
     });
+
     const genBodies = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/generate_and_import') : ((c[0] as URL).toString().endsWith('/api/article/generate_and_import'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
@@ -162,6 +163,33 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/generate_and_import') : ((c[0] as URL).toString().endsWith('/api/article/generate_and_import'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(genBodies.some((b) => b.model === 'gpt-5-nano' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
+  });
+
+  it('sends the selected category when generating and importing examples', async () => {
+    const fetchMock = setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+    const importTab = await screen.findByRole('button', { name: '文章インポート' });
+    await act(async () => {
+      await user.click(importTab);
+    });
+
+    const categorySelect = await screen.findByRole('combobox', { name: '' });
+    await act(async () => {
+      await user.selectOptions(categorySelect, 'Dev');
+    });
+    expect((categorySelect as HTMLSelectElement).value).toBe('Dev');
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: /生成＆インポート/ }));
+    });
+
+    const genBodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/generate_and_import') : ((c[0] as URL).toString().endsWith('/api/article/generate_and_import'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(genBodies.length).toBeGreaterThan(0);
+    expect(genBodies.some((b) => b.category === 'Dev')).toBe(true);
   });
 
   it('uses selected model for regenerate from import result modal (reasoning model)', async () => {

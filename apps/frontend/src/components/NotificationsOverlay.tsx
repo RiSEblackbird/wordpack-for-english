@@ -36,6 +36,8 @@ export const NotificationsOverlay: React.FC = () => {
       {notifications.map((n) => {
         const elapsedMs = n.status === 'progress' ? nowMs - n.createdAt : n.updatedAt - n.createdAt;
         const timeLabel = n.status === 'progress' ? '経過' : '所要';
+        const detailParts = [n.model, n.category].filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+        const detailLabel = detailParts.length ? ` ( ${detailParts.join(', ')} )` : '';
         return (
         <div key={n.id} className="ntf-card" role="status" aria-label={`${n.title} - ${n.status}`}>
           <div className="ntf-icon" aria-hidden="true">
@@ -50,7 +52,7 @@ export const NotificationsOverlay: React.FC = () => {
           <div>
             <div className="ntf-title">{n.title}</div>
             {n.message ? <div className="ntf-msg">{n.message}</div> : null}
-            <div className="ntf-time">{timeLabel} {formatElapsed(elapsedMs)}{n.model ? ` (${n.model})` : ''}</div>
+            <div className="ntf-time">{timeLabel} {formatElapsed(elapsedMs)}{detailLabel}</div>
           </div>
           <button className="ntf-close" aria-label="閉じる" onClick={() => remove(n.id)}>✕</button>
         </div>

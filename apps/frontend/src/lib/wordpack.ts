@@ -10,8 +10,8 @@ export interface RegenerateSettings {
 }
 
 export interface NotificationsAdapter {
-  add: (input: { title: string; message?: string; status?: 'progress' | 'success' | 'error'; id?: string }) => string;
-  update: (id: string, patch: { title?: string; message?: string; status?: 'progress' | 'success' | 'error' }) => void;
+  add: (input: { title: string; message?: string; status?: 'progress' | 'success' | 'error'; id?: string; model?: string; category?: string }) => string;
+  update: (id: string, patch: { title?: string; message?: string; status?: 'progress' | 'success' | 'error'; model?: string; category?: string }) => void;
 }
 
 export interface RegenerateWordPackMessages {
