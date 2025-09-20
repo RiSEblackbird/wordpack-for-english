@@ -6,33 +6,46 @@ import pytest
 from fastapi.testclient import TestClient
 
 
-@pytest.fixture(scope="module")
-def client():
-    backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
-    sys.path.insert(0, str(backend_root))
-    # tests: strict を無効化（ダミー・フォールバック許可）
-    import os
-    os.environ["STRICT_MODE"] = "false"
-    # backend.* モジュールを明示的にアンロードして設定を取り直す
+def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_path: Path | None = None):
+    """テスト用に backend.* モジュールを再読み込みしてクリーンな状態を準備する補助関数。"""
+
     import importlib
-    importlib.invalidate_caches()
+
+    backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
+    if str(backend_root) not in sys.path:
+        sys.path.insert(0, str(backend_root))
+
+    monkeypatch.setenv("STRICT_MODE", "true" if strict else "false")
+    if db_path is not None:
+        monkeypatch.setenv("SRS_DB_PATH", str(db_path))
+
+    # backend.* を一度破棄して設定と永続層のキャッシュをリセット
     for name in list(sys.modules.keys()):
         if name == "backend" or name.startswith("backend."):
             sys.modules.pop(name)
-    # langgraph を本物のモジュールとしてスタブ（パッケージ/サブモジュール両方）
+
+    # 必須依存が未導入でも import できるよう最低限スタブ化
     lg_mod = types.ModuleType("langgraph")
     graph_mod = types.ModuleType("langgraph.graph")
-    graph_mod.StateGraph = object  # 最小スタブ
+    graph_mod.StateGraph = object  # 最小限のダミー
     lg_mod.graph = graph_mod
     sys.modules.setdefault("langgraph", lg_mod)
     sys.modules.setdefault("langgraph.graph", graph_mod)
     sys.modules.setdefault("chromadb", types.SimpleNamespace())
-    # 設定変更後に関連モジュールをリロードして反映
-    for m in ["backend.config", "backend.providers", "backend.main"]:
-        if m in sys.modules:
-            importlib.reload(sys.modules[m])
-    from backend.main import app
-    return TestClient(app)
+
+    # 設定・ストアを新しい環境変数で初期化
+    importlib.import_module("backend.config")
+    importlib.import_module("backend.store")
+    return importlib.import_module("backend.main")
+
+
+@pytest.fixture()
+def client(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
+    backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
+    sys.path.insert(0, str(backend_root))
+    db_path = tmp_path_factory.mktemp("srs") / "store.sqlite3"
+    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=db_path)
+    return TestClient(backend_main.app)
 
 
 def test_health(client):
@@ -108,22 +121,9 @@ def test_review_stats_removed(client):
     assert client.get("/api/review/stats").status_code in (404, 405)
 
 
-def test_word_pack_strict_llm_json_parse_failure_to_502(monkeypatch):
-    import os, sys, importlib
-    # Strict を有効化し、LLM が壊れたJSONを返す状況を作る
-    monkeypatch.setenv("STRICT_MODE", "true")
-    # 既存LLMインスタンスをクリア
-    try:
-        import backend.providers as providers
-        providers._LLM_INSTANCE = None
-    except Exception:
-        pass
-    for m in ["backend.providers", "backend.main"]:
-        if m in sys.modules:
-            importlib.reload(sys.modules[m])
-    from backend import main as backend_main
+def test_word_pack_strict_llm_json_parse_failure_to_502(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=tmp_path / "strict.sqlite3")
     from fastapi.testclient import TestClient
-    # LLM を壊れたJSON返却に固定
     import backend.providers as providers_mod
 
     class _StubLLM:
@@ -132,7 +132,7 @@ def test_word_pack_strict_llm_json_parse_failure_to_502(monkeypatch):
 
     providers_mod._LLM_INSTANCE = _StubLLM()
 
-    client = TestClient(backend_main.app)
+    client = TestClient(backend_main.app, raise_server_exceptions=False)
     r = client.post("/api/word/pack", json={"lemma": "no_data"})
     assert r.status_code == 502
 
@@ -272,26 +272,13 @@ def test_word_pack_list_pagination(client):
     assert resp.status_code == 422  # validation error
 
 
-def test_word_pack_strict_empty_llm(monkeypatch):
+def test_word_pack_strict_empty_llm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """STRICT_MODE で LLM が空文字を返した場合、5xx となることを確認。
 
     ルータは内部で例外をリレーズするため、FastAPI の既定ハンドラで 500 になる。
     （依存不足系の424は廃止）
     """
-    import os, sys
-    import importlib
-    # Strict を有効化して設定を再ロード
-    monkeypatch.setenv("STRICT_MODE", "true")
-    # 既存LLMインスタンスをクリア
-    try:
-        import backend.providers as providers
-        providers._LLM_INSTANCE = None
-    except Exception:
-        pass
-    for m in ["backend.config", "backend.providers", "backend.main"]:
-        if m in sys.modules:
-            importlib.reload(sys.modules[m])
-    from backend import main as backend_main
+    backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=tmp_path / "strict_empty.sqlite3")
     from fastapi.testclient import TestClient
     # LLM を空応答に固定
     import backend.providers as providers_mod
@@ -302,12 +289,12 @@ def test_word_pack_strict_empty_llm(monkeypatch):
 
     providers_mod._LLM_INSTANCE = _StubLLM()
 
-    client = TestClient(backend_main.app)
+    client = TestClient(backend_main.app, raise_server_exceptions=False)
     r = client.post("/api/word/pack", json={"lemma": "no_data"})
     assert 500 <= r.status_code < 600
 
 
-def test_article_wordpack_link_persists_after_regeneration(monkeypatch):
+def test_article_wordpack_link_persists_after_regeneration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     """記事詳細の関連WordPackが再生成後も消えないことを検証する回帰テスト。
 
     現象: 文章プレビューモーダルで [生成] 実行→完了後に再度開くと関連WordPackが一覧から消えることがある。
@@ -316,25 +303,28 @@ def test_article_wordpack_link_persists_after_regeneration(monkeypatch):
     本テストでは、記事をインポートし、関連WordPackのうち1件を再生成した後に
     記事詳細取得でリンクが保持されていることを確認する。
     """
-    import os, sys, types, importlib
-    # 非 strict でローカルLLM（空応答）にして高速安定化
-    monkeypatch.setenv("STRICT_MODE", "false")
-    # 廃止
-    # langgraph/chromadb を最低限スタブ
-    lg_mod = types.ModuleType("langgraph")
-    graph_mod = types.ModuleType("langgraph.graph")
-    graph_mod.StateGraph = object
-    lg_mod.graph = graph_mod
-    sys.modules.setdefault("langgraph", lg_mod)
-    sys.modules.setdefault("langgraph.graph", graph_mod)
-    sys.modules.setdefault("chromadb", types.SimpleNamespace())
-    # 設定反映リロード
-    for m in ["backend.config", "backend.providers", "backend.main"]:
-        if m in sys.modules:
-            importlib.reload(sys.modules[m])
-    from backend.main import app
+    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "article_link.sqlite3")
     from fastapi.testclient import TestClient
-    client = TestClient(app)
+    import backend.providers as providers_mod
+    from backend.flows.article_import import ArticleImportFlow
+
+    monkeypatch.setattr(ArticleImportFlow, "_post_filter_lemmas", lambda self, raw: ["session invalidation"])
+
+    class _StubLLM:
+        def complete(self, prompt: str) -> str:
+            p = str(prompt or "")
+            if "JSON 配列" in p and "lemmas" in p:
+                return "{\"lemmas\": [\"session invalidation\", \"concurrency control\"]}"
+            if "日本語へ忠実に翻訳" in p:
+                return "これはキャッシュレイヤーとセッション無効化を扱う解説文です。"
+            if "詳細な解説" in p:
+                return "文は高負荷時のキャッシュ戦略とセッション無効化手順を段階的に説明している。"
+            if "タイトル" in p:
+                return "Cache strategies under load"
+            return "補足メモ"
+
+    providers_mod._LLM_INSTANCE = _StubLLM()
+    client = TestClient(backend_main.app, raise_server_exceptions=False)
 
     # 1) 記事を簡易インポート（本文だけでOK）
     r_imp = client.post("/api/article/import", json={"text": "This is about caching layer and session invalidation under load."})
@@ -372,7 +362,7 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
         def complete(self, prompt: str) -> str:
             p = (prompt or "")
             # 例文生成プロンプト（スキーマに examples のみ）
-            if ("\"examples\"" in p) and ("Schema" in p):
+            if ("\"examples\"" in p) and ("スキーマ" in p):
                 return _json.dumps({
                     "examples": [
                         {"en": "Cache invalidation is one of the two hard things in CS.", "ja": "キャッシュ無効化はCSで難題の一つ。", "grammar_ja": "SVC。"},
@@ -380,10 +370,10 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
                     ]
                 })
             # カテゴリ別：単一 lemma を返すプロンプト
-            if ("Return ONLY one JSON object" in p) and ("\"lemma\"" in p):
+            if ("例文生成のためにカテゴリに密接に関連する英語の lemma" in p):
                 return '{"lemma":"cache"}'
             # 記事インポート系の補助（lemmas抽出など）
-            if ("lemmas" in p) and ("Return JSON" in p):
+            if ("返却形式" in p) and ("JSON" in p):
                 return '["cache","invalidation"]'
             # タイトル/訳/説明等はプレーンテキストで十分
             return "ok"
@@ -436,7 +426,7 @@ def test_category_generate_import_fallback_on_duplicate(client, monkeypatch):
         def complete(self, prompt: str) -> str:
             p = (prompt or "")
             # 例文生成プロンプト（スキーマに examples のみ）
-            if ("\"examples\"" in p) and ("Schema" in p):
+            if ("\"examples\"" in p) and ("スキーマ" in p):
                 return _json.dumps({
                     "examples": [
                         {"en": "Example about systems.", "ja": "システムに関する例。", "grammar_ja": "SVO。"},
@@ -444,10 +434,10 @@ def test_category_generate_import_fallback_on_duplicate(client, monkeypatch):
                     ]
                 })
             # カテゴリ別：単一 lemma を返すプロンプト（常に既存の dupword を返す）
-            if ("Return ONLY one JSON object" in p) and ("\"lemma\"" in p):
+            if ("例文生成のためにカテゴリに密接に関連する英語の lemma" in p):
                 return '{"lemma":"dupword"}'
             # 記事インポート系の補助（lemmas抽出など）
-            if ("lemmas" in p) and ("Return JSON" in p):
+            if ("返却形式" in p) and ("JSON" in p):
                 return '["dupword","performance"]'
             # タイトル/訳/説明等はプレーンテキストで十分
             return "ok"

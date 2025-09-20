@@ -87,50 +87,48 @@ class ArticleImportFlow:
     # ---- 役割別プロンプト（サブグラフ相当） ----
     def _prompt_title(self, text: str) -> str:
         return (
-            """Write a very short English title (<= 10 words) that faithfully reflects the input.
-Constraints:
-- Do not paraphrase the content beyond what is necessary for a concise title.
-- Output only the title text without quotes.
-Input:
+            """入力テキストの内容を忠実に反映した、10語以内の非常に短い英語タイトルを作成する。
+制約:
+- 簡潔なタイトルに必要な範囲を超えて言い換えない。
+- 引用符などを付けず、タイトル本文のみを出力する。
+入力:
 <INPUT_START>\n""" + text + """\n<INPUT_END>"""
         )
 
     def _prompt_translation(self, text: str) -> str:
         return (
-            """Translate the input English text into Japanese faithfully.
-Constraints:
-- Do not summarize or paraphrase.
-- Keep the meaning accurate and complete.
-Output only the translated Japanese text without additional commentary.
-Input:
+            """入力された英語テキストを日本語へ忠実に翻訳する。
+制約:
+- 要約や言い換えを行わない。
+- 意味を完全かつ正確に保持する。
+出力は翻訳された日本語本文のみ（追加の解説は禁止）。
+入力:
 <INPUT_START>\n""" + text + """\n<INPUT_END>"""
         )
 
     def _prompt_explanation(self, text: str) -> str:
         return (
-            """Write a detailed Japanese explanation (2-4 sentences) for the input English text.
-Prioritize grammar analysis: name key sentence structures, tense/aspect/voice choices, and explain why they are used.
-Highlight idioms, phrasal verbs, collocations, and set phrases with their nuance and usage restrictions.
-If a technical term appears, briefly clarify how it functions inside the sentence.
-Keep the explanation instructional and concrete for university-educated learners.
-Output only the explanation sentences without quotes.
-Input:
+            """入力された英語テキストについて、日本語で 2〜4 文の詳細な解説を書く。
+文法分析を最優先し、主要な文構造や時制・相・態の選択理由を明示する。
+慣用表現・句動詞・コロケーション・定型表現があれば、そのニュアンスと使用制約を説明する。
+専門用語が登場する場合は、文中でどのように機能しているかを簡潔に示す。
+大学教育を受けた学習者向けに、指導的で具体的な解説にする。
+出力は解説文のみとし、引用符などは付けない。
+入力:
 <INPUT_START>\n""" + text + """\n<INPUT_END>"""
         )
 
     def _prompt_lemmas(self, text: str) -> str:
         return (
-            """From the input English text, list learning-worthy lemmas and multi-word expressions.
-STRICT FILTER: exclude function words (articles, auxiliaries, copulas, simple pronouns, basic prepositions/conjunctions)
-and trivial tokens like I, am, a, the, be, is, are, to, of, and, in, on, for, with, at, by, from, as.
-Exclude everyday vocabulary at CEFR A1-A2 level (greetings, calendar/time words, basic verbs like get, go, make, take, etc.).
-Focus on university-level vocabulary (CEFR B2+) suitable for graduates, including advanced general academic words (e.g., resilience, articulate)
-and professional/technical terminology.
-Include multi-word expressions (phrasal verbs, idioms, collocations) when they represent advanced usage.
-Prefer rare or precise terms over broad/general ones when both appear, but do not skip solid academic vocabulary simply because it is widely used.
-Aim for ~5-30 items.
-Return a JSON array of strings. Example: ["supply chain", "mitigate", "trade-off"].
-Input:
+            """入力英語テキストから、学習価値の高い lemma と複数語表現のみを抽出して列挙する。
+厳格フィルタ: 機能語（冠詞・助動詞・be 動詞・単純な代名詞・基本的な前置詞/接続詞）や、I, am, a, the, be, is, are, to, of, and, in, on, for, with, at, by, from, as といった些末語を除外する。
+CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 get/go/make/take など）も除外する。
+大学生以上向けの語彙（CEFR B2+）を中心に、洗練された一般学術語（例: resilience, articulate）と専門・技術用語を含める。
+高度な用法を示す複数語表現（句動詞・イディオム・コロケーション）も取り入れる。
+同じ語が一般語と専門語で並んで現れた場合は、より精密で希少な語を優先しつつ、信頼できる学術語であれば広く使われていても除外しない。
+目安は 5〜30 件。
+返却形式: 文字列の JSON 配列。例: ["supply chain", "mitigate", "trade-off"]。
+入力:
 <INPUT_START>\n""" + text + """\n<INPUT_END>"""
         )
 
