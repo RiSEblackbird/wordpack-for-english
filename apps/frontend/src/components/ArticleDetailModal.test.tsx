@@ -1,0 +1,76 @@
+import { render, screen } from '@testing-library/react';
+import '@testing-library/jest-dom';
+import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
+
+describe('ArticleDetailModal', () => {
+  it('displays article metadata above related word packs', () => {
+    const article: ArticleDetailData = {
+      id: 'art:test',
+      title_en: 'Sample Title',
+      body_en: 'English body',
+      body_ja: '日本語本文',
+      notes_ja: '補足',
+      llm_model: 'gpt-5-mini',
+      llm_params: 'reasoning.effort=minimal;text.verbosity=medium',
+      generation_category: 'Dev',
+      created_at: '2024-05-01T10:00:00+09:00',
+      updated_at: '2024-05-01T10:01:05+09:00',
+      generation_started_at: '2024-05-01T10:00:00+09:00',
+      generation_completed_at: '2024-05-01T10:01:05+09:00',
+      generation_duration_ms: 65_000,
+      related_word_packs: [
+        { word_pack_id: 'wp:1', lemma: 'alpha', status: 'existing' },
+      ],
+    };
+
+    render(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        title="文章プレビュー"
+        article={article}
+      />,
+    );
+
+    const meta = screen.getByTestId('article-meta');
+    expect(meta.tagName.toLowerCase()).toBe('dl');
+    expect(meta).toHaveTextContent('作成');
+    expect(meta).toHaveTextContent('更新');
+    expect(meta).toHaveTextContent('生成所要時間');
+    expect(meta).toHaveTextContent('生成カテゴリ');
+    expect(meta).toHaveTextContent('AIモデル');
+    expect(meta).toHaveTextContent('AIパラメータ');
+    expect(meta).toHaveTextContent('gpt-5-mini');
+    expect(meta).toHaveTextContent('reasoning.effort=minimal;text.verbosity=medium');
+    expect(meta).toHaveTextContent('2024/05/01 10:00');
+    expect(meta).toHaveTextContent('1分5秒');
+    expect(meta).toHaveTextContent('Dev（開発）');
+    expect(screen.getByRole('heading', { level: 4, name: '関連WordPack' })).toBeInTheDocument();
+  });
+
+  it('falls back to 0秒 when created_at and updated_at are identical', () => {
+    const article: ArticleDetailData = {
+      id: 'art:zero',
+      title_en: 'Zero Duration',
+      body_en: 'English body',
+      body_ja: '日本語本文',
+      related_word_packs: [],
+      created_at: '2024-05-01T10:00:00+09:00',
+      updated_at: '2024-05-01T10:00:00+09:00',
+      generation_duration_ms: 0,
+    };
+
+    render(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        article={article}
+      />,
+    );
+
+    const meta = screen.getByTestId('article-meta');
+    expect(meta).toHaveTextContent('0秒');
+    expect(meta).toHaveTextContent('未指定');
+    expect(meta).toHaveTextContent('未記録');
+  });
+});

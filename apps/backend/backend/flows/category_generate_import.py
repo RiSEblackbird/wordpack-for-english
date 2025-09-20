@@ -12,6 +12,7 @@ from ..store import store
 from ..models.word import WordPack, ExampleCategory
 from ..flows.word_pack import WordPackFlow
 from ..flows.article_import import ArticleImportFlow
+from ..models.article import ArticleImportRequest
 from ..observability import span
 
 
@@ -30,9 +31,17 @@ class CategoryGenerateAndImportFlow:
             reasoning_override=reasoning,
             text_override=text,
         )
+        # 呼び出し元から渡された LLM パラメータを保持し、下流の ArticleImportFlow へも同一の契約で引き継ぐ
         self._llm_info = {
             "model": model,
             "params": None,
+        }
+        self._overrides = {
+            "model": model,
+            "temperature": temperature,
+            "reasoning": reasoning,
+            # ArticleImportFlow は text_opts というキー名を採用しているため、ここで変換
+            "text_opts": text,
         }
 
     def _prompt_lemma(self, category: ExampleCategory, attempted: List[str], avoid_existing: List[str]) -> str:
@@ -192,7 +201,16 @@ class CategoryGenerateAndImportFlow:
         for ex in items:
             try:
                 with span(trace=None, name="category.import_article", input={"lemma": lemma, "category": category.value, "text_chars": len(str(ex.get("en") or ""))}):
-                    res = art_flow.run(type("Req", (), {"text": ex.get("en"), "model": None, "temperature": None, "reasoning": None, "text_opts": None})())  # lightweight shim
+                    # ArticleImportFlow に LLM パラメータを引き継ぐ
+                    req_payload = ArticleImportRequest(
+                        text=str(ex.get("en") or ""),
+                        model=self._overrides.get("model"),
+                        temperature=self._overrides.get("temperature"),
+                        reasoning=self._overrides.get("reasoning"),
+                        text_opts=self._overrides.get("text_opts"),
+                        generation_category=category,
+                    )
+                    res = art_flow.run(req_payload)
                 article_ids.append(res.id)
             except Exception:
                 # Skip failed imports but continue

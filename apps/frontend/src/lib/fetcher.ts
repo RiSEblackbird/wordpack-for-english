@@ -37,7 +37,12 @@ export async function fetchJson<T = any>(url: string, options: FetchJsonOptions 
   try {
     const res = await fetch(url, {
       method,
-      headers: body ? { 'Content-Type': 'application/json', ...headers } : headers,
+      // すべての取得/送信は都度最新のサーバ値を参照する（ブラウザ/中間プロキシのキャッシュを無効化）
+      headers: body
+        ? { 'Content-Type': 'application/json', 'Cache-Control': 'no-store, no-cache', Pragma: 'no-cache', ...headers }
+        : { 'Cache-Control': 'no-store, no-cache', Pragma: 'no-cache', ...headers },
+      // fetch の request キャッシュも無効化
+      cache: 'no-store',
       body: body ? JSON.stringify(body) : undefined,
       signal: ctrl.signal,
     });

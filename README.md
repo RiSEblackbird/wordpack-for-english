@@ -106,7 +106,7 @@ OpenAI LLM統合（Responses API）:
 
 LLM メタ情報の保存/返却:
 - WordPack: 生成/再生成時に使用した `llm_model`/`llm_params` をレスポンスに含め、DBへ保存
-- 文章（Article）: インポート時に使用した `llm_model`/`llm_params` を保存し、`GET /api/article/{id}` で返却
+- 文章（Article）: インポート時、フロントで選択したカテゴリを `generation_category` として `POST /api/article/import` に含めて送信します。バックエンドは `llm_model`/`llm_params` と共に保存し、生成開始/完了時刻も記録します。`GET /api/article/{id}` で返却。
 
 ---
 
@@ -302,6 +302,7 @@ FastAPI アプリは `apps/backend/backend/main.py`。
   - リクエスト例: `{ "model": "gpt-5-mini", "reasoning": { "effort": "minimal" }, "text": { "verbosity": "medium" } }` または `{ "model": "gpt-5-nano", "reasoning": { "effort": "minimal" }, "text": { "verbosity": "medium" } }`
   - レスポンス例: `{ "message": "Examples generated and appended", "added": 2, "category": "Dev", "items": [{"en":"...","ja":"..."}] }`
   - `model/temperature/reasoning/text` は任意。未指定時はサーバ既定（環境変数）を使用。
+  - `generation_category` は UI のカテゴリ選択値（Dev/CS/LLM/Business/Common）。
 
 - `GET /api/word/examples`（新）
   - 例文をWordPack横断で一覧取得。
@@ -498,7 +499,7 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
   - 抽出語のWordPack関連（既存がなければ空のWordPackを自動作成）
 - 一覧: `/api/article` で記事一覧、`/api/article/{id}` で詳細取得、`DELETE /api/article/{id}` で削除。
 - 関連WordPackカードの「生成」ボタンで `/api/word/packs/{word_pack_id}/regenerate` を呼び出し、生成完了後はUIが自動更新されます。
- - フロントエンドの詳細表示は共通モーダル `ArticleDetailModal` を用いて実装しています。`ArticleImportPanel` と `ArticleListPanel` の双方で同一のUI/挙動を共有し、日本語訳の直下に解説 `notes_ja` が表示されます。関連WordPackは常にカード表示で統一し、インポート直後は再生成/プレビュー操作が可能、一覧からの表示は閲覧専用です。
+  - フロントエンドの詳細表示は共通モーダル `ArticleDetailModal` を用いて実装しています。`ArticleImportPanel` と `ArticleListPanel` の双方で同一のUI/挙動を共有し、日本語訳の直下に解説 `notes_ja` が表示されます。また関連WordPack一覧の直前に、生成開始（作成）・生成完了（更新）の各タイムスタンプと、バックエンドが記録した正確な生成所要時間、AIモデル/パラメータを2列グリッドでまとめたメタ情報セクションを配置しています。関連WordPackは常にカード表示で統一し、インポート直後は再生成/プレビュー操作が可能、一覧からの表示は閲覧専用です。
 
 ### 文章インポートのエラーハンドリング（重要）
 - 各役割（タイトル/訳/解説/lemmas）は独立プロンプトで生成します。lemmas は JSON 配列、他は素のテキストを期待します（コードフェンスは自動剥離）。

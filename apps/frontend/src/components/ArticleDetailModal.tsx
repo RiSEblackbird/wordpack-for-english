@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal } from './Modal';
+import { calculateDurationMs, formatDateJst, formatDurationMs } from '../lib/date';
 
 export interface ArticleWordPackLink {
   word_pack_id: string;
@@ -17,9 +18,13 @@ export interface ArticleDetailData {
   // 生成に使用したAI情報（任意）
   llm_model?: string | null;
   llm_params?: string | null;
+  generation_category?: 'Dev' | 'CS' | 'LLM' | 'Business' | 'Common' | null;
   related_word_packs: ArticleWordPackLink[];
   created_at?: string;
   updated_at?: string;
+  generation_started_at?: string | null;
+  generation_completed_at?: string | null;
+  generation_duration_ms?: number | null;
 }
 
 interface Props {
@@ -41,6 +46,61 @@ export const ArticleDetailModal: React.FC<Props> = ({
   onOpenWordPackPreview,
   onDeleteWordPack,
 }) => {
+  const formatDateWithFallback = (value?: string | null) => {
+    if (!value) return null;
+    const formatted = formatDateJst(value);
+    return formatted && formatted.trim() ? formatted : value;
+  };
+
+  const generationDuration = React.useMemo(() => {
+    if (!article) return null;
+    const durationValue = article.generation_duration_ms;
+    const hasDbDuration = typeof durationValue === 'number' && Number.isFinite(durationValue);
+    if (hasDbDuration) {
+      const label = formatDurationMs(durationValue as number);
+      if (label && label.trim()) return label;
+      if ((durationValue as number) === 0) return '0秒';
+    }
+    const start = article.generation_started_at || article.created_at;
+    const end = article.generation_completed_at || article.updated_at;
+    if (!start || !end) return null;
+    const diff = calculateDurationMs(start, end);
+    if (diff === null) return null;
+    const label = formatDurationMs(diff);
+    if (label && label.trim()) return label;
+    // フォールバック計算で 0ms 相当になった場合は「計測不可」とする（DB未記録時のみ）
+    if (diff === 0 && !hasDbDuration) return '計測不可';
+    if (diff === 0) return '0秒';
+    return null;
+  }, [article]);
+
+  const metaRows = React.useMemo(() => {
+    if (!article) return [] as { label: string; value: string }[];
+    const rows: { label: string; value: string }[] = [];
+    const created = formatDateWithFallback(article.generation_started_at || article.created_at) ?? '未記録';
+    const updated = formatDateWithFallback(article.generation_completed_at || article.updated_at) ?? '未記録';
+    const durationLabel = generationDuration || '計測不可';
+    const categoryMap: Record<'Dev' | 'CS' | 'LLM' | 'Business' | 'Common', string> = {
+      Dev: 'Dev（開発）',
+      CS: 'CS（コンピュータサイエンス）',
+      LLM: 'LLM（大規模言語モデル）',
+      Business: 'Business（ビジネス）',
+      Common: 'Common（日常）',
+    };
+    const rawCategory = (article.generation_category || '').trim();
+    const categoryLabel = rawCategory ? (categoryMap[rawCategory as keyof typeof categoryMap] || rawCategory) : '';
+    const modelLabel = (article.llm_model || '').trim() || '未記録';
+    const paramsLabel = (article.llm_params || '').trim() || '未記録';
+
+    rows.push({ label: '作成', value: created });
+    rows.push({ label: '更新', value: updated });
+    rows.push({ label: '生成所要時間', value: durationLabel });
+    rows.push({ label: '生成カテゴリ', value: (categoryLabel || '未指定') });
+    rows.push({ label: 'AIモデル', value: modelLabel });
+    rows.push({ label: 'AIパラメータ', value: paramsLabel });
+    return rows;
+  }, [article, generationDuration]);
+
   return (
     <Modal
       isOpen={!!article && isOpen}
@@ -50,14 +110,37 @@ export const ArticleDetailModal: React.FC<Props> = ({
       {article ? (
         <div>
           <style>{`
-            .ai-wp-grid { 
-              display: grid; 
-              grid-template-columns: 1fr; 
-              gap: 0.35rem; 
+            .ai-wp-grid {
+              display: grid;
+              grid-template-columns: 1fr;
+              gap: 0.35rem;
+            }
+            .ai-meta-grid {
+              display: grid;
+              grid-template-columns: minmax(6rem, 0.45fr) 1fr;
+              column-gap: 0.75rem;
+              row-gap: 0.35rem;
+              font-size: 0.75em;
+              color: var(--color-subtle);
+              margin-top: 0.75rem;
+              font-variant-numeric: tabular-nums;
+            }
+            .ai-meta-grid dt {
+              font-weight: 600;
+            }
+            .ai-meta-grid dd {
+              margin: 0;
+              white-space: pre-wrap;
+              word-break: break-word;
+            }
+            @media (max-width: 480px) {
+              .ai-meta-grid {
+                grid-template-columns: minmax(5rem, 0.55fr) 1fr;
+              }
             }
             @media (min-width: 480px) {
-              .ai-wp-grid { 
-                grid-template-columns: repeat(2, 1fr); 
+              .ai-wp-grid {
+                grid-template-columns: repeat(2, 1fr);
               }
             }
             @media (min-width: 768px) {
@@ -75,11 +158,15 @@ export const ArticleDetailModal: React.FC<Props> = ({
           {article.notes_ja ? (
             <div style={{ marginTop: '0.5rem', color: 'var(--color-subtle)' }}>{article.notes_ja}</div>
           ) : null}
-          {(article.llm_model || article.llm_params) ? (
-            <div className="kv" style={{ marginTop: '0.5rem', fontSize: '0.8em', color: 'var(--color-subtle)' }}>
-              {article.llm_model ? (<><div>AIモデル</div><div>{article.llm_model}</div></>) : null}
-              {article.llm_params ? (<><div>AIパラメータ</div><div>{article.llm_params}</div></>) : null}
-            </div>
+          {metaRows.length > 0 ? (
+            <dl className="ai-meta-grid" data-testid="article-meta">
+              {metaRows.map((row, idx) => (
+                <React.Fragment key={`${row.label}-${idx}`}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </React.Fragment>
+              ))}
+            </dl>
           ) : null}
           <h4>関連WordPack</h4>
           <div className="ai-wp-grid">
