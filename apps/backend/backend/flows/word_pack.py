@@ -26,7 +26,7 @@ from ..config import settings
 def _examples_common_notes_text() -> str:
     """カテゴリ共通の Notes。カテゴリ固有の規定は含めない。"""
     return (
-        "Notes: \n"
+        "注意事項:\n"
         "- gloss_ja / definition_ja / nuances_ja / grammar_ja / notes_ja は日本語。\n"
         "- もし対象語が名詞（一般名詞/固有名詞）や専門用語である場合、\n"
         "  term_overview_ja（3〜5文の概要）と term_core_ja（3〜5文の本質）を必ず日本語で記述する。\n"
@@ -65,7 +65,7 @@ def _examples_category_notes_text(category: ExampleCategory) -> str:
     }
     extra_common: str = (
         "- Common の英例文は“ビジネス英語ではなく”カジュアルな日常会話のトーンで。友達/家族/同僚との軽いチャット想定。丁寧すぎる表現やフォーマルな語彙（therefore, thus, regarding, via など）は避け、口語（gonna, kinda, hey などは過度に使いすぎない範囲で可）、よくあるシーン（メッセ/通話/待ち合わせ/日常の小さな出来事）を取り入れる。\n"
-        "- Common は短い感嘆や相づち・依頼も自然に含めてよい（e.g., Could you shoot me a text?, Mind sending me the link?）。ただしスラングや下品な表現は避ける。\n"
+        "- Common は短い感嘆や相づち・依頼も自然に含めてよい（例: Could you shoot me a text?, Mind sending me the link?）。ただしスラングや下品な表現は避ける。\n"
     )
     text = base_map.get(category, "")
     if category is ExampleCategory.Common:
@@ -120,10 +120,10 @@ class WordPackFlow:
             if self.llm is not None and hasattr(self.llm, "complete"):
                 logger.info("wordpack_llm_prompt_built", lemma=lemma)
                 prompt = (
-                    "You are a lexicographer. Return ONLY one JSON object, no prose.\n"
-                    "Target word: "
+                    "あなたは辞書編集者である。必ず JSON オブジェクト1件のみを返し、説明文は書かないこと。\n"
+                    "対象語: "
                     f"{lemma}\n\n"
-                    "Schema (keys and types must match exactly):\n"
+                    "スキーマ（キーと型は完全一致させること）:\n"
                     "{\n"
                     "  \"senses\": [ { \"id\": \"s1\", \"gloss_ja\": \"...\", \"definition_ja\": \"...\", \"nuances_ja\": \"...\", \"patterns\": [\"...\"], \"synonyms\": [\"...\"], \"antonyms\": [\"...\"], \"register\": \"...\", \"notes_ja\": \"...\", \"term_overview_ja\": \"...\", \"term_core_ja\": \"...\" } ],\n"
                     "  \"collocations\": {\n"
@@ -135,7 +135,7 @@ class WordPackFlow:
                     "  \"study_card\": \"1文の要点(日本語)\",\n"
                     "  \"pronunciation\": { \"ipa_RP\": \"/.../\" }\n"
                     "}\n"
-                    "Notes: \n"
+                    "注意事項:\n"
                     "- gloss_ja / definition_ja / nuances_ja / notes_ja は日本語。\n"
                     "- もし対象語が名詞（一般名詞/固有名詞）や専門用語である場合、\n"
                     "  term_overview_ja（3〜5文の概要）と term_core_ja（3〜5文の本質）を必ず日本語で記述する。\n"
@@ -434,10 +434,10 @@ class WordPackFlow:
         """
         # 英語ヘッダ＋スキーマの枠は "正" の冒頭に揃える
         header = (
-            "You are a lexicographer. Return ONLY one JSON object, no prose.\n"
-            "Target word: "
+            "あなたは辞書編集者である。必ず JSON オブジェクト1件のみを返し、説明文は書かないこと。\n"
+            "対象語: "
             f"{lemma}\n\n"
-            "Schema (keys and types must match exactly):\n"
+            "スキーマ（キーと型は完全一致させること）:\n"
             "{\n"
             "  \"examples\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ]\n"
             "}\n"
@@ -446,14 +446,14 @@ class WordPackFlow:
         # Notes を共通とカテゴリ別に分割
         notes_common = _examples_common_notes_text()
         category_notes = _examples_category_notes_text(category)
-        enforce = "Apply these category-specific rules to the Target category only.\n"
+        enforce = "カテゴリ別ガイドラインは Target category のみに適用すること。\n"
 
         # カテゴリを明示し、このリクエストでは当該カテゴリのみ生成する旨を指定
         # 件数は最後に厳密指定（正の文言は保持しつつ上書き制約）
         tail = (
-            f"Target category: {category.value}\n"
-            "Return strictly one JSON object. No prose. No code fences.\n"
-            f"Override: examples must be exactly {count} items.\n"
+            f"対象カテゴリ: {category.value}\n"
+            "出力は JSON オブジェクト1件に厳密に限定し、説明文やコードフェンスを含めないこと。\n"
+            f"上書き指示: 例文数は必ず {count} 件とする。\n"
         )
 
         prompt = header + notes_common + category_notes + enforce + tail

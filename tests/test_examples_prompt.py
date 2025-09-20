@@ -38,7 +38,7 @@ from backend.models.word import ExampleCategory  # noqa: E402
         ),
         (
             ExampleCategory.Common,
-            ["- Common: 日常会話", "ビジネス英語ではなく"],
+            ["- Common: とても様々な日常会話", "ビジネス英語ではなく"],
             ["- Dev:", "- CS:", "- LLM:", "- Business:"],
         ),
     ],
@@ -48,9 +48,9 @@ def test_examples_prompt_is_category_specific(category, present, absent):
     prompt = flow._build_examples_prompt("converge", category, 2)
 
     # Common parts are always included
-    assert "You are a lexicographer." in prompt
+    assert "あなたは辞書編集者である。" in prompt
     assert "\"examples\"" in prompt
-    assert "Override: examples must be exactly 2 items." in prompt
+    assert "上書き指示: 例文数は必ず 2 件とする。" in prompt
 
     # Category-specific presence/absence
     for token in present:

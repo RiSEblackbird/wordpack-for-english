@@ -33,18 +33,16 @@ router = APIRouter(tags=["article"])
 def _prompt_for_article_import(text: str) -> str:
     """原文保持・機能語除外の厳格プロンプト。"""
     return (
-        """You will receive an English text. Return JSON only with these keys and nothing else.
-- title_en: A very short English title (<= 10 words).
-- body_ja: Faithful Japanese translation of the input text (do not summarize or paraphrase).
-- notes_ja: Short Japanese commentary (1-3 sentences), focusing on usage notes or context.
-- lemmas: Learning-worthy lemmas/phrases only (unique). STRICT FILTER: exclude function words
-  (articles, auxiliaries, copulas, simple pronouns, basic prepositions/conjunctions) and trivial tokens
-  like 'I', 'am', 'a', 'the', 'be', 'is', 'are', 'to', 'of', 'and', 'in', 'on', 'for', 'with', 'at', 'by', 'from', 'as'.
-  Include academic/professional terms and multi-word expressions (phrasal verbs, idioms, collocations).
-  Aim for ~5-30 items.
-IMPORTANT: Do NOT paraphrase or rewrite the input.
-Return JSON with keys: {"title_en", "body_ja", "notes_ja", "lemmas"}.
-Input text:
+        """以下の英語テキストが与えられる。出力は次のキーだけを含む JSON に限定し、その他の情報は一切出力しない。
+- title_en: 10語以内の非常に短い英語タイトル。
+- body_ja: 入力テキストを忠実に訳した日本語（要約や言い換えは禁止）。
+- notes_ja: 用法や文脈に焦点を当てた日本語の短い解説（1〜3文）。
+- lemmas: 学習価値のある lemma/フレーズのみ（重複禁止）。厳格フィルタ: 機能語（冠詞・助動詞・be 動詞・単純な代名詞・基本的な前置詞/接続詞）や、'I','am','a','the','be','is','are','to','of','and','in','on','for','with','at','by','from','as' などの些末語を除外する。
+  学術/専門的な語彙や複数語表現（句動詞・イディオム・コロケーション）を含める。
+  目安は 5〜30 件。
+重要: 入力テキストを言い換えたり書き換えたりしない。
+返却形式: {"title_en", "body_ja", "notes_ja", "lemmas"} のキーだけを含む JSON。
+入力テキスト:
 """ + text
     )
 
