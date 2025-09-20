@@ -127,6 +127,34 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     expect(genBodies.some((b) => b.model === 'gpt-5-mini' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
   });
 
+  it('sends selected generation_category in /api/article/import payload', async () => {
+    const fetchMock = setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+    const importTab = await screen.findByRole('button', { name: '文章インポート' });
+    await act(async () => {
+      await user.click(importTab);
+    });
+
+    // カテゴリ選択→インポート
+    const categorySelect = await screen.findByRole('combobox', { name: '' });
+    await act(async () => {
+      await user.selectOptions(categorySelect, 'Dev');
+    });
+    const textarea = screen.getByPlaceholderText('文章を貼り付け（日本語/英語）');
+    await act(async () => {
+      await user.type(textarea, 'hello cat');
+      await user.click(screen.getByRole('button', { name: 'インポート' }));
+    });
+
+    const bodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/import') : ((c[0] as URL).toString().endsWith('/api/article/import'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(bodies.length).toBeGreaterThan(0);
+    expect(bodies.some((b) => b.generation_category === 'Dev')).toBe(true);
+  });
+
   it('sends reasoning params for gpt-5-nano on both import and generate_and_import', async () => {
     const fetchMock = setupFetchMocks();
     render(<App />);

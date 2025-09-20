@@ -36,6 +36,7 @@ export const ArticleImportPanel: React.FC = () => {
 
   const importArticle = async () => {
     const selectedModel = model;
+    const selectedCategory = category;
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -44,7 +45,7 @@ export const ArticleImportPanel: React.FC = () => {
     setArticle(null);
     const notifId = addNotification({ title: '文章インポート中...', message: 'LLMで要約と語彙抽出を実行しています', status: 'progress', model: selectedModel });
     try {
-      const body: any = { text: text.trim() };
+      const body: any = { text: text.trim(), generation_category: selectedCategory };
       // WordPackPanel と同様のモデル選択ロジック
       body.model = selectedModel;
       if ((selectedModel || '').toLowerCase() === 'gpt-5-mini' || (selectedModel || '').toLowerCase() === 'gpt-5-nano') {
