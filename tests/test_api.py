@@ -414,3 +414,51 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
     assert r_wp.status_code == 200
     wp = r_wp.json()
     assert len(wp.get("examples", {}).get("Dev", [])) >= 2
+
+
+def test_category_generate_import_fallback_on_duplicate(client, monkeypatch):
+    """LLM が既存の lemma を繰り返し提案しても、重複回避で成功すること。
+
+    手順:
+    1) 先に `dupword` の WordPack を作成
+    2) LLM をスタブし、lemma 選定プロンプトには常に `dupword` を返す
+    3) /api/article/generate_and_import を叩くと、409 ではなく 200 で
+       別の lemma が選ばれて WordPack が作成されることを検証
+    """
+    import json as _json
+    import backend.providers as providers_mod
+
+    # 1) 先に重複対象の WordPack を用意
+    r_pre = client.post("/api/word/pack", json={"lemma": "dupword"})
+    assert r_pre.status_code == 200
+
+    class _StubLLMAlwaysDuplicate:
+        def complete(self, prompt: str) -> str:
+            p = (prompt or "")
+            # 例文生成プロンプト（スキーマに examples のみ）
+            if ("\"examples\"" in p) and ("Schema" in p):
+                return _json.dumps({
+                    "examples": [
+                        {"en": "Example about systems.", "ja": "システムに関する例。", "grammar_ja": "SVO。"},
+                        {"en": "Another example about performance.", "ja": "性能に関する別の例。", "grammar_ja": "SVO。"},
+                    ]
+                })
+            # カテゴリ別：単一 lemma を返すプロンプト（常に既存の dupword を返す）
+            if ("Return ONLY one JSON object" in p) and ("\"lemma\"" in p):
+                return '{"lemma":"dupword"}'
+            # 記事インポート系の補助（lemmas抽出など）
+            if ("lemmas" in p) and ("Return JSON" in p):
+                return '["dupword","performance"]'
+            # タイトル/訳/説明等はプレーンテキストで十分
+            return "ok"
+
+    # 共有LLMインスタンスをスタブで上書き
+    providers_mod._LLM_INSTANCE = _StubLLMAlwaysDuplicate()
+
+    r = client.post("/api/article/generate_and_import", json={"category": "Dev"})
+    # 旧実装では 409。改善後は 200 を期待
+    assert r.status_code == 200
+    body = r.json()
+    assert body["lemma"] != "dupword"
+    assert isinstance(body.get("word_pack_id"), str) and body["word_pack_id"].startswith("wp:")
+    assert body.get("generated_examples", 0) >= 2

@@ -35,18 +35,19 @@ export const ArticleImportPanel: React.FC = () => {
   const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
 
   const importArticle = async () => {
+    const selectedModel = model;
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
     setMsg(null);
     setArticle(null);
-    const notifId = addNotification({ title: '文章インポート中...', message: 'LLMで要約と語彙抽出を実行しています', status: 'progress' });
+    const notifId = addNotification({ title: '文章インポート中...', message: 'LLMで要約と語彙抽出を実行しています', status: 'progress', model: selectedModel });
     try {
       const body: any = { text: text.trim() };
       // WordPackPanel と同様のモデル選択ロジック
-      body.model = model;
-      if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
+      body.model = selectedModel;
+      if ((selectedModel || '').toLowerCase() === 'gpt-5-mini' || (selectedModel || '').toLowerCase() === 'gpt-5-nano') {
         body.reasoning = { effort: settings.reasoningEffort || 'minimal' };
         body.text_opts = { verbosity: settings.textVerbosity || 'medium' };
       } else {
@@ -65,7 +66,7 @@ export const ArticleImportPanel: React.FC = () => {
       });
       setArticle(refreshed);
       setMsg({ kind: 'status', text: '文章をインポートしました' });
-      updateNotification(notifId, { title: '文章インポート完了', status: 'success', message: '詳細を表示します' });
+      updateNotification(notifId, { title: '文章インポート完了', status: 'success', message: '詳細を表示します', model: selectedModel });
       // グローバルに記事更新イベントを通知（一覧の自動更新用）
       try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
       setDetailOpen(true);
@@ -74,7 +75,7 @@ export const ArticleImportPanel: React.FC = () => {
       if (ctrl.signal.aborted) return;
       const m = e instanceof ApiError ? e.message : '文章インポートに失敗しました';
       setMsg({ kind: 'alert', text: m });
-      updateNotification(notifId, { title: '文章インポート失敗', status: 'error', message: m });
+      updateNotification(notifId, { title: '文章インポート失敗', status: 'error', message: m, model: selectedModel });
     } finally {
       setLoading(false);
     }
@@ -170,15 +171,17 @@ export const ArticleImportPanel: React.FC = () => {
           </select>
           <button
             onClick={async () => {
+              const selectedCategory = category;
+              const selectedModel = model;
               setMsg(null);
               setArticle(null);
               setGenRunning((n) => n + 1);
-              const notifId = addNotification({ title: `【${category}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress' });
+              const notifId = addNotification({ title: `【${selectedCategory}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
               try {
-                const reqBody: any = { category };
+                const reqBody: any = { category: selectedCategory };
                 // generate_and_import は text キーで受け取る
-                reqBody.model = model;
-                if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
+                reqBody.model = selectedModel;
+                if ((selectedModel || '').toLowerCase() === 'gpt-5-mini' || (selectedModel || '').toLowerCase() === 'gpt-5-nano') {
                   reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
                   reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
                 } else {
@@ -190,13 +193,13 @@ export const ArticleImportPanel: React.FC = () => {
                   // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
                   timeoutMs: settings.requestTimeoutMs,
                 });
-                updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました` });
+                updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
                 try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
                 setMsg({ kind: 'status', text: '生成＆インポートを実行しました' });
               } catch (e) {
                 const m = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
                 setMsg({ kind: 'alert', text: m });
-                updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message: m });
+                updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message: m, model: selectedModel, category: selectedCategory });
               } finally {
                 setGenRunning((n) => Math.max(0, n - 1));
               }
