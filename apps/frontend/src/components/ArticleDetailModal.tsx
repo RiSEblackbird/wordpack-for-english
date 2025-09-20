@@ -42,14 +42,41 @@ export const ArticleDetailModal: React.FC<Props> = ({
   onOpenWordPackPreview,
   onDeleteWordPack,
 }) => {
-  const formattedCreatedAt = article?.created_at ? formatDateJst(article.created_at) : null;
-  const formattedUpdatedAt = article?.updated_at ? formatDateJst(article.updated_at) : null;
+  const formatDateWithFallback = (value?: string | null) => {
+    if (!value) return null;
+    const formatted = formatDateJst(value);
+    return formatted && formatted.trim() ? formatted : value;
+  };
+
   const generationDuration = (() => {
     if (!article?.created_at || !article?.updated_at) return null;
     const diff = calculateDurationMs(article.created_at, article.updated_at);
-    if (diff === null || diff <= 0) return null;
+    if (diff === null) return null;
     const label = formatDurationMs(diff);
-    return label ? label : null;
+    if (label && label.trim()) {
+      return label;
+    }
+    if (diff === 0) {
+      return '0秒';
+    }
+    return null;
+  })();
+
+  const metaRows = (() => {
+    if (!article) return [] as { label: string; value: string }[];
+    const rows: { label: string; value: string }[] = [];
+    const created = formatDateWithFallback(article.created_at);
+    if (created) rows.push({ label: '作成', value: created });
+    const updated = formatDateWithFallback(article.updated_at);
+    if (updated) rows.push({ label: '更新', value: updated });
+    if (generationDuration) rows.push({ label: '生成所要時間', value: generationDuration });
+    if (article.llm_model && article.llm_model.trim()) {
+      rows.push({ label: 'AIモデル', value: article.llm_model });
+    }
+    if (article.llm_params && article.llm_params.trim()) {
+      rows.push({ label: 'AIパラメータ', value: article.llm_params });
+    }
+    return rows;
   })();
 
   return (
@@ -76,8 +103,13 @@ export const ArticleDetailModal: React.FC<Props> = ({
               margin-top: 0.75rem;
               font-variant-numeric: tabular-nums;
             }
-            .ai-meta-grid div:nth-child(odd) {
+            .ai-meta-grid dt {
               font-weight: 600;
+            }
+            .ai-meta-grid dd {
+              margin: 0;
+              white-space: pre-wrap;
+              word-break: break-word;
             }
             @media (max-width: 480px) {
               .ai-meta-grid {
@@ -104,14 +136,15 @@ export const ArticleDetailModal: React.FC<Props> = ({
           {article.notes_ja ? (
             <div style={{ marginTop: '0.5rem', color: 'var(--color-subtle)' }}>{article.notes_ja}</div>
           ) : null}
-          {(formattedCreatedAt || formattedUpdatedAt || generationDuration || article.llm_model || article.llm_params) ? (
-            <div className="ai-meta-grid" data-testid="article-meta">
-              {formattedCreatedAt ? (<><div>作成</div><div>{formattedCreatedAt}</div></>) : null}
-              {formattedUpdatedAt ? (<><div>更新</div><div>{formattedUpdatedAt}</div></>) : null}
-              {generationDuration ? (<><div>生成所要時間</div><div>{generationDuration}</div></>) : null}
-              {article.llm_model ? (<><div>AIモデル</div><div>{article.llm_model}</div></>) : null}
-              {article.llm_params ? (<><div>AIパラメータ</div><div>{article.llm_params}</div></>) : null}
-            </div>
+          {metaRows.length > 0 ? (
+            <dl className="ai-meta-grid" data-testid="article-meta">
+              {metaRows.map((row, idx) => (
+                <React.Fragment key={`${row.label}-${idx}`}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </React.Fragment>
+              ))}
+            </dl>
           ) : null}
           <h4>関連WordPack</h4>
           <div className="ai-wp-grid">

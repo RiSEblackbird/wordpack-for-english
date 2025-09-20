@@ -29,6 +29,7 @@ describe('ArticleDetailModal', () => {
     );
 
     const meta = screen.getByTestId('article-meta');
+    expect(meta.tagName.toLowerCase()).toBe('dl');
     expect(meta).toHaveTextContent('作成');
     expect(meta).toHaveTextContent('更新');
     expect(meta).toHaveTextContent('生成所要時間');
@@ -39,5 +40,28 @@ describe('ArticleDetailModal', () => {
     expect(meta).toHaveTextContent('2024/05/01 10:00');
     expect(meta).toHaveTextContent('1分5秒');
     expect(screen.getByRole('heading', { level: 4, name: '関連WordPack' })).toBeInTheDocument();
+  });
+
+  it('falls back to 0秒 when created_at and updated_at are identical', () => {
+    const article: ArticleDetailData = {
+      id: 'art:zero',
+      title_en: 'Zero Duration',
+      body_en: 'English body',
+      body_ja: '日本語本文',
+      related_word_packs: [],
+      created_at: '2024-05-01T10:00:00+09:00',
+      updated_at: '2024-05-01T10:00:00+09:00',
+    };
+
+    render(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        article={article}
+      />,
+    );
+
+    const meta = screen.getByTestId('article-meta');
+    expect(meta).toHaveTextContent('0秒');
   });
 });

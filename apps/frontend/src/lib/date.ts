@@ -40,6 +40,9 @@ export function calculateDurationMs(start?: string | null, end?: string | null):
 
 export function formatDurationMs(durationMs: number): string {
   if (!Number.isFinite(durationMs) || durationMs < 0) return '';
+  if (durationMs === 0) {
+    return '0秒';
+  }
   if (durationMs < 1000) {
     return `${Math.round(durationMs)}ミリ秒`;
   }
