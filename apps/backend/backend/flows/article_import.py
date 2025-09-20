@@ -121,9 +121,10 @@ Input:
 STRICT FILTER: exclude function words (articles, auxiliaries, copulas, simple pronouns, basic prepositions/conjunctions)
 and trivial tokens like I, am, a, the, be, is, are, to, of, and, in, on, for, with, at, by, from, as.
 Exclude everyday vocabulary at CEFR A1-A2 level (greetings, calendar/time words, basic verbs like get, go, make, take, etc.).
-Focus on university-level or professional/academic vocabulary (CEFR B2+), including technical terms, discipline-specific nouns,
-and multi-word expressions (phrasal verbs, idioms, collocations).
-Prefer rare or precise terms over broad/general ones when both appear.
+Focus on university-level vocabulary (CEFR B2+) suitable for graduates, including advanced general academic words (e.g., resilience, articulate)
+and professional/technical terminology.
+Include multi-word expressions (phrasal verbs, idioms, collocations) when they represent advanced usage.
+Prefer rare or precise terms over broad/general ones when both appear, but do not skip solid academic vocabulary simply because it is widely used.
 Aim for ~5-30 items.
 Return a JSON array of strings. Example: ["supply chain", "mitigate", "trade-off"].
 Input:

@@ -13,3 +13,12 @@ def test_post_filter_excludes_basic_vocabulary():
     assert "hello" not in result
     assert "mitigate" in result
     assert "supply chain" in result
+
+
+def test_post_filter_retains_general_advanced_terms():
+    flow = ArticleImportFlow()
+    result = flow._post_filter_lemmas(["strategic", "analysis", "thanks"])
+
+    assert "strategic" in result
+    assert "analysis" in result
+    assert "thanks" not in result
