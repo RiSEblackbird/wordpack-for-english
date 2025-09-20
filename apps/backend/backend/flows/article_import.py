@@ -54,6 +54,36 @@ class ArticleImportFlow:
         "and","or","but","if","because","so","than","too","very","not","no","nor","also","then","there","here",
     }
 
+    _BASIC_LEMMAS: set[str] = {
+        "about","above","across","action","actually","after","again","against","age","ago","air","all","almost",
+        "alone","along","already","always","american","among","another","answer","any","anyone","anything","area",
+        "around","ask","away","back","bad","base","because","become","before","begin","behind","believe","best",
+        "better","big","black","body","book","both","business","call","called","car","care","case","center",
+        "change","child","children","city","class","clear","close","cold","college","come","common","company",
+        "country","course","create","day","days","development","different","difficult","direction","door","down",
+        "early","education","enough","even","evening","event","ever","every","everyone","everything","example",
+        "experience","family","far","father","feel","felt","few","find","first","follow","food","form","friend",
+        "friends","front","full","game","general","get","girl","give","given","good","government","great","group",
+        "hand","hands","happen","happened","hard","head","health","hear","heard","help","high","history","home",
+        "house","idea","important","interest","interesting","issue","job","keep","kind","know","known","large",
+        "last","later","learn","least","leave","left","letter","life","like","line","little","local","long",
+        "look","lot","love","main","major","make","making","man","many","matter","mean","member","men","might",
+        "million","money","month","months","morning","most","mother","move","much","music","name","national",
+        "need","never","new","next","night","nothing","number","often","old","once","open","order","other",
+        "others","part","people","perhaps","place","plan","play","point","power","present","president","problem",
+        "public","question","quite","real","really","reason","receive","research","right","room","run","school",
+        "set","several","show","small","someone","something","sometimes","start","state","story","student","study",
+        "such","system","take","team","tell","term","thing","think","thought","though","together","today","told",
+        "toward","town","try","turn","understand","university","use","used","using","very","want","war","water",
+        "week","weeks","while","white","whole","why","woman","women","word","work","world","write","year","years",
+        "young",
+        # 典型的な挨拶・日常語
+        "hello","hi","thanks","thank","please","okay","ok","bye","welcome","sorry","yeah","yep",
+        # 曜日・月
+        "monday","tuesday","wednesday","thursday","friday","saturday","sunday",
+        "january","february","march","april","may","june","july","august","september","october","november","december",
+    }
+
     # ---- 役割別プロンプト（サブグラフ相当） ----
     def _prompt_title(self, text: str) -> str:
         return (
@@ -135,6 +165,8 @@ Input:
                 continue
             low = token.lower()
             if low in self._STOP_LEMMAS:
+                continue
+            if low in self._BASIC_LEMMAS:
                 continue
             if len(token) <= 2 and not (token.isupper() and 2 <= len(token) <= 4):
                 continue
