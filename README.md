@@ -103,7 +103,7 @@ OpenAI LLM統合（Responses API）:
 
 LLM メタ情報の保存/返却:
 - WordPack: 生成/再生成時に使用した `llm_model`/`llm_params` をレスポンスに含め、DBへ保存
-- 文章（Article）: インポート時に使用した `llm_model`/`llm_params` と生成カテゴリ（Dev/CS/LLM/Business/Common）、生成開始/完了時刻を保存し、`GET /api/article/{id}` で返却
+- 文章（Article）: インポート時、フロントで選択したカテゴリを `generation_category` として `POST /api/article/import` に含めて送信します。バックエンドは `llm_model`/`llm_params` と共に保存し、生成開始/完了時刻も記録します。`GET /api/article/{id}` で返却。
 
 ---
 
@@ -299,6 +299,7 @@ FastAPI アプリは `apps/backend/backend/main.py`。
   - リクエスト例: `{ "model": "gpt-5-mini", "reasoning": { "effort": "minimal" }, "text": { "verbosity": "medium" } }` または `{ "model": "gpt-5-nano", "reasoning": { "effort": "minimal" }, "text": { "verbosity": "medium" } }`
   - レスポンス例: `{ "message": "Examples generated and appended", "added": 2, "category": "Dev", "items": [{"en":"...","ja":"..."}] }`
   - `model/temperature/reasoning/text` は任意。未指定時はサーバ既定（環境変数）を使用。
+  - `generation_category` は UI のカテゴリ選択値（Dev/CS/LLM/Business/Common）。
 
 - `GET /api/word/examples`（新）
   - 例文をWordPack横断で一覧取得。
