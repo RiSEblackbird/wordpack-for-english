@@ -35,8 +35,9 @@ class CategoryGenerateAndImportFlow:
             "params": None,
         }
 
-    def _prompt_lemma(self, category: ExampleCategory, attempted: List[str]) -> str:
+    def _prompt_lemma(self, category: ExampleCategory, attempted: List[str], avoid_existing: List[str]) -> str:
         attempted_list = ", ".join(attempted) if attempted else "(none)"
+        existing_list = ", ".join(avoid_existing[:30]) if avoid_existing else "(none)"
         return (
             "You are selecting a domain-relevant English lemma for example generation.\n"
             f"Target category: {category.value}.\n"
@@ -47,14 +48,53 @@ class CategoryGenerateAndImportFlow:
             "- Single word preferred; multi-word expressions allowed if they are common collocations or domain terms.\n"
             "- Length 1..64 chars. Use ASCII letters, hyphens, apostrophes, and spaces only.\n"
             "- Avoid ultra-generic function words and trivial tokens.\n"
-            "- Do NOT output a previously attempted lemma: " + attempted_list + "\n"
+            "- Do NOT output previously attempted or existing lemmas.\n"
+            "  Attempted (this session): " + attempted_list + "\n"
+            "  Existing in database (sample): " + existing_list + "\n"
             "Output JSON only."
         )
 
-    def _choose_new_lemma(self, category: ExampleCategory, max_retries: int = 3) -> str:
+    def _existing_lemmas_sample(self, limit: int = 50) -> List[str]:
+        try:
+            items = store.list_word_packs(limit=limit, offset=0)
+        except Exception:
+            return []
+        out: List[str] = []
+        for _id, lemma, _c, _u in items:
+            try:
+                out.append(str(lemma).strip().lower())
+            except Exception:
+                continue
+        # unique preserving order
+        seen: set[str] = set()
+        uniq: List[str] = []
+        for w in out:
+            if w and w not in seen:
+                seen.add(w)
+                uniq.append(w)
+        return uniq
+
+    def _fallback_candidates(self, category: ExampleCategory) -> List[str]:
+        base: List[str] = [
+            # generic, but not function words; safe ascii
+            "memoization", "serialization", "throughput", "latency", "idempotency",
+            "refactor", "concurrency", "race condition", "transaction", "consistency",
+            "sharding", "load testing", "rate limiting", "retry policy", "circuit breaker",
+        ]
+        by_cat: dict[str, List[str]] = {
+            "Dev": base + ["feature flag", "observability", "telemetry"],
+            "CS": base + ["graph traversal", "hash table", "binary search"],
+            "LLM": base + ["tokenization", "prompt engineering", "hallucination"],
+            "Business": base + ["stakeholder", "arbitrage", "churn"],
+            "Common": base + ["resilience", "trade-off", "estimate"],
+        }
+        return by_cat.get(category.value, base)
+
+    def _choose_new_lemma(self, category: ExampleCategory, max_retries: int = 5) -> str:
         attempted: List[str] = []
+        avoid_existing = self._existing_lemmas_sample(limit=60)
         for _ in range(max_retries):
-            prompt = self._prompt_lemma(category, attempted)
+            prompt = self._prompt_lemma(category, attempted, avoid_existing)
             # 観測: プロンプトと LLM 呼び出し
             try:
                 with span(trace=None, name="category.pick_lemma.prompt", input={"prompt_chars": len(prompt), "category": category.value, "attempted": len(attempted)}):
@@ -82,6 +122,16 @@ class CategoryGenerateAndImportFlow:
                 continue
             logger.info("category_pick_lemma", category=category.value, lemma=lemma)
             return lemma
+        # Fallback: choose from a deterministic candidate list filtered by existing
+        candidates = self._fallback_candidates(category)
+        for cand in candidates:
+            lc = str(cand).strip().lower()
+            if not lc or lc in attempted:
+                continue
+            if store.find_word_pack_id_by_lemma(lc) is None:
+                logger.info("category_pick_lemma_fallback", category=category.value, lemma=lc)
+                return lc
+        # still no choice
         raise HTTPException(status_code=409, detail={
             "message": "No unique lemma could be chosen after retries",
             "reason_code": "LEMMA_DUPLICATE_OR_INVALID",
