@@ -210,6 +210,8 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
             return ";".join(parts) if parts else None
 
         original_text = req.text.strip()
+        selected_llm_model = getattr(req, "model", None) or settings.llm_model
+        formatted_llm_params = _fmt_llm_params()
 
         try:
             graph = create_state_graph()
@@ -222,6 +224,8 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 "body_en": original_text,
                 "body_ja": "",
                 "notes_ja": None,
+                "llm_model": selected_llm_model,
+                "llm_params": formatted_llm_params,
             }
             # 保存済みIDを閉包で保持（LangGraphの差分返却による欠落対策）
             saved_article_id: Optional[str] = None
@@ -388,8 +392,8 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                         related_word_packs=[(l.word_pack_id, l.lemma, l.status) for l in s.get("links", [])],
                     )
                     meta = store.get_article(article_id)
-                    created_at = meta[4] if meta else ""
-                    updated_at = meta[5] if meta else ""
+                    created_at = meta[6] if meta else ""
+                    updated_at = meta[7] if meta else ""
                 s.update({
                     "article_id": article_id,
                     "title_en": title_en,
@@ -432,6 +436,9 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 out_state = compiled.invoke(state)  # type: ignore[attr-defined]
                 # 差分返却の場合でも初期stateを混ぜて欠落させない。ただし初期stateではなく、out_stateをそのまま優先。
                 s = out_state if isinstance(out_state, dict) else state
+                if isinstance(s, dict):
+                    s.setdefault("llm_model", selected_llm_model)
+                    s.setdefault("llm_params", formatted_llm_params)
             except Exception:
                 # LangGraph が使えない/非互換のときは順次実行
                 s = state
