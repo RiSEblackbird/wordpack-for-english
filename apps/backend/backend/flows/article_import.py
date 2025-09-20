@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, TypedDict
+from datetime import datetime
 import json
 import uuid
 
@@ -17,7 +18,6 @@ from ..models.article import (
 from . import create_state_graph, StateGraph
 from ..observability import span
 from fastapi import HTTPException
-from ..models.word import ExampleCategory
 from ..flows.word_pack import WordPackFlow
 
 
@@ -33,6 +33,9 @@ class _ArticleState(TypedDict, total=False):
     notes_ja: Optional[str]
     llm_model: Optional[str]
     llm_params: Optional[str]
+    generation_category: Optional[str]
+    generation_started_at: Optional[str]
+    generation_completed_at: Optional[str]
     created_at: str
     updated_at: str
 
@@ -212,6 +215,14 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
         original_text = req.text.strip()
         selected_llm_model = getattr(req, "model", None) or settings.llm_model
         formatted_llm_params = _fmt_llm_params()
+        generation_category = None
+        try:
+            cat = getattr(req, "generation_category", None)
+            if cat:
+                generation_category = getattr(cat, "value", None) or str(cat)
+        except Exception:
+            generation_category = None
+        generation_started_at = datetime.utcnow().isoformat()
 
         try:
             graph = create_state_graph()
@@ -226,6 +237,8 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 "notes_ja": None,
                 "llm_model": selected_llm_model,
                 "llm_params": formatted_llm_params,
+                "generation_category": generation_category,
+                "generation_started_at": generation_started_at,
             }
             # 保存済みIDを閉包で保持（LangGraphの差分返却による欠落対策）
             saved_article_id: Optional[str] = None
@@ -375,6 +388,10 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 notes_ja = str(s.get("notes_ja") or "").strip() or None
                 llm_model = str(s.get("llm_model") or "").strip() or None
                 llm_params = str(s.get("llm_params") or "").strip() or None
+                generation_category_local = str(s.get("generation_category") or "").strip() or None
+                started_at = str(s.get("generation_started_at") or "").strip() or None
+                completed_at = datetime.utcnow().isoformat()
+                s["generation_completed_at"] = completed_at
 
                 with span(trace=None, name="article.save_article"):
                     article_id = f"art:{uuid.uuid4().hex[:12]}"
@@ -389,11 +406,17 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                         notes_ja=notes_ja,
                         llm_model=llm_model,
                         llm_params=llm_params,
+                        generation_category=generation_category_local,
                         related_word_packs=[(l.word_pack_id, l.lemma, l.status) for l in s.get("links", [])],
+                        created_at=started_at,
+                        updated_at=completed_at,
                     )
                     meta = store.get_article(article_id)
-                    created_at = meta[6] if meta else ""
-                    updated_at = meta[7] if meta else ""
+                    created_at = meta[7] if meta else ""
+                    updated_at = meta[8] if meta else ""
+                    if meta and len(meta) >= 9:
+                        s["generation_category"] = (meta[6] or generation_category_local)
+                        s["generation_started_at"] = created_at or started_at or generation_started_at
                 s.update({
                     "article_id": article_id,
                     "title_en": title_en,
@@ -439,6 +462,8 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 if isinstance(s, dict):
                     s.setdefault("llm_model", selected_llm_model)
                     s.setdefault("llm_params", formatted_llm_params)
+                    s.setdefault("generation_category", generation_category)
+                    s.setdefault("generation_started_at", generation_started_at)
             except Exception:
                 # LangGraph が使えない/非互換のときは順次実行
                 s = state
@@ -452,6 +477,9 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 try:
                     s["llm_model"] = getattr(req, 'model', None) or settings.llm_model
                     s["llm_params"] = _fmt_llm_params()
+                    s["generation_category"] = generation_category
+                    if "generation_started_at" not in s:
+                        s["generation_started_at"] = generation_started_at
                 except Exception:
                     pass
                 s = _save_article(s)
@@ -468,6 +496,9 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
             try:
                 s["llm_model"] = getattr(req, 'model', None) or settings.llm_model
                 s["llm_params"] = _fmt_llm_params()
+                s["generation_category"] = generation_category
+                if "generation_started_at" not in s:
+                    s["generation_started_at"] = generation_started_at
             except Exception:
                 pass
             s = _save_article(s)  # type: ignore[name-defined]
@@ -490,7 +521,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                         "diagnostics": {"article_id": aid},
                     },
                 )
-            title_en, body_en_db, body_ja_db, notes_ja_db, llm_model_db, llm_params_db, created_at, updated_at, links = got
+            title_en, body_en_db, body_ja_db, notes_ja_db, llm_model_db, llm_params_db, generation_category_db, created_at, updated_at, links = got
             link_models: list[ArticleWordPackLink] = [
                 ArticleWordPackLink(word_pack_id=wp, lemma=lm, status=st, is_empty=True) for (wp, lm, st) in links
             ]
@@ -523,6 +554,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 notes_ja=(notes_ja_db or None),
                 llm_model=(llm_model_db or None),
                 llm_params=(llm_params_db or None),
+                generation_category=(generation_category_db or None),
                 related_word_packs=link_models,
                 created_at=created_at,
                 updated_at=updated_at,

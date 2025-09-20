@@ -12,6 +12,7 @@ describe('ArticleDetailModal', () => {
       notes_ja: '補足',
       llm_model: 'gpt-5-mini',
       llm_params: 'reasoning.effort=minimal;text.verbosity=medium',
+      generation_category: 'Dev',
       created_at: '2024-05-01T10:00:00+09:00',
       updated_at: '2024-05-01T10:01:05+09:00',
       related_word_packs: [
@@ -33,12 +34,14 @@ describe('ArticleDetailModal', () => {
     expect(meta).toHaveTextContent('作成');
     expect(meta).toHaveTextContent('更新');
     expect(meta).toHaveTextContent('生成所要時間');
+    expect(meta).toHaveTextContent('生成カテゴリ');
     expect(meta).toHaveTextContent('AIモデル');
     expect(meta).toHaveTextContent('AIパラメータ');
     expect(meta).toHaveTextContent('gpt-5-mini');
     expect(meta).toHaveTextContent('reasoning.effort=minimal;text.verbosity=medium');
     expect(meta).toHaveTextContent('2024/05/01 10:00');
     expect(meta).toHaveTextContent('1分5秒');
+    expect(meta).toHaveTextContent('Dev（開発）');
     expect(screen.getByRole('heading', { level: 4, name: '関連WordPack' })).toBeInTheDocument();
   });
 
@@ -63,5 +66,7 @@ describe('ArticleDetailModal', () => {
 
     const meta = screen.getByTestId('article-meta');
     expect(meta).toHaveTextContent('0秒');
+    expect(meta).toHaveTextContent('未指定');
+    expect(meta).toHaveTextContent('未記録');
   });
 });

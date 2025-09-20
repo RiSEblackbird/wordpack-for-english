@@ -18,6 +18,10 @@ class ArticleImportRequest(BaseModel):
     temperature: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     reasoning: Optional[dict] = Field(default=None)
     text_opts: Optional[dict] = Field(default=None)
+    generation_category: Optional[ExampleCategory] = Field(
+        default=None,
+        description="文章生成時に使用した例文カテゴリ（任意）",
+    )
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -37,6 +41,7 @@ class Article(BaseModel):
     # LLM 情報（任意）
     llm_model: Optional[str] = None
     llm_params: Optional[str] = None
+    generation_category: Optional[ExampleCategory] = None
     related_word_packs: List[ArticleWordPackLink] = Field(default_factory=list)
 
 

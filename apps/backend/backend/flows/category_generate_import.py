@@ -12,6 +12,7 @@ from ..store import store
 from ..models.word import WordPack, ExampleCategory
 from ..flows.word_pack import WordPackFlow
 from ..flows.article_import import ArticleImportFlow
+from ..models.article import ArticleImportRequest
 from ..observability import span
 
 
@@ -192,7 +193,12 @@ class CategoryGenerateAndImportFlow:
         for ex in items:
             try:
                 with span(trace=None, name="category.import_article", input={"lemma": lemma, "category": category.value, "text_chars": len(str(ex.get("en") or ""))}):
-                    res = art_flow.run(type("Req", (), {"text": ex.get("en"), "model": None, "temperature": None, "reasoning": None, "text_opts": None})())  # lightweight shim
+                    req_payload = ArticleImportRequest(
+                        text=str(ex.get("en") or ""),
+                        model=self._llm_info.get("model"),
+                        generation_category=category,
+                    )
+                    res = art_flow.run(req_payload)
                 article_ids.append(res.id)
             except Exception:
                 # Skip failed imports but continue

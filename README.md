@@ -103,7 +103,7 @@ OpenAI LLM統合（Responses API）:
 
 LLM メタ情報の保存/返却:
 - WordPack: 生成/再生成時に使用した `llm_model`/`llm_params` をレスポンスに含め、DBへ保存
-- 文章（Article）: インポート時に使用した `llm_model`/`llm_params` を保存し、`GET /api/article/{id}` で返却
+- 文章（Article）: インポート時に使用した `llm_model`/`llm_params` と生成カテゴリ（Dev/CS/LLM/Business/Common）、生成開始/完了時刻を保存し、`GET /api/article/{id}` で返却
 
 ---
 

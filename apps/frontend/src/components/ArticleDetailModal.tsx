@@ -18,6 +18,7 @@ export interface ArticleDetailData {
   // 生成に使用したAI情報（任意）
   llm_model?: string | null;
   llm_params?: string | null;
+  generation_category?: 'Dev' | 'CS' | 'LLM' | 'Business' | 'Common' | null;
   related_word_packs: ArticleWordPackLink[];
   created_at?: string;
   updated_at?: string;
@@ -62,22 +63,35 @@ export const ArticleDetailModal: React.FC<Props> = ({
     return null;
   })();
 
-  const metaRows = (() => {
+  const metaRows = React.useMemo(() => {
     if (!article) return [] as { label: string; value: string }[];
     const rows: { label: string; value: string }[] = [];
-    const created = formatDateWithFallback(article.created_at);
-    if (created) rows.push({ label: '作成', value: created });
-    const updated = formatDateWithFallback(article.updated_at);
-    if (updated) rows.push({ label: '更新', value: updated });
-    if (generationDuration) rows.push({ label: '生成所要時間', value: generationDuration });
-    if (article.llm_model && article.llm_model.trim()) {
-      rows.push({ label: 'AIモデル', value: article.llm_model });
-    }
-    if (article.llm_params && article.llm_params.trim()) {
-      rows.push({ label: 'AIパラメータ', value: article.llm_params });
-    }
+    const created = formatDateWithFallback(article.created_at) ?? '未記録';
+    const updated = formatDateWithFallback(article.updated_at) ?? '未記録';
+    const durationLabel = generationDuration || '計測不可';
+    const categoryMap: Record<'Dev' | 'CS' | 'LLM' | 'Business' | 'Common', string> = {
+      Dev: 'Dev（開発）',
+      CS: 'CS（コンピュータサイエンス）',
+      LLM: 'LLM（大規模言語モデル）',
+      Business: 'Business（ビジネス）',
+      Common: 'Common（日常）',
+    };
+    const categoryLabel = (() => {
+      const raw = (article.generation_category || '').trim();
+      if (!raw) return '未指定';
+      return categoryMap[raw as keyof typeof categoryMap] || raw;
+    })();
+    const modelLabel = (article.llm_model || '').trim() || '未記録';
+    const paramsLabel = (article.llm_params || '').trim() || '未記録';
+
+    rows.push({ label: '作成', value: created });
+    rows.push({ label: '更新', value: updated });
+    rows.push({ label: '生成所要時間', value: durationLabel });
+    rows.push({ label: '生成カテゴリ', value: categoryLabel });
+    rows.push({ label: 'AIモデル', value: modelLabel });
+    rows.push({ label: 'AIパラメータ', value: paramsLabel });
     return rows;
-  })();
+  }, [article, generationDuration]);
 
   return (
     <Modal

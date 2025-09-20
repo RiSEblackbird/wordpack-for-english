@@ -393,6 +393,9 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
     first_article_id = body["article_ids"][0]
     r_get = client.get(f"/api/article/{first_article_id}")
     assert r_get.status_code == 200
+    art_detail = r_get.json()
+    assert art_detail.get("generation_category") == "Dev"
+    assert art_detail.get("llm_model")
 
     # WordPack 一覧から該当 lemma を探し、例文が2件以上あること
     r_list = client.get("/api/word/packs")

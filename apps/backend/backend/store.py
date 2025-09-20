@@ -158,6 +158,7 @@ class AppSQLiteStore:
                         notes_ja TEXT,
                         llm_model TEXT,
                         llm_params TEXT,
+                        generation_category TEXT,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
                     );
@@ -172,6 +173,10 @@ class AppSQLiteStore:
                     pass
                 try:
                     conn.execute("ALTER TABLE articles ADD COLUMN llm_params TEXT;")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE articles ADD COLUMN generation_category TEXT;")
                 except Exception:
                     pass
                 # Article と WordPack の関連（多対多）
@@ -749,23 +754,28 @@ class AppSQLiteStore:
         notes_ja: str | None,
         llm_model: str | None = None,
         llm_params: str | None = None,
+        generation_category: str | None = None,
         related_word_packs: list[tuple[str, str, str]] | None = None,
+        created_at: str | None = None,
+        updated_at: str | None = None,
     ) -> None:
         """記事を保存（upsert）し、関連WordPackリンクも置き換える。
 
         - related_word_packs: [(word_pack_id, lemma, status), ...]
         """
         now = datetime.utcnow().isoformat()
+        created_at_override = created_at
+        updated_at_value = updated_at or now
         conn = self._connect()
         try:
             with conn:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO articles(
-                        id, title_en, body_en, body_ja, notes_ja, llm_model, llm_params, created_at, updated_at
+                        id, title_en, body_en, body_ja, notes_ja, llm_model, llm_params, generation_category, created_at, updated_at
                     ) VALUES (
-                        ?, ?, ?, ?, ?, ?, ?,
-                        COALESCE((SELECT created_at FROM articles WHERE id = ?), ?),
+                        ?, ?, ?, ?, ?, ?, ?, ?,
+                        COALESCE(?, (SELECT created_at FROM articles WHERE id = ?), ?),
                         ?
                     );
                     """,
@@ -777,9 +787,11 @@ class AppSQLiteStore:
                         (notes_ja or ""),
                         (llm_model or None),
                         (llm_params or None),
+                        (generation_category or None),
+                        created_at_override,
                         article_id,
                         now,
-                        now,
+                        updated_at_value,
                     ),
                 )
                 if related_word_packs is not None:
@@ -795,7 +807,10 @@ class AppSQLiteStore:
         finally:
             conn.close()
 
-    def get_article(self, article_id: str) -> Optional[tuple[str, str, str, str | None, str | None, str, str, list[tuple[str, str, str]]]]:
+    def get_article(
+        self,
+        article_id: str,
+    ) -> Optional[tuple[str, str, str, str | None, str | None, str | None, str, str, list[tuple[str, str, str]]]]:
         """記事を取得し、関連WordPackリンク一覧を返す。
 
         戻り値: (title_en, body_en, body_ja, notes_ja, llm_model, llm_params, created_at, updated_at, [(word_pack_id, lemma, status)])
@@ -803,7 +818,7 @@ class AppSQLiteStore:
         conn = self._connect()
         try:
             cur = conn.execute(
-                "SELECT title_en, body_en, body_ja, notes_ja, llm_model, llm_params, created_at, updated_at FROM articles WHERE id = ?;",
+                "SELECT title_en, body_en, body_ja, notes_ja, llm_model, llm_params, generation_category, created_at, updated_at FROM articles WHERE id = ?;",
                 (article_id,),
             )
             row = cur.fetchone()
@@ -826,6 +841,7 @@ class AppSQLiteStore:
                 row["notes_ja"],
                 row["llm_model"],
                 row["llm_params"],
+                row["generation_category"],
                 row["created_at"],
                 row["updated_at"],
                 links,
