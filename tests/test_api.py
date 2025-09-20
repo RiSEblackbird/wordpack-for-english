@@ -396,6 +396,10 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
     art_detail = r_get.json()
     assert art_detail.get("generation_category") == "Dev"
     assert art_detail.get("llm_model")
+    assert art_detail.get("generation_started_at")
+    assert art_detail.get("generation_completed_at")
+    assert art_detail.get("generation_duration_ms") is not None
+    assert art_detail.get("generation_duration_ms") >= 0
 
     # WordPack 一覧から該当 lemma を探し、例文が2件以上あること
     r_list = client.get("/api/word/packs")
@@ -499,6 +503,9 @@ def test_article_import_includes_llm_metadata(monkeypatch, tmp_path):
     assert "temperature=0.42" in data["llm_params"]
     assert "reasoning.effort=focused" in data["llm_params"]
     assert "text.verbosity=medium" in data["llm_params"]
+    assert data["generation_started_at"]
+    assert data["generation_completed_at"]
+    assert data["generation_duration_ms"] >= 0
 
     art_id = data["id"]
     r_get = client.get(f"/api/article/{art_id}")
@@ -506,3 +513,6 @@ def test_article_import_includes_llm_metadata(monkeypatch, tmp_path):
     detail = r_get.json()
     assert detail["llm_model"] == "gpt-test-alpha"
     assert detail["llm_params"] == data["llm_params"]
+    assert detail["generation_started_at"]
+    assert detail["generation_completed_at"]
+    assert detail["generation_duration_ms"] >= 0

@@ -160,7 +160,10 @@ class AppSQLiteStore:
                         llm_params TEXT,
                         generation_category TEXT,
                         created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL
+                        updated_at TEXT NOT NULL,
+                        generation_started_at TEXT,
+                        generation_completed_at TEXT,
+                        generation_duration_ms INTEGER
                     );
                     """
                 )
@@ -177,6 +180,18 @@ class AppSQLiteStore:
                     pass
                 try:
                     conn.execute("ALTER TABLE articles ADD COLUMN generation_category TEXT;")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE articles ADD COLUMN generation_started_at TEXT;")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE articles ADD COLUMN generation_completed_at TEXT;")
+                except Exception:
+                    pass
+                try:
+                    conn.execute("ALTER TABLE articles ADD COLUMN generation_duration_ms INTEGER;")
                 except Exception:
                     pass
                 # Article と WordPack の関連（多対多）
@@ -758,6 +773,9 @@ class AppSQLiteStore:
         related_word_packs: list[tuple[str, str, str]] | None = None,
         created_at: str | None = None,
         updated_at: str | None = None,
+        generation_started_at: str | None = None,
+        generation_completed_at: str | None = None,
+        generation_duration_ms: int | None = None,
     ) -> None:
         """記事を保存（upsert）し、関連WordPackリンクも置き換える。
 
@@ -766,17 +784,37 @@ class AppSQLiteStore:
         now = datetime.utcnow().isoformat()
         created_at_override = created_at
         updated_at_value = updated_at or now
+        generation_started_at_override = generation_started_at or None
+        generation_started_at_default = (
+            generation_started_at_override
+            or created_at_override
+            or now
+        )
+        generation_completed_at_override = generation_completed_at or None
+        generation_completed_at_default = (
+            generation_completed_at_override
+            or updated_at_value
+            or now
+        )
+        generation_duration_value = (
+            None if generation_duration_ms is None else int(generation_duration_ms)
+        )
+        generation_duration_default = generation_duration_value
         conn = self._connect()
         try:
             with conn:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO articles(
-                        id, title_en, body_en, body_ja, notes_ja, llm_model, llm_params, generation_category, created_at, updated_at
+                        id, title_en, body_en, body_ja, notes_ja, llm_model, llm_params, generation_category,
+                        created_at, updated_at, generation_started_at, generation_completed_at, generation_duration_ms
                     ) VALUES (
                         ?, ?, ?, ?, ?, ?, ?, ?,
                         COALESCE(?, (SELECT created_at FROM articles WHERE id = ?), ?),
-                        ?
+                        ?,
+                        COALESCE(?, (SELECT generation_started_at FROM articles WHERE id = ?), ?),
+                        COALESCE(?, (SELECT generation_completed_at FROM articles WHERE id = ?), ?),
+                        COALESCE(?, (SELECT generation_duration_ms FROM articles WHERE id = ?), ?)
                     );
                     """,
                     (
@@ -792,6 +830,15 @@ class AppSQLiteStore:
                         article_id,
                         now,
                         updated_at_value,
+                        generation_started_at_override,
+                        article_id,
+                        generation_started_at_default,
+                        generation_completed_at_override,
+                        article_id,
+                        generation_completed_at_default,
+                        generation_duration_value,
+                        article_id,
+                        generation_duration_default,
                     ),
                 )
                 if related_word_packs is not None:
@@ -810,7 +857,23 @@ class AppSQLiteStore:
     def get_article(
         self,
         article_id: str,
-    ) -> Optional[tuple[str, str, str, str | None, str | None, str | None, str, str, list[tuple[str, str, str]]]]:
+    ) -> Optional[
+        tuple[
+            str,
+            str,
+            str,
+            str | None,
+            str | None,
+            str | None,
+            str | None,
+            str,
+            str,
+            str | None,
+            str | None,
+            int | None,
+            list[tuple[str, str, str]],
+        ]
+    ]:
         """記事を取得し、関連WordPackリンク一覧を返す。
 
         戻り値: (title_en, body_en, body_ja, notes_ja, llm_model, llm_params, created_at, updated_at, [(word_pack_id, lemma, status)])
@@ -818,7 +881,23 @@ class AppSQLiteStore:
         conn = self._connect()
         try:
             cur = conn.execute(
-                "SELECT title_en, body_en, body_ja, notes_ja, llm_model, llm_params, generation_category, created_at, updated_at FROM articles WHERE id = ?;",
+                """
+                SELECT
+                    title_en,
+                    body_en,
+                    body_ja,
+                    notes_ja,
+                    llm_model,
+                    llm_params,
+                    generation_category,
+                    created_at,
+                    updated_at,
+                    generation_started_at,
+                    generation_completed_at,
+                    generation_duration_ms
+                FROM articles
+                WHERE id = ?;
+                """,
                 (article_id,),
             )
             row = cur.fetchone()
@@ -844,6 +923,9 @@ class AppSQLiteStore:
                 row["generation_category"],
                 row["created_at"],
                 row["updated_at"],
+                row["generation_started_at"],
+                row["generation_completed_at"],
+                row["generation_duration_ms"],
                 links,
             )
         finally:

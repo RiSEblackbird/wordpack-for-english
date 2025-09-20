@@ -43,6 +43,9 @@ class Article(BaseModel):
     llm_params: Optional[str] = None
     generation_category: Optional[ExampleCategory] = None
     related_word_packs: List[ArticleWordPackLink] = Field(default_factory=list)
+    generation_started_at: Optional[str] = None
+    generation_completed_at: Optional[str] = None
+    generation_duration_ms: Optional[int] = None
 
 
 class ArticleDetailResponse(Article):

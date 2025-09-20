@@ -121,7 +121,26 @@ async def get_article(article_id: str) -> ArticleDetailResponse:
     result = store.get_article(article_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Article not found")
-    title_en, body_en, body_ja, notes_ja, llm_model, llm_params, generation_category, created_at, updated_at, links = result
+    (
+        title_en,
+        body_en,
+        body_ja,
+        notes_ja,
+        llm_model,
+        llm_params,
+        generation_category,
+        created_at,
+        updated_at,
+        generation_started_at,
+        generation_completed_at,
+        generation_duration_ms,
+        links,
+    ) = result
+    duration_value = (
+        int(generation_duration_ms)
+        if isinstance(generation_duration_ms, (int, float)) and not isinstance(generation_duration_ms, bool)
+        else None
+    )
     link_models: list[ArticleWordPackLink] = []
     for (wp_id, lemma, status) in links:
         is_empty = True
@@ -150,6 +169,9 @@ async def get_article(article_id: str) -> ArticleDetailResponse:
         related_word_packs=link_models,
         created_at=created_at,
         updated_at=updated_at,
+        generation_started_at=generation_started_at,
+        generation_completed_at=generation_completed_at,
+        generation_duration_ms=duration_value,
     )
 
 

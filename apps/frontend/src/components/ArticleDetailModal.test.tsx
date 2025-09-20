@@ -15,6 +15,9 @@ describe('ArticleDetailModal', () => {
       generation_category: 'Dev',
       created_at: '2024-05-01T10:00:00+09:00',
       updated_at: '2024-05-01T10:01:05+09:00',
+      generation_started_at: '2024-05-01T10:00:00+09:00',
+      generation_completed_at: '2024-05-01T10:01:05+09:00',
+      generation_duration_ms: 65_000,
       related_word_packs: [
         { word_pack_id: 'wp:1', lemma: 'alpha', status: 'existing' },
       ],
@@ -54,6 +57,7 @@ describe('ArticleDetailModal', () => {
       related_word_packs: [],
       created_at: '2024-05-01T10:00:00+09:00',
       updated_at: '2024-05-01T10:00:00+09:00',
+      generation_duration_ms: 0,
     };
 
     render(

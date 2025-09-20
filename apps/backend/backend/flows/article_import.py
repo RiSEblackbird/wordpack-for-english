@@ -392,6 +392,16 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 started_at = str(s.get("generation_started_at") or "").strip() or None
                 completed_at = datetime.utcnow().isoformat()
                 s["generation_completed_at"] = completed_at
+                duration_ms = None
+                try:
+                    if started_at:
+                        start_dt = datetime.fromisoformat(started_at)
+                        end_dt = datetime.fromisoformat(completed_at)
+                        duration_ms = max(0, int((end_dt - start_dt).total_seconds() * 1000))
+                except Exception:
+                    duration_ms = None
+                if duration_ms is not None:
+                    s["generation_duration_ms"] = duration_ms
 
                 with span(trace=None, name="article.save_article"):
                     article_id = f"art:{uuid.uuid4().hex[:12]}"
@@ -410,13 +420,37 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                         related_word_packs=[(l.word_pack_id, l.lemma, l.status) for l in s.get("links", [])],
                         created_at=started_at,
                         updated_at=completed_at,
+                        generation_started_at=started_at,
+                        generation_completed_at=completed_at,
+                        generation_duration_ms=duration_ms,
                     )
                     meta = store.get_article(article_id)
-                    created_at = meta[7] if meta else ""
-                    updated_at = meta[8] if meta else ""
-                    if meta and len(meta) >= 9:
+                    created_at = ""
+                    updated_at = ""
+                    started_at_db = started_at
+                    completed_at_db = completed_at
+                    duration_ms_db = duration_ms
+                    if meta:
+                        created_at = str(meta[7] or "")
+                        updated_at = str(meta[8] or "")
+                        started_at_db = (
+                            str(meta[9] or "")
+                            or created_at
+                            or started_at
+                            or generation_started_at
+                        )
+                        completed_at_db = str(meta[10] or "") or updated_at or completed_at
+                        if len(meta) >= 12:
+                            duration_ms_db = meta[11] if meta[11] is not None else duration_ms_db
                         s["generation_category"] = (meta[6] or generation_category_local)
-                        s["generation_started_at"] = created_at or started_at or generation_started_at
+                    if started_at_db:
+                        s["generation_started_at"] = started_at_db
+                    if completed_at_db:
+                        s["generation_completed_at"] = completed_at_db
+                    if duration_ms_db is not None:
+                        s["generation_duration_ms"] = duration_ms_db
+                    created_at = created_at or (started_at_db or "")
+                    updated_at = updated_at or (completed_at_db or "")
                 s.update({
                     "article_id": article_id,
                     "title_en": title_en,
@@ -521,7 +555,21 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                         "diagnostics": {"article_id": aid},
                     },
                 )
-            title_en, body_en_db, body_ja_db, notes_ja_db, llm_model_db, llm_params_db, generation_category_db, created_at, updated_at, links = got
+            (
+                title_en,
+                body_en_db,
+                body_ja_db,
+                notes_ja_db,
+                llm_model_db,
+                llm_params_db,
+                generation_category_db,
+                created_at,
+                updated_at,
+                generation_started_at_db,
+                generation_completed_at_db,
+                generation_duration_ms_db,
+                links,
+            ) = got
             link_models: list[ArticleWordPackLink] = [
                 ArticleWordPackLink(word_pack_id=wp, lemma=lm, status=st, is_empty=True) for (wp, lm, st) in links
             ]
@@ -558,6 +606,13 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 related_word_packs=link_models,
                 created_at=created_at,
                 updated_at=updated_at,
+                generation_started_at=(generation_started_at_db or None),
+                generation_completed_at=(generation_completed_at_db or None),
+                generation_duration_ms=(
+                    int(generation_duration_ms_db)
+                    if isinstance(generation_duration_ms_db, (int, float)) and not isinstance(generation_duration_ms_db, bool)
+                    else None
+                ),
             )
         except HTTPException:
             raise

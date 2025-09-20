@@ -22,6 +22,9 @@ export interface ArticleDetailData {
   related_word_packs: ArticleWordPackLink[];
   created_at?: string;
   updated_at?: string;
+  generation_started_at?: string | null;
+  generation_completed_at?: string | null;
+  generation_duration_ms?: number | null;
 }
 
 interface Props {
@@ -49,9 +52,22 @@ export const ArticleDetailModal: React.FC<Props> = ({
     return formatted && formatted.trim() ? formatted : value;
   };
 
-  const generationDuration = (() => {
-    if (!article?.created_at || !article?.updated_at) return null;
-    const diff = calculateDurationMs(article.created_at, article.updated_at);
+  const generationDuration = React.useMemo(() => {
+    if (!article) return null;
+    const durationValue = article.generation_duration_ms;
+    if (typeof durationValue === 'number' && Number.isFinite(durationValue)) {
+      const label = formatDurationMs(durationValue);
+      if (label && label.trim()) {
+        return label;
+      }
+      if (durationValue === 0) {
+        return '0秒';
+      }
+    }
+    const start = article.generation_started_at || article.created_at;
+    const end = article.generation_completed_at || article.updated_at;
+    if (!start || !end) return null;
+    const diff = calculateDurationMs(start, end);
     if (diff === null) return null;
     const label = formatDurationMs(diff);
     if (label && label.trim()) {
@@ -61,13 +77,13 @@ export const ArticleDetailModal: React.FC<Props> = ({
       return '0秒';
     }
     return null;
-  })();
+  }, [article]);
 
   const metaRows = React.useMemo(() => {
     if (!article) return [] as { label: string; value: string }[];
     const rows: { label: string; value: string }[] = [];
-    const created = formatDateWithFallback(article.created_at) ?? '未記録';
-    const updated = formatDateWithFallback(article.updated_at) ?? '未記録';
+    const created = formatDateWithFallback(article.generation_started_at || article.created_at) ?? '未記録';
+    const updated = formatDateWithFallback(article.generation_completed_at || article.updated_at) ?? '未記録';
     const durationLabel = generationDuration || '計測不可';
     const categoryMap: Record<'Dev' | 'CS' | 'LLM' | 'Business' | 'Common', string> = {
       Dev: 'Dev（開発）',
