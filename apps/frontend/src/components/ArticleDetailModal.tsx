@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal } from './Modal';
+import { calculateDurationMs, formatDateJst, formatDurationMs } from '../lib/date';
 
 export interface ArticleWordPackLink {
   word_pack_id: string;
@@ -41,6 +42,16 @@ export const ArticleDetailModal: React.FC<Props> = ({
   onOpenWordPackPreview,
   onDeleteWordPack,
 }) => {
+  const formattedCreatedAt = article?.created_at ? formatDateJst(article.created_at) : null;
+  const formattedUpdatedAt = article?.updated_at ? formatDateJst(article.updated_at) : null;
+  const generationDuration = (() => {
+    if (!article?.created_at || !article?.updated_at) return null;
+    const diff = calculateDurationMs(article.created_at, article.updated_at);
+    if (diff === null || diff <= 0) return null;
+    const label = formatDurationMs(diff);
+    return label ? label : null;
+  })();
+
   return (
     <Modal
       isOpen={!!article && isOpen}
@@ -50,14 +61,32 @@ export const ArticleDetailModal: React.FC<Props> = ({
       {article ? (
         <div>
           <style>{`
-            .ai-wp-grid { 
-              display: grid; 
-              grid-template-columns: 1fr; 
-              gap: 0.35rem; 
+            .ai-wp-grid {
+              display: grid;
+              grid-template-columns: 1fr;
+              gap: 0.35rem;
+            }
+            .ai-meta-grid {
+              display: grid;
+              grid-template-columns: minmax(6rem, 0.45fr) 1fr;
+              column-gap: 0.75rem;
+              row-gap: 0.35rem;
+              font-size: 0.75em;
+              color: var(--color-subtle);
+              margin-top: 0.75rem;
+              font-variant-numeric: tabular-nums;
+            }
+            .ai-meta-grid div:nth-child(odd) {
+              font-weight: 600;
+            }
+            @media (max-width: 480px) {
+              .ai-meta-grid {
+                grid-template-columns: minmax(5rem, 0.55fr) 1fr;
+              }
             }
             @media (min-width: 480px) {
-              .ai-wp-grid { 
-                grid-template-columns: repeat(2, 1fr); 
+              .ai-wp-grid {
+                grid-template-columns: repeat(2, 1fr);
               }
             }
             @media (min-width: 768px) {
@@ -75,8 +104,11 @@ export const ArticleDetailModal: React.FC<Props> = ({
           {article.notes_ja ? (
             <div style={{ marginTop: '0.5rem', color: 'var(--color-subtle)' }}>{article.notes_ja}</div>
           ) : null}
-          {(article.llm_model || article.llm_params) ? (
-            <div className="kv" style={{ marginTop: '0.5rem', fontSize: '0.8em', color: 'var(--color-subtle)' }}>
+          {(formattedCreatedAt || formattedUpdatedAt || generationDuration || article.llm_model || article.llm_params) ? (
+            <div className="ai-meta-grid" data-testid="article-meta">
+              {formattedCreatedAt ? (<><div>作成</div><div>{formattedCreatedAt}</div></>) : null}
+              {formattedUpdatedAt ? (<><div>更新</div><div>{formattedUpdatedAt}</div></>) : null}
+              {generationDuration ? (<><div>生成所要時間</div><div>{generationDuration}</div></>) : null}
               {article.llm_model ? (<><div>AIモデル</div><div>{article.llm_model}</div></>) : null}
               {article.llm_params ? (<><div>AIパラメータ</div><div>{article.llm_params}</div></>) : null}
             </div>
