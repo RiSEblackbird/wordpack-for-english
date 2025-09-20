@@ -4,6 +4,11 @@
 
 <img width="2015" height="1061" alt="image" src="https://github.com/user-attachments/assets/0e1cee28-af2a-4a0e-9eff-975cb693c50f" />
 
+| | | |
+|---|---|---|
+| <a href="images/a.png"><img src="https://github.com/user-attachments/assets/0e1cee28-af2a-4a0e-9eff-975cb693c50f" width="220" alt="A"></a> | <a href="images/b.png"><img src="images/b.png" width="220" alt="B"></a> | <a href="images/c.png"><img src="images/c.png" width="220" alt="C"></a> |
+
+
 ## 特徴
 - バックエンド: FastAPI、構成・ルータ・簡易ログ、テストあり
 - フロントエンド: React + TypeScript + Vite、単一ページ/2パネル構成（WordPack/設定）
