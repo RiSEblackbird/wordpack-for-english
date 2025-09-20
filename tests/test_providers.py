@@ -8,7 +8,13 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def add_src_to_path():
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "backend"))
+    os.environ.setdefault("STRICT_MODE", "false")
+    import importlib
+    importlib.invalidate_caches()
+    for name in list(sys.modules.keys()):
+        if name == "backend" or name.startswith("backend."):
+            sys.modules.pop(name)
     yield
 
 

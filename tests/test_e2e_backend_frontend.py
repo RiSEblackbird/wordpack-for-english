@@ -1,3 +1,4 @@
+import os
 import sys
 import types
 from pathlib import Path
@@ -6,12 +7,19 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+os.environ.setdefault("STRICT_MODE", "false")
+
+
 @pytest.fixture(scope="module")
 def app_client():
     # src を import パスに追加
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-    import os
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "backend"))
     os.environ["STRICT_MODE"] = "false"
+    import importlib
+    importlib.invalidate_caches()
+    for name in list(sys.modules.keys()):
+        if name == "backend" or name.startswith("backend."):
+            sys.modules.pop(name)
     # langgraph を最小スタブ化（バックエンドのみのE2Eに留める）
     lg_mod = types.ModuleType("langgraph")
     graph_mod = types.ModuleType("langgraph.graph")

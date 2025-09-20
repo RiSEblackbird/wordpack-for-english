@@ -134,17 +134,17 @@
   pip install -r requirements.txt
 
   # Frontend
-  cd src/frontend
+  cd apps/frontend
   npm install
   ```
 - サービス起動（別ターミナル）:
   ```bash
   # Backend（リポジトリルートで）
   # .env に OPENAI_API_KEY を設定
-  python -m uvicorn backend.main:app --reload --app-dir src
+  python -m uvicorn backend.main:app --reload --app-dir apps/backend
 
   # Frontend
-  cd src/frontend
+  cd apps/frontend
   npm run dev
   ```
 - ヒント（APIキー/出力）:
@@ -165,14 +165,14 @@
 - ダッシュボードで Input/Output が空の場合:
   1) `.env` のキー/ホスト設定を確認
   2) `LANGFUSE_ENABLED=true` か確認
-  3) `src/backend/observability.py` の v3 分岐が有効（`set_attribute('input'|'output', ...)` 実行）であることを確認
+  3) `apps/backend/backend/observability.py` の v3 分岐が有効（`set_attribute('input'|'output', ...)` 実行）であることを確認
 
 ### B-2. アーキテクチャと実装メモ
 - エンドポイント統合は `/api/*` に統一
 - LangGraph/OpenAI LLM 統合
   - `WordPackFlow`、`ReadingAssistFlow`、`FeedbackFlow` は OpenAI LLM を直接使用し、`citations`/`confidence`（Enum: low/medium/high）を付与
   - ChromaDB 依存は削除
-- 発音生成は `src/backend/pronunciation.py` に統一
+- 発音生成は `apps/backend/backend/pronunciation.py` に統一
   - cmudict/g2p-en 利用時は精度向上、未導入時は例外辞書+規則フォールバック（タイムアウト制御）
 
 ### B-3. API 一覧（現状）
@@ -250,7 +250,7 @@
 
 - 500 Internal Server Error で `ValidationError: 1 validation error for ContrastItem with Field required`
   - 原因: Pydantic v2 のエイリアス設定未適用により `with` → `with_` マッピング不全
-  - 対応: `src/backend/models/word.py` の `ContrastItem` に `model_config = ConfigDict(populate_by_name=true)`（適用済み）。最新版へ更新し再起動（Docker は再ビルド推奨）
+  - 対応: `apps/backend/backend/models/word.py` の `ContrastItem` に `model_config = ConfigDict(populate_by_name=true)`（適用済み）。最新版へ更新し再起動（Docker は再ビルド推奨）
   - 補足: API レスポンスの `contrast` は `[{"with": string, "diff_ja": string}]`
 
 ### B-7. 運用のヒント（PR4）

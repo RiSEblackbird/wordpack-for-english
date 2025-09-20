@@ -32,7 +32,7 @@ python -m venv .venv
 pip install -r requirements.txt  # M5: 発音で cmudict / g2p-en を使用
 
 # Frontend
-cd src/frontend
+cd apps/frontend
 npm install
 ```
 
@@ -48,7 +48,7 @@ cp env.example .env
 ### 1-4. バックエンド起動
 ```bash
 # リポジトリルートで
-python -m uvicorn backend.main:app --reload --app-dir src
+python -m uvicorn backend.main:app --reload --app-dir apps/backend
 ```
 - 既定ポート: `http://127.0.0.1:8000`
 - ヘルスチェック: `GET /healthz`
@@ -56,7 +56,7 @@ python -m uvicorn backend.main:app --reload --app-dir src
 
 ### 1-5. フロントエンド起動
 ```bash
-cd src/frontend
+cd apps/frontend
 npm run dev
 ```
 - 既定ポート: `http://127.0.0.1:5173`
@@ -71,7 +71,7 @@ docker compose up --build
 - フロントエンド: http://127.0.0.1:${FRONTEND_PORT:-5173}
 - ホットリロード:
   - backend: `uvicorn --reload` + ボリュームマウント `.:/app`
-  - frontend: Vite dev サーバ + ボリュームマウント `src/frontend:/app`
+- frontend: Vite dev サーバ + ボリュームマウント `apps/frontend:/app`
 - フロントからの API 呼び出しは Vite のプロキシ設定で `http://backend:8000` に転送されます。
   - フロントエンドでは、生成/再生成/削除の完了時に `wordpack:updated` を発火し、保存済み一覧が自動更新されます。進捗や成功/失敗は右下の通知カードに表示されます。
 
@@ -122,8 +122,7 @@ LLM メタ情報の保存/返却:
 
 ## 2. ディレクトリ構成（抜粋）
 ```
-app/                     # 追加のサンプルFastAPIアプリ（静的配信デモ等）
-src/backend/             # 本番用FastAPIアプリ
+apps/backend/backend/    # 本番用FastAPIアプリ
   main.py                # ルータ登録/ログ初期化
   config.py              # 環境設定（pydantic-settings）
   logging.py             # structlog設定
@@ -131,16 +130,18 @@ src/backend/             # 本番用FastAPIアプリ
   flows/                 # LangGraphベースの処理
   models/                # pydanticモデル（厳密化済み: Enum/Field制約/例）
   pronunciation.py       # 発音（cmudict/g2p-en優先・例外辞書/キャッシュ/タイムアウト付き）
-src/frontend/            # React + Vite
+apps/frontend/           # React + Vite
   src/components/        # 2パネルのコンポーネント（WordPack/Settings）
   src/SettingsContext.tsx
-static/                  # 最小UIの静的ファイル（`app/main.py`用）
+packages/shared/         # （今後）OpenAPI生成型や共通DTOを配置
+examples/static-ui/      # 静的UIのサンプル（旧 `app/`）
+static/                  # FastAPI ルートから配信する最小静的ファイル
 ```
 
 ---
 
 ## 3. API 概要
-FastAPI アプリは `src/backend/main.py`。
+FastAPI アプリは `apps/backend/backend/main.py`。
 
 - `GET /healthz`
   - ヘルスチェック。レスポンス: `{ "status": "ok" }`
@@ -157,7 +158,7 @@ FastAPI アプリは `src/backend/main.py`。
   - リクエスト例: `{ "lemma": "insight" }`
   - レスポンス例: `{ "id": "wp:insight:a1b2c3d4" }`
   - 周辺知識パック生成（OpenAI LLM: 語義/共起/対比/例文/語源/学習カード要点/発音RPを直接生成し `citations` と `confidence` を付与）。
-  - 発音: 実装は `src/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
+  - 発音: 実装は `apps/backend/backend/pronunciation.py` に一本化。cmudict/g2p-en を優先し、例外辞書・辞書キャッシュ・タイムアウトを備えた規則フォールバックで `pronunciation.ipa_GA`、`syllables`、`stress_index` を付与。
   - 例文: Dev/CS/LLM/Business/Common 別の英日ペア配列で返却。各要素は `{ en, ja, grammar_ja?, category?, llm_model?, llm_params? }`。カテゴリ定義は次の通り：
     - `category` はサーバが付与するカテゴリEnum（`Dev|CS|LLM|Business|Common`）。後方互換のため任意。
     - `llm_model` は例文生成に使用したモデル名（任意）。
@@ -374,7 +375,7 @@ FastAPI アプリは `src/backend/main.py`。
 ```bash
 pytest
 # もしくは従来同様の明示オプション
-pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
+pytest -q --cov=apps/backend/backend --cov-report=term-missing --cov-fail-under=60
 ```
 - カバレッジ閾値は `pytest.ini` に設定（60%）。必要に応じて上書き可。
 - テスト構成:
@@ -385,7 +386,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
     - PR4 追加: 基本SLA（少数リクエストで5秒以内）を検証。`X-Request-ID` ヘッダの付与も確認。
 
 フロントエンド単体テスト（Vitest/jsdom）:
-- `src/frontend/vitest.setup.ts` で `window.matchMedia` のポリフィルを提供しています。jsdom には `matchMedia` がないため、コンポーネントの幅検知（`(min-width: 900px)`）でエラーにならないようにしています。
+- `apps/frontend/vitest.setup.ts` で `window.matchMedia` のポリフィルを提供しています。jsdom には `matchMedia` がないため、コンポーネントの幅検知（`(min-width: 900px)`）でエラーにならないようにしています。
 - ポリフィルは `addEventListener`/`removeEventListener` とレガシー `addListener`/`removeListener` の双方に対応するダミー実装です（常に `matches=false`）。UIロジックは初期値に依存せず、レンダリング後の振る舞いをアサートしてください。
 
 注意:
@@ -395,7 +396,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
 ---
 
 ## 6. 設定/環境変数
-- `src/backend/config.py`
+- `apps/backend/backend/config.py`
   - 共通:
     - `environment`
     - `llm_provider` … `openai` | `local`
@@ -430,7 +431,7 @@ pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60
    - WordPack のJSONが途中で切れないよう、十分なトークン数を確保してください。
 
 補足（互換キーの無視）:
-- 旧サンプル/別アプリ由来のキー（例: `API_KEY`/`ALLOWED_ORIGINS` など）が `.env` に残っていても、`src/backend/config.py` は未使用の環境変数を無視する設定になっています（`extra="ignore"`）。
+- 旧サンプル/別アプリ由来のキー（例: `API_KEY`/`ALLOWED_ORIGINS` など）が `.env` に残っていても、`apps/backend/backend/config.py` は未使用の環境変数を無視する設定になっています（`extra="ignore"`）。
 - そのため Docker 環境でも、未使用キーが存在して起動が失敗することはありません。
 
 ### 6-2. Langfuse の有効化（任意）
@@ -459,7 +460,7 @@ Strict モード（`STRICT_MODE=true`）で `LANGFUSE_ENABLED=true` のとき、
 #### Input / Output の表示について
 - 本リポジトリでは、Langfuse v3 のスパン属性として `input` と `output` を付与します（HTTP 親スパンはリクエストの要点とレスポンスの要点、LLM スパンはプロンプト長や結果テキストなど）。
 - v2 クライアント互換時は `trace/span.update(input=..., output=...)` を使用します。
-- ダッシュボードに Input/Output が表示されない場合は、`LANGFUSE_ENABLED=true` とキー設定、ならびに `src/backend/observability.py` が v3 分岐で `set_attribute('input'|'output', ...)` を実行していることを確認してください。
+- ダッシュボードに Input/Output が表示されない場合は、`LANGFUSE_ENABLED=true` とキー設定、ならびに `apps/backend/backend/observability.py` が v3 分岐で `set_attribute('input'|'output', ...)` を実行していることを確認してください。
 
 #### 6-2-1. 文章インポート（ArticleImportFlow）のトレース
 - `POST /api/article/import` は `ArticleImportFlow` によって LangGraph スタイルでオーケストレーションされ、各ステップに Langfuse スパンが付与されています。
