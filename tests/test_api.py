@@ -8,10 +8,17 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture(scope="module")
 def client():
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
+    sys.path.insert(0, str(backend_root))
     # tests: strict を無効化（ダミー・フォールバック許可）
     import os
     os.environ["STRICT_MODE"] = "false"
+    # backend.* モジュールを明示的にアンロードして設定を取り直す
+    import importlib
+    importlib.invalidate_caches()
+    for name in list(sys.modules.keys()):
+        if name == "backend" or name.startswith("backend."):
+            sys.modules.pop(name)
     # langgraph を本物のモジュールとしてスタブ（パッケージ/サブモジュール両方）
     lg_mod = types.ModuleType("langgraph")
     graph_mod = types.ModuleType("langgraph.graph")
@@ -21,7 +28,6 @@ def client():
     sys.modules.setdefault("langgraph.graph", graph_mod)
     sys.modules.setdefault("chromadb", types.SimpleNamespace())
     # 設定変更後に関連モジュールをリロードして反映
-    import importlib
     for m in ["backend.config", "backend.providers", "backend.main"]:
         if m in sys.modules:
             importlib.reload(sys.modules[m])

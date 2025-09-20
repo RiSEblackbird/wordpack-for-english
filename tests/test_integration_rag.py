@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+os.environ.setdefault("STRICT_MODE", "false")
+
 
 @pytest.fixture(scope="module")
 def client_with_openai_llm():
@@ -18,10 +20,14 @@ def client_with_openai_llm():
         os.environ["OPENAI_API_KEY"] = "test-key"
 
     # src を import パスに追加
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "backend"))
 
     # 設定反映のため関連モジュールをリロード
     import importlib
+    importlib.invalidate_caches()
+    for name in list(sys.modules.keys()):
+        if name == "backend" or name.startswith("backend."):
+            sys.modules.pop(name)
     for m in ["backend.providers", "backend.main"]:
         if m in sys.modules:
             importlib.reload(sys.modules[m])

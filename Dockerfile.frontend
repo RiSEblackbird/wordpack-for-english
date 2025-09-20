@@ -4,7 +4,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install dependencies (use repo root context; copy only frontend manifests)
-COPY src/frontend/package*.json ./
+COPY apps/frontend/package*.json ./
 RUN npm ci || npm install
 
 EXPOSE 5173

@@ -1,16 +1,23 @@
+import os
 import sys
-from pathlib import Path
 import time
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
+os.environ.setdefault("STRICT_MODE", "false")
+
 
 @pytest.fixture(scope="module")
 def client():
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-    import os
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "backend"))
     os.environ["STRICT_MODE"] = "false"
+    import importlib
+    importlib.invalidate_caches()
+    for name in list(sys.modules.keys()):
+        if name == "backend" or name.startswith("backend."):
+            sys.modules.pop(name)
     from backend.main import app
     return TestClient(app)
 
@@ -56,7 +63,7 @@ def test_progress_and_grade_lemma_regression(client):
 
 def test_sla_word_pack_smoke(client):
     """基本SLA(少数リクエストで5秒以内)を満たす。"""
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "backend"))
     start = time.time()
     for _ in range(10):
         assert client.post("/api/word/pack", json={"lemma": "sla"}).status_code == 200

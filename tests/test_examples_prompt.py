@@ -1,11 +1,13 @@
+import os
 import sys
 from pathlib import Path
 
 import pytest
 
 
-# Ensure `src` is importable
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+# Ensure backend package is importable
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "backend"))
+os.environ.setdefault("STRICT_MODE", "false")
 
 from backend.flows.word_pack import WordPackFlow  # noqa: E402
 from backend.models.word import ExampleCategory  # noqa: E402
