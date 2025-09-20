@@ -2,11 +2,9 @@
 
 英単語トレーナー（OpenAI LLM×LangGraph）。技術・科学英文の読み・用法・発音の理解を支援します。リポジトリはバックエンド（FastAPI）とフロントエンド（React + Vite）のモノレポ構成です。
 
-<img width="2015" height="1061" alt="image" src="https://github.com/user-attachments/assets/0e1cee28-af2a-4a0e-9eff-975cb693c50f" />
-
 | | | |
 |---|---|---|
-| <a href="images/a.png"><img src="https://github.com/user-attachments/assets/0e1cee28-af2a-4a0e-9eff-975cb693c50f" width="220" alt="A"></a> | <a href="images/b.png"><img src="images/b.png" width="220" alt="B"></a> | <a href="images/c.png"><img src="images/c.png" width="220" alt="C"></a> |
+| <img width="600" alt="image" src="https://github.com/user-attachments/assets/0e1cee28-af2a-4a0e-9eff-975cb693c50f" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/c4b000bf-aa7c-4d94-bc6c-f639fdce515a" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/bc3af0f4-e2e9-4d93-85ec-2ffb38a5643c" /> |
 
 
 ## 特徴
