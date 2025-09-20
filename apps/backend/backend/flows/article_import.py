@@ -120,7 +120,10 @@ Input:
             """From the input English text, list learning-worthy lemmas and multi-word expressions.
 STRICT FILTER: exclude function words (articles, auxiliaries, copulas, simple pronouns, basic prepositions/conjunctions)
 and trivial tokens like I, am, a, the, be, is, are, to, of, and, in, on, for, with, at, by, from, as.
-Include academic/professional terms and multi-word expressions (phrasal verbs, idioms, collocations).
+Exclude everyday vocabulary at CEFR A1-A2 level (greetings, calendar/time words, basic verbs like get, go, make, take, etc.).
+Focus on university-level or professional/academic vocabulary (CEFR B2+), including technical terms, discipline-specific nouns,
+and multi-word expressions (phrasal verbs, idioms, collocations).
+Prefer rare or precise terms over broad/general ones when both appear.
 Aim for ~5-30 items.
 Return a JSON array of strings. Example: ["supply chain", "mitigate", "trade-off"].
 Input:
