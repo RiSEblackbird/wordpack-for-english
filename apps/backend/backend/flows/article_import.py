@@ -54,6 +54,36 @@ class ArticleImportFlow:
         "and","or","but","if","because","so","than","too","very","not","no","nor","also","then","there","here",
     }
 
+    _BASIC_LEMMAS: set[str] = {
+        "about","above","across","action","actually","after","again","against","age","ago","air","all","almost",
+        "alone","along","already","always","american","among","another","answer","any","anyone","anything","area",
+        "around","ask","away","back","bad","base","because","become","before","begin","behind","believe","best",
+        "better","big","black","body","book","both","business","call","called","car","care","case","center",
+        "change","child","children","city","class","clear","close","cold","college","come","common","company",
+        "country","course","create","day","days","development","different","difficult","direction","door","down",
+        "early","education","enough","even","evening","event","ever","every","everyone","everything","example",
+        "experience","family","far","father","feel","felt","few","find","first","follow","food","form","friend",
+        "friends","front","full","game","general","get","girl","give","given","good","government","great","group",
+        "hand","hands","happen","happened","hard","head","health","hear","heard","help","high","history","home",
+        "house","idea","important","interest","interesting","issue","job","keep","kind","know","known","large",
+        "last","later","learn","least","leave","left","letter","life","like","line","little","local","long",
+        "look","lot","love","main","major","make","making","man","many","matter","mean","member","men","might",
+        "million","money","month","months","morning","most","mother","move","much","music","name","national",
+        "need","never","new","next","night","nothing","number","often","old","once","open","order","other",
+        "others","part","people","perhaps","place","plan","play","point","power","present","president","problem",
+        "public","question","quite","real","really","reason","receive","research","right","room","run","school",
+        "set","several","show","small","someone","something","sometimes","start","state","story","student","study",
+        "such","system","take","team","tell","term","thing","think","thought","though","together","today","told",
+        "toward","town","try","turn","understand","university","use","used","using","very","want","war","water",
+        "week","weeks","while","white","whole","why","woman","women","word","work","world","write","year","years",
+        "young",
+        # 典型的な挨拶・日常語
+        "hello","hi","thanks","thank","please","okay","ok","bye","welcome","sorry","yeah","yep",
+        # 曜日・月
+        "monday","tuesday","wednesday","thursday","friday","saturday","sunday",
+        "january","february","march","april","may","june","july","august","september","october","november","december",
+    }
+
     # ---- 役割別プロンプト（サブグラフ相当） ----
     def _prompt_title(self, text: str) -> str:
         return (
@@ -78,8 +108,11 @@ Input:
 
     def _prompt_explanation(self, text: str) -> str:
         return (
-            """Write a concise Japanese explanation (1-3 sentences) for the input English text.
-Focus on usage notes, key terms, or context that helps Japanese learners.
+            """Write a detailed Japanese explanation (2-4 sentences) for the input English text.
+Prioritize grammar analysis: name key sentence structures, tense/aspect/voice choices, and explain why they are used.
+Highlight idioms, phrasal verbs, collocations, and set phrases with their nuance and usage restrictions.
+If a technical term appears, briefly clarify how it functions inside the sentence.
+Keep the explanation instructional and concrete for university-educated learners.
 Output only the explanation sentences without quotes.
 Input:
 <INPUT_START>\n""" + text + """\n<INPUT_END>"""
@@ -90,7 +123,11 @@ Input:
             """From the input English text, list learning-worthy lemmas and multi-word expressions.
 STRICT FILTER: exclude function words (articles, auxiliaries, copulas, simple pronouns, basic prepositions/conjunctions)
 and trivial tokens like I, am, a, the, be, is, are, to, of, and, in, on, for, with, at, by, from, as.
-Include academic/professional terms and multi-word expressions (phrasal verbs, idioms, collocations).
+Exclude everyday vocabulary at CEFR A1-A2 level (greetings, calendar/time words, basic verbs like get, go, make, take, etc.).
+Focus on university-level vocabulary (CEFR B2+) suitable for graduates, including advanced general academic words (e.g., resilience, articulate)
+and professional/technical terminology.
+Include multi-word expressions (phrasal verbs, idioms, collocations) when they represent advanced usage.
+Prefer rare or precise terms over broad/general ones when both appear, but do not skip solid academic vocabulary simply because it is widely used.
 Aim for ~5-30 items.
 Return a JSON array of strings. Example: ["supply chain", "mitigate", "trade-off"].
 Input:
@@ -135,6 +172,8 @@ Input:
                 continue
             low = token.lower()
             if low in self._STOP_LEMMAS:
+                continue
+            if low in self._BASIC_LEMMAS:
                 continue
             if len(token) <= 2 and not (token.isupper() and 2 <= len(token) <= 4):
                 continue
