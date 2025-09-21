@@ -26,26 +26,29 @@ describe('WordPackListPanel modal preview', () => {
         return new Response(
           JSON.stringify({
             items: [
-              { 
-                id: 'wp:test:1', 
-                lemma: 'delta', 
-                created_at: twoDaysAgo.toISOString(), 
-                updated_at: yesterday.toISOString(), 
-                is_empty: true 
+              {
+                id: 'wp:test:1',
+                lemma: 'delta',
+                sense_title: 'デルタ概説',
+                created_at: twoDaysAgo.toISOString(),
+                updated_at: yesterday.toISOString(),
+                is_empty: true
               },
-              { 
-                id: 'wp:test:2', 
-                lemma: 'alpha', 
-                created_at: yesterday.toISOString(), 
-                updated_at: now.toISOString(), 
+              {
+                id: 'wp:test:2',
+                lemma: 'alpha',
+                sense_title: 'アルファ概説',
+                created_at: yesterday.toISOString(),
+                updated_at: now.toISOString(),
                 is_empty: false,
                 examples_count: { Dev: 2, CS: 1, LLM: 0, Business: 3, Common: 4 }
               },
-              { 
-                id: 'wp:test:3', 
-                lemma: 'beta', 
-                created_at: now.toISOString(), 
-                updated_at: twoDaysAgo.toISOString(), 
+              {
+                id: 'wp:test:3',
+                lemma: 'beta',
+                sense_title: 'ベータ概説',
+                created_at: now.toISOString(),
+                updated_at: twoDaysAgo.toISOString(),
                 is_empty: false,
                 examples_count: { Dev: 1, CS: 2, LLM: 1, Business: 1, Common: 2 }
               },
@@ -62,6 +65,7 @@ describe('WordPackListPanel modal preview', () => {
         return new Response(
           JSON.stringify({
             lemma: 'delta',
+            sense_title: 'デルタ概説',
             pronunciation: { ipa_GA: null, ipa_RP: null, syllables: null, stress_index: null, linking_notes: [] },
             senses: [{ id: 's1', gloss_ja: '意味', definition_ja: '定義', nuances_ja: 'ニュアンス', patterns: ['p1'], synonyms: ['syn'], antonyms: ['ant'], register: 'formal', notes_ja: '注意' }],
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
@@ -103,6 +107,7 @@ describe('WordPackListPanel modal preview', () => {
         return new Response(
           JSON.stringify({
             lemma: 'alpha',
+            sense_title: 'アルファ概説',
             pronunciation: { ipa_GA: null, ipa_RP: null, syllables: null, stress_index: null, linking_notes: [] },
             senses: [{ id: 's1', gloss_ja: '意味', definition_ja: '定義', nuances_ja: 'ニュアンス', patterns: ['p1'], synonyms: ['syn'], antonyms: ['ant'], register: 'formal', notes_ja: '注意' }],
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },

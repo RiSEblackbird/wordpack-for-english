@@ -51,6 +51,7 @@ class AppSQLiteStore:
                     CREATE TABLE IF NOT EXISTS word_packs (
                         id TEXT PRIMARY KEY,
                         lemma TEXT NOT NULL,
+                        sense_title TEXT NOT NULL DEFAULT '',
                         data TEXT NOT NULL,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
@@ -120,23 +121,30 @@ class AppSQLiteStore:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_article ON article_word_packs(article_id);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_lemma ON article_word_packs(lemma);")
 
-    def _split_examples_from_payload(self, data: str | Mapping[str, Any]) -> tuple[str, Mapping[str, Any] | None]:
+    def _split_examples_from_payload(
+        self, data: str | Mapping[str, Any]
+    ) -> tuple[str, Mapping[str, Any] | None, str]:
         if isinstance(data, Mapping):
             parsed: Mapping[str, Any] = dict(data)
         else:
             try:
                 parsed = json.loads(data) if data else {}
             except Exception:
-                return (data if isinstance(data, str) else json.dumps({}, ensure_ascii=False), None)
+                return (data if isinstance(data, str) else json.dumps({}, ensure_ascii=False), None, "")
             if not isinstance(parsed, Mapping):
-                return (data if isinstance(data, str) else json.dumps({}, ensure_ascii=False), None)
+                return (data if isinstance(data, str) else json.dumps({}, ensure_ascii=False), None, "")
+        sense_title = ""
+        try:
+            sense_title = str(parsed.get("sense_title") or "").strip()
+        except Exception:
+            sense_title = ""
         examples = parsed.get("examples") if isinstance(parsed, Mapping) else None
         if isinstance(examples, Mapping):
             core = dict(parsed)
             core.pop("examples", None)
-            return json.dumps(core, ensure_ascii=False), examples
+            return json.dumps(core, ensure_ascii=False), examples, sense_title
         serialized = json.dumps(parsed, ensure_ascii=False) if not isinstance(data, str) else data
-        return serialized, None
+        return serialized, None, sense_title
 
     def _iter_example_rows(
         self, examples: Mapping[str, Any]
@@ -199,24 +207,30 @@ class AppSQLiteStore:
         core 部分（examples を除く）を word_packs.data に保存する。
         """
         now = datetime.now(UTC).isoformat()
-        core_json, examples = self._split_examples_from_payload(data)
+        core_json, examples, sense_title = self._split_examples_from_payload(data)
+        sense_title = (sense_title or "").strip()
+        if not sense_title:
+            sense_title = lemma[:40]
+        else:
+            sense_title = sense_title[:40]
 
         with self._conn() as conn:
             with conn:
                 conn.execute(
                     """
-                    INSERT INTO word_packs(id, lemma, data, created_at, updated_at)
+                    INSERT INTO word_packs(id, lemma, sense_title, data, created_at, updated_at)
                     VALUES (
-                        ?, ?, ?,
+                        ?, ?, ?, ?,
                         COALESCE((SELECT created_at FROM word_packs WHERE id = ?), ?),
                         ?
                     )
                     ON CONFLICT(id) DO UPDATE SET
                         lemma = excluded.lemma,
+                        sense_title = excluded.sense_title,
                         data = excluded.data,
                         updated_at = excluded.updated_at;
                     """,
-                    (word_pack_id, lemma, core_json, word_pack_id, now, now),
+                    (word_pack_id, lemma, sense_title, core_json, word_pack_id, now, now),
                 )
 
                 if isinstance(examples, Mapping):
@@ -249,14 +263,17 @@ class AppSQLiteStore:
             data_json = self._merge_core_with_examples(row["data"], rows)
             return (row["lemma"], data_json, row["created_at"], row["updated_at"])
 
-    def list_word_packs(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str]]:
-        """WordPack一覧を取得する。戻り値: [(id, lemma, created_at, updated_at), ...]"""
+    def list_word_packs(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str, str]]:
+        """WordPack一覧を取得する。戻り値: [(id, lemma, sense_title, created_at, updated_at), ...]"""
         with self._conn() as conn:
             cur = conn.execute(
-                "SELECT id, lemma, created_at, updated_at FROM word_packs ORDER BY created_at DESC LIMIT ? OFFSET ?;",
+                "SELECT id, lemma, sense_title, created_at, updated_at FROM word_packs ORDER BY created_at DESC LIMIT ? OFFSET ?;",
                 (limit, offset),
             )
-            return [(row["id"], row["lemma"], row["created_at"], row["updated_at"]) for row in cur.fetchall()]
+            return [
+                (row["id"], row["lemma"], row["sense_title"], row["created_at"], row["updated_at"])
+                for row in cur.fetchall()
+            ]
 
     def count_word_packs(self) -> int:
         """WordPack総件数を返す。"""
@@ -267,10 +284,10 @@ class AppSQLiteStore:
 
     def list_word_packs_with_flags(
         self, limit: int = 50, offset: int = 0
-    ) -> list[tuple[str, str, str, str, bool, Optional[dict]]]:
+    ) -> list[tuple[str, str, str, str, str, bool, Optional[dict]]]:
         """一覧取得のための軽量フラグ/集計付きリストを返す。
 
-        戻り値: [(id, lemma, created_at, updated_at, is_empty, examples_count_dict|None), ...]
+        戻り値: [(id, lemma, sense_title, created_at, updated_at, is_empty, examples_count_dict|None), ...]
 
         - is_empty: examples と study_card/senses の有無に依存するが、一覧は軽量化のため
           examples の件数のみで空判定の近似値を算出する。
@@ -279,7 +296,7 @@ class AppSQLiteStore:
         with self._conn() as conn:
             cur = conn.execute(
                 """
-                SELECT wp.id, wp.lemma, wp.created_at, wp.updated_at,
+                SELECT wp.id, wp.lemma, wp.sense_title, wp.created_at, wp.updated_at,
                        SUM(CASE WHEN wpe.category = 'Dev' THEN 1 ELSE 0 END) AS cnt_dev,
                        SUM(CASE WHEN wpe.category = 'CS' THEN 1 ELSE 0 END) AS cnt_cs,
                        SUM(CASE WHEN wpe.category = 'LLM' THEN 1 ELSE 0 END) AS cnt_llm,
@@ -293,7 +310,7 @@ class AppSQLiteStore:
                 """,
                 (limit, offset),
             )
-            items: list[tuple[str, str, str, str, bool, Optional[dict]]] = []
+            items: list[tuple[str, str, str, str, str, bool, Optional[dict]]] = []
             for row in cur.fetchall():
                 cnt_dev = int(row["cnt_dev"] or 0)
                 cnt_cs = int(row["cnt_cs"] or 0)
@@ -313,6 +330,7 @@ class AppSQLiteStore:
                     (
                         row["id"],
                         row["lemma"],
+                        row["sense_title"],
                         row["created_at"],
                         row["updated_at"],
                         is_empty,

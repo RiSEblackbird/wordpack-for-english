@@ -59,6 +59,8 @@ def test_word_pack(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["lemma"] == "converge"
+    assert isinstance(body.get("sense_title"), str)
+    assert body["sense_title"].strip()
     assert "senses" in body
     # 生成結果の基本フィールド
     assert "citations" in body and "confidence" in body
@@ -70,6 +72,7 @@ def test_word_pack_llm_model_updates_on_generate_and_regenerate(client):
     assert r_gen.status_code == 200
     wp = r_gen.json()
     assert wp.get("llm_model") == "gpt-4o-mini"
+    assert isinstance(wp.get("sense_title"), str) and wp["sense_title"].strip()
     # 2) 保存済み一覧から ID を取得
     r_list = client.get("/api/word/packs")
     assert r_list.status_code == 200
@@ -87,6 +90,7 @@ def test_word_pack_llm_model_updates_on_generate_and_regenerate(client):
     assert r_regen.status_code == 200
     wp2 = r_regen.json()
     assert wp2.get("llm_model") == "gpt-5-nano"
+    assert isinstance(wp2.get("sense_title"), str) and wp2["sense_title"].strip()
 
 
 def test_word_lookup(client):
@@ -168,6 +172,7 @@ def test_word_pack_persistence(client):
     pack_id = first_pack["id"]
     assert "id" in first_pack
     assert "lemma" in first_pack
+    assert "sense_title" in first_pack
     assert "created_at" in first_pack
     assert "updated_at" in first_pack
     
@@ -176,6 +181,7 @@ def test_word_pack_persistence(client):
     assert resp.status_code == 200
     retrieved_pack = resp.json()
     assert retrieved_pack["lemma"] == first_pack["lemma"]
+    assert isinstance(retrieved_pack.get("sense_title"), str)
     assert "senses" in retrieved_pack
     assert "citations" in retrieved_pack
     assert "confidence" in retrieved_pack
@@ -188,6 +194,7 @@ def test_word_pack_persistence(client):
     assert resp.status_code == 200
     regenerated_pack = resp.json()
     assert regenerated_pack["lemma"] == first_pack["lemma"]
+    assert isinstance(regenerated_pack.get("sense_title"), str)
     
     # 5. 存在しないWordPackの取得
     resp = client.get("/api/word/packs/nonexistent_id")
@@ -411,6 +418,7 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
     assert r_wp.status_code == 200
     wp = r_wp.json()
     assert len(wp.get("examples", {}).get("Dev", [])) >= 2
+    assert isinstance(wp.get("sense_title"), str)
 
 
 def test_category_generate_import_fallback_on_duplicate(client, monkeypatch):

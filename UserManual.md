@@ -191,7 +191,8 @@
 
 ### B-4. 保存済み WordPack の内部構造（実装メモ）
 - 例文は DB で別テーブルに正規化。部分読み込み/部分削除が高速
-- API の入出力は従来どおり `examples` を含む完全な `WordPack`
+- API の入出力は `sense_title`（語義タイトル）と `examples` を含む完全な `WordPack`
+- `word_packs` テーブルには `sense_title` 列を新設し、一覧表示用に語義タイトルを保持します
 
 ### B-5. 運用・監視・品質
 - `/metrics` で API パス別の p95・件数・エラー・タイムアウトを確認

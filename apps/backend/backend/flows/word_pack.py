@@ -126,6 +126,7 @@ class WordPackFlow:
                     "スキーマ（キーと型は完全一致させること）:\n"
                     "{\n"
                     "  \"senses\": [ { \"id\": \"s1\", \"gloss_ja\": \"...\", \"definition_ja\": \"...\", \"nuances_ja\": \"...\", \"patterns\": [\"...\"], \"synonyms\": [\"...\"], \"antonyms\": [\"...\"], \"register\": \"...\", \"notes_ja\": \"...\", \"term_overview_ja\": \"...\", \"term_core_ja\": \"...\" } ],\n"
+                    "  \"sense_title\": \"10文字前後で語義全体の見出しになる短い日本語タイトル\",\n"
                     "  \"collocations\": {\n"
                     "    \"general\": { \"verb_object\": [\"...\"], \"adj_noun\": [\"...\"], \"prep_noun\": [\"...\"] },\n"
                     "    \"academic\": { \"verb_object\": [\"...\"], \"adj_noun\": [\"...\"], \"prep_noun\": [\"...\"] }\n"
@@ -198,6 +199,7 @@ class WordPackFlow:
         senses: List[Sense] = []
         collocations = Collocations()
         examples = Examples()
+        sense_title = ""
         etymology = Etymology(note="", confidence=ConfidenceLevel.low)
         study_card = ""
         
@@ -256,6 +258,14 @@ class WordPackFlow:
                 logger.info("wordpack_senses_built", lemma=lemma, senses_count=len(senses))
             except Exception:
                 logger.info("wordpack_senses_build_error", lemma=lemma)
+                pass
+
+            # sense_title
+            try:
+                st_raw = str(llm_payload.get("sense_title") or "").strip()
+                if st_raw:
+                    sense_title = st_raw[:20]
+            except Exception:
                 pass
 
             # collocations
@@ -348,9 +358,17 @@ class WordPackFlow:
                     pronunciation.ipa_RP = rp
             except Exception:
                 pass
+
+        if not sense_title and senses:
+            primary = (senses[0].gloss_ja or "").strip()
+            if primary:
+                sense_title = primary[:20]
+        if not sense_title:
+            sense_title = lemma[:20]
         
         pack = WordPack(
             lemma=lemma,
+            sense_title=sense_title,
             pronunciation=pronunciation,
             senses=senses,
             collocations=collocations,
@@ -373,6 +391,7 @@ class WordPackFlow:
                 + len(pack.examples.Common)
             ),
             has_definition_any=any(bool(s.definition_ja) for s in pack.senses),
+            sense_title_len=len(pack.sense_title or ""),
         )
         # 厳格モードでは、語義と例文がともにゼロの場合はエラーとして扱う（ダミーを返さない）
         try:

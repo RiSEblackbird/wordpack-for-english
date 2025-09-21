@@ -50,6 +50,7 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false }
 interface WordPackListItem {
   id: string;
   lemma: string;
+  sense_title?: string;
   created_at: string;
   updated_at: string;
   is_empty?: boolean;

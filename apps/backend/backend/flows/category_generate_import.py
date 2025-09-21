@@ -69,7 +69,7 @@ class CategoryGenerateAndImportFlow:
         except Exception:
             return []
         out: List[str] = []
-        for _id, lemma, _c, _u in items:
+        for _id, lemma, _sense_title, _c, _u in items:
             try:
                 out.append(str(lemma).strip().lower())
             except Exception:
@@ -154,6 +154,7 @@ class CategoryGenerateAndImportFlow:
             return existing
         empty_word_pack = WordPack(
             lemma=lemma,
+            sense_title=lemma[:20],
             pronunciation={"ipa_GA": None, "ipa_RP": None, "syllables": None, "stress_index": None, "linking_notes": []},
             senses=[],
             collocations={"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},

@@ -67,7 +67,7 @@ npm run test
 ```
 
 ## REST API（抜粋）
-- `POST /api/word/pack` … WordPack を生成して語義や例文、語源、学習カード要点を返却
+- `POST /api/word/pack` … WordPack を生成して語義タイトル・語義・例文・語源・学習カード要点を返却
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts で読み上げた音声（audio/mpeg）をストリーミング返却
 
 ## ディレクトリ

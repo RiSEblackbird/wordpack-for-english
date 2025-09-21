@@ -136,7 +136,7 @@ def _maybe_add_timeout_middleware(app: FastAPI) -> None:
 
 def create_app() -> FastAPI:
     configure_logging()
-    app = FastAPI(title="WordPack API", version="0.3.0")
+    app = FastAPI(title="WordPack API", version="0.3.1")
 
     app.add_middleware(
         CORSMiddleware,
