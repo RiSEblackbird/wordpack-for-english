@@ -33,7 +33,12 @@ export const ConfirmDialogProvider: React.FC<{ children: ReactNode }> = ({ child
   return (
     <ConfirmDialogContext.Provider value={{ confirm: requestConfirm }}>
       {children}
-      <Modal isOpen={pending !== null} onClose={() => close(false)} title="削除確認">
+      <Modal
+        isOpen={pending !== null}
+        onClose={() => close(false)}
+        title="削除確認"
+        maxWidth="min(48vw, calc(var(--main-max-width, 1000px) * 0.45))"
+      >
         <p style={{ marginBottom: '1.5rem', lineHeight: 1.6 }}>{message}</p>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
           <button onClick={() => close(false)}>いいえ</button>

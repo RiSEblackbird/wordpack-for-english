@@ -121,7 +121,11 @@ export const ArticleImportPanel: React.FC = () => {
 
   const deleteWordPack = async (wordPackId: string) => {
     if (!article) return;
-    const confirmed = await confirmDialog('WordPack');
+    const lemmaLabel = (() => {
+      try { return article.related_word_packs.find((l) => l.word_pack_id === wordPackId)?.lemma?.trim(); }
+      catch { return undefined; }
+    })();
+    const confirmed = await confirmDialog(lemmaLabel || 'WordPack');
     if (!confirmed) return;
     const ctrl = new AbortController();
     setLoading(true);

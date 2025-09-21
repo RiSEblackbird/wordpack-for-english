@@ -236,8 +236,9 @@ export const WordPackListPanel: React.FC = () => {
     }
   }, [apiBase]);
 
-  const deleteWordPack = useCallback(async (wordPackId: string) => {
-    const confirmed = await confirmDialog('WordPack');
+  const deleteWordPack = useCallback(async (wordPack: WordPackListItem) => {
+    const targetLabel = wordPack.lemma?.trim() || 'WordPack';
+    const confirmed = await confirmDialog(targetLabel);
     if (!confirmed) return;
 
     abortRef.current?.abort();
@@ -247,7 +248,7 @@ export const WordPackListPanel: React.FC = () => {
     setMsg(null);
 
     try {
-      await fetchJson(`${apiBase}/word/packs/${wordPackId}`, {
+      await fetchJson(`${apiBase}/word/packs/${wordPack.id}`, {
         method: 'DELETE',
         signal: ctrl.signal,
       });
@@ -578,7 +579,7 @@ export const WordPackListPanel: React.FC = () => {
                         >語義</button>
                         <TTSButton text={wp.lemma} className="wp-card-tts-btn" />
                         <DeleteButton
-                          onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
+                          onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
                           disabled={loading}
                         />
                       </div>
@@ -675,7 +676,7 @@ export const WordPackListPanel: React.FC = () => {
                       >語義</button>
                       <TTSButton text={wp.lemma} className="wp-index-tts-btn" />
                       <DeleteButton
-                        onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
+                        onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
                         disabled={loading}
                       />
                     </div>

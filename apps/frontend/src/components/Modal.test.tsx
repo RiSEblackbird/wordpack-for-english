@@ -18,6 +18,24 @@ describe('Modal width constraint', () => {
     // 可読性のため、width は 100% であることも確認
     expect(container!.style.width).toBe('100%');
   });
+
+  it('allows overriding max width when specified', () => {
+    render(
+      <Modal
+        isOpen
+        onClose={() => {}}
+        title="Test"
+        maxWidth="480px"
+      >
+        <div>content</div>
+      </Modal>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    const container = dialog.querySelector('div > div') as HTMLDivElement | null;
+    expect(container).not.toBeNull();
+    expect(container!.style.maxWidth).toBe('480px');
+  });
 });
 
 
