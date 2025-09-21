@@ -30,8 +30,6 @@ def test_simple_load_smoke(client):
         # Request ID が付与されている（運用: トレース用）
         assert r1.headers.get("X-Request-ID")
         assert r1.status_code == 200
-        r2 = client.post("/api/sentence/check", json={"sentence": "Hello"})
-        assert r2.status_code == 200
     elapsed = time.time() - start
     # 10リクエストが5秒以内で応答（ゆるい門）
     assert elapsed < 5.0
@@ -45,20 +43,10 @@ def test_prompt_regression_pack_schema(client):
     for key in ["lemma", "senses", "examples", "citations", "confidence"]:
         assert key in j
 
-def test_progress_and_grade_lemma_regression(client):
-    # 進捗APIが最低限のキーを返し、整数/配列型であること
-    r1 = client.get("/api/review/stats")
-    assert r1.status_code == 200
-    s = r1.json()
-    assert isinstance(s.get("due_now"), int)
-    assert isinstance(s.get("reviewed_today"), int)
-    assert isinstance(s.get("recent"), list)
-
-    # レンマ採点APIの回帰: 正常応答
-    r2 = client.post("/api/review/grade_by_lemma", json={"lemma": "regress", "grade": 1})
-    assert r2.status_code == 200
-    j2 = r2.json()
-    assert j2.get("ok") is True and "next_due" in j2
+def test_review_endpoints_removed(client):
+    # 旧SRS互換APIは提供されない（404/405）
+    assert client.get("/api/review/stats").status_code in (404, 405)
+    assert client.post("/api/review/grade_by_lemma", json={"lemma": "regress", "grade": 1}).status_code in (404, 405)
 
 
 def test_sla_word_pack_smoke(client):

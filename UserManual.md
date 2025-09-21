@@ -209,7 +209,7 @@
   - 未解決時はログと `X-Request-ID` を添えて報告
 
 - 404 が返る
-  - パスを確認（例: `…/api/sentence/check`, `…/api/text/assist`）
+  - パスを確認（例: WordPack生成は `…/api/word/pack`）
 
 - CORS エラー
   - ローカル開発では Frontend を `npm run dev`、Backend を `uvicorn … --reload` で起動（Vite プロキシで接続設定不要）

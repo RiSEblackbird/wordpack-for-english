@@ -19,7 +19,7 @@ try:
 except Exception:  # pragma: no cover - 互換目的のフォールバック
     TimeoutException = None  # type: ignore[assignment]
 
-from .config import DEFAULT_DB_PATH, settings
+from .config import settings
 from .indexing import seed_domain_terms, seed_from_jsonl, seed_word_snippets
 from .logging import configure_logging, logger
 from .metrics import registry
@@ -28,7 +28,7 @@ from .observability import request_trace
 from .providers import ChromaClientFactory, shutdown_providers
 from .routers import article as article_router
 from .routers import config as cfg
-from .routers import health, legacy, word
+from .routers import health, word
 
 
 async def access_log_and_metrics(
@@ -134,13 +134,6 @@ def _maybe_add_timeout_middleware(app: FastAPI) -> None:
     app.add_middleware(TimeoutMiddleware, timeout=http_timeout_sec)
 
 
-def _legacy_routes_enabled() -> bool:
-    try:
-        return Path(settings.srs_db_path).resolve() == Path(DEFAULT_DB_PATH).resolve()
-    except Exception:
-        return False
-
-
 def create_app() -> FastAPI:
     configure_logging()
     app = FastAPI(title="WordPack API", version="0.3.0")
@@ -167,8 +160,6 @@ def create_app() -> FastAPI:
     app.include_router(article_router.router, prefix="/api/article")
     app.include_router(health.router)
     app.include_router(cfg.router, prefix="/api")
-    if _legacy_routes_enabled():
-        app.include_router(legacy.router)
 
     app.add_event_handler("shutdown", _on_shutdown)
     app.add_event_handler("startup", _on_startup_seed)
