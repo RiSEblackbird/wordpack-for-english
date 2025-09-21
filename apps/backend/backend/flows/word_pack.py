@@ -483,7 +483,44 @@ class WordPackFlow:
             if m1 != -1 and m2 != -1 and m2 > m1:
                 t = t[m1:m2+1]
             return t.strip()
+
+        def _sanitize_control_chars(text: str) -> str:
+            # JSON 文字列リテラル内に素で含まれた制御文字（U+0000〜U+001F）のみを \uXXXX に正規化する。
+            if not text:
+                return text
+            out_chars: list[str] = []
+            in_string = False
+            escaped = False
+            for ch in text:
+                if in_string:
+                    if escaped:
+                        out_chars.append(ch)
+                        escaped = False
+                        continue
+                    if ch == "\\":
+                        out_chars.append(ch)
+                        escaped = True
+                        continue
+                    if ch == '"':
+                        out_chars.append(ch)
+                        in_string = False
+                        continue
+                    code = ord(ch)
+                    if 0 <= code <= 0x1F:
+                        out_chars.append(f"\\u{code:04x}")
+                    else:
+                        out_chars.append(ch)
+                else:
+                    out_chars.append(ch)
+                    if ch == '"' and not escaped:
+                        in_string = True
+                        escaped = False
+            return "".join(out_chars)
+
+        # 1) フェンス除去
         text = _strip_code_fences(raw or "")
+        # 2) 制御文字を \uXXXX に正規化（Invalid control character を回避）
+        text = _sanitize_control_chars(text)
         obj = _json.loads(text)
         if isinstance(obj, list):
             return [x for x in obj if isinstance(x, dict)]
