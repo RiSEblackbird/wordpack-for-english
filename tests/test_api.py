@@ -17,7 +17,7 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
 
     monkeypatch.setenv("STRICT_MODE", "true" if strict else "false")
     if db_path is not None:
-        monkeypatch.setenv("SRS_DB_PATH", str(db_path))
+        monkeypatch.setenv("WORDPACK_DB_PATH", str(db_path))
 
     # backend.* を一度破棄して設定と永続層のキャッシュをリセット
     for name in list(sys.modules.keys()):
@@ -43,7 +43,7 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
 def client(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
     backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
     sys.path.insert(0, str(backend_root))
-    db_path = tmp_path_factory.mktemp("srs") / "store.sqlite3"
+    db_path = tmp_path_factory.mktemp("wordpack") / "store.sqlite3"
     backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=db_path)
     return TestClient(backend_main.app)
 
