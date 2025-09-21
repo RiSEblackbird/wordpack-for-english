@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
-import { regenerateWordPackRequest } from '../lib/wordpack';
+import { composeModelRequestFields, regenerateWordPackRequest } from '../lib/wordpack';
 import { LoadingIndicator } from './LoadingIndicator';
 import { useNotifications } from '../NotificationsContext';
 import { Modal } from './Modal';
+import { formatDateJst } from '../lib/date';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -70,12 +71,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loadingInfo, setLoadingInfo] = useState<{ label: string; subtext?: string } | null>(null);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [reveal, setReveal] = useState(false);
   const [count, setCount] = useState(3);
   const abortRef = useRef<AbortController | null>(null);
-  const [sessionStartAt] = useState<Date>(new Date());
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
   const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
   // 直近のAIメタ（一覧メタ or 例文メタから推定表示）
@@ -84,24 +83,32 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const mountedRef = useRef(true);
   const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
 
+  const {
+    apiBase,
+    pronunciationEnabled,
+    regenerateScope,
+    requestTimeoutMs,
+    temperature,
+    reasoningEffort,
+    textVerbosity,
+  } = settings;
+
+  const applyModelRequestFields = useCallback(
+    (base: Record<string, unknown> = {}) => ({
+      ...base,
+      ...composeModelRequestFields({
+        model,
+        temperature,
+        reasoningEffort,
+        textVerbosity,
+      }),
+    }),
+    [model, temperature, reasoningEffort, textVerbosity]
+  );
+
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
-    try {
-      const hasTZ = /[Zz]|[+-]\d{2}:?\d{2}$/.test(dateStr);
-      const s = hasTZ ? dateStr : `${dateStr}Z`;
-      return new Date(s).toLocaleString('ja-JP', {
-        timeZone: 'Asia/Tokyo',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      } as Intl.DateTimeFormatOptions);
-    } catch {
-      return dateStr;
-    }
+    return formatDateJst(dateStr);
   };
 
   const sectionIds = useMemo(
@@ -117,6 +124,22 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       { id: 'confidence', label: '信頼度' },
     ],
     []
+  );
+
+  const exampleCategories = useMemo(() => (['Dev', 'CS', 'LLM', 'Business', 'Common'] as const), []);
+
+  const exampleStats = useMemo(
+    () => {
+      const counts = exampleCategories.map((category) => ({
+        category,
+        count: data?.examples?.[category]?.length ?? 0,
+      }));
+      return {
+        counts,
+        total: counts.reduce((sum, item) => sum + item.count, 0),
+      };
+    },
+    [data, exampleCategories]
   );
 
   const generate = async () => {
@@ -135,26 +158,16 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     setReveal(false);
     setCount(3);
     try {
-      const res = await fetchJson<WordPack>(`${settings.apiBase}/word/pack`, {
+      const res = await fetchJson<WordPack>(`${apiBase}/word/pack`, {
         method: 'POST',
-        body: (() => {
-          const base: any = {
-            lemma: l,
-            pronunciation_enabled: settings.pronunciationEnabled,
-            regenerate_scope: settings.regenerateScope,
-            model,
-          };
-          if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
-            base.reasoning = { effort: settings.reasoningEffort || 'minimal' };
-            base.text = { verbosity: settings.textVerbosity || 'medium' };
-          } else {
-            base.temperature = settings.temperature;
-          }
-          return base;
-        })(),
+        body: applyModelRequestFields({
+          lemma: l,
+          pronunciation_enabled: pronunciationEnabled,
+          regenerate_scope: regenerateScope,
+        }),
         signal: ctrl.signal,
         // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
-        timeoutMs: settings.requestTimeoutMs,
+        timeoutMs: requestTimeoutMs,
       });
       if (mountedRef.current) {
         setData(res);
@@ -176,7 +189,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     } finally {
       if (mountedRef.current) {
         setLoading(false);
-        setLoadingInfo(null);
       }
     }
   };
@@ -190,12 +202,12 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const notifId = addNotification({ title: `【${l2}】の生成処理中...`, message: '空のWordPackを作成しています', status: 'progress' });
     setMsg(null);
     try {
-      const res = await fetchJson<{ id: string }>(`${settings.apiBase}/word/packs`, {
+      const res = await fetchJson<{ id: string }>(`${apiBase}/word/packs`, {
         method: 'POST',
         body: { lemma: lemma.trim() },
         signal: ctrl.signal,
         // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
-        timeoutMs: settings.requestTimeoutMs,
+        timeoutMs: requestTimeoutMs,
       });
       setCurrentWordPackId(res.id);
       // 直後に保存済みWordPack詳細を読み込んで表示
@@ -211,14 +223,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       updateNotification(notifId, { title: `【${l2}】の生成失敗`, status: 'error', message: `空のWordPackの作成に失敗しました（${m}）` });
     } finally {
       setLoading(false);
-      setLoadingInfo(null);
     }
   };
 
-  const refreshStats = async () => {};
-  const refreshPopular = async () => {};
-
-  const loadWordPack = async (wordPackId: string) => {
+  const loadWordPack = useCallback(async (wordPackId: string) => {
     // ここでは同時に例文生成などが進行している可能性がある。
     // 保存済み詳細を閲覧するだけなので、進行中のバックグラウンド処理は中断せずに並行実行させる。
     const ctrl = new AbortController();
@@ -229,7 +237,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     setReveal(false);
     setCount(3);
     try {
-      const res = await fetchJson<WordPack>(`${settings.apiBase}/word/packs/${wordPackId}`, {
+      const res = await fetchJson<WordPack>(`${apiBase}/word/packs/${wordPackId}`, {
         signal: ctrl.signal,
       });
       setData(res);
@@ -256,9 +264,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setMsg({ kind: 'alert', text: m });
     } finally {
       setLoading(false);
-      setLoadingInfo(null);
     }
-  };
+  }, [apiBase]);
 
   const regenerateWordPack = async (wordPackId: string) => {
     // 再生成はバックグラウンド継続を許可するため、モーダル閉鎖/アンマウントで中断しない
@@ -268,15 +275,15 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     if (mountedRef.current) setMsg(null);
     try {
       await regenerateWordPackRequest({
-        apiBase: settings.apiBase,
+        apiBase,
         wordPackId,
         settings: {
-          pronunciationEnabled: settings.pronunciationEnabled,
-          regenerateScope: settings.regenerateScope,
-          requestTimeoutMs: settings.requestTimeoutMs,
-          temperature: settings.temperature,
-          reasoningEffort: settings.reasoningEffort,
-          textVerbosity: settings.textVerbosity,
+          pronunciationEnabled,
+          regenerateScope,
+          requestTimeoutMs,
+          temperature,
+          reasoningEffort,
+          textVerbosity,
         },
         model,
         lemma: lemma3,
@@ -290,9 +297,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       });
       // 再生成後に最新詳細を取得して反映（アンマウント済みならリフレッシュはスキップ）
       if (mountedRef.current) {
-        const refreshed = await fetchJson<WordPack>(`${settings.apiBase}/word/packs/${wordPackId}`, {
+        const refreshed = await fetchJson<WordPack>(`${apiBase}/word/packs/${wordPackId}`, {
           signal: ctrl.signal,
-          timeoutMs: settings.requestTimeoutMs,
+          timeoutMs: requestTimeoutMs,
         });
         if (mountedRef.current) {
           setData(refreshed);
@@ -311,7 +318,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     } finally {
       if (mountedRef.current) {
         setLoading(false);
-        setLoadingInfo(null);
       }
     }
   };
@@ -325,10 +331,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     setLoading(true);
     setMsg(null);
     try {
-      await fetchJson(`${settings.apiBase}/word/packs/${currentWordPackId}/examples/${category}/${index}`, {
+      await fetchJson(`${apiBase}/word/packs/${currentWordPackId}/examples/${category}/${index}`, {
         method: 'DELETE',
         signal: ctrl.signal,
-        timeoutMs: settings.requestTimeoutMs,
+        timeoutMs: requestTimeoutMs,
       });
       setMsg({ kind: 'status', text: '例文を削除しました' });
       // 最新状態を再取得
@@ -339,7 +345,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setMsg({ kind: 'alert', text: m });
     } finally {
       setLoading(false);
-      setLoadingInfo(null);
     }
   };
 
@@ -353,11 +358,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       const ctrl = new AbortController();
       const lemma5 = data?.lemma || '(unknown)';
       const notifId = addNotification({ title: `【${lemma5}】文章インポート中...`, message: '当該の例文を元に記事を生成しています', status: 'progress' });
-      await fetchJson<{ id: string }>(`${settings.apiBase}/article/import`, {
+      await fetchJson<{ id: string }>(`${apiBase}/article/import`, {
         method: 'POST',
         body: { text: ex.en },
         signal: ctrl.signal,
-        timeoutMs: settings.requestTimeoutMs,
+        timeoutMs: requestTimeoutMs,
       });
       updateNotification(notifId, { title: '文章インポート完了', status: 'success', message: '記事一覧を更新しました' });
       try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
@@ -406,20 +411,12 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const notifId = addNotification({ title: `【${lemma4}】の生成処理中...`, message: `例文（${category}）を2件追加生成しています`, status: 'progress' });
     setMsg(null);
     try {
-      await fetchJson(`${settings.apiBase}/word/packs/${currentWordPackId}/examples/${category}/generate`, {
+      const requestBody = applyModelRequestFields();
+      await fetchJson(`${apiBase}/word/packs/${currentWordPackId}/examples/${category}/generate`, {
         method: 'POST',
-        body: (() => {
-          const base: any = { model };
-          if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
-            base.reasoning = { effort: settings.reasoningEffort || 'minimal' };
-            base.text = { verbosity: settings.textVerbosity || 'medium' };
-          } else {
-            base.temperature = settings.temperature;
-          }
-          return base;
-        })(),
+        body: requestBody,
         signal: ctrl.signal,
-        timeoutMs: settings.requestTimeoutMs,
+        timeoutMs: requestTimeoutMs,
       });
       setMsg({ kind: 'status', text: `${category} に例文を2件追加しました` });
       updateNotification(notifId, { title: `【${lemma4}】の生成完了！`, status: 'success', message: `${category} に例文を2件追加しました` });
@@ -432,21 +429,14 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       updateNotification(notifId, { title: `【${lemma4}】の生成失敗`, status: 'error', message: `${category} の例文追加生成に失敗しました（${m}）` });
     } finally {
       setLoading(false);
-      setLoadingInfo(null);
     }
   };
 
-  useEffect(() => {
-    refreshStats();
-    refreshPopular();
-  }, []);
-
   // 選択されたWordPackIDが変更された場合の処理
   useEffect(() => {
-    if (selectedWordPackId && selectedWordPackId !== currentWordPackId) {
-      loadWordPack(selectedWordPackId);
-    }
-  }, [selectedWordPackId]);
+    if (!selectedWordPackId || selectedWordPackId === currentWordPackId) return;
+    loadWordPack(selectedWordPackId);
+  }, [currentWordPackId, loadWordPack, selectedWordPackId]);
 
   // 3秒セルフチェック: カウントダウン後に自動解除（クリックで即解除）
   useEffect(() => {
@@ -517,35 +507,25 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <strong style={{ color: 'var(--color-accent)' }}>📊 例文統計</strong>
               <span style={{ fontSize: '1.1em', fontWeight: 'bold' }}>
-                総数 {(() => {
-                  const total = (data!.examples?.Dev?.length || 0) + 
-                               (data!.examples?.CS?.length || 0) + 
-                               (data!.examples?.LLM?.length || 0) + 
-                               (data!.examples?.Business?.length || 0) + 
-                               (data!.examples?.Common?.length || 0);
-                  return total;
-                })()}件
+                総数 {exampleStats.total}件
               </span>
             </div>
             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.9em' }}>
-              {(['Dev','CS','LLM','Business','Common'] as const).map(cat => {
-                const count = data!.examples?.[cat]?.length || 0;
-                return (
-                  <span key={cat} style={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    gap: '0.25rem',
-                    padding: '0.25rem 0.5rem',
-                    backgroundColor: count > 0 ? 'var(--color-accent-bg)' : 'var(--color-neutral-surface)',
-                    color: count > 0 ? 'var(--color-accent)' : 'var(--color-subtle)',
-                    borderRadius: '4px',
-                    border: `1px solid ${count > 0 ? 'var(--color-accent)' : 'var(--color-border)'}`
-                  }}>
-                    <span style={{ fontWeight: 'bold' }}>{cat}</span>
-                    <span style={{ fontSize: '0.85em' }}>{count}件</span>
-                  </span>
-                );
-              })}
+              {exampleStats.counts.map(({ category, count }) => (
+                <span key={category} style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.25rem',
+                  padding: '0.25rem 0.5rem',
+                  backgroundColor: count > 0 ? 'var(--color-accent-bg)' : 'var(--color-neutral-surface)',
+                  color: count > 0 ? 'var(--color-accent)' : 'var(--color-subtle)',
+                  borderRadius: '4px',
+                  border: `1px solid ${count > 0 ? 'var(--color-accent)' : 'var(--color-border)'}`
+                }}>
+                  <span style={{ fontWeight: 'bold' }}>{category}</span>
+                  <span style={{ fontSize: '0.85em' }}>{count}件</span>
+                </span>
+              ))}
             </div>
           </div>
           <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -828,7 +808,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             モデル
             <select
               value={model}
-              onChange={(e) => { const v = e.target.value; setModel(v); setSettings({ ...settings, model: v }); }}
+              onChange={(e) => {
+                const v = e.target.value;
+                setModel(v);
+                setSettings((prev) => ({ ...prev, model: v }));
+              }}
               disabled={loading}
             >
               <option value="gpt-5-mini">gpt-5-mini</option>
@@ -843,8 +827,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 reasoning.effort
                 <select
                   aria-label="reasoning.effort"
-                  value={settings.reasoningEffort || 'minimal'}
-                  onChange={(e) => setSettings({ ...settings, reasoningEffort: e.target.value as any })}
+                  value={reasoningEffort || 'minimal'}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
                   disabled={loading}
                 >
                   <option value="minimal">minimal</option>
@@ -857,8 +841,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 text.verbosity
                 <select
                   aria-label="text.verbosity"
-                  value={settings.textVerbosity || 'medium'}
-                  onChange={(e) => setSettings({ ...settings, textVerbosity: e.target.value as any })}
+                  value={textVerbosity || 'medium'}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
                   disabled={loading}
                 >
                   <option value="low">low</option>

@@ -1,5 +1,30 @@
 import { fetchJson, ApiError } from './fetcher';
 
+export interface ModelRequestConfig {
+  model?: string;
+  temperature: number;
+  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  textVerbosity?: 'low' | 'medium' | 'high';
+}
+
+export const composeModelRequestFields = ({
+  model,
+  temperature,
+  reasoningEffort,
+  textVerbosity,
+}: ModelRequestConfig): Record<string, unknown> => {
+  if (!model) return {};
+  const normalized = model.toLowerCase();
+  if (normalized === 'gpt-5-mini' || normalized === 'gpt-5-nano') {
+    return {
+      model,
+      reasoning: { effort: reasoningEffort || 'minimal' },
+      text: { verbosity: textVerbosity || 'medium' },
+    };
+  }
+  return { model, temperature };
+};
+
 export interface RegenerateSettings {
   pronunciationEnabled: boolean;
   regenerateScope: 'all' | 'examples' | 'collocations';
@@ -16,11 +41,11 @@ export interface NotificationsAdapter {
 
 export interface RegenerateWordPackMessages {
   // Body text shown while processing (beneath the title)
-  progress?: string; // e.g. "WordPackを再生成しています"
+  progress?: string; // Example: "WordPackを再生成しています"
   // Body text shown on success (beneath the title)
-  success?: string; // e.g. "再生成が完了しました"
+  success?: string; // Example: 成功時に表示するメッセージ
   // Body text shown on failure (beneath the title). If omitted, error.message (if ApiError) is used
-  failure?: string; // e.g. "WordPackの再生成に失敗しました"
+  failure?: string; // Example: 失敗時に表示するメッセージ
 }
 
 export async function regenerateWordPackRequest(params: {
@@ -43,18 +68,16 @@ export async function regenerateWordPackRequest(params: {
   });
 
   try {
-    const body: any = {
+    const body = {
       pronunciation_enabled: settings.pronunciationEnabled,
       regenerate_scope: settings.regenerateScope,
-      // モデル未指定時はサーバ既定に任せる（キー自体を省略）
-      ...(model ? { model } : {}),
+      ...composeModelRequestFields({
+        model,
+        temperature: settings.temperature,
+        reasoningEffort: settings.reasoningEffort,
+        textVerbosity: settings.textVerbosity,
+      }),
     };
-    if ((model || '').toLowerCase() === 'gpt-5-mini' || (model || '').toLowerCase() === 'gpt-5-nano') {
-      body.reasoning = { effort: settings.reasoningEffort || 'minimal' };
-      body.text = { verbosity: settings.textVerbosity || 'medium' };
-    } else if (model) {
-      body.temperature = settings.temperature;
-    }
 
     await fetchJson(`${apiBase}/word/packs/${wordPackId}/regenerate`, {
       method: 'POST',
