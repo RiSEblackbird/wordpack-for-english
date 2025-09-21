@@ -2,6 +2,9 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+DEFAULT_DB_PATH = ".data/srs.sqlite3"
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables.
 
@@ -68,14 +71,10 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, description="OpenAI API Key")
     voyage_api_key: str | None = Field(default=None, description="Voyage API Key")
 
-    # --- SRS（復習）の永続化設定 ---
+    # --- データ永続化設定 ---
     srs_db_path: str = Field(
-        default=".data/srs.sqlite3",
-        description="Path to SRS SQLite database / SRS用SQLite DBパス",
-    )
-    srs_max_today: int = Field(
-        default=5,
-        description="Max items to return for today's review / 本日の最大出題数",
+        default=DEFAULT_DB_PATH,
+        description="Path to SQLite database for WordPack persistence / WordPack用SQLite DBパス",
     )
 
     # --- Operations/Observability (PR4) ---
