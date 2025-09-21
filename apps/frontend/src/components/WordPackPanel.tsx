@@ -53,6 +53,7 @@ interface Citation { text: string; meta?: Record<string, any> }
 
 interface WordPack {
   lemma: string;
+  sense_title: string;
   pronunciation: Pronunciation;
   senses: Sense[];
   collocations: Collocations;

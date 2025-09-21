@@ -20,6 +20,7 @@ from ..models.word import (
     ExampleListItem,
 )
 from ..store import store
+from ..sense_title import choose_sense_title
 from ..logging import logger
 from pydantic import BaseModel, Field
 from typing import Optional, Any
@@ -57,6 +58,7 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
     # スキーマ準拠の空WordPackを構築
     empty_word_pack = WordPack(
         lemma=lemma,
+        sense_title=choose_sense_title(None, [], lemma=lemma, limit=20),
         pronunciation={
             "ipa_GA": None,
             "ipa_RP": None,
@@ -254,11 +256,12 @@ async def list_word_packs(
     """保存済みWordPackの一覧を取得する。"""
     items_with_flags = store.list_word_packs_with_flags(limit=limit, offset=offset)
     items: list[WordPackListItem] = []
-    for wp_id, lemma, created_at, updated_at, is_empty, examples_count in items_with_flags:
+    for wp_id, lemma, sense_title, created_at, updated_at, is_empty, examples_count in items_with_flags:
         items.append(
             WordPackListItem(
                 id=wp_id,
                 lemma=lemma,
+                sense_title=sense_title,
                 created_at=created_at,
                 updated_at=updated_at,
                 is_empty=bool(is_empty),

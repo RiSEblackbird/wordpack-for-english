@@ -169,6 +169,7 @@ class WordPack(BaseModel):
         "examples": [
             {
                 "lemma": "converge",
+                "sense_title": "収束ポイント",
                 "pronunciation": {"ipa_GA": "/kənvɝdʒ/", "syllables": 2, "stress_index": 1, "linking_notes": []},
                 "senses": [{"id": "s1", "gloss_ja": "意味（暫定）", "patterns": []}],
                 "collocations": {"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
@@ -180,10 +181,11 @@ class WordPack(BaseModel):
                 "confidence": "low"
             }
         ],
-        "x-schema-version": "0.3.0"
+        "x-schema-version": "0.3.1"
     })
 
     lemma: str
+    sense_title: str = Field(default="", description="語義一覧などで表示する短い語義タイトル（10文字程度を想定）")
     pronunciation: Pronunciation
     senses: List[Sense] = Field(default_factory=list)
     collocations: Collocations = Field(default_factory=Collocations)
@@ -202,6 +204,7 @@ class WordPackListItem(BaseModel):
     """WordPack一覧表示用の軽量モデル"""
     id: str
     lemma: str
+    sense_title: str = Field(default="", description="一覧表示用の語義タイトル")
     created_at: str
     updated_at: str
     is_empty: bool = Field(default=False, description="内容が空のWordPackかどうか（UI用）")

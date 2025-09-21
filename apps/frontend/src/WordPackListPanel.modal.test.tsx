@@ -7,6 +7,9 @@ import { vi } from 'vitest';
 describe('WordPackListPanel modal preview', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    try {
+      sessionStorage.clear();
+    } catch {}
   });
 
   function setupFetchMocks() {
@@ -26,26 +29,29 @@ describe('WordPackListPanel modal preview', () => {
         return new Response(
           JSON.stringify({
             items: [
-              { 
-                id: 'wp:test:1', 
-                lemma: 'delta', 
-                created_at: twoDaysAgo.toISOString(), 
-                updated_at: yesterday.toISOString(), 
-                is_empty: true 
+              {
+                id: 'wp:test:1',
+                lemma: 'delta',
+                sense_title: 'デルタ概説',
+                created_at: twoDaysAgo.toISOString(),
+                updated_at: yesterday.toISOString(),
+                is_empty: true
               },
-              { 
-                id: 'wp:test:2', 
-                lemma: 'alpha', 
-                created_at: yesterday.toISOString(), 
-                updated_at: now.toISOString(), 
+              {
+                id: 'wp:test:2',
+                lemma: 'alpha',
+                sense_title: 'アルファ概説',
+                created_at: yesterday.toISOString(),
+                updated_at: now.toISOString(),
                 is_empty: false,
                 examples_count: { Dev: 2, CS: 1, LLM: 0, Business: 3, Common: 4 }
               },
-              { 
-                id: 'wp:test:3', 
-                lemma: 'beta', 
-                created_at: now.toISOString(), 
-                updated_at: twoDaysAgo.toISOString(), 
+              {
+                id: 'wp:test:3',
+                lemma: 'beta',
+                sense_title: 'ベータ概説',
+                created_at: now.toISOString(),
+                updated_at: twoDaysAgo.toISOString(),
                 is_empty: false,
                 examples_count: { Dev: 1, CS: 2, LLM: 1, Business: 1, Common: 2 }
               },
@@ -62,6 +68,7 @@ describe('WordPackListPanel modal preview', () => {
         return new Response(
           JSON.stringify({
             lemma: 'delta',
+            sense_title: 'デルタ概説',
             pronunciation: { ipa_GA: null, ipa_RP: null, syllables: null, stress_index: null, linking_notes: [] },
             senses: [{ id: 's1', gloss_ja: '意味', definition_ja: '定義', nuances_ja: 'ニュアンス', patterns: ['p1'], synonyms: ['syn'], antonyms: ['ant'], register: 'formal', notes_ja: '注意' }],
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
@@ -103,6 +110,7 @@ describe('WordPackListPanel modal preview', () => {
         return new Response(
           JSON.stringify({
             lemma: 'alpha',
+            sense_title: 'アルファ概説',
             pronunciation: { ipa_GA: null, ipa_RP: null, syllables: null, stress_index: null, linking_notes: [] },
             senses: [{ id: 's1', gloss_ja: '意味', definition_ja: '定義', nuances_ja: 'ニュアンス', patterns: ['p1'], synonyms: ['syn'], antonyms: ['ant'], register: 'formal', notes_ja: '注意' }],
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
@@ -157,7 +165,10 @@ describe('WordPackListPanel modal preview', () => {
     // 統合された一覧のヘッダーが表示される
     await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
 
-    const ttsButtons = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    const senseButtons = await screen.findAllByRole('button', { name: '語義' });
+    expect(senseButtons).toHaveLength(3);
+
+    const ttsButtons = await screen.findAllByRole('button', { name: '音声' });
     expect(ttsButtons).toHaveLength(3);
 
     // 例文未生成バッジ表示
@@ -183,7 +194,7 @@ describe('WordPackListPanel modal preview', () => {
     const lemmaLabel = within(modalContent).getByText('見出し語');
     const lemmaValue = lemmaLabel.nextElementSibling as HTMLElement | null;
     expect(lemmaValue).not.toBeNull();
-    const lemmaTtsButtons = lemmaValue ? within(lemmaValue).getAllByRole('button', { name: '音声読み上げ' }) : [];
+    const lemmaTtsButtons = lemmaValue ? within(lemmaValue).getAllByRole('button', { name: '音声' }) : [];
     expect(lemmaTtsButtons).toHaveLength(1);
 
     // 閉じる
@@ -203,19 +214,121 @@ describe('WordPackListPanel modal preview', () => {
       await user.keyboard('{Alt>}{4}{/Alt}');
     });
 
-    const buttonsInCardView = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    const buttonsInCardView = await screen.findAllByRole('button', { name: '音声' });
     expect(buttonsInCardView).toHaveLength(3);
+
+    const senseButtonsInCardView = await screen.findAllByRole('button', { name: '語義' });
+    expect(senseButtonsInCardView).toHaveLength(3);
 
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'リスト' }));
     });
 
-    const buttonsInListView = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    const buttonsInListView = await screen.findAllByRole('button', { name: '音声' });
     expect(buttonsInListView).toHaveLength(3);
+
+    const senseButtonsInListView = await screen.findAllByRole('button', { name: '語義' });
+    expect(senseButtonsInListView).toHaveLength(3);
+
 
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'カード' }));
     });
+  });
+
+  it('語義ボタンで語義タイトルを確認できる（カード/リスト）', async () => {
+    setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.keyboard('{Alt>}{4}{/Alt}');
+    });
+
+    const cards = await screen.findAllByTestId('wp-card');
+    expect(cards).toHaveLength(3);
+
+    const firstCardSenseButton = within(cards[0]).getByRole('button', { name: '語義' });
+
+    await act(async () => {
+      await user.click(firstCardSenseButton);
+    });
+
+    const senseTitleInCard = within(cards[0]).getByTestId('wp-card-sense-title');
+    expect(senseTitleInCard).toHaveTextContent('アルファ概説');
+
+    await act(async () => {
+      await user.click(firstCardSenseButton);
+    });
+
+    expect(within(cards[0]).queryByTestId('wp-card-sense-title')).toBeNull();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'リスト' }));
+    });
+
+    const listItems = await screen.findAllByTestId('wp-index-item');
+    expect(listItems).toHaveLength(3);
+
+    const firstListItem = listItems[0];
+    const listSenseButton = within(firstListItem).getByRole('button', { name: '語義' });
+
+    await act(async () => {
+      await user.click(listSenseButton);
+    });
+
+    const titleRow = within(firstListItem).getByTestId('wp-index-title-row');
+    expect(titleRow).toHaveTextContent('alpha');
+    expect(titleRow).toHaveTextContent('アルファ概説');
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'カード' }));
+    });
+  });
+
+  it('語義一括表示トグルで全語義タイトルを同時表示・非表示できる', async () => {
+    setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.keyboard('{Alt>}{4}{/Alt}');
+    });
+
+    const cards = await screen.findAllByTestId('wp-card');
+    expect(cards).toHaveLength(3);
+
+    // 初期状態では語義タイトルは表示されていない
+    expect(screen.queryByTestId('wp-card-sense-title')).toBeNull();
+
+    const toggle = screen.getByLabelText('語義一括表示') as HTMLInputElement;
+    expect(toggle).not.toBeChecked();
+
+    await act(async () => {
+      await user.click(toggle);
+    });
+
+    await waitFor(() => {
+      const displayed = screen.getAllByTestId('wp-card-sense-title');
+      expect(displayed).toHaveLength(3);
+      expect(displayed[0]).toHaveTextContent(/概説/);
+    });
+
+    // 個別ボタンは一括表示中は操作不可
+    const senseButton = within(cards[0]).getByRole('button', { name: '語義' }) as HTMLButtonElement;
+    expect(senseButton).toBeDisabled();
+
+    await act(async () => {
+      await user.click(toggle);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('wp-card-sense-title')).toBeNull();
+    });
+
+    expect(senseButton).not.toBeDisabled();
   });
 
   it('ソート機能が正しく動作する', async () => {

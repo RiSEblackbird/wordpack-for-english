@@ -1,3 +1,4 @@
+import json
 import sys
 import types
 from pathlib import Path
@@ -59,9 +60,71 @@ def test_word_pack(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["lemma"] == "converge"
+    assert isinstance(body.get("sense_title"), str)
+    assert body["sense_title"].strip()
     assert "senses" in body
     # 生成結果の基本フィールド
     assert "citations" in body and "confidence" in body
+
+
+def test_word_pack_sanitizes_english_sense_title(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+):
+    db_path = tmp_path_factory.mktemp("wordpack-english-title") / "store.sqlite3"
+    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=db_path)
+
+    from fastapi.testclient import TestClient
+    import backend.providers as providers_mod
+
+    class _EnglishSenseTitleLLM:
+        def complete(self, prompt: str) -> str:
+            if '"sense_title"' in prompt:
+                payload = {
+                    "senses": [
+                        {
+                            "id": "s1",
+                            "gloss_ja": "整列概要",
+                            "patterns": ["alignment with N"],
+                            "definition_ja": "対象を整列させて秩序を保つこと。",
+                            "nuances_ja": "比喩的な用法でも使われる。",
+                        }
+                    ],
+                    "sense_title": "alignment overview",
+                    "collocations": {
+                        "general": {"verb_object": [], "adj_noun": [], "prep_noun": []},
+                        "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []},
+                    },
+                    "contrast": [],
+                    "etymology": {"note": "", "confidence": "low"},
+                    "study_card": "整列という概念の核心を押さえる。",
+                    "pronunciation": {"ipa_RP": "/əˈlaɪnmənt/"},
+                }
+                return json.dumps(payload, ensure_ascii=False)
+            return json.dumps(
+                [
+                    {
+                        "en": "Alignment keeps the cross-team roadmap on track.",
+                        "ja": "整列を図ることで部門横断のロードマップがぶれなくなる。",
+                    }
+                ],
+                ensure_ascii=False,
+            )
+
+    providers_mod._CLIENT_CACHE.clear()
+    providers_mod._LLM_INSTANCE = _EnglishSenseTitleLLM()
+
+    client = TestClient(backend_main.app)
+
+    resp = client.post("/api/word/pack", json={"lemma": "alignment"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["lemma"] == "alignment"
+    assert body["sense_title"] == "整列概要"
+
+    resp_list = client.get("/api/word/packs")
+    assert resp_list.status_code == 200
+    items = resp_list.json().get("items", [])
+    assert any(it.get("sense_title") == "整列概要" for it in items)
 
 
 def test_word_pack_llm_model_updates_on_generate_and_regenerate(client):
@@ -70,6 +133,7 @@ def test_word_pack_llm_model_updates_on_generate_and_regenerate(client):
     assert r_gen.status_code == 200
     wp = r_gen.json()
     assert wp.get("llm_model") == "gpt-4o-mini"
+    assert isinstance(wp.get("sense_title"), str) and wp["sense_title"].strip()
     # 2) 保存済み一覧から ID を取得
     r_list = client.get("/api/word/packs")
     assert r_list.status_code == 200
@@ -87,6 +151,7 @@ def test_word_pack_llm_model_updates_on_generate_and_regenerate(client):
     assert r_regen.status_code == 200
     wp2 = r_regen.json()
     assert wp2.get("llm_model") == "gpt-5-nano"
+    assert isinstance(wp2.get("sense_title"), str) and wp2["sense_title"].strip()
 
 
 def test_word_lookup(client):
@@ -168,6 +233,7 @@ def test_word_pack_persistence(client):
     pack_id = first_pack["id"]
     assert "id" in first_pack
     assert "lemma" in first_pack
+    assert "sense_title" in first_pack
     assert "created_at" in first_pack
     assert "updated_at" in first_pack
     
@@ -176,6 +242,7 @@ def test_word_pack_persistence(client):
     assert resp.status_code == 200
     retrieved_pack = resp.json()
     assert retrieved_pack["lemma"] == first_pack["lemma"]
+    assert isinstance(retrieved_pack.get("sense_title"), str)
     assert "senses" in retrieved_pack
     assert "citations" in retrieved_pack
     assert "confidence" in retrieved_pack
@@ -188,6 +255,7 @@ def test_word_pack_persistence(client):
     assert resp.status_code == 200
     regenerated_pack = resp.json()
     assert regenerated_pack["lemma"] == first_pack["lemma"]
+    assert isinstance(regenerated_pack.get("sense_title"), str)
     
     # 5. 存在しないWordPackの取得
     resp = client.get("/api/word/packs/nonexistent_id")
@@ -411,6 +479,7 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
     assert r_wp.status_code == 200
     wp = r_wp.json()
     assert len(wp.get("examples", {}).get("Dev", [])) >= 2
+    assert isinstance(wp.get("sense_title"), str)
 
 
 def test_category_generate_import_fallback_on_duplicate(client, monkeypatch):
@@ -569,3 +638,43 @@ def test_article_import_category_and_zero_duration(monkeypatch, tmp_path):
     assert detail.get("generation_started_at")
     assert detail.get("generation_completed_at")
     assert detail.get("generation_duration_ms") is not None
+
+
+def test_store_prefers_japanese_sense_title(tmp_path: Path):
+    backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
+    if str(backend_root) not in sys.path:
+        sys.path.insert(0, str(backend_root))
+    from backend.store import AppSQLiteStore
+
+    store = AppSQLiteStore(str(tmp_path / "sense.sqlite3"))
+    payload = {
+        "sense_title": "alignment",
+        "senses": [
+            {
+                "id": "s1",
+                "gloss_ja": "整列",
+                "definition_ja": "対象をきちんと並べること。",
+            }
+        ],
+        "examples": {cat: [] for cat in ["Dev", "CS", "LLM", "Business", "Common"]},
+    }
+    store.save_word_pack("wp:test:1", "alignment", json.dumps(payload, ensure_ascii=False))
+    rows = store.list_word_packs()
+    assert rows and rows[0][2] == "整列"
+
+
+def test_store_uses_placeholder_when_no_japanese(tmp_path: Path):
+    backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
+    if str(backend_root) not in sys.path:
+        sys.path.insert(0, str(backend_root))
+    from backend.store import AppSQLiteStore
+
+    store = AppSQLiteStore(str(tmp_path / "sense-placeholder.sqlite3"))
+    payload = {
+        "sense_title": "alignment",
+        "senses": [],
+        "examples": {cat: [] for cat in ["Dev", "CS", "LLM", "Business", "Common"]},
+    }
+    store.save_word_pack("wp:test:2", "alignment", json.dumps(payload, ensure_ascii=False))
+    rows = store.list_word_packs()
+    assert rows and rows[0][2] == "語義タイトル未設定"

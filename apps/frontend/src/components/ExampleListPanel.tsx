@@ -44,6 +44,7 @@ export const ExampleListPanel: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<ExampleItemData['category'] | 'all'>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('card');
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [showAllTranslations, setShowAllTranslations] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<ExampleItemData | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -57,6 +58,7 @@ export const ExampleListPanel: React.FC = () => {
     categoryFilter: ExampleItemData['category'] | 'all';
     viewMode: ViewMode;
     offset: number;
+    showAllTranslations: boolean;
   };
 
   useEffect(() => {
@@ -73,14 +75,25 @@ export const ExampleListPanel: React.FC = () => {
       if (s.categoryFilter) setCategoryFilter(s.categoryFilter);
       if (s.viewMode) setViewMode(s.viewMode);
       if (typeof s.offset === 'number' && Number.isFinite(s.offset) && s.offset >= 0) setOffset(s.offset);
+      if (typeof s.showAllTranslations === 'boolean') setShowAllTranslations(s.showAllTranslations);
     } catch {}
   }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const p: PersistedState = { sortKey, sortOrder, searchMode, searchInput, appliedSearch, categoryFilter, viewMode, offset };
+    const p: PersistedState = {
+      sortKey,
+      sortOrder,
+      searchMode,
+      searchInput,
+      appliedSearch,
+      categoryFilter,
+      viewMode,
+      offset,
+      showAllTranslations,
+    };
     try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch {}
-  }, [sortKey, sortOrder, searchMode, searchInput, appliedSearch, categoryFilter, viewMode, offset]);
+  }, [sortKey, sortOrder, searchMode, searchInput, appliedSearch, categoryFilter, viewMode, offset, showAllTranslations]);
 
   const handleApplySearch = () => setAppliedSearch({ mode: searchMode, value: searchInput.trim() });
   const handleToggleExpand = (id: number) => setExpandedIds((prev) => {
@@ -88,6 +101,20 @@ export const ExampleListPanel: React.FC = () => {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+
+  const toggleAllTranslations = () => {
+    setShowAllTranslations((prev) => {
+      const next = !prev;
+      setExpandedIds(next ? new Set(items.map((it) => it.id)) : new Set());
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (showAllTranslations) {
+      setExpandedIds(new Set(items.map((it) => it.id)));
+    }
+  }, [showAllTranslations, items]);
 
   const buildQuery = (o: number) => {
     const sp = new URLSearchParams();
@@ -191,6 +218,18 @@ export const ExampleListPanel: React.FC = () => {
           searchInput={searchInput}
           onChangeSearchInput={setSearchInput}
           onApplySearch={handleApplySearch}
+          filtersLeft={(
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', marginLeft: '0.5rem' }}>
+              <input
+                type="checkbox"
+                role="switch"
+                aria-label="訳一括表示"
+                checked={showAllTranslations}
+                onChange={toggleAllTranslations}
+              />
+              訳一括表示
+            </label>
+          )}
           filtersRight={(
             <>
               <label htmlFor="ex-cat" style={{ marginLeft: '0.5rem' }}>カテゴリ:</label>
@@ -213,18 +252,28 @@ export const ExampleListPanel: React.FC = () => {
             {viewMode === 'card' ? (
               <div className="ex-list-grid">
                 {items.map((it) => (
-                  <div key={it.id} className="ex-card" onClick={() => { setPreviewItem(it); setPreviewOpen(true); }}>
+                  <div
+                    key={it.id}
+                    className="ex-card"
+                    data-testid="example-card"
+                    onClick={() => { setPreviewItem(it); setPreviewOpen(true); }}
+                  >
                     <div className="ex-meta" style={{ marginBottom: 4 }}>{it.lemma} / {it.category}</div>
                     <h4 className="ex-en">{it.en}</h4>
                     <div className="ex-actions">
-                      <button type="button" onClick={(e) => { e.stopPropagation(); handleToggleExpand(it.id); }}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleToggleExpand(it.id); }}
+                        aria-pressed={showAllTranslations || expandedIds.has(it.id)}
+                        disabled={showAllTranslations}
+                      >
                         訳表示
                       </button>
                       <div onClick={(e) => e.stopPropagation()}>
                         <TTSButton text={it.en} className="ex-tts-btn" />
                       </div>
                     </div>
-                    {expandedIds.has(it.id) && (
+                    {(showAllTranslations || expandedIds.has(it.id)) && (
                       <div className="ex-ja">{it.ja}</div>
                     )}
                   </div>
@@ -233,17 +282,27 @@ export const ExampleListPanel: React.FC = () => {
             ) : (
               <div>
                 {items.map((it) => (
-                  <div key={it.id} className="ex-list-item" onClick={() => { setPreviewItem(it); setPreviewOpen(true); }}>
+                  <div
+                    key={it.id}
+                    className="ex-list-item"
+                    data-testid="example-list-item"
+                    onClick={() => { setPreviewItem(it); setPreviewOpen(true); }}
+                  >
                     <div style={{ flex: 1 }}>
                       <div className="ex-meta" style={{ marginBottom: 4 }}>{it.lemma} / {it.category}</div>
                       <div className="ex-en">{it.en}</div>
                       <div className="ex-actions">
-                        <button type="button" onClick={(e) => { e.stopPropagation(); handleToggleExpand(it.id); }}>訳表示</button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleToggleExpand(it.id); }}
+                          aria-pressed={showAllTranslations || expandedIds.has(it.id)}
+                          disabled={showAllTranslations}
+                        >訳表示</button>
                         <div onClick={(e) => e.stopPropagation()}>
                           <TTSButton text={it.en} className="ex-tts-btn" />
                         </div>
                       </div>
-                      {expandedIds.has(it.id) && <div className="ex-ja">{it.ja}</div>}
+                      {(showAllTranslations || expandedIds.has(it.id)) && <div className="ex-ja">{it.ja}</div>}
                     </div>
                   </div>
                 ))}

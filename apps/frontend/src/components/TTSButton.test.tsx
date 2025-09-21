@@ -44,7 +44,7 @@ describe('TTSButton', () => {
 
     render(<TTSButton text="Hello" />);
     const user = userEvent.setup();
-    const button = screen.getByRole('button', { name: '音声読み上げ' });
+    const button = screen.getByRole('button', { name: '音声' });
     await user.click(button);
 
     expect(fetchMock).toHaveBeenCalledWith('/api/tts', expect.objectContaining({ method: 'POST' }));
@@ -66,7 +66,7 @@ describe('TTSButton', () => {
 
     render(<TTSButton text="Hello" />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: '音声読み上げ' }));
+    await user.click(screen.getByRole('button', { name: '音声' }));
 
     await waitFor(() => expect(alertMock).toHaveBeenCalledWith('音声の取得に失敗しました'));
     expect(consoleMock).toHaveBeenCalled();

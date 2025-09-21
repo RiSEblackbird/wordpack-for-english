@@ -16,7 +16,7 @@ describe('ExampleDetailModal', () => {
   it('renders TTS buttons for original and translated texts', () => {
     render(<ExampleDetailModal isOpen onClose={() => {}} item={item} />);
 
-    const ttsButtons = screen.getAllByRole('button', { name: '音声読み上げ' });
+    const ttsButtons = screen.getAllByRole('button', { name: '音声' });
     expect(ttsButtons).toHaveLength(2);
     expect(screen.getByText(item.en)).toBeInTheDocument();
     expect(screen.getByText(item.ja)).toBeInTheDocument();

@@ -1,4 +1,4 @@
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { App } from './App';
@@ -66,7 +66,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
 
     // 初期ロードのレンジ表記とボタン状態（見出しをheadingロールで特定）
     await screen.findByRole('heading', { name: '例文一覧' });
-    const ttsButtons = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    const ttsButtons = await screen.findAllByRole('button', { name: '音声' });
     expect(ttsButtons.length).toBeGreaterThan(0);
     // limit=200, total=450, offset=0 => 1-200 / 450件
     const range1 = await screen.findByText(/1-200 \/ 450件/);
@@ -100,6 +100,49 @@ describe('ExampleListPanel pagination offset behavior', () => {
     });
     const range4 = await screen.findByText(/201-400 \/ 450件/);
     expect(range4).toBeInTheDocument();
+  }, 15000);
+
+  it('訳一括表示トグルで全訳文の開閉を一括操作できる', async () => {
+    setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+
+    const examplesTabBtn = await screen.findByRole('button', { name: '例文一覧' });
+    await act(async () => {
+      await user.click(examplesTabBtn);
+    });
+
+    await screen.findByRole('heading', { name: '例文一覧' });
+
+    // 初期状態では訳文が非表示
+    expect(screen.queryByText('例文 ja 1')).toBeNull();
+
+    const toggle = screen.getByLabelText('訳一括表示') as HTMLInputElement;
+    expect(toggle).not.toBeChecked();
+
+    await act(async () => {
+      await user.click(toggle);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('例文 ja 1')).toBeInTheDocument();
+    });
+
+    const cards = await screen.findAllByTestId('example-card');
+    expect(cards.length).toBeGreaterThan(0);
+    const firstTranslationButton = within(cards[0]).getByRole('button', { name: '訳表示' }) as HTMLButtonElement;
+    expect(firstTranslationButton).toBeDisabled();
+
+    await act(async () => {
+      await user.click(toggle);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText('例文 ja 1')).toBeNull();
+    });
+
+    expect(firstTranslationButton).not.toBeDisabled();
   }, 15000);
 });
 
