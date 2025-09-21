@@ -44,7 +44,7 @@ def test_prompt_regression_pack_schema(client):
         assert key in j
 
 def test_review_endpoints_removed(client):
-    # 旧SRS互換APIは提供されない（404/405）
+    # 復習系の互換APIは提供されない（404/405）
     assert client.get("/api/review/stats").status_code in (404, 405)
     assert client.post("/api/review/grade_by_lemma", json={"lemma": "regress", "grade": 1}).status_code in (404, 405)
 

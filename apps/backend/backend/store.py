@@ -787,6 +787,6 @@ class AppSQLiteStore:
             conn.close()
 
 # module-level singleton store (wired to settings)
-store = AppSQLiteStore(db_path=settings.srs_db_path)
+store = AppSQLiteStore(db_path=settings.wordpack_db_path)
 
 

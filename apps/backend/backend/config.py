@@ -2,7 +2,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-DEFAULT_DB_PATH = ".data/srs.sqlite3"
+DEFAULT_DB_PATH = ".data/wordpack.sqlite3"
 
 
 class Settings(BaseSettings):
@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     voyage_api_key: str | None = Field(default=None, description="Voyage API Key")
 
     # --- データ永続化設定 ---
-    srs_db_path: str = Field(
+    wordpack_db_path: str = Field(
         default=DEFAULT_DB_PATH,
         description="Path to SQLite database for WordPack persistence / WordPack用SQLite DBパス",
     )
