@@ -1,4 +1,5 @@
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, useMemo, useState } from 'react';
+import { useSettings } from '../SettingsContext';
 
 type Props = {
   text: string;
@@ -9,6 +10,18 @@ type Props = {
 
 export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
   const [loading, setLoading] = useState(false);
+  let contextApiBase: string | undefined;
+  try {
+    const { settings } = useSettings();
+    contextApiBase = settings.apiBase;
+  } catch (err) {
+    contextApiBase = undefined;
+  }
+  const endpoint = useMemo(() => {
+    const base = contextApiBase || '/api';
+    const normalized = base.endsWith('/') ? base.slice(0, -1) : base;
+    return `${normalized}/tts`;
+  }, [contextApiBase]);
 
   const speak = async () => {
     if (loading) return;
@@ -19,7 +32,7 @@ export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
     }
     setLoading(true);
     try {
-      const res = await fetch('/api/tts', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: trimmed, voice }),

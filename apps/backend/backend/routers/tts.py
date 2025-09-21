@@ -117,13 +117,27 @@ def synth(req: TTSIn, request: Request) -> StreamingResponse:
         )
         raise HTTPException(status_code=500, detail="OpenAI client is not configured")
 
+    response_ctx: object | None = None
+    response_obj: object | None = None
+    use_streaming_api = False
+
     try:
-        response = client_instance.audio.speech.create(  # type: ignore[union-attr]
-            model="gpt-4o-mini-tts",
-            voice=req.voice,
-            input=req.text,
-            response_format="mp3",
-        )
+        streaming_api = getattr(getattr(client_instance.audio, "speech", None), "with_streaming_response", None)
+        if streaming_api is not None and hasattr(streaming_api, "create"):
+            use_streaming_api = True
+            response_ctx = streaming_api.create(
+                model="gpt-4o-mini-tts",
+                voice=req.voice,
+                input=req.text,
+                response_format="mp3",
+            )
+        else:
+            response_obj = client_instance.audio.speech.create(  # type: ignore[union-attr]
+                model="gpt-4o-mini-tts",
+                voice=req.voice,
+                input=req.text,
+                response_format="mp3",
+            )
     except Exception as exc:  # pragma: no cover - SDK からの例外を分類
         status_code, detail, reason = _map_openai_exception(exc)
         logger.warning(
@@ -137,12 +151,22 @@ def synth(req: TTSIn, request: Request) -> StreamingResponse:
         raise HTTPException(status_code=status_code, detail=detail) from exc
 
     def stream() -> Iterator[bytes]:
+        nonlocal response_obj
         total_bytes = 0
         had_error = False
         try:
-            for chunk in _iter_audio_bytes(response):
-                total_bytes += len(chunk)
-                yield chunk
+            if use_streaming_api and response_ctx is not None:
+                with response_ctx as response:
+                    response_obj = response
+                    for chunk in _iter_audio_bytes(response):
+                        total_bytes += len(chunk)
+                        yield chunk
+            elif response_obj is not None:
+                for chunk in _iter_audio_bytes(response_obj):
+                    total_bytes += len(chunk)
+                    yield chunk
+            else:  # pragma: no cover - 想定外フォーマット
+                raise RuntimeError("text-to-speech response missing audio bytes")
         except Exception as exc:  # pragma: no cover - ストリーミング中の異常
             had_error = True
             logger.error(
@@ -157,7 +181,9 @@ def synth(req: TTSIn, request: Request) -> StreamingResponse:
         finally:
             duration_ms = (time.perf_counter() - t0) * 1000
             try:
-                response.close()
+                close_target = response_ctx if use_streaming_api else response_obj
+                if close_target is not None and hasattr(close_target, "close"):
+                    close_target.close()  # type: ignore[misc]
             except Exception:  # pragma: no cover - close に失敗しても継続
                 logger.warning(
                     "tts_stream_close_failed",
