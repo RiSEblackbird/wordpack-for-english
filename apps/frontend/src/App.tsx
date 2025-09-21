@@ -38,7 +38,7 @@ export const App: React.FC = () => {
     <SettingsProvider>
       <ModalProvider>
         <NotificationsProvider>
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '1000px', margin: '0 auto', ['--main-max-width' as any]: '1000px' }}>
         <ThemeApplier />
         <style>{`
           /* テーマ変数 */
