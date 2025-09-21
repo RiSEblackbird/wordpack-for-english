@@ -39,7 +39,8 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
    >
       <div
         style={{
-          width: 'min(80vw, 96vw)',
+          width: '100%',
+          maxWidth: 'min(96vw, calc(var(--main-max-width, 1000px) * 0.90))',
           maxHeight: '90vh',
           overflow: 'auto',
           background: 'var(--color-surface)',
