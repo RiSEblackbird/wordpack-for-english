@@ -7,6 +7,9 @@ import { vi } from 'vitest';
 describe('WordPackListPanel modal preview', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    try {
+      sessionStorage.clear();
+    } catch {}
   });
 
   function setupFetchMocks() {
@@ -162,6 +165,9 @@ describe('WordPackListPanel modal preview', () => {
     // 統合された一覧のヘッダーが表示される
     await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
 
+    const senseButtons = await screen.findAllByRole('button', { name: '語義' });
+    expect(senseButtons).toHaveLength(3);
+
     const ttsButtons = await screen.findAllByRole('button', { name: '音声' });
     expect(ttsButtons).toHaveLength(3);
 
@@ -211,12 +217,70 @@ describe('WordPackListPanel modal preview', () => {
     const buttonsInCardView = await screen.findAllByRole('button', { name: '音声' });
     expect(buttonsInCardView).toHaveLength(3);
 
+    const senseButtonsInCardView = await screen.findAllByRole('button', { name: '語義' });
+    expect(senseButtonsInCardView).toHaveLength(3);
+
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'リスト' }));
     });
 
     const buttonsInListView = await screen.findAllByRole('button', { name: '音声' });
     expect(buttonsInListView).toHaveLength(3);
+
+    const senseButtonsInListView = await screen.findAllByRole('button', { name: '語義' });
+    expect(senseButtonsInListView).toHaveLength(3);
+
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'カード' }));
+    });
+  });
+
+  it('語義ボタンで語義タイトルを確認できる（カード/リスト）', async () => {
+    setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.keyboard('{Alt>}{4}{/Alt}');
+    });
+
+    const cards = await screen.findAllByTestId('wp-card');
+    expect(cards).toHaveLength(3);
+
+    const firstCardSenseButton = within(cards[0]).getByRole('button', { name: '語義' });
+
+    await act(async () => {
+      await user.click(firstCardSenseButton);
+    });
+
+    const senseTitleInCard = within(cards[0]).getByTestId('wp-card-sense-title');
+    expect(senseTitleInCard).toHaveTextContent('アルファ概説');
+
+    await act(async () => {
+      await user.click(firstCardSenseButton);
+    });
+
+    expect(within(cards[0]).queryByTestId('wp-card-sense-title')).toBeNull();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'リスト' }));
+    });
+
+    const listItems = await screen.findAllByTestId('wp-index-item');
+    expect(listItems).toHaveLength(3);
+
+    const firstListItem = listItems[0];
+    const listSenseButton = within(firstListItem).getByRole('button', { name: '語義' });
+
+    await act(async () => {
+      await user.click(listSenseButton);
+    });
+
+    const titleRow = within(firstListItem).getByTestId('wp-index-title-row');
+    expect(titleRow).toHaveTextContent('alpha');
+    expect(titleRow).toHaveTextContent('アルファ概説');
 
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'カード' }));

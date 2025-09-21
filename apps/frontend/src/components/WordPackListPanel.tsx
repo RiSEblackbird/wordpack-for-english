@@ -138,6 +138,7 @@ export const WordPackListPanel: React.FC = () => {
   const [searchMode, setSearchMode] = useState<SearchMode>('contains');
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(null);
+  const [senseOpenIds, setSenseOpenIds] = useState<Set<string>>(() => new Set());
   // グリッドの可視幅に基づき列数を算出（最大4列）
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [columnCount, setColumnCount] = useState<number>(() =>
@@ -269,6 +270,25 @@ export const WordPackListPanel: React.FC = () => {
     };
   }, [loadWordPacks, offset]);
 
+  useEffect(() => {
+    setSenseOpenIds((prev) => {
+      const validIds = new Set(wordPacks.map((wp) => wp.id));
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (validIds.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      });
+      if (!changed && next.size === prev.size) {
+        return prev;
+      }
+      return next;
+    });
+  }, [wordPacks]);
+
   const formatDate = (dateStr: string) => formatDateJst(dateStr);
 
   const normalizedSearch = useMemo(() => {
@@ -344,6 +364,23 @@ export const WordPackListPanel: React.FC = () => {
     [sortKey]
   );
 
+  const toggleSenseOpen = useCallback((id: string) => {
+    setSenseOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const resolveSenseTitle = useCallback((title?: string) => {
+    const trimmed = (title ?? '').trim();
+    return trimmed || '語義タイトル未設定';
+  }, []);
+
   const hasNext = offset + PAGE_LIMIT < total;
   const hasPrev = offset > 0;
 
@@ -368,6 +405,9 @@ export const WordPackListPanel: React.FC = () => {
         .wp-card-tts-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; }
         .wp-card-title { font-size: 1.0em; font-weight: bold; color: #333; margin: 0; }
         .wp-card-meta { font-size: 0.50em; color: #666; margin: 0.25rem 0; }
+        .wp-sense-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; border: 1px solid #5c6bc0; background: #f5f7ff; color: #3f51b5; cursor: pointer; }
+        .wp-sense-btn[aria-pressed="true"] { background: #e8eaf6; border-color: #3f51b5; color: #283593; }
+        .wp-card-sense-title { margin: 0.35rem 0 0.2rem; font-size: 0.70em; color: #2f2f2f; background: rgba(255,255,255,0.86); padding: 0.25rem 0.35rem; border-left: 3px solid #5c6bc0; border-radius: 4px; line-height: 1.4; }
         .wp-badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 999px; font-size: 0.75em; margin-left: 0.5rem; }
         .wp-badge.empty { background: #fff3cd; color: #7a5b00; border: 1px solid #ffe08a; }
         .wp-pagination { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem; }
@@ -389,9 +429,11 @@ export const WordPackListPanel: React.FC = () => {
           .wp-index-grid { grid-template-columns: 1fr 1fr 1fr 1fr; }
         }
         .wp-index-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0.3rem; border-bottom: 1px solid #eee; cursor: pointer; background: transparent; border-radius: 4px; }
+        .wp-index-title-row { display: flex; align-items: baseline; gap: 0.4rem; flex: 1; min-width: 0; }
         .wp-index-actions { margin-left: auto; display: flex; gap: 0.25rem; align-items: center; }
         .wp-index-tts-btn { font-size: 0.55em; padding: 0.05rem 0.3rem; border-radius: 4px; }
-        .wp-index-title { font-size: 0.75em; font-weight: bold; color:rgb(233, 233, 233); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .wp-index-title { font-size: 0.75em; font-weight: bold; color:rgb(233, 233, 233); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .wp-index-sense { font-size: 0.55em; color: #212121; background: rgba(255,255,255,0.85); padding: 0.05rem 0.35rem; border-radius: 4px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .wp-index-meta { font-size: 0.10em; color: #666; }
         @media (max-width: 640px) { 
           .wp-list-grid { grid-template-columns: 1fr; }
@@ -493,6 +535,15 @@ export const WordPackListPanel: React.FC = () => {
                         {wp.lemma}
                       </h3>
                       <div className="wp-card-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="wp-sense-btn"
+                          aria-pressed={senseOpenIds.has(wp.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSenseOpen(wp.id);
+                          }}
+                        >語義</button>
                         <TTSButton text={wp.lemma} className="wp-card-tts-btn" />
                         <DeleteButton
                           onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
@@ -500,6 +551,11 @@ export const WordPackListPanel: React.FC = () => {
                         />
                       </div>
                     </div>
+                    {senseOpenIds.has(wp.id) && (
+                      <div className="wp-card-sense-title" data-testid="wp-card-sense-title">
+                        {resolveSenseTitle(wp.sense_title)}
+                      </div>
+                    )}
                     <div className="wp-card-meta">
                       <div>作成: {formatDate(wp.created_at)} / 更新: {formatDate(wp.updated_at)}</div>
                       {wp.is_empty ? (
@@ -567,9 +623,23 @@ export const WordPackListPanel: React.FC = () => {
                       setModalOpen(true);
                     }}
                   >
-                    <span className="wp-index-title">{wp.lemma}</span>
-                    <span className="wp-index-meta">{wp.is_empty ? ' / 未' : ` / 例文: ${wp.totalExamples}件`}</span>
+                    <div className="wp-index-title-row" data-testid="wp-index-title-row">
+                      <span className="wp-index-title">{wp.lemma}</span>
+                      {senseOpenIds.has(wp.id) && (
+                        <span className="wp-index-sense">{resolveSenseTitle(wp.sense_title)}</span>
+                      )}
+                      <span className="wp-index-meta">{wp.is_empty ? ' / 未' : ` / 例文: ${wp.totalExamples}件`}</span>
+                    </div>
                     <div className="wp-index-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="wp-sense-btn"
+                        aria-pressed={senseOpenIds.has(wp.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSenseOpen(wp.id);
+                        }}
+                      >語義</button>
                       <TTSButton text={wp.lemma} className="wp-index-tts-btn" />
                       <DeleteButton
                         onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}

@@ -13,6 +13,7 @@
 - 例文（Dev/CS/LLM/Business/Common）の追加・削除
 - 文章インポートと関連 WordPack の紐付け
 - OpenAI gpt-4o-mini-tts を用いた例文／日本語訳／インポート文章／WordPack語彙（一覧・プレビュー）の音声再生（「音声」ボタン）
+- 保存済みWordPack一覧で語義タイトルを即座に確認できる「語義」トグルボタン
 
 ## クイックスタート
 
