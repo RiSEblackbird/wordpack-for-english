@@ -1,4 +1,4 @@
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { App } from './App';
@@ -180,6 +180,11 @@ describe('WordPackListPanel modal preview', () => {
     // WordPackの詳細が読み込まれるまで待機（モーダル内の内容を一意に特定）
     const modalContent = await waitFor(() => screen.getByTestId('modal-wordpack-content'), { timeout: 10000 });
     expect(modalContent).toHaveTextContent('学習カード要点');
+    const lemmaLabel = within(modalContent).getByText('見出し語');
+    const lemmaValue = lemmaLabel.nextElementSibling as HTMLElement | null;
+    expect(lemmaValue).not.toBeNull();
+    const lemmaTtsButtons = lemmaValue ? within(lemmaValue).getAllByRole('button', { name: '音声読み上げ' }) : [];
+    expect(lemmaTtsButtons).toHaveLength(1);
 
     // 閉じる
     await act(async () => {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Modal } from './Modal';
+import { TTSButton } from './TTSButton';
 
 export interface ExampleItemData {
   id: number;
@@ -26,11 +27,17 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({ isOpen, 
       <section>
         <div style={{ display: 'grid', gap: '0.5rem' }}>
           <div>
-            <strong>原文</strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <strong>原文</strong>
+              <TTSButton text={item.en} style={{ fontSize: '0.75em', padding: '0.15rem 0.5rem', borderRadius: 4 }} />
+            </div>
             <p style={{ marginTop: 4 }}>{item.en}</p>
           </div>
           <div>
-            <strong>日本語訳</strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <strong>日本語訳</strong>
+              <TTSButton text={item.ja} style={{ fontSize: '0.75em', padding: '0.15rem 0.5rem', borderRadius: 4 }} />
+            </div>
             <p style={{ marginTop: 4 }}>{item.ja}</p>
           </div>
           {item.grammar_ja ? (
