@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { formatDateJst } from '../lib/date';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
+import { useConfirmDialog } from '../ConfirmDialogContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { useNotifications } from '../NotificationsContext';
 import { regenerateWordPackRequest } from '../lib/wordpack';
@@ -28,6 +29,7 @@ export const ArticleListPanel: React.FC = () => {
   const { settings } = useSettings();
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
+  const confirmDialog = useConfirmDialog();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<ArticleListItem[]>([]);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
@@ -74,12 +76,14 @@ export const ArticleListPanel: React.FC = () => {
     }
   };
 
-  const del = async (id: string) => {
-    if (!confirm('この文章を削除しますか？')) return;
+  const del = async (item: ArticleListItem) => {
+    const targetLabel = item.title_en?.trim() || '文章';
+    const confirmed = await confirmDialog(targetLabel);
+    if (!confirmed) return;
     setLoading(true);
     setMsg(null);
     try {
-      await fetchJson(`${settings.apiBase}/article/${id}`, { method: 'DELETE' });
+      await fetchJson(`${settings.apiBase}/article/${item.id}`, { method: 'DELETE' });
       await load(offset);
       setMsg({ kind: 'status', text: '削除しました' });
     } catch (e) {
@@ -92,7 +96,12 @@ export const ArticleListPanel: React.FC = () => {
 
   const deleteWordPack = async (wordPackId: string) => {
     if (!preview) return;
-    if (!confirm('このWordPackを削除しますか？')) return;
+    const lemmaLabel = (() => {
+      try { return preview.related_word_packs.find((l) => l.word_pack_id === wordPackId)?.lemma?.trim(); }
+      catch { return undefined; }
+    })();
+    const confirmed = await confirmDialog(lemmaLabel || 'WordPack');
+    if (!confirmed) return;
     setLoading(true);
     setMsg(null);
     try {
@@ -180,7 +189,7 @@ export const ArticleListPanel: React.FC = () => {
           <div key={it.id} className="al-card" onClick={() => open(it.id)}>
             <div style={{ display: 'flex', gap: 8 }}>
               <strong style={{ flex: 1, fontSize: '12px' }}>{it.title_en}</strong>
-              <button onClick={(e) => { e.stopPropagation(); del(it.id); }} aria-label={`delete-article-${it.id}`}>削除</button>
+              <button onClick={(e) => { e.stopPropagation(); del(it); }} aria-label={`delete-article-${it.id}`}>削除</button>
             </div>
             <div style={{ fontSize: '10px', color: 'var(--color-subtle)' }}>更新: {formatDateJst(it.updated_at)}</div>
           </div>
