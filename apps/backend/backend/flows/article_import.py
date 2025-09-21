@@ -9,6 +9,7 @@ from ..config import settings
 from ..logging import logger
 from ..providers import get_llm_provider
 from ..store import store
+from ..sense_title import choose_sense_title
 from ..models.word import WordPack
 from ..models.article import (
     ArticleImportRequest,
@@ -349,7 +350,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                         if wp_id is None:
                             empty_word_pack = WordPack(
                                 lemma=lemma,
-                                sense_title=lemma[:20],
+                                sense_title=choose_sense_title(None, [], lemma=lemma, limit=20),
                                 pronunciation={"ipa_GA": None, "ipa_RP": None, "syllables": None, "stress_index": None, "linking_notes": []},
                                 senses=[],
                                 collocations={"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},

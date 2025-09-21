@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence
 
 from .config import settings
+from .sense_title import choose_sense_title
 
 
 EXAMPLE_CATEGORIES: tuple[str, ...] = ("Dev", "CS", "LLM", "Business", "Common")
@@ -123,28 +124,56 @@ class AppSQLiteStore:
 
     def _split_examples_from_payload(
         self, data: str | Mapping[str, Any]
-    ) -> tuple[str, Mapping[str, Any] | None, str]:
+    ) -> tuple[str, Mapping[str, Any] | None, str, list[str]]:
         if isinstance(data, Mapping):
             parsed: Mapping[str, Any] = dict(data)
         else:
             try:
                 parsed = json.loads(data) if data else {}
             except Exception:
-                return (data if isinstance(data, str) else json.dumps({}, ensure_ascii=False), None, "")
+                empty_json = json.dumps({}, ensure_ascii=False)
+                return (
+                    data if isinstance(data, str) else empty_json,
+                    None,
+                    "",
+                    [],
+                )
             if not isinstance(parsed, Mapping):
-                return (data if isinstance(data, str) else json.dumps({}, ensure_ascii=False), None, "")
+                empty_json = json.dumps({}, ensure_ascii=False)
+                return (
+                    data if isinstance(data, str) else empty_json,
+                    None,
+                    "",
+                    [],
+                )
+
         sense_title = ""
+        sense_candidates: list[str] = []
         try:
             sense_title = str(parsed.get("sense_title") or "").strip()
         except Exception:
             sense_title = ""
+
+        senses_payload = parsed.get("senses") if isinstance(parsed, Mapping) else None
+        if isinstance(senses_payload, Sequence):
+            for sense in senses_payload:
+                if not isinstance(sense, Mapping):
+                    continue
+                for key in ("gloss_ja", "term_overview_ja", "term_core_ja", "definition_ja", "nuances_ja"):
+                    try:
+                        val = str(sense.get(key) or "").strip()
+                    except Exception:
+                        val = ""
+                    if val:
+                        sense_candidates.append(val)
+
         examples = parsed.get("examples") if isinstance(parsed, Mapping) else None
         if isinstance(examples, Mapping):
             core = dict(parsed)
             core.pop("examples", None)
-            return json.dumps(core, ensure_ascii=False), examples, sense_title
+            return json.dumps(core, ensure_ascii=False), examples, sense_title, sense_candidates
         serialized = json.dumps(parsed, ensure_ascii=False) if not isinstance(data, str) else data
-        return serialized, None, sense_title
+        return serialized, None, sense_title, sense_candidates
 
     def _iter_example_rows(
         self, examples: Mapping[str, Any]
@@ -207,12 +236,13 @@ class AppSQLiteStore:
         core 部分（examples を除く）を word_packs.data に保存する。
         """
         now = datetime.now(UTC).isoformat()
-        core_json, examples, sense_title = self._split_examples_from_payload(data)
-        sense_title = (sense_title or "").strip()
-        if not sense_title:
-            sense_title = lemma[:40]
-        else:
-            sense_title = sense_title[:40]
+        core_json, examples, sense_title_raw, sense_candidates = self._split_examples_from_payload(data)
+        sense_title = choose_sense_title(
+            sense_title_raw,
+            sense_candidates,
+            lemma=lemma,
+            limit=40,
+        )
 
         with self._conn() as conn:
             with conn:

@@ -20,6 +20,7 @@ from ..models.word import (
     ExampleListItem,
 )
 from ..store import store
+from ..sense_title import choose_sense_title
 from ..logging import logger
 from pydantic import BaseModel, Field
 from typing import Optional, Any
@@ -57,7 +58,7 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
     # スキーマ準拠の空WordPackを構築
     empty_word_pack = WordPack(
         lemma=lemma,
-        sense_title=lemma[:20],
+        sense_title=choose_sense_title(None, [], lemma=lemma, limit=20),
         pronunciation={
             "ipa_GA": None,
             "ipa_RP": None,

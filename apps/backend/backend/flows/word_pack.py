@@ -20,6 +20,7 @@ from ..models.common import ConfidenceLevel, Citation
 from ..pronunciation import generate_pronunciation
 from ..logging import logger
 from ..config import settings
+from ..sense_title import choose_sense_title
 
 
 # --- 例文生成プロンプト: Notes 分割（共通/カテゴリ別） ---
@@ -199,7 +200,7 @@ class WordPackFlow:
         senses: List[Sense] = []
         collocations = Collocations()
         examples = Examples()
-        sense_title = ""
+        sense_title_raw = ""
         etymology = Etymology(note="", confidence=ConfidenceLevel.low)
         study_card = ""
         
@@ -264,7 +265,7 @@ class WordPackFlow:
             try:
                 st_raw = str(llm_payload.get("sense_title") or "").strip()
                 if st_raw:
-                    sense_title = st_raw[:20]
+                    sense_title_raw = st_raw
             except Exception:
                 pass
 
@@ -359,12 +360,24 @@ class WordPackFlow:
             except Exception:
                 pass
 
-        if not sense_title and senses:
-            primary = (senses[0].gloss_ja or "").strip()
-            if primary:
-                sense_title = primary[:20]
-        if not sense_title:
-            sense_title = lemma[:20]
+        sense_candidates: list[str] = []
+        for sense in senses:
+            sense_candidates.extend(
+                [
+                    sense.gloss_ja,
+                    sense.term_overview_ja or "",
+                    sense.term_core_ja or "",
+                    sense.definition_ja or "",
+                    sense.nuances_ja or "",
+                ]
+            )
+
+        sense_title = choose_sense_title(
+            sense_title_raw,
+            sense_candidates,
+            lemma=lemma,
+            limit=20,
+        )
         
         pack = WordPack(
             lemma=lemma,
