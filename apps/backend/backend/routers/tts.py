@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, constr
 
+from backend.config import settings
+
 try:
     from openai import OpenAI  # type: ignore
 except Exception:  # pragma: no cover - openai SDK が無い環境では初期化しない
@@ -19,7 +21,7 @@ router = APIRouter(prefix="/api/tts", tags=["tts"])
 def _init_client() -> OpenAI | None:  # type: ignore[valid-type]
     if OpenAI is None:  # pragma: no cover - SDK 未導入環境
         return None
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
     if not api_key:
         return None
     return OpenAI(api_key=api_key)
@@ -42,6 +44,11 @@ class TTSIn(BaseModel):
 
 @router.post("", response_class=StreamingResponse)
 def synth(req: TTSIn) -> StreamingResponse:
+    global client
+
+    if client is None:
+        client = _init_client()
+
     if client is None:
         raise HTTPException(status_code=500, detail="OpenAI client is not configured")
 

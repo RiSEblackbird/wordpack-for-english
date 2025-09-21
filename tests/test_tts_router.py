@@ -67,6 +67,8 @@ def test_tts_synth_streams_audio(monkeypatch) -> None:
 def test_tts_synth_unconfigured(monkeypatch) -> None:
     original_client = tts.client
     tts.client = None  # type: ignore[assignment]
+    monkeypatch.setattr(tts.settings, "openai_api_key", None)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     try:
         app = create_app()
         with TestClient(app) as client:
@@ -75,3 +77,17 @@ def test_tts_synth_unconfigured(monkeypatch) -> None:
         assert response.json()["detail"].startswith("OpenAI client is not configured")
     finally:
         tts.client = original_client  # type: ignore[assignment]
+
+
+def test_init_client_reads_settings(monkeypatch) -> None:
+    class _SpyClient:
+        def __init__(self, api_key: str) -> None:
+            self.api_key = api_key
+
+    monkeypatch.setattr(tts, "OpenAI", _SpyClient)
+    monkeypatch.setattr(tts.settings, "openai_api_key", "from-settings")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    client = tts._init_client()
+    assert isinstance(client, _SpyClient)
+    assert client.api_key == "from-settings"
