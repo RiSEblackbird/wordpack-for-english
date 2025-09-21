@@ -494,7 +494,12 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           <h3>概要</h3>
           <div className="kv" style={{ fontSize: '1.7em', marginBottom: '0.8rem' }}>
             <div>見出し語</div>
-            <div><strong>{data!.lemma}</strong></div>
+            <div className="wp-modal-lemma">
+              <strong>{data!.lemma}</strong>
+              {isInModalView ? (
+                <TTSButton text={data!.lemma} className="wp-modal-tts-btn" />
+              ) : null}
+            </div>
           </div>
           {selectedMeta ? (
             <div className="kv" style={{ marginBottom: '0.5rem', fontSize: '0.7em' }}>
@@ -798,6 +803,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         .selfcheck { position: relative; border: 1px dashed var(--color-border); padding: 0.5rem; border-radius: 6px; }
         .selfcheck-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--color-overlay-bg); cursor: pointer; font-weight: bold; }
         .kv { display: grid; grid-template-columns: 10rem 1fr; row-gap: 0.25rem; }
+        .wp-modal-lemma { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .wp-modal-tts-btn { font-size: 0.6em; padding: 0.15rem 0.45rem; border-radius: 4px; }
         .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
         @media (max-width: 840px) { .wp-container { grid-template-columns: 1fr; } }
       `}</style>

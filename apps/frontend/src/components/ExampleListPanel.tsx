@@ -4,6 +4,7 @@ import { fetchJson, ApiError } from '../lib/fetcher';
 import { LoadingIndicator } from './LoadingIndicator';
 import { ListControls } from './ListControls';
 import { ExampleDetailModal, ExampleItemData } from './ExampleDetailModal';
+import { TTSButton } from './TTSButton';
 
 type SortKey = 'created_at' | 'pack_updated_at' | 'lemma' | 'category';
 type SortOrder = 'asc' | 'desc';
@@ -149,7 +150,11 @@ export const ExampleListPanel: React.FC = () => {
         .ex-card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.6rem; background:rgb(224, 183, 112); cursor: pointer; color: #111827; }
         .ex-card h4 { margin: 0 0 0.25rem 0; font-size: 1.0em; }
         .ex-meta { font-size: 0.75em; color: #6b7280; }
-        .ex-actions { display: flex; gap: 0.5rem; margin-top: 0.4rem; }
+        .ex-actions { display: flex; gap: 0.5rem; margin-top: 0.4rem; flex-wrap: wrap; align-items: center; }
+        .ex-actions button,
+        .ex-actions .ex-tts-btn {
+          font-size: 0.85em;
+        }
         .ex-list-item { display: flex; align-items: start; gap: 0.5rem; padding: 0.4rem; border-bottom: 1px solid #eee; cursor: pointer; }
         .ex-en { font-weight: 600; }
         .ex-ja { margin-top: 0.3rem; }
@@ -215,6 +220,9 @@ export const ExampleListPanel: React.FC = () => {
                       <button type="button" onClick={(e) => { e.stopPropagation(); handleToggleExpand(it.id); }}>
                         訳表示
                       </button>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <TTSButton text={it.en} className="ex-tts-btn" />
+                      </div>
                     </div>
                     {expandedIds.has(it.id) && (
                       <div className="ex-ja">{it.ja}</div>
@@ -231,6 +239,9 @@ export const ExampleListPanel: React.FC = () => {
                       <div className="ex-en">{it.en}</div>
                       <div className="ex-actions">
                         <button type="button" onClick={(e) => { e.stopPropagation(); handleToggleExpand(it.id); }}>訳表示</button>
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <TTSButton text={it.en} className="ex-tts-btn" />
+                        </div>
                       </div>
                       {expandedIds.has(it.id) && <div className="ex-ja">{it.ja}</div>}
                     </div>

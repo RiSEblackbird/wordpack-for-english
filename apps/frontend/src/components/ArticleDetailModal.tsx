@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal } from './Modal';
 import { calculateDurationMs, formatDateJst, formatDurationMs } from '../lib/date';
+import { TTSButton } from './TTSButton';
 
 export interface ArticleWordPackLink {
   word_pack_id: string;
@@ -151,7 +152,22 @@ export const ArticleDetailModal: React.FC<Props> = ({
             .ai-card { border: 1px solid var(--color-border); border-radius: 4px; padding: 0.35rem; background: var(--color-surface); }
             .ai-badge { font-size: 0.68em; padding: 0.06rem 0.3rem; border-radius: 999px; border: 1px solid var(--color-border); }
           `}</style>
-          <h3 style={{ marginTop: 0 }}>{article.title_en}</h3>
+          <div
+            style={{
+              marginTop: 0,
+              display: 'flex',
+              gap: '0.5rem',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+            }}
+          >
+            <h3 style={{ margin: 0, flex: '1 1 auto' }}>{article.title_en}</h3>
+            <TTSButton
+              text={article.body_en}
+              style={{ flex: '0 0 auto' }}
+            />
+          </div>
           <div style={{ whiteSpace: 'pre-wrap', margin: '0.5rem 0' }}>{article.body_en}</div>
           <hr />
           <div style={{ whiteSpace: 'pre-wrap', margin: '0.5rem 0' }}>{article.body_ja}</div>
