@@ -287,6 +287,50 @@ describe('WordPackListPanel modal preview', () => {
     });
   });
 
+  it('語義一括表示トグルで全語義タイトルを同時表示・非表示できる', async () => {
+    setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.keyboard('{Alt>}{4}{/Alt}');
+    });
+
+    const cards = await screen.findAllByTestId('wp-card');
+    expect(cards).toHaveLength(3);
+
+    // 初期状態では語義タイトルは表示されていない
+    expect(screen.queryByTestId('wp-card-sense-title')).toBeNull();
+
+    const toggle = screen.getByLabelText('語義一括表示') as HTMLInputElement;
+    expect(toggle).not.toBeChecked();
+
+    await act(async () => {
+      await user.click(toggle);
+    });
+
+    await waitFor(() => {
+      const displayed = screen.getAllByTestId('wp-card-sense-title');
+      expect(displayed).toHaveLength(3);
+      expect(displayed[0]).toHaveTextContent(/概説/);
+    });
+
+    // 個別ボタンは一括表示中は操作不可
+    const senseButton = within(cards[0]).getByRole('button', { name: '語義' }) as HTMLButtonElement;
+    expect(senseButton).toBeDisabled();
+
+    await act(async () => {
+      await user.click(toggle);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('wp-card-sense-title')).toBeNull();
+    });
+
+    expect(senseButton).not.toBeDisabled();
+  });
+
   it('ソート機能が正しく動作する', async () => {
     setupFetchMocks();
     render(<App />);

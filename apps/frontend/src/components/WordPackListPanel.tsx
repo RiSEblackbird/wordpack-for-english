@@ -82,6 +82,7 @@ type PersistedState = {
   searchInput: string;
   appliedSearch: { mode: SearchMode; value: string } | null;
   offset: number;
+  showAllSense: boolean;
 };
 
 const STORAGE_KEY = 'wp.list.ui_state.v1';
@@ -139,6 +140,7 @@ export const WordPackListPanel: React.FC = () => {
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(null);
   const [senseOpenIds, setSenseOpenIds] = useState<Set<string>>(() => new Set());
+  const [showAllSense, setShowAllSense] = useState(false);
   // グリッドの可視幅に基づき列数を算出（最大4列）
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [columnCount, setColumnCount] = useState<number>(() =>
@@ -189,6 +191,7 @@ export const WordPackListPanel: React.FC = () => {
       if (typeof s.searchInput === 'string') setSearchInput(s.searchInput);
       if (s.appliedSearch) setAppliedSearch(s.appliedSearch);
       if (typeof s.offset === 'number' && Number.isFinite(s.offset) && s.offset >= 0) setOffset(s.offset);
+      if (typeof s.showAllSense === 'boolean') setShowAllSense(s.showAllSense);
     } catch {
       // ignore parse errors
     }
@@ -205,9 +208,10 @@ export const WordPackListPanel: React.FC = () => {
       searchInput,
       appliedSearch,
       offset,
+      showAllSense,
     };
     try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch {}
-  }, [sortKey, sortOrder, viewMode, generationFilter, searchMode, searchInput, appliedSearch, offset]);
+  }, [sortKey, sortOrder, viewMode, generationFilter, searchMode, searchInput, appliedSearch, offset, showAllSense]);
 
   const loadWordPacks = useCallback(async (newOffset: number = 0) => {
     abortRef.current?.abort();
@@ -376,6 +380,20 @@ export const WordPackListPanel: React.FC = () => {
     });
   }, []);
 
+  const toggleAllSense = useCallback(() => {
+    setShowAllSense((prev) => {
+      const next = !prev;
+      setSenseOpenIds(next ? new Set(wordPacks.map((wp) => wp.id)) : new Set());
+      return next;
+    });
+  }, [wordPacks]);
+
+  useEffect(() => {
+    if (showAllSense) {
+      setSenseOpenIds(new Set(wordPacks.map((wp) => wp.id)));
+    }
+  }, [showAllSense, wordPacks]);
+
   const resolveSenseTitle = useCallback((title?: string) => {
     const trimmed = (title ?? '').trim();
     return trimmed || '語義タイトル未設定';
@@ -484,6 +502,18 @@ export const WordPackListPanel: React.FC = () => {
           searchInput={searchInput}
           onChangeSearchInput={setSearchInput}
           onApplySearch={handleApplySearch}
+          filtersLeft={(
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', marginLeft: '0.5rem' }}>
+              <input
+                type="checkbox"
+                role="switch"
+                aria-label="語義一括表示"
+                checked={showAllSense}
+                onChange={toggleAllSense}
+              />
+              語義一括表示
+            </label>
+          )}
           filtersRight={(
             <>
               <label htmlFor="gen-filter" style={{ marginLeft: '0.5rem' }}>表示絞り込み:</label>
@@ -538,7 +568,8 @@ export const WordPackListPanel: React.FC = () => {
                         <button
                           type="button"
                           className="wp-sense-btn"
-                          aria-pressed={senseOpenIds.has(wp.id)}
+                          aria-pressed={showAllSense || senseOpenIds.has(wp.id)}
+                          disabled={showAllSense}
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleSenseOpen(wp.id);
@@ -551,7 +582,7 @@ export const WordPackListPanel: React.FC = () => {
                         />
                       </div>
                     </div>
-                    {senseOpenIds.has(wp.id) && (
+                    {(showAllSense || senseOpenIds.has(wp.id)) && (
                       <div className="wp-card-sense-title" data-testid="wp-card-sense-title">
                         {resolveSenseTitle(wp.sense_title)}
                       </div>
@@ -625,7 +656,7 @@ export const WordPackListPanel: React.FC = () => {
                   >
                     <div className="wp-index-title-row" data-testid="wp-index-title-row">
                       <span className="wp-index-title">{wp.lemma}</span>
-                      {senseOpenIds.has(wp.id) && (
+                      {(showAllSense || senseOpenIds.has(wp.id)) && (
                         <span className="wp-index-sense">{resolveSenseTitle(wp.sense_title)}</span>
                       )}
                       <span className="wp-index-meta">{wp.is_empty ? ' / 未' : ` / 例文: ${wp.totalExamples}件`}</span>
@@ -634,7 +665,8 @@ export const WordPackListPanel: React.FC = () => {
                       <button
                         type="button"
                         className="wp-sense-btn"
-                        aria-pressed={senseOpenIds.has(wp.id)}
+                        aria-pressed={showAllSense || senseOpenIds.has(wp.id)}
+                        disabled={showAllSense}
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleSenseOpen(wp.id);

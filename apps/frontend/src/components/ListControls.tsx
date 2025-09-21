@@ -11,6 +11,7 @@ interface ListControlsProps<TSortKey extends string> {
   onChangeSortKey: (key: TSortKey) => void;
   sortOrder: SortOrder;
   onChangeSortOrder: (order: SortOrder) => void;
+  filtersLeft?: React.ReactNode;
   filtersRight?: React.ReactNode;
   searchMode: 'prefix' | 'suffix' | 'contains';
   onChangeSearchMode: (mode: 'prefix' | 'suffix' | 'contains') => void;
@@ -27,6 +28,7 @@ export function ListControls<TSortKey extends string>(props: ListControlsProps<T
     onChangeSortKey,
     sortOrder,
     onChangeSortOrder,
+    filtersLeft,
     filtersRight,
     searchMode,
     onChangeSearchMode,
@@ -64,6 +66,8 @@ export function ListControls<TSortKey extends string>(props: ListControlsProps<T
       >
         ↑
       </button>
+
+      {filtersLeft}
 
       {filtersRight}
 
