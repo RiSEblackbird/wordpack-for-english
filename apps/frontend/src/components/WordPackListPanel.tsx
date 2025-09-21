@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
@@ -6,6 +6,7 @@ import { Modal } from './Modal';
 import { ListControls } from './ListControls';
 import { WordPackPanel } from './WordPackPanel';
 import { LoadingIndicator } from './LoadingIndicator';
+import { formatDateJst } from '../lib/date';
 
 // 削除ボタンの共通コンポーネント
 interface DeleteButtonProps {
@@ -63,6 +64,52 @@ interface WordPackListItem {
 
 type SortKey = 'created_at' | 'updated_at' | 'lemma' | 'total_examples';
 type SortOrder = 'asc' | 'desc';
+type ViewMode = 'card' | 'list';
+type GenerationFilter = 'all' | 'generated' | 'not_generated';
+type SearchMode = 'prefix' | 'suffix' | 'contains';
+
+interface WordPackListItemWithTotal extends WordPackListItem {
+  totalExamples: number;
+}
+
+type PersistedState = {
+  sortKey: SortKey;
+  sortOrder: SortOrder;
+  viewMode: ViewMode;
+  generationFilter: GenerationFilter;
+  searchMode: SearchMode;
+  searchInput: string;
+  appliedSearch: { mode: SearchMode; value: string } | null;
+  offset: number;
+};
+
+const STORAGE_KEY = 'wp.list.ui_state.v1';
+const PAGE_LIMIT = 200;
+const MIN_COLUMN_WIDTH = 320;
+
+const getFallbackColumnCount = (width: number): number => {
+  if (width >= 1600) return 4;
+  if (width >= 1200) return 3;
+  if (width >= 900) return 2;
+  return 1;
+};
+
+const computeColumnCount = (width: number): number => {
+  const count = Math.floor(width / MIN_COLUMN_WIDTH);
+  return Math.min(4, Math.max(1, count));
+};
+
+const sumExamples = (counts?: WordPackListItem['examples_count']): number => {
+  if (!counts) return 0;
+  return Object.values(counts).reduce((sum, count) => sum + count, 0);
+};
+
+const matchString = (text: string, query: string, mode: SearchMode): boolean => {
+  if (!query) return true;
+  if (mode === 'prefix') return text.startsWith(query);
+  if (mode === 'suffix') return text.endsWith(query);
+  return text.includes(query);
+};
 
 interface WordPackListResponse {
   items: WordPackListItem[];
@@ -72,65 +119,45 @@ interface WordPackListResponse {
 }
 
 export const WordPackListPanel: React.FC = () => {
-  const { settings } = useSettings();
+  const { settings: { apiBase } } = useSettings();
   const { setModalOpen } = useModal();
-  const STORAGE_KEY = 'wp.list.ui_state.v1';
   const [wordPacks, setWordPacks] = useState<WordPackListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [limit] = useState(200);
   const abortRef = useRef<AbortController | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewWordPackId, setPreviewWordPackId] = useState<string | null>(null);
   const modalFocusRef = useRef<HTMLElement>(null);
   const [sortKey, setSortKey] = useState<SortKey>('updated_at');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  type ViewMode = 'card' | 'list';
   const [viewMode, setViewMode] = useState<ViewMode>('card');
-  // 表示絞り込み（例文生成状況）と検索（単語名）
-  type GenerationFilter = 'all' | 'generated' | 'not_generated';
   const [generationFilter, setGenerationFilter] = useState<GenerationFilter>('all');
-  type SearchMode = 'prefix' | 'suffix' | 'contains';
   const [searchMode, setSearchMode] = useState<SearchMode>('contains');
-  const [searchInput, setSearchInput] = useState<string>('');
+  const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(null);
   // 複数カラム時に列優先で並べるための幅検知
   const [isWide, setIsWide] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(min-width: 900px)').matches;
   });
-  
+
   // グリッドの可視幅に基づき列数を算出（最大4列）
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const getColumnCountFromWindow = (w: number): number => {
-    if (w >= 1600) return 4;
-    if (w >= 1200) return 3;
-    if (w >= 900) return 2;
-    return 1;
-  };
   const [columnCount, setColumnCount] = useState<number>(() =>
-    typeof window === 'undefined' ? 1 : getColumnCountFromWindow(window.innerWidth)
+    typeof window === 'undefined' ? 1 : getFallbackColumnCount(window.innerWidth)
   );
-
-  const computeColumnCount = (width: number): number => {
-    // 1列あたりの最小想定幅（px）。項目の可読性を保つための経験値。
-    const MIN_COL_WIDTH = 320;
-    const count = Math.floor(width / MIN_COL_WIDTH);
-    return Math.min(4, Math.max(1, count));
-  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const el = gridRef.current;
-    const fallbackUpdate = () => setColumnCount(getColumnCountFromWindow(window.innerWidth));
+    const fallbackUpdate = () => setColumnCount(getFallbackColumnCount(window.innerWidth));
     if (!el) {
-      // 次フレームでrefが入ることがあるため再試行
       requestAnimationFrame(() => {
-        const n = gridRef.current;
-        if (n) {
-          setColumnCount(computeColumnCount(n.clientWidth));
+        const next = gridRef.current;
+        if (next) {
+          setColumnCount(computeColumnCount(next.clientWidth));
         } else {
           fallbackUpdate();
         }
@@ -149,7 +176,7 @@ export const WordPackListPanel: React.FC = () => {
       if (ro) ro.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, [gridRef, viewMode]);
+  }, [viewMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -219,15 +246,15 @@ export const WordPackListPanel: React.FC = () => {
     try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch {}
   }, [sortKey, sortOrder, viewMode, generationFilter, searchMode, searchInput, appliedSearch, offset]);
 
-  const loadWordPacks = async (newOffset: number = 0) => {
+  const loadWordPacks = useCallback(async (newOffset: number = 0) => {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
     setMsg(null);
-    
+
     try {
-      const res = await fetchJson<WordPackListResponse>(`${settings.apiBase}/word/packs?limit=${limit}&offset=${newOffset}`, {
+      const res = await fetchJson<WordPackListResponse>(`${apiBase}/word/packs?limit=${PAGE_LIMIT}&offset=${newOffset}`, {
         signal: ctrl.signal,
       });
       setWordPacks(res.items);
@@ -240,24 +267,23 @@ export const WordPackListPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiBase]);
 
-  const deleteWordPack = async (wordPackId: string) => {
+  const deleteWordPack = useCallback(async (wordPackId: string) => {
     if (!confirm('このWordPackを削除しますか？')) return;
-    
+
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
     setMsg(null);
-    
+
     try {
-      await fetchJson(`${settings.apiBase}/word/packs/${wordPackId}`, {
+      await fetchJson(`${apiBase}/word/packs/${wordPackId}`, {
         method: 'DELETE',
         signal: ctrl.signal,
       });
       setMsg({ kind: 'status', text: 'WordPackを削除しました' });
-      // 一覧を再読み込み
       await loadWordPacks(offset);
     } catch (e) {
       if (ctrl.signal.aborted) return;
@@ -266,72 +292,53 @@ export const WordPackListPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiBase, loadWordPacks, offset]);
 
   useEffect(() => {
     loadWordPacks();
     return () => abortRef.current?.abort();
-  }, []);
+  }, [loadWordPacks]);
 
-  // WordPackの生成/再生成/削除完了時のグローバルイベントで最新化
   useEffect(() => {
     const onUpdated = () => { loadWordPacks(offset); };
     try { window.addEventListener('wordpack:updated', onUpdated as EventListener); } catch {}
     return () => {
       try { window.removeEventListener('wordpack:updated', onUpdated as EventListener); } catch {}
     };
-  }, [offset]);
+  }, [loadWordPacks, offset]);
 
-  const formatDate = (dateStr: string) => {
-    try {
-      const hasTZ = /[Zz]|[+-]\d{2}:?\d{2}$/.test(dateStr);
-      const s = hasTZ ? dateStr : `${dateStr}Z`;
-      return new Date(s).toLocaleString('ja-JP', {
-        timeZone: 'Asia/Tokyo',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      } as Intl.DateTimeFormatOptions);
-    } catch {
-      return dateStr;
-    }
-  };
+  const formatDate = (dateStr: string) => formatDateJst(dateStr);
 
-  const getTotalExamples = (wp: WordPackListItem): number => {
-    if (!wp.examples_count) return 0;
-    return Object.values(wp.examples_count).reduce((sum, count) => sum + count, 0);
-  };
+  const normalizedSearch = useMemo(() => {
+    if (!appliedSearch) return null;
+    const value = appliedSearch.value.trim().toLowerCase();
+    if (!value) return null;
+    return { mode: appliedSearch.mode, value };
+  }, [appliedSearch]);
 
-  const matchString = (text: string, query: string, mode: SearchMode): boolean => {
-    const t = text.toLowerCase();
-    const q = query.toLowerCase();
-    if (!q) return true;
-    if (mode === 'prefix') return t.startsWith(q);
-    if (mode === 'suffix') return t.endsWith(q);
-    return t.includes(q);
-  };
+  const normalizedWordPacks = useMemo<WordPackListItemWithTotal[]>(
+    () =>
+      wordPacks.map((wp) => ({
+        ...wp,
+        totalExamples: sumExamples(wp.examples_count),
+      })),
+    [wordPacks]
+  );
 
-  const filterWordPacks = (packs: WordPackListItem[]): WordPackListItem[] => {
-    return packs.filter((wp) => {
-      const total = getTotalExamples(wp);
-      if (generationFilter === 'generated' && total <= 0) return false;
-      if (generationFilter === 'not_generated' && total > 0) return false;
-      if (appliedSearch && appliedSearch.value.trim().length > 0) {
-        if (!matchString(wp.lemma || '', appliedSearch.value.trim(), appliedSearch.mode)) return false;
+  const filteredWordPacks = useMemo(() => {
+    return normalizedWordPacks.filter((wp) => {
+      if (generationFilter === 'generated' && wp.totalExamples <= 0) return false;
+      if (generationFilter === 'not_generated' && wp.totalExamples > 0) return false;
+      if (normalizedSearch) {
+        const lemma = (wp.lemma || '').toLowerCase();
+        if (!matchString(lemma, normalizedSearch.value, normalizedSearch.mode)) return false;
       }
       return true;
     });
-  };
+  }, [normalizedWordPacks, generationFilter, normalizedSearch]);
 
-  const handleApplySearch = () => {
-    setAppliedSearch({ mode: searchMode, value: searchInput.trim() });
-  };
-
-  const sortWordPacks = (packs: WordPackListItem[]): WordPackListItem[] => {
-    return [...packs].sort((a, b) => {
+  const sortedWordPacks = useMemo(() => {
+    return [...filteredWordPacks].sort((a, b) => {
       let aValue: string | number;
       let bValue: string | number;
 
@@ -346,8 +353,8 @@ export const WordPackListPanel: React.FC = () => {
           bValue = b.lemma.toLowerCase();
           break;
         case 'total_examples':
-          aValue = getTotalExamples(a);
-          bValue = getTotalExamples(b);
+          aValue = a.totalExamples;
+          bValue = b.totalExamples;
           break;
         default:
           return 0;
@@ -357,21 +364,25 @@ export const WordPackListPanel: React.FC = () => {
       if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
       return 0;
     });
-  };
+  }, [filteredWordPacks, sortKey, sortOrder]);
 
-  const handleSortChange = (newSortKey: SortKey) => {
-    if (sortKey === newSortKey) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(newSortKey);
-      setSortOrder('desc'); // 新しいキーでは降順をデフォルトに
-    }
-  };
+  const handleApplySearch = useCallback(() => {
+    setAppliedSearch({ mode: searchMode, value: searchInput.trim() });
+  }, [searchMode, searchInput]);
 
-  const filteredWordPacks = filterWordPacks(wordPacks);
-  const sortedWordPacks = sortWordPacks(filteredWordPacks);
+  const handleSortChange = useCallback(
+    (newSortKey: SortKey) => {
+      if (sortKey === newSortKey) {
+        setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      } else {
+        setSortKey(newSortKey);
+        setSortOrder('desc');
+      }
+    },
+    [sortKey]
+  );
 
-  const hasNext = offset + limit < total;
+  const hasNext = offset + PAGE_LIMIT < total;
   const hasPrev = offset > 0;
 
   return (
@@ -587,7 +598,7 @@ export const WordPackListPanel: React.FC = () => {
                     }}
                   >
                     <span className="wp-index-title">{wp.lemma}</span>
-                    <span className="wp-index-meta">{wp.is_empty ? ' / 未' : ` / 例文: ${getTotalExamples(wp)}件`}</span>
+                    <span className="wp-index-meta">{wp.is_empty ? ' / 未' : ` / 例文: ${wp.totalExamples}件`}</span>
                     <DeleteButton 
                       onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
                       disabled={loading}
@@ -599,17 +610,17 @@ export const WordPackListPanel: React.FC = () => {
 
             {(hasPrev || hasNext) && (
               <div className="wp-pagination">
-                <button 
-                  onClick={() => loadWordPacks(offset - limit)} 
+                <button
+                  onClick={() => loadWordPacks(Math.max(0, offset - PAGE_LIMIT))}
                   disabled={!hasPrev || loading}
                 >
                   前へ
                 </button>
                 <span>
-                  {offset + 1}-{Math.min(offset + limit, total)} / {total}件
+                  {offset + 1}-{Math.min(offset + PAGE_LIMIT, total)} / {total}件
                 </span>
-                <button 
-                  onClick={() => loadWordPacks(offset + limit)} 
+                <button
+                  onClick={() => loadWordPacks(offset + PAGE_LIMIT)}
                   disabled={!hasNext || loading}
                 >
                   次へ

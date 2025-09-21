@@ -6,6 +6,7 @@ import { regenerateWordPackRequest } from '../lib/wordpack';
 import { LoadingIndicator } from './LoadingIndicator';
 import { useNotifications } from '../NotificationsContext';
 import { Modal } from './Modal';
+import { formatDateJst } from '../lib/date';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -70,12 +71,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loadingInfo, setLoadingInfo] = useState<{ label: string; subtext?: string } | null>(null);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [reveal, setReveal] = useState(false);
   const [count, setCount] = useState(3);
   const abortRef = useRef<AbortController | null>(null);
-  const [sessionStartAt] = useState<Date>(new Date());
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
   const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
   // 直近のAIメタ（一覧メタ or 例文メタから推定表示）
@@ -86,22 +85,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
-    try {
-      const hasTZ = /[Zz]|[+-]\d{2}:?\d{2}$/.test(dateStr);
-      const s = hasTZ ? dateStr : `${dateStr}Z`;
-      return new Date(s).toLocaleString('ja-JP', {
-        timeZone: 'Asia/Tokyo',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      } as Intl.DateTimeFormatOptions);
-    } catch {
-      return dateStr;
-    }
+    return formatDateJst(dateStr);
   };
 
   const sectionIds = useMemo(
@@ -176,7 +160,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     } finally {
       if (mountedRef.current) {
         setLoading(false);
-        setLoadingInfo(null);
       }
     }
   };
@@ -211,7 +194,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       updateNotification(notifId, { title: `【${l2}】の生成失敗`, status: 'error', message: `空のWordPackの作成に失敗しました（${m}）` });
     } finally {
       setLoading(false);
-      setLoadingInfo(null);
     }
   };
 
@@ -256,7 +238,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setMsg({ kind: 'alert', text: m });
     } finally {
       setLoading(false);
-      setLoadingInfo(null);
     }
   };
 
@@ -311,7 +292,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     } finally {
       if (mountedRef.current) {
         setLoading(false);
-        setLoadingInfo(null);
       }
     }
   };
@@ -339,7 +319,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setMsg({ kind: 'alert', text: m });
     } finally {
       setLoading(false);
-      setLoadingInfo(null);
     }
   };
 
@@ -432,7 +411,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       updateNotification(notifId, { title: `【${lemma4}】の生成失敗`, status: 'error', message: `${category} の例文追加生成に失敗しました（${m}）` });
     } finally {
       setLoading(false);
-      setLoadingInfo(null);
     }
   };
 

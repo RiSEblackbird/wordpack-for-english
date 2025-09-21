@@ -16,11 +16,11 @@ export interface NotificationsAdapter {
 
 export interface RegenerateWordPackMessages {
   // Body text shown while processing (beneath the title)
-  progress?: string; // e.g. "WordPackを再生成しています"
+  progress?: string; // Example: "WordPackを再生成しています"
   // Body text shown on success (beneath the title)
-  success?: string; // e.g. "再生成が完了しました"
+  success?: string; // Example: 成功時に表示するメッセージ
   // Body text shown on failure (beneath the title). If omitted, error.message (if ApiError) is used
-  failure?: string; // e.g. "WordPackの再生成に失敗しました"
+  failure?: string; // Example: 失敗時に表示するメッセージ
 }
 
 export async function regenerateWordPackRequest(params: {
