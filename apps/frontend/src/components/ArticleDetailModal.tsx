@@ -174,16 +174,6 @@ export const ArticleDetailModal: React.FC<Props> = ({
           {article.notes_ja ? (
             <div style={{ marginTop: '0.5rem', color: 'var(--color-subtle)' }}>{article.notes_ja}</div>
           ) : null}
-          {metaRows.length > 0 ? (
-            <dl className="ai-meta-grid" data-testid="article-meta">
-              {metaRows.map((row, idx) => (
-                <React.Fragment key={`${row.label}-${idx}`}>
-                  <dt>{row.label}</dt>
-                  <dd>{row.value}</dd>
-                </React.Fragment>
-              ))}
-            </dl>
-          ) : null}
           <h4>関連WordPack</h4>
           <div className="ai-wp-grid">
             {article.related_word_packs.map((l) => (
@@ -215,6 +205,16 @@ export const ArticleDetailModal: React.FC<Props> = ({
               </div>
             ))}
           </div>
+          {metaRows.length > 0 ? (
+            <dl className="ai-meta-grid" data-testid="article-meta">
+              {metaRows.map((row, idx) => (
+                <React.Fragment key={`${row.label}-${idx}`}>
+                  <dt>{row.label}</dt>
+                  <dd>{row.value}</dd>
+                </React.Fragment>
+              ))}
+            </dl>
+          ) : null}
         </div>
       ) : null}
     </Modal>

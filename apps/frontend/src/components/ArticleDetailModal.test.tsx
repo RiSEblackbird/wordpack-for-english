@@ -3,7 +3,7 @@ import '@testing-library/jest-dom';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
 
 describe('ArticleDetailModal', () => {
-  it('displays article metadata above related word packs', () => {
+  it('displays article metadata below related word packs', () => {
     const article: ArticleDetailData = {
       id: 'art:test',
       title_en: 'Sample Title',
@@ -46,7 +46,10 @@ describe('ArticleDetailModal', () => {
     expect(meta).toHaveTextContent('2024/05/01 10:00');
     expect(meta).toHaveTextContent('1分5秒');
     expect(meta).toHaveTextContent('Dev（開発）');
-    expect(screen.getByRole('heading', { level: 4, name: '関連WordPack' })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { level: 4, name: '関連WordPack' });
+    expect(heading).toBeInTheDocument();
+    // メタ情報が「関連WordPack」見出しより後に来ることを確認
+    expect(heading.compareDocumentPosition(meta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('falls back to 0秒 when created_at and updated_at are identical', () => {
