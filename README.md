@@ -12,7 +12,7 @@
 - 発音情報（IPA/音節/強勢）の付与
 - 例文（Dev/CS/LLM/Business/Common）の追加・削除
 - 文章インポートと関連 WordPack の紐付け
-- OpenAI gpt-4o-mini-tts を用いた例文の音声読み上げ
+- OpenAI gpt-4o-mini-tts を用いた例文・インポート文章の音声読み上げ
 
 ## クイックスタート
 
