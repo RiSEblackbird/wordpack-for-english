@@ -97,7 +97,7 @@
 
 ### A-11. 制約・既知の事項（ユーザー向け）
 - UI文言は今後統一予定
-- 復習（SRS）は同じSQLiteに保存されます（初回起動時に数枚のカードが用意されます）
+- SQLite は WordPack と文章の保存専用です（復習スケジュール機能はありません）
 
 ### A-12. トラブルシュート（一般ユーザー向け）
 - 表示が更新されない: ブラウザを更新、または一度アプリを停止して再起動
@@ -209,7 +209,7 @@
   - 未解決時はログと `X-Request-ID` を添えて報告
 
 - 404 が返る
-  - パスを確認（例: `…/api/sentence/check`, `…/api/text/assist`）
+  - パスを確認（例: WordPack生成は `…/api/word/pack`）
 
 - CORS エラー
   - ローカル開発では Frontend を `npm run dev`、Backend を `uvicorn … --reload` で起動（Vite プロキシで接続設定不要）

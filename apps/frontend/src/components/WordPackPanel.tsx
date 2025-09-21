@@ -115,7 +115,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       { id: 'contrast', label: '対比' },
       { id: 'citations', label: '引用' },
       { id: 'confidence', label: '信頼度' },
-      { id: 'srs', label: 'SRSメタ' },
     ],
     []
   );

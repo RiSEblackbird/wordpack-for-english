@@ -106,7 +106,7 @@ async def import_article(req: ArticleImportRequest) -> ArticleDetailResponse:
 async def list_articles(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)) -> ArticleListResponse:
     items_raw = store.list_articles(limit=limit, offset=offset)
     items = [ArticleListItem(id=i[0], title_en=i[1], created_at=i[2], updated_at=i[3]) for i in items_raw]
-    total = len(store.list_articles(limit=10000, offset=0))
+    total = store.count_articles()
     return ArticleListResponse(items=items, total=total, limit=limit, offset=offset)
 
 

@@ -1,61 +1,40 @@
-import time
+from __future__ import annotations
+
 import asyncio
+import time
+from pathlib import Path
+from typing import Any, Awaitable, Callable
+
 from fastapi import FastAPI, Request
 from starlette.middleware.cors import CORSMiddleware
-try:
+from starlette.responses import Response
+
+try:  # FastAPI/Starlette のバージョンにより存在しない場合がある
     from starlette.middleware.timeout import TimeoutMiddleware  # type: ignore
-except Exception:  # Starlette が古い場合などに備えたフォールバック
+except Exception:  # pragma: no cover - 互換目的のフォールバック
     TimeoutMiddleware = None  # type: ignore[assignment]
 
 try:
     from starlette.exceptions import TimeoutException  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover - 互換目的のフォールバック
     TimeoutException = None  # type: ignore[assignment]
 
-from .config import settings  # noqa: F401 - imported for side effects or future use
-from .logging import configure_logging, logger
-from .routers import health, word, config as cfg
-from .routers import article as article_router
-from .metrics import registry
-from .observability import request_trace
 from .config import settings
-from .middleware import RequestIDMiddleware, RateLimitMiddleware
-from .providers import shutdown_providers, ChromaClientFactory
-from .indexing import seed_word_snippets, seed_domain_terms, seed_from_jsonl
-from pathlib import Path
-
-configure_logging()
-app = FastAPI(title="WordPack API", version="0.3.0")
-
-# CORS（必要に応じて環境変数に移行可能）
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# タイムアウト: アプリの LLM タイムアウトに概ね合わせる（秒）
-if TimeoutMiddleware is not None:
-    # LLM の試行タイムアウト(ms)をベースに、HTTP全体の上限を少し長め（+5秒）に設定
-    # Starlette TimeoutMiddleware は秒指定
-    http_timeout_sec = max(1, int((settings.llm_timeout_ms + 5000) / 1000))
-    app.add_middleware(TimeoutMiddleware, timeout=http_timeout_sec)
-
-# リクエストID付与（全リクエスト）
-app.add_middleware(RequestIDMiddleware)
-
-# レート制限（IP/ユーザ, 429応答）。必要に応じて環境変数で閾値を調整
-app.add_middleware(
-    RateLimitMiddleware,
-    ip_capacity_per_minute=settings.rate_limit_per_min_ip,
-    user_capacity_per_minute=settings.rate_limit_per_min_user,
-)
+from .indexing import seed_domain_terms, seed_from_jsonl, seed_word_snippets
+from .logging import configure_logging, logger
+from .metrics import registry
+from .middleware import RateLimitMiddleware, RequestIDMiddleware
+from .observability import request_trace
+from .providers import ChromaClientFactory, shutdown_providers
+from .routers import article as article_router
+from .routers import config as cfg
+from .routers import health, word
 
 
-@app.middleware("http")
-async def access_log_and_metrics(request: Request, call_next):
+async def access_log_and_metrics(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
     start = time.time()
     path = request.url.path
     method = request.method
@@ -64,7 +43,6 @@ async def access_log_and_metrics(request: Request, call_next):
     ua = request.headers.get("user-agent", "-")
     is_error = False
     is_timeout = False
-    # 入力（クエリ等）は Langfuse の Input として記録
     input_payload: dict[str, Any] = {
         "path": path,
         "method": method,
@@ -76,40 +54,34 @@ async def access_log_and_metrics(request: Request, call_next):
         metadata={"request_id": request_id, "client_ip": client_ip, "user_agent": ua, "path": path},
         path=path,
     ) as ctx:
+        trace_obj = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
         try:
-            tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
-            # v3: set_attribute / v2: update(input=...)
-            try:
-                if tr is not None and hasattr(tr, "set_attribute"):
-                    tr.set_attribute("input", str(input_payload)[:40000])  # type: ignore[call-arg]
-                elif tr is not None and hasattr(tr, "update"):
-                    tr.update(input=input_payload)
-            except Exception:
-                pass
-        except Exception:
+            if trace_obj is not None and hasattr(trace_obj, "set_attribute"):
+                trace_obj.set_attribute("input", str(input_payload)[:40000])  # type: ignore[call-arg]
+            elif trace_obj is not None and hasattr(trace_obj, "update"):
+                trace_obj.update(input=input_payload)
+        except Exception:  # pragma: no cover - 追跡失敗時も処理継続
             pass
         try:
             response = await call_next(request)
-            # 出力はステータス/ヘッダの要点のみ（ボディは副作用回避のため読まない）
             try:
-                tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
                 output_payload = {
                     "status": getattr(response, "status_code", None),
                     "content_type": response.headers.get("content-type"),
                     "content_length": response.headers.get("content-length"),
                 }
-                if tr is not None and hasattr(tr, "set_attribute"):
-                    tr.set_attribute("output", str(output_payload)[:40000])  # type: ignore[call-arg]
-                elif tr is not None and hasattr(tr, "update"):
-                    tr.update(output=output_payload)
-            except Exception:
+                if trace_obj is not None and hasattr(trace_obj, "set_attribute"):
+                    trace_obj.set_attribute("output", str(output_payload)[:40000])  # type: ignore[call-arg]
+                elif trace_obj is not None and hasattr(trace_obj, "update"):
+                    trace_obj.update(output=output_payload)
+            except Exception:  # pragma: no cover - 出力メタ記録失敗時
                 pass
             return response
         except Exception as exc:
             is_error = True
             if (TimeoutException is not None and isinstance(exc, TimeoutException)) or isinstance(exc, asyncio.TimeoutError):
                 is_timeout = True
-            raise exc
+            raise
         finally:
             latency_ms = (time.time() - start) * 1000
             registry.record(path, latency_ms, is_error=is_error, is_timeout=is_timeout)
@@ -125,35 +97,74 @@ async def access_log_and_metrics(request: Request, call_next):
                 user_agent=ua,
             )
 
-app.include_router(word.router, prefix="/api/word")  # 語彙関連エンドポイント
-app.include_router(article_router.router, prefix="/api/article")  # 文章インポート/参照エンドポイント
-app.include_router(health.router)  # ヘルスチェック
-app.include_router(cfg.router, prefix="/api")  # フロント向け実行時設定
 
-
-@app.on_event("shutdown")
 async def _on_shutdown() -> None:
-    # 共有スレッドプールなどのリソースを解放
     shutdown_providers()
 
 
-@app.on_event("startup")
 async def _on_startup_seed() -> None:
-    # 起動時自動シード（任意）: STRICT_MODE=true でも、明示フラグがtrueなら最小シードを投入
     try:
-        if settings.auto_seed_on_startup:
-            client = ChromaClientFactory().create_client()
-            if client is None:
-                return
-            wj = Path(settings.auto_seed_word_jsonl) if settings.auto_seed_word_jsonl else None
-            tj = Path(settings.auto_seed_terms_jsonl) if settings.auto_seed_terms_jsonl else None
-            if (wj and wj.exists()) or (tj and tj.exists()):
-                seed_from_jsonl(client, word_snippets_path=wj, domain_terms_path=tj)
-                logger.info("auto_seed", mode="jsonl", word_jsonl=str(wj) if wj else None, terms_jsonl=str(tj) if tj else None)
-            else:
-                seed_word_snippets(client)
-                seed_domain_terms(client)
-                logger.info("auto_seed", mode="minimal")
-    except Exception as exc:
-        # strict モードでも起動継続。
+        if not settings.auto_seed_on_startup:
+            return
+        client = ChromaClientFactory().create_client()
+        if client is None:
+            return
+        wj = Path(settings.auto_seed_word_jsonl) if settings.auto_seed_word_jsonl else None
+        tj = Path(settings.auto_seed_terms_jsonl) if settings.auto_seed_terms_jsonl else None
+        if (wj and wj.exists()) or (tj and tj.exists()):
+            seed_from_jsonl(client, word_snippets_path=wj, domain_terms_path=tj)
+            logger.info(
+                "auto_seed",
+                mode="jsonl",
+                word_jsonl=str(wj) if wj else None,
+                terms_jsonl=str(tj) if tj else None,
+            )
+        else:
+            seed_word_snippets(client)
+            seed_domain_terms(client)
+            logger.info("auto_seed", mode="minimal")
+    except Exception as exc:  # pragma: no cover - 起動時エラーは継続
         logger.warning("auto_seed_failed", error=repr(exc))
+
+
+def _maybe_add_timeout_middleware(app: FastAPI) -> None:
+    if TimeoutMiddleware is None:
+        return
+    http_timeout_sec = max(1, int((settings.llm_timeout_ms + 5000) / 1000))
+    app.add_middleware(TimeoutMiddleware, timeout=http_timeout_sec)
+
+
+def create_app() -> FastAPI:
+    configure_logging()
+    app = FastAPI(title="WordPack API", version="0.3.0")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    _maybe_add_timeout_middleware(app)
+    app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(
+        RateLimitMiddleware,
+        ip_capacity_per_minute=settings.rate_limit_per_min_ip,
+        user_capacity_per_minute=settings.rate_limit_per_min_user,
+    )
+
+    app.middleware("http")(access_log_and_metrics)
+
+    app.include_router(word.router, prefix="/api/word")
+    app.include_router(article_router.router, prefix="/api/article")
+    app.include_router(health.router)
+    app.include_router(cfg.router, prefix="/api")
+
+    app.add_event_handler("shutdown", _on_shutdown)
+    app.add_event_handler("startup", _on_startup_seed)
+
+    return app
+
+
+app = create_app()

@@ -1,45 +1,23 @@
 from __future__ import annotations
 
-import os
-import sqlite3
 import json
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+import sqlite3
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import Any, Iterable, Iterator, Mapping, Optional, Sequence
 
 from .config import settings
 
 
-@dataclass
-class ReviewItem:
-    id: str
-    front: str
-    back: str
-    repetitions: int = 0
-    interval_days: int = 0
-    ease: float = 2.5
-    due_at: datetime = field(default_factory=lambda: datetime.utcnow())
+EXAMPLE_CATEGORIES: tuple[str, ...] = ("Dev", "CS", "LLM", "Business", "Common")
 
 
 class AppSQLiteStore:
-    """SQLite-backed application store.
+    """SQLite-backed persistence layer for WordPack data."""
 
-    Responsibilities:
-    - Spaced Repetition (SRS) cards and reviews (simplified SM-2)
-    - WordPack persistence with normalized examples
-    - Articles persistence and WordPack links
-
-    Notes:
-    - grade: 2=correct, 1=partial, 0=wrong
-    - ease is clamped into [1.5, 3.0]
-    - due/interval/ease/repetitions updated transactionally; review history recorded
-    """
-
-    def __init__(self, db_path: str, default_user_id: str = "default", default_deck_id: str = "default") -> None:
+    def __init__(self, db_path: str) -> None:
         self.db_path = db_path
-        self.default_user_id = default_user_id
-        self.default_deck_id = default_deck_id
         self._ensure_dirs()
         self._init_db()
 
@@ -52,67 +30,22 @@ class AppSQLiteStore:
             conn.execute("pragma foreign_keys=ON;")
         return conn
 
+    @contextmanager
+    def _conn(self) -> Iterator[sqlite3.Connection]:
+        conn = self._connect()
+        try:
+            yield conn
+        finally:
+            conn.close()
+
     def _ensure_dirs(self) -> None:
         p = Path(self.db_path)
         if p.parent and not p.parent.exists():
             p.parent.mkdir(parents=True, exist_ok=True)
 
     def _init_db(self) -> None:
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             with conn:
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS users (
-                        id TEXT PRIMARY KEY,
-                        created_at TEXT NOT NULL
-                    );
-                    """
-                )
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS decks (
-                        id TEXT PRIMARY KEY,
-                        user_id TEXT NOT NULL,
-                        name TEXT NOT NULL,
-                        created_at TEXT NOT NULL,
-                        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-                    );
-                    """
-                )
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS cards (
-                        id TEXT PRIMARY KEY,
-                        deck_id TEXT NOT NULL,
-                        front TEXT NOT NULL,
-                        back TEXT NOT NULL,
-                        repetitions INTEGER NOT NULL DEFAULT 0,
-                        interval_days INTEGER NOT NULL DEFAULT 0,
-                        ease REAL NOT NULL DEFAULT 2.5,
-                        due_at TEXT NOT NULL,
-                        created_at TEXT NOT NULL,
-                        FOREIGN KEY(deck_id) REFERENCES decks(id) ON DELETE CASCADE
-                    );
-                    """
-                )
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS reviews (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        card_id TEXT NOT NULL,
-                        reviewed_at TEXT NOT NULL,
-                        grade INTEGER NOT NULL,
-                        ease REAL NOT NULL,
-                        interval_days INTEGER NOT NULL,
-                        due_at TEXT NOT NULL,
-                        FOREIGN KEY(card_id) REFERENCES cards(id) ON DELETE CASCADE
-                    );
-                    """
-                )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_cards_due_at ON cards(due_at);")
-
-                # WordPack 永続化テーブル
                 conn.execute(
                     """
                     CREATE TABLE IF NOT EXISTS word_packs (
@@ -169,31 +102,6 @@ class AppSQLiteStore:
                 )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title_en);")
-                # 既存DBに列を追加（後方互換マイグレーション）
-                try:
-                    conn.execute("ALTER TABLE articles ADD COLUMN llm_model TEXT;")
-                except Exception:
-                    pass
-                try:
-                    conn.execute("ALTER TABLE articles ADD COLUMN llm_params TEXT;")
-                except Exception:
-                    pass
-                try:
-                    conn.execute("ALTER TABLE articles ADD COLUMN generation_category TEXT;")
-                except Exception:
-                    pass
-                try:
-                    conn.execute("ALTER TABLE articles ADD COLUMN generation_started_at TEXT;")
-                except Exception:
-                    pass
-                try:
-                    conn.execute("ALTER TABLE articles ADD COLUMN generation_completed_at TEXT;")
-                except Exception:
-                    pass
-                try:
-                    conn.execute("ALTER TABLE articles ADD COLUMN generation_duration_ms INTEGER;")
-                except Exception:
-                    pass
                 # Article と WordPack の関連（多対多）
                 conn.execute(
                     """
@@ -211,258 +119,77 @@ class AppSQLiteStore:
                 )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_article ON article_word_packs(article_id);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_lemma ON article_word_packs(lemma);")
-        finally:
-            conn.close()
 
-    # --- public API: SRS ---
-    def get_today(self, limit: int = 5) -> List[ReviewItem]:
-        now = datetime.utcnow().isoformat()
-        conn = self._connect()
-        try:
-            cur = conn.execute(
-                "SELECT id, front, back, repetitions, interval_days, ease, due_at FROM cards WHERE due_at <= ? ORDER BY due_at ASC, id ASC LIMIT ?;",
-                (now, limit),
-            )
-            items: List[ReviewItem] = []
-            for row in cur.fetchall():
-                items.append(
-                    ReviewItem(
-                        id=row["id"],
-                        front=row["front"],
-                        back=row["back"],
-                        repetitions=int(row["repetitions"]),
-                        interval_days=int(row["interval_days"]),
-                        ease=float(row["ease"]),
-                        due_at=datetime.fromisoformat(row["due_at"]),
-                    )
-                )
-            return items
-        finally:
-            conn.close()
-
-    def grade(self, item_id: str, grade: int) -> Optional[ReviewItem]:
-        # clamp grade into {0,1,2}
-        g = 2 if grade >= 2 else (1 if grade == 1 else 0)
-        conn = self._connect()
-        try:
-            # BEGIN IMMEDIATE to avoid concurrent writers on the same row
-            conn.execute("BEGIN IMMEDIATE;")
-            cur = conn.execute(
-                "SELECT id, front, back, repetitions, interval_days, ease, due_at FROM cards WHERE id = ?;",
-                (item_id,),
-            )
-            row = cur.fetchone()
-            if row is None:
-                conn.execute("ROLLBACK;")
-                return None
-
-            repetitions = int(row["repetitions"]) or 0
-            interval_days = int(row["interval_days"]) or 0
-            ease = float(row["ease"]) if row["ease"] is not None else 2.5
-
-            # update ease
-            if g == 2:
-                ease += 0.10
-            elif g == 1:
-                ease += 0.00
-            else:
-                ease -= 0.20
-            ease = max(1.5, min(3.0, ease))
-
-            # update interval and repetitions
-            if g == 0:
-                repetitions = 0
-                interval_days = 1
-            else:
-                repetitions += 1
-                if repetitions == 1:
-                    interval_days = 1
-                elif repetitions == 2:
-                    interval_days = 6
-                else:
-                    interval_days = max(1, int(round(interval_days * (ease if g == 2 else 1.2))))
-
-            next_due_dt = datetime.utcnow() + timedelta(days=interval_days)
-            next_due = next_due_dt.isoformat()
-
-            # persist update
-            conn.execute(
-                """
-                UPDATE cards
-                SET repetitions = ?, interval_days = ?, ease = ?, due_at = ?
-                WHERE id = ?;
-                """,
-                (repetitions, interval_days, ease, next_due, item_id),
-            )
-            conn.execute(
-                """
-                INSERT INTO reviews(card_id, reviewed_at, grade, ease, interval_days, due_at)
-                VALUES (?, ?, ?, ?, ?, ?);
-                """,
-                (item_id, datetime.utcnow().isoformat(), g, ease, interval_days, next_due),
-            )
-            conn.execute("COMMIT;")
-
-            return ReviewItem(
-                id=row["id"],
-                front=row["front"],
-                back=row["back"],
-                repetitions=repetitions,
-                interval_days=interval_days,
-                ease=ease,
-                due_at=next_due_dt,
-            )
-        except Exception:
+    def _split_examples_from_payload(self, data: str | Mapping[str, Any]) -> tuple[str, Mapping[str, Any] | None]:
+        if isinstance(data, Mapping):
+            parsed: Mapping[str, Any] = dict(data)
+        else:
             try:
-                conn.execute("ROLLBACK;")
+                parsed = json.loads(data) if data else {}
             except Exception:
-                pass
-            raise
-        finally:
-            conn.close()
+                return (data if isinstance(data, str) else json.dumps({}, ensure_ascii=False), None)
+            if not isinstance(parsed, Mapping):
+                return (data if isinstance(data, str) else json.dumps({}, ensure_ascii=False), None)
+        examples = parsed.get("examples") if isinstance(parsed, Mapping) else None
+        if isinstance(examples, Mapping):
+            core = dict(parsed)
+            core.pop("examples", None)
+            return json.dumps(core, ensure_ascii=False), examples
+        serialized = json.dumps(parsed, ensure_ascii=False) if not isinstance(data, str) else data
+        return serialized, None
 
-    def ensure_card(self, item_id: str, front: str, back: str) -> None:
-        """Ensure a card exists; create if missing with defaults.
+    def _iter_example_rows(
+        self, examples: Mapping[str, Any]
+    ) -> Iterable[tuple[str, int, str, str, str | None, str | None, str | None]]:
+        for category in EXAMPLE_CATEGORIES:
+            arr = examples.get(category)
+            if not isinstance(arr, Sequence):
+                continue
+            for pos, item in enumerate(arr):
+                if not isinstance(item, Mapping):
+                    continue
+                en = str(item.get("en") or "").strip()
+                ja = str(item.get("ja") or "").strip()
+                if not en or not ja:
+                    continue
+                grammar_ja = str(item.get("grammar_ja") or "").strip() or None
+                llm_model = str(item.get("llm_model") or "").strip() or None
+                llm_params = str(item.get("llm_params") or "").strip() or None
+                yield category, pos, en, ja, grammar_ja, llm_model, llm_params
 
-        Newly created cards are due immediately (due_at=now) so they can be graded at once.
-        """
-        now = datetime.utcnow()
-        conn = self._connect()
+    def _load_examples_rows(self, conn: sqlite3.Connection, word_pack_id: str) -> Sequence[sqlite3.Row]:
+        cur = conn.execute(
+            """
+            SELECT category, en, ja, grammar_ja, llm_model, llm_params
+            FROM word_pack_examples
+            WHERE word_pack_id = ?
+            ORDER BY category ASC, position ASC, id ASC;
+            """,
+            (word_pack_id,),
+        )
+        return cur.fetchall()
+
+    def _merge_core_with_examples(self, core_json: str, rows: Sequence[sqlite3.Row]) -> str:
         try:
-            cur = conn.execute("SELECT 1 FROM cards WHERE id = ?;", (item_id,))
-            if cur.fetchone() is not None:
-                return
-            with conn:
-                # lazily ensure default user/deck exist
-                conn.execute(
-                    "INSERT OR IGNORE INTO users(id, created_at) VALUES (?, ?);",
-                    (self.default_user_id, now.isoformat()),
-                )
-                conn.execute(
-                    "INSERT OR IGNORE INTO decks(id, user_id, name, created_at) VALUES (?, ?, ?, ?);",
-                    (self.default_deck_id, self.default_user_id, "default", now.isoformat()),
-                )
-                conn.execute(
-                    "INSERT INTO cards(id, deck_id, front, back, repetitions, interval_days, ease, due_at, created_at) VALUES (?, ?, ?, ?, 0, 0, 2.5, ?, ?);",
-                    (item_id, self.default_deck_id, front, back, now.isoformat(), now.isoformat()),
-                )
-        finally:
-            conn.close()
-
-    def get_card_meta(self, item_id: str) -> Optional[ReviewItem]:
-        """Return SRS metadata for a card if it exists.
-
-        Includes repetitions, interval_days, and due_at. Returns None if not found.
-        """
-        conn = self._connect()
-        try:
-            cur = conn.execute(
-                "SELECT id, front, back, repetitions, interval_days, ease, due_at FROM cards WHERE id = ?;",
-                (item_id,),
-            )
-            row = cur.fetchone()
-            if row is None:
-                return None
-            return ReviewItem(
-                id=row["id"],
-                front=row["front"],
-                back=row["back"],
-                repetitions=int(row["repetitions"]),
-                interval_days=int(row["interval_days"]),
-                ease=float(row["ease"]),
-                due_at=datetime.fromisoformat(row["due_at"]),
-            )
-        finally:
-            conn.close()
-
-    # --- stats & history ---
-    def get_stats(self) -> Tuple[int, int]:
-        """Return (due_now_count, reviewed_today_count).
-
-        - due_now_count: 現在時刻までに due のカード件数
-        - reviewed_today_count: 当日 00:00 UTC 以降にレビューされた件数
-        """
-        now = datetime.utcnow()
-        today_start = datetime(now.year, now.month, now.day)
-        conn = self._connect()
-        try:
-            cur1 = conn.execute("SELECT COUNT(1) AS c FROM cards WHERE due_at <= ?;", (now.isoformat(),))
-            due_now = int(cur1.fetchone()["c"])
-            cur2 = conn.execute("SELECT COUNT(1) AS c FROM reviews WHERE reviewed_at >= ?;", (today_start.isoformat(),))
-            reviewed_today = int(cur2.fetchone()["c"])
-            return due_now, reviewed_today
-        finally:
-            conn.close()
-
-    def get_recent_reviewed(self, limit: int = 5) -> List[ReviewItem]:
-        """直近レビューのカードを新しい順に最大 limit 件返す。"""
-        conn = self._connect()
-        try:
-            cur = conn.execute(
-                """
-                SELECT c.id, c.front, c.back, c.repetitions, c.interval_days, c.ease, c.due_at
-                FROM reviews r
-                JOIN cards c ON c.id = r.card_id
-                ORDER BY r.reviewed_at DESC
-                LIMIT ?;
-                """,
-                (limit,),
-            )
-            items: List[ReviewItem] = []
-            for row in cur.fetchall():
-                items.append(
-                    ReviewItem(
-                        id=row["id"],
-                        front=row["front"],
-                        back=row["back"],
-                        repetitions=int(row["repetitions"]),
-                        interval_days=int(row["interval_days"]),
-                        ease=float(row["ease"]),
-                        due_at=datetime.fromisoformat(row["due_at"]),
-                    )
-                )
-            return items
-        finally:
-            conn.close()
-
-    def get_popular(self, limit: int = 10) -> List[ReviewItem]:
-        """よく見る順（レビュー件数の多い順）にカードを返す。
-
-        - reviews の件数で降順ソート
-        - 同数の場合は cards.created_at の昇順で安定化
-        """
-        conn = self._connect()
-        try:
-            cur = conn.execute(
-                """
-                SELECT c.id, c.front, c.back, c.repetitions, c.interval_days, c.ease, c.due_at
-                FROM cards c
-                LEFT JOIN (
-                    SELECT card_id, COUNT(1) AS rc
-                    FROM reviews
-                    GROUP BY card_id
-                ) r ON r.card_id = c.id
-                ORDER BY COALESCE(r.rc, 0) DESC, c.created_at ASC, c.id ASC
-                LIMIT ?;
-                """,
-                (limit,),
-            )
-            items: List[ReviewItem] = []
-            for row in cur.fetchall():
-                items.append(
-                    ReviewItem(
-                        id=row["id"],
-                        front=row["front"],
-                        back=row["back"],
-                        repetitions=int(row["repetitions"]),
-                        interval_days=int(row["interval_days"]),
-                        ease=float(row["ease"]),
-                        due_at=datetime.fromisoformat(row["due_at"]),
-                    )
-                )
-            return items
-        finally:
-            conn.close()
+            core = json.loads(core_json) if core_json else {}
+        except Exception:
+            core = {}
+        examples: dict[str, list[dict[str, Any]]] = {cat: [] for cat in EXAMPLE_CATEGORIES}
+        for r in rows:
+            cat = r["category"]
+            item = {"en": r["en"], "ja": r["ja"]}
+            if r["grammar_ja"]:
+                item["grammar_ja"] = r["grammar_ja"]
+            if r["llm_model"]:
+                item["llm_model"] = r["llm_model"]
+            if r["llm_params"]:
+                item["llm_params"] = r["llm_params"]
+            examples.setdefault(cat, []).append(item)
+        # ensure categories exist even if absent in DB
+        for cat in EXAMPLE_CATEGORIES:
+            examples.setdefault(cat, [])
+        core["examples"] = examples
+        return json.dumps(core, ensure_ascii=False)
 
     # --- WordPack 永続化機能 ---
     def save_word_pack(self, word_pack_id: str, lemma: str, data: str) -> None:
@@ -471,30 +198,11 @@ class AppSQLiteStore:
         入力の data(JSON) から examples を分離して正規化テーブルに保存し、
         core 部分（examples を除く）を word_packs.data に保存する。
         """
-        now = datetime.utcnow().isoformat()
-        # JSON を解析し、examples を分離
-        try:
-            parsed = json.loads(data) if isinstance(data, str) else dict(data or {})
-        except Exception:
-            # 不正な JSON はそのまま保存（従来互換）
-            parsed = None
-        examples = None
-        core_json = data
-        if isinstance(parsed, dict):
-            try:
-                examples = parsed.get("examples")
-                if isinstance(examples, dict):
-                    # core から examples を取り除いて保存用 JSON を作る
-                    core = dict(parsed)
-                    core.pop("examples", None)
-                    core_json = json.dumps(core, ensure_ascii=False)
-            except Exception:
-                examples = None
+        now = datetime.now(UTC).isoformat()
+        core_json, examples = self._split_examples_from_payload(data)
 
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             with conn:
-                # 1) core を upsert（REPLACE を使わず、リンクのカスケード削除を回避）
                 conn.execute(
                     """
                     INSERT INTO word_packs(id, lemma, data, created_at, updated_at)
@@ -511,42 +219,24 @@ class AppSQLiteStore:
                     (word_pack_id, lemma, core_json, word_pack_id, now, now),
                 )
 
-                # 2) examples が dict なら正規化テーブルを置き換え
-                if isinstance(examples, dict):
+                if isinstance(examples, Mapping):
                     conn.execute("DELETE FROM word_pack_examples WHERE word_pack_id = ?;", (word_pack_id,))
-                    categories = ["Dev", "CS", "LLM", "Business", "Common"]
-                    for cat in categories:
-                        arr = examples.get(cat) or []
-                        if not isinstance(arr, list):
-                            continue
-                        for pos, item in enumerate(arr):
-                            if not isinstance(item, dict):
-                                continue
-                            en = str(item.get("en") or "").strip()
-                            ja = str(item.get("ja") or "").strip()
-                            if not en or not ja:
-                                continue
-                            grammar_ja = (str(item.get("grammar_ja") or "").strip() or None)
-                            llm_model = (str(item.get("llm_model") or "").strip() or None)
-                            llm_params = (str(item.get("llm_params") or "").strip() or None)
-                            conn.execute(
-                                """
-                                INSERT INTO word_pack_examples(
-                                    word_pack_id, category, position, en, ja, grammar_ja, llm_model, llm_params, created_at
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-                                """,
-                                (word_pack_id, cat, pos, en, ja, grammar_ja, llm_model, llm_params, now),
-                            )
-        finally:
-            conn.close()
+                    for cat, pos, en, ja, grammar_ja, llm_model, llm_params in self._iter_example_rows(examples):
+                        conn.execute(
+                            """
+                            INSERT INTO word_pack_examples(
+                                word_pack_id, category, position, en, ja, grammar_ja, llm_model, llm_params, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                            """,
+                            (word_pack_id, cat, pos, en, ja, grammar_ja, llm_model, llm_params, now),
+                        )
 
     def get_word_pack(self, word_pack_id: str) -> Optional[tuple[str, str, str, str]]:
         """WordPackをIDで取得する。戻り値: (lemma, data_json, created_at, updated_at)
 
         保存時に examples を分離しているため、ここで examples を結合して返す。
         """
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             cur = conn.execute(
                 "SELECT lemma, data, created_at, updated_at FROM word_packs WHERE id = ?;",
                 (word_pack_id,),
@@ -555,73 +245,29 @@ class AppSQLiteStore:
             if row is None:
                 return None
 
-            lemma = row["lemma"]
-            core_json = row["data"]
-            created_at = row["created_at"]
-            updated_at = row["updated_at"]
+            rows = self._load_examples_rows(conn, word_pack_id)
+            data_json = self._merge_core_with_examples(row["data"], rows)
+            return (row["lemma"], data_json, row["created_at"], row["updated_at"])
 
-            # core を辞書化
-            try:
-                core = json.loads(core_json) if core_json else {}
-            except Exception:
-                core = {}
-
-            # 正規化テーブルから examples を再構築（存在しなければ空カテゴリを返す）
-            examples: dict = {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}
-            ex_cur = conn.execute(
-                """
-                SELECT category, en, ja, grammar_ja, llm_model, llm_params
-                FROM word_pack_examples
-                WHERE word_pack_id = ?
-                ORDER BY category ASC, position ASC, id ASC;
-                """,
-                (word_pack_id,),
-            )
-            for ex_row in ex_cur.fetchall():
-                cat = ex_row["category"]
-                item = {
-                    "en": ex_row["en"],
-                    "ja": ex_row["ja"],
-                }
-                if ex_row["grammar_ja"]:
-                    item["grammar_ja"] = ex_row["grammar_ja"]
-                if ex_row["llm_model"]:
-                    item["llm_model"] = ex_row["llm_model"]
-                if ex_row["llm_params"]:
-                    item["llm_params"] = ex_row["llm_params"]
-                if cat in examples:
-                    examples[cat].append(item)
-            core["examples"] = examples
-
-            return (lemma, json.dumps(core, ensure_ascii=False), created_at, updated_at)
-        finally:
-            conn.close()
-
-    def list_word_packs(self, limit: int = 50, offset: int = 0) -> List[tuple[str, str, str, str]]:
+    def list_word_packs(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str]]:
         """WordPack一覧を取得する。戻り値: [(id, lemma, created_at, updated_at), ...]"""
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             cur = conn.execute(
                 "SELECT id, lemma, created_at, updated_at FROM word_packs ORDER BY created_at DESC LIMIT ? OFFSET ?;",
                 (limit, offset),
             )
             return [(row["id"], row["lemma"], row["created_at"], row["updated_at"]) for row in cur.fetchall()]
-        finally:
-            conn.close()
 
     def count_word_packs(self) -> int:
         """WordPack総件数を返す。"""
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             cur = conn.execute("SELECT COUNT(1) AS c FROM word_packs;")
             row = cur.fetchone()
             return int(row["c"]) if row is not None else 0
-        finally:
-            conn.close()
 
     def list_word_packs_with_flags(
         self, limit: int = 50, offset: int = 0
-    ) -> List[tuple[str, str, str, str, bool, Optional[dict]]]:
+    ) -> list[tuple[str, str, str, str, bool, Optional[dict]]]:
         """一覧取得のための軽量フラグ/集計付きリストを返す。
 
         戻り値: [(id, lemma, created_at, updated_at, is_empty, examples_count_dict|None), ...]
@@ -630,8 +276,7 @@ class AppSQLiteStore:
           examples の件数のみで空判定の近似値を算出する。
         - examples_count_dict: {category: count}
         """
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             cur = conn.execute(
                 """
                 SELECT wp.id, wp.lemma, wp.created_at, wp.updated_at,
@@ -648,7 +293,7 @@ class AppSQLiteStore:
                 """,
                 (limit, offset),
             )
-            items: List[tuple[str, str, str, str, bool, Optional[dict]]] = []
+            items: list[tuple[str, str, str, str, bool, Optional[dict]]] = []
             for row in cur.fetchall():
                 cnt_dev = int(row["cnt_dev"] or 0)
                 cnt_cs = int(row["cnt_cs"] or 0)
@@ -675,18 +320,13 @@ class AppSQLiteStore:
                     )
                 )
             return items
-        finally:
-            conn.close()
 
     def delete_word_pack(self, word_pack_id: str) -> bool:
         """WordPackを削除する。成功時True、存在しない場合False。"""
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             with conn:
                 cur = conn.execute("DELETE FROM word_packs WHERE id = ?;", (word_pack_id,))
                 return cur.rowcount > 0
-        finally:
-            conn.close()
 
     # --- WordPack Examples operations (optimized) ---
     def delete_example(self, word_pack_id: str, category: str, index: int) -> Optional[int]:
@@ -696,8 +336,7 @@ class AppSQLiteStore:
         """
         if index < 0:
             return None
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             with conn:
                 # 行の存在確認とターゲット id の特定（position 順）
                 cur = conn.execute(
@@ -736,14 +375,11 @@ class AppSQLiteStore:
                 # 残件数
                 remaining = len(ids)
                 return remaining
-        finally:
-            conn.close()
 
     # --- WordPack helpers ---
     def find_word_pack_id_by_lemma(self, lemma: str) -> Optional[str]:
         """見出し語から既存のWordPack IDを1件返す（更新日時降順）。無ければNone。"""
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             cur = conn.execute(
                 """
                 SELECT id FROM word_packs
@@ -755,8 +391,6 @@ class AppSQLiteStore:
             )
             row = cur.fetchone()
             return row["id"] if row is not None else None
-        finally:
-            conn.close()
 
     # --- Articles operations ---
     def save_article(
@@ -781,7 +415,7 @@ class AppSQLiteStore:
 
         - related_word_packs: [(word_pack_id, lemma, status), ...]
         """
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC).isoformat()
         created_at_override = created_at
         updated_at_value = updated_at or now
         generation_started_at_override = generation_started_at or None
@@ -800,8 +434,7 @@ class AppSQLiteStore:
             None if generation_duration_ms is None else int(generation_duration_ms)
         )
         generation_duration_default = generation_duration_value
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             with conn:
                 conn.execute(
                     """
@@ -851,8 +484,6 @@ class AppSQLiteStore:
                             """,
                             (article_id, wp_id, lemma, status, now),
                         )
-        finally:
-            conn.close()
 
     def get_article(
         self,
@@ -878,8 +509,7 @@ class AppSQLiteStore:
 
         戻り値: (title_en, body_en, body_ja, notes_ja, llm_model, llm_params, created_at, updated_at, [(word_pack_id, lemma, status)])
         """
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             cur = conn.execute(
                 """
                 SELECT
@@ -928,13 +558,10 @@ class AppSQLiteStore:
                 row["generation_duration_ms"],
                 links,
             )
-        finally:
-            conn.close()
 
     def list_articles(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str]]:
         """記事一覧: [(id, title_en, created_at, updated_at)] を返す。"""
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             cur = conn.execute(
                 """
                 SELECT id, title_en, created_at, updated_at
@@ -945,20 +572,22 @@ class AppSQLiteStore:
                 (limit, offset),
             )
             return [(row["id"], row["title_en"], row["created_at"], row["updated_at"]) for row in cur.fetchall()]
-        finally:
-            conn.close()
+
+    def count_articles(self) -> int:
+        """記事総件数を返す。"""
+        with self._conn() as conn:
+            cur = conn.execute("SELECT COUNT(1) AS c FROM articles;")
+            row = cur.fetchone()
+            return int(row["c"] or 0)
 
     def delete_article(self, article_id: str) -> bool:
         """記事を削除する（関連リンクも外部キーで削除）。"""
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             with conn:
                 cur = conn.execute("DELETE FROM articles WHERE id = ?;", (article_id,))
                 return cur.rowcount > 0
-        finally:
-            conn.close()
 
-    def append_examples(self, word_pack_id: str, category: str, items: List[dict]) -> int:
+    def append_examples(self, word_pack_id: str, category: str, items: list[dict]) -> int:
         """指定カテゴリに例文を末尾追記し、追加件数を返す。
 
         - `items`: {en, ja, grammar_ja?, llm_model?, llm_params?} の辞書配列
@@ -966,9 +595,8 @@ class AppSQLiteStore:
         """
         if not items:
             return 0
-        now = datetime.utcnow().isoformat()
-        conn = self._connect()
-        try:
+        now = datetime.now(UTC).isoformat()
+        with self._conn() as conn:
             with conn:
                 # 既存の末尾位置を取得
                 cur = conn.execute(
@@ -1009,8 +637,6 @@ class AppSQLiteStore:
                 )
 
                 return inserted
-        finally:
-            conn.close()
 
 
     def count_examples(
@@ -1021,8 +647,7 @@ class AppSQLiteStore:
         category: str | None = None,
     ) -> int:
         """正規化テーブルの例文総数（フィルタ適用後）を返す。"""
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             where_clauses: list[str] = []
             params: list[object] = []
             if isinstance(category, str) and category:
@@ -1051,8 +676,6 @@ class AppSQLiteStore:
             )
             row = cur.fetchone()
             return int(row["c"] or 0)
-        finally:
-            conn.close()
 
 
     def list_examples(
@@ -1080,8 +703,7 @@ class AppSQLiteStore:
         order_col = order_map.get(order_by, "wpe.created_at")
         order_dir_sql = "DESC" if str(order_dir).lower() == "desc" else "ASC"
 
-        conn = self._connect()
-        try:
+        with self._conn() as conn:
             where_clauses: list[str] = []
             params: list[object] = []
             if isinstance(category, str) and category:
@@ -1136,13 +758,8 @@ class AppSQLiteStore:
                     )
                 )
             return items
-        finally:
-            conn.close()
-
-# Backward-compatibility alias (class name)
-SRSSQLiteStore = AppSQLiteStore
 
 # module-level singleton store (wired to settings)
-store = AppSQLiteStore(db_path=settings.srs_db_path)
+store = AppSQLiteStore(db_path=settings.wordpack_db_path)
 
 

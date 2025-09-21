@@ -94,6 +94,15 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - network not used in tests
             except Exception:
                 pass
             try:
+                choices = getattr(resp, "choices", None)
+                if isinstance(choices, list) and choices:
+                    message = getattr(choices[0], "message", None)
+                    content = getattr(message, "content", None)
+                    if isinstance(content, str) and content.strip():
+                        return content.strip()
+            except Exception:
+                pass
+            try:
                 d = resp if isinstance(resp, dict) else resp.model_dump()  # type: ignore[attr-defined]
                 # ベータSDK互換: output[0].content[0].text
                 output = d.get("output") or []
@@ -618,8 +627,3 @@ def shutdown_providers() -> None:
     except Exception:
         pass
     _LLM_INSTANCE = None
-
-
-def chroma_query_with_policy(*args: Any, **kwargs: Any) -> dict[str, Any] | None:
-    """Compatibility stub: vector search feature is removed. Always returns None."""
-    return None
