@@ -66,7 +66,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
 
     // 初期ロードのレンジ表記とボタン状態（見出しをheadingロールで特定）
     await screen.findByRole('heading', { name: '例文一覧' });
-    const ttsButtons = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    const ttsButtons = await screen.findAllByRole('button', { name: '音声' });
     expect(ttsButtons.length).toBeGreaterThan(0);
     // limit=200, total=450, offset=0 => 1-200 / 450件
     const range1 = await screen.findByText(/1-200 \/ 450件/);

@@ -162,7 +162,7 @@ describe('WordPackListPanel modal preview', () => {
     // 統合された一覧のヘッダーが表示される
     await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
 
-    const ttsButtons = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    const ttsButtons = await screen.findAllByRole('button', { name: '音声' });
     expect(ttsButtons).toHaveLength(3);
 
     // 例文未生成バッジ表示
@@ -188,7 +188,7 @@ describe('WordPackListPanel modal preview', () => {
     const lemmaLabel = within(modalContent).getByText('見出し語');
     const lemmaValue = lemmaLabel.nextElementSibling as HTMLElement | null;
     expect(lemmaValue).not.toBeNull();
-    const lemmaTtsButtons = lemmaValue ? within(lemmaValue).getAllByRole('button', { name: '音声読み上げ' }) : [];
+    const lemmaTtsButtons = lemmaValue ? within(lemmaValue).getAllByRole('button', { name: '音声' }) : [];
     expect(lemmaTtsButtons).toHaveLength(1);
 
     // 閉じる
@@ -208,14 +208,14 @@ describe('WordPackListPanel modal preview', () => {
       await user.keyboard('{Alt>}{4}{/Alt}');
     });
 
-    const buttonsInCardView = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    const buttonsInCardView = await screen.findAllByRole('button', { name: '音声' });
     expect(buttonsInCardView).toHaveLength(3);
 
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'リスト' }));
     });
 
-    const buttonsInListView = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    const buttonsInListView = await screen.findAllByRole('button', { name: '音声' });
     expect(buttonsInListView).toHaveLength(3);
 
     await act(async () => {

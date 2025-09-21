@@ -32,7 +32,7 @@ describe('ArticleDetailModal', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: '音声読み上げ' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '音声' })).toBeInTheDocument();
     const meta = screen.getByTestId('article-meta');
     expect(meta.tagName.toLowerCase()).toBe('dl');
     expect(meta).toHaveTextContent('作成');

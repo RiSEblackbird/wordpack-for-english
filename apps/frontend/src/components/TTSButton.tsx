@@ -69,7 +69,7 @@ export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
       data-testid="speak-btn"
       style={style}
     >
-      {loading ? '読み上げ中…' : '音声読み上げ'}
+      {loading ? '読み上げ中…' : '音声'}
     </button>
   );
 }
