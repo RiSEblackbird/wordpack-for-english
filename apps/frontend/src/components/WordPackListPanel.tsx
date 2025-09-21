@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
+import { useConfirmDialog } from '../ConfirmDialogContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { Modal } from './Modal';
 import { ListControls } from './ListControls';
@@ -121,6 +122,7 @@ interface WordPackListResponse {
 export const WordPackListPanel: React.FC = () => {
   const { settings: { apiBase } } = useSettings();
   const { setModalOpen } = useModal();
+  const confirmDialog = useConfirmDialog();
   const [wordPacks, setWordPacks] = useState<WordPackListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
@@ -235,7 +237,8 @@ export const WordPackListPanel: React.FC = () => {
   }, [apiBase]);
 
   const deleteWordPack = useCallback(async (wordPackId: string) => {
-    if (!confirm('このWordPackを削除しますか？')) return;
+    const confirmed = await confirmDialog('WordPack');
+    if (!confirmed) return;
 
     abortRef.current?.abort();
     const ctrl = new AbortController();
@@ -257,7 +260,7 @@ export const WordPackListPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [apiBase, loadWordPacks, offset]);
+  }, [apiBase, confirmDialog, loadWordPacks, offset]);
 
   useEffect(() => {
     loadWordPacks();

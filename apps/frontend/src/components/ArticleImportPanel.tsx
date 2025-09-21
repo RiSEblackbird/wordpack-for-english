@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
+import { useConfirmDialog } from '../ConfirmDialogContext';
 import { useNotifications } from '../NotificationsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { regenerateWordPackRequest } from '../lib/wordpack';
@@ -21,6 +22,7 @@ export const ArticleImportPanel: React.FC = () => {
   const { settings, setSettings } = useSettings();
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
+  const confirmDialog = useConfirmDialog();
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
   const [genRunning, setGenRunning] = useState(0);
@@ -119,7 +121,8 @@ export const ArticleImportPanel: React.FC = () => {
 
   const deleteWordPack = async (wordPackId: string) => {
     if (!article) return;
-    if (!confirm('このWordPackを削除しますか？')) return;
+    const confirmed = await confirmDialog('WordPack');
+    if (!confirmed) return;
     const ctrl = new AbortController();
     setLoading(true);
     setMsg(null);

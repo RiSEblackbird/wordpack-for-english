@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
+import { useConfirmDialog } from '../ConfirmDialogContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { composeModelRequestFields, regenerateWordPackRequest } from '../lib/wordpack';
 import { LoadingIndicator } from './LoadingIndicator';
@@ -70,6 +71,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const { settings, setSettings } = useSettings();
   const { isModalOpen, setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
+  const confirmDialog = useConfirmDialog();
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
   const [loading, setLoading] = useState(false);
@@ -326,7 +328,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
   const deleteExample = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common', index: number) => {
     if (!currentWordPackId) return;
-    if (!confirm('この例文を削除しますか？')) return;
+    const confirmed = await confirmDialog('例文');
+    if (!confirmed) return;
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;

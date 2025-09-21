@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { formatDateJst } from '../lib/date';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
+import { useConfirmDialog } from '../ConfirmDialogContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { useNotifications } from '../NotificationsContext';
 import { regenerateWordPackRequest } from '../lib/wordpack';
@@ -28,6 +29,7 @@ export const ArticleListPanel: React.FC = () => {
   const { settings } = useSettings();
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
+  const confirmDialog = useConfirmDialog();
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<ArticleListItem[]>([]);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
@@ -75,7 +77,8 @@ export const ArticleListPanel: React.FC = () => {
   };
 
   const del = async (id: string) => {
-    if (!confirm('この文章を削除しますか？')) return;
+    const confirmed = await confirmDialog('文章');
+    if (!confirmed) return;
     setLoading(true);
     setMsg(null);
     try {
@@ -92,7 +95,8 @@ export const ArticleListPanel: React.FC = () => {
 
   const deleteWordPack = async (wordPackId: string) => {
     if (!preview) return;
-    if (!confirm('このWordPackを削除しますか？')) return;
+    const confirmed = await confirmDialog('WordPack');
+    if (!confirmed) return;
     setLoading(true);
     setMsg(null);
     try {
