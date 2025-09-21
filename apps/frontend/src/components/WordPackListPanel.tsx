@@ -137,12 +137,6 @@ export const WordPackListPanel: React.FC = () => {
   const [searchMode, setSearchMode] = useState<SearchMode>('contains');
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(null);
-  // 複数カラム時に列優先で並べるための幅検知
-  const [isWide, setIsWide] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(min-width: 900px)').matches;
-  });
-
   // グリッドの可視幅に基づき列数を算出（最大4列）
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [columnCount, setColumnCount] = useState<number>(() =>
@@ -178,40 +172,7 @@ export const WordPackListPanel: React.FC = () => {
     };
   }, [viewMode]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mql = window.matchMedia('(min-width: 900px)');
-    const handler = (e: MediaQueryListEvent) => setIsWide(e.matches);
-    // Safari 対応のため addListener/removeListener フォールバック
-    // 実装仕様上の説明のみをコメントとして記述
-    // 主要ブラウザでの互換性を確保する
-    if (mql.addEventListener) {
-      mql.addEventListener('change', handler);
-    } else if ((mql as any).addListener) {
-      (mql as any).addListener(handler);
-    }
-    setIsWide(mql.matches);
-    return () => {
-      if (mql.removeEventListener) {
-        mql.removeEventListener('change', handler);
-      } else if ((mql as any).removeListener) {
-        (mql as any).removeListener(handler);
-      }
-    };
-  }, []);
-
   // --- UI状態の保存/復元（sessionStorage） ---
-  type PersistedState = {
-    sortKey: SortKey;
-    sortOrder: SortOrder;
-    viewMode: ViewMode;
-    generationFilter: GenerationFilter;
-    searchMode: SearchMode;
-    searchInput: string;
-    appliedSearch: { mode: SearchMode; value: string } | null;
-    offset: number;
-  };
-
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
