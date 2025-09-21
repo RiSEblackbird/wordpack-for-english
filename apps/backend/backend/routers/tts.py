@@ -1,21 +1,35 @@
 from __future__ import annotations
 
 import os
+import threading
+import time
 from typing import Iterator
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, constr
 
 from backend.config import settings
+from backend.logging import logger
 
 try:
-    from openai import OpenAI  # type: ignore
+    from openai import (  # type: ignore
+        APIConnectionError,
+        APIError,
+        APIStatusError,
+        AuthenticationError,
+        BadRequestError,
+        OpenAI,
+        RateLimitError,
+    )
 except Exception:  # pragma: no cover - openai SDK が無い環境では初期化しない
+    APIConnectionError = APIError = APIStatusError = AuthenticationError = BadRequestError = RateLimitError = None  # type: ignore[assignment]
     OpenAI = None  # type: ignore[assignment]
 
 
 router = APIRouter(prefix="/api/tts", tags=["tts"])
+
+_CLIENT_LOCK = threading.Lock()
 
 
 def _init_client() -> OpenAI | None:  # type: ignore[valid-type]
@@ -42,27 +56,123 @@ class TTSIn(BaseModel):
     voice: str = "alloy"
 
 
-@router.post("", response_class=StreamingResponse)
-def synth(req: TTSIn) -> StreamingResponse:
+def _tts_client() -> OpenAI | None:  # type: ignore[valid-type]
     global client
+    if client is not None:
+        return client
+    with _CLIENT_LOCK:
+        if client is None:
+            client = _init_client()
+    return client
 
-    if client is None:
-        client = _init_client()
 
-    if client is None:
+def _text_preview(text: str, limit: int = 80) -> str:
+    sanitized = " ".join(text.strip().split())
+    if len(sanitized) <= limit:
+        return sanitized
+    return sanitized[: limit - 1] + "…"
+
+
+def _loggable_request_id(request: Request | None) -> str | None:
+    if request is None:
+        return None
+    return getattr(request.state, "request_id", None)
+
+
+def _map_openai_exception(exc: Exception) -> tuple[int, str, str]:
+    if AuthenticationError is not None and isinstance(exc, AuthenticationError):
+        return 502, "OpenAI authentication failed", "authentication_error"
+    if RateLimitError is not None and isinstance(exc, RateLimitError):
+        return 429, "OpenAI rate limit exceeded", "rate_limit"
+    if BadRequestError is not None and isinstance(exc, BadRequestError):
+        return 400, "Invalid text-to-speech request", "bad_request"
+    if APIConnectionError is not None and isinstance(exc, APIConnectionError):
+        return 502, "OpenAI connection error", "connection_error"
+    if APIStatusError is not None and isinstance(exc, APIStatusError):
+        return exc.status_code or 502, "OpenAI returned an error response", "api_status_error"
+    if APIError is not None and isinstance(exc, APIError):
+        return 502, "OpenAI API error", "api_error"
+    return 500, "Text-to-speech failed", "unexpected_error"
+
+
+@router.post("", response_class=StreamingResponse)
+def synth(req: TTSIn, request: Request) -> StreamingResponse:
+    t0 = time.perf_counter()
+    request_id = _loggable_request_id(request)
+    text_chars = len(req.text)
+    logger.info(
+        "tts_request",
+        request_id=request_id,
+        voice=req.voice,
+        text_chars=text_chars,
+        text_preview=_text_preview(req.text),
+    )
+
+    client_instance = _tts_client()
+    if client_instance is None:
+        logger.error(
+            "tts_client_unavailable",
+            request_id=request_id,
+            reason="missing_sdk_or_api_key",
+        )
         raise HTTPException(status_code=500, detail="OpenAI client is not configured")
 
     try:
-        def stream() -> Iterator[bytes]:
-            with client.audio.speech.with_streaming_response.create(  # type: ignore[union-attr]
-                model="gpt-4o-mini-tts",
-                voice=req.voice,
-                input=req.text,
-            ) as resp:
-                yield from _iter_audio_bytes(resp)
+        response = client_instance.audio.speech.create(  # type: ignore[union-attr]
+            model="gpt-4o-mini-tts",
+            voice=req.voice,
+            input=req.text,
+            response_format="mp3",
+        )
+    except Exception as exc:  # pragma: no cover - SDK からの例外を分類
+        status_code, detail, reason = _map_openai_exception(exc)
+        logger.warning(
+            "tts_request_failed",
+            request_id=request_id,
+            voice=req.voice,
+            text_chars=text_chars,
+            reason=reason,
+            error=str(exc),
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
 
-        return StreamingResponse(stream(), media_type="audio/mpeg")
-    except HTTPException:
-        raise
-    except Exception as exc:  # pragma: no cover - SDK からの例外をそのまま伝播
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    def stream() -> Iterator[bytes]:
+        total_bytes = 0
+        had_error = False
+        try:
+            for chunk in _iter_audio_bytes(response):
+                total_bytes += len(chunk)
+                yield chunk
+        except Exception as exc:  # pragma: no cover - ストリーミング中の異常
+            had_error = True
+            logger.error(
+                "tts_stream_error",
+                request_id=request_id,
+                voice=req.voice,
+                text_chars=text_chars,
+                streamed_bytes=total_bytes,
+                error=str(exc),
+            )
+            raise
+        finally:
+            duration_ms = (time.perf_counter() - t0) * 1000
+            try:
+                response.close()
+            except Exception:  # pragma: no cover - close に失敗しても継続
+                logger.warning(
+                    "tts_stream_close_failed",
+                    request_id=request_id,
+                    voice=req.voice,
+                    streamed_bytes=total_bytes,
+                )
+            if not had_error:
+                logger.info(
+                    "tts_stream_complete",
+                    request_id=request_id,
+                    voice=req.voice,
+                    text_chars=text_chars,
+                    streamed_bytes=total_bytes,
+                    duration_ms=duration_ms,
+                )
+
+    return StreamingResponse(stream(), media_type="audio/mpeg")
