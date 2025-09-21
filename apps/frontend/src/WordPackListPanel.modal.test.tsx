@@ -157,6 +157,9 @@ describe('WordPackListPanel modal preview', () => {
     // 統合された一覧のヘッダーが表示される
     await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
 
+    const ttsButtons = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    expect(ttsButtons).toHaveLength(3);
+
     // 例文未生成バッジ表示
     await waitFor(() => expect(screen.getByText('例文未生成')).toBeInTheDocument());
 
@@ -184,6 +187,31 @@ describe('WordPackListPanel modal preview', () => {
     });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'WordPack プレビュー' })).not.toBeInTheDocument(), { timeout: 3000 });
   }, 15000);
+
+  it('カード/リスト表示ともにWordPack語彙の読み上げボタンが表示される', async () => {
+    setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.keyboard('{Alt>}{4}{/Alt}');
+    });
+
+    const buttonsInCardView = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    expect(buttonsInCardView).toHaveLength(3);
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'リスト' }));
+    });
+
+    const buttonsInListView = await screen.findAllByRole('button', { name: '音声読み上げ' });
+    expect(buttonsInListView).toHaveLength(3);
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'カード' }));
+    });
+  });
 
   it('ソート機能が正しく動作する', async () => {
     setupFetchMocks();

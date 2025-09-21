@@ -6,6 +6,7 @@ import { Modal } from './Modal';
 import { ListControls } from './ListControls';
 import { WordPackPanel } from './WordPackPanel';
 import { LoadingIndicator } from './LoadingIndicator';
+import { TTSButton } from './TTSButton';
 import { formatDateJst } from '../lib/date';
 
 // 削除ボタンの共通コンポーネント
@@ -20,15 +21,14 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false }
       className="danger" 
       onClick={onClick}
       disabled={disabled}
-      style={{ 
-        padding: '0.04rem 0.07rem', 
-        fontSize: '0.40em', 
-        border: '1px solid #d32f2f', 
-        borderRadius: '4px', 
-        background: 'rgb(234, 230, 217)', 
+      style={{
+        padding: '0.04rem 0.07rem',
+        fontSize: '0.40em',
+        border: '1px solid #d32f2f',
+        borderRadius: '4px',
+        background: 'rgb(234, 230, 217)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         color: '#d32f2f',
-        marginLeft: 'auto',
         opacity: disabled ? 0.6 : 1
       }}
       onMouseEnter={(e) => {
@@ -363,6 +363,8 @@ export const WordPackListPanel: React.FC = () => {
         .wp-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
         .wp-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.4rem; background:rgb(173, 159, 211); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
         .wp-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.2rem; }
+        .wp-card-actions { display: flex; gap: 0.3rem; align-items: center; margin-left: auto; flex-wrap: wrap; }
+        .wp-card-tts-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; }
         .wp-card-title { font-size: 1.0em; font-weight: bold; color: #333; margin: 0; }
         .wp-card-meta { font-size: 0.50em; color: #666; margin: 0.25rem 0; }
         .wp-badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 999px; font-size: 0.75em; margin-left: 0.5rem; }
@@ -386,11 +388,14 @@ export const WordPackListPanel: React.FC = () => {
           .wp-index-grid { grid-template-columns: 1fr 1fr 1fr 1fr; }
         }
         .wp-index-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0.3rem; border-bottom: 1px solid #eee; cursor: pointer; background: transparent; border-radius: 4px; }
+        .wp-index-actions { margin-left: auto; display: flex; gap: 0.25rem; align-items: center; }
+        .wp-index-tts-btn { font-size: 0.55em; padding: 0.05rem 0.3rem; border-radius: 4px; }
         .wp-index-title { font-size: 0.75em; font-weight: bold; color:rgb(233, 233, 233); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .wp-index-meta { font-size: 0.10em; color: #666; }
         @media (max-width: 640px) { 
           .wp-list-grid { grid-template-columns: 1fr; }
           .wp-card-header { flex-direction: column; align-items: flex-start; }
+          .wp-card-actions { margin-left: 0; margin-top: 0.3rem; }
           .wp-sort-controls { flex-direction: column; align-items: stretch; }
         }
       `}</style>
@@ -486,10 +491,13 @@ export const WordPackListPanel: React.FC = () => {
                       <h3 className="wp-card-title">
                         {wp.lemma}
                       </h3>
-                      <DeleteButton 
-                        onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
-                        disabled={loading}
-                      />
+                      <div className="wp-card-actions" onClick={(e) => e.stopPropagation()}>
+                        <TTSButton text={wp.lemma} className="wp-card-tts-btn" />
+                        <DeleteButton
+                          onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
+                          disabled={loading}
+                        />
+                      </div>
                     </div>
                     <div className="wp-card-meta">
                       <div>作成: {formatDate(wp.created_at)} / 更新: {formatDate(wp.updated_at)}</div>
@@ -560,10 +568,13 @@ export const WordPackListPanel: React.FC = () => {
                   >
                     <span className="wp-index-title">{wp.lemma}</span>
                     <span className="wp-index-meta">{wp.is_empty ? ' / 未' : ` / 例文: ${wp.totalExamples}件`}</span>
-                    <DeleteButton 
-                      onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
-                      disabled={loading}
-                    />
+                    <div className="wp-index-actions" onClick={(e) => e.stopPropagation()}>
+                      <TTSButton text={wp.lemma} className="wp-index-tts-btn" />
+                      <DeleteButton
+                        onClick={(e) => { e.stopPropagation(); deleteWordPack(wp.id); }}
+                        disabled={loading}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
