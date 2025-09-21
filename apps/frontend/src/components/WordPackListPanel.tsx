@@ -90,15 +90,13 @@ const PAGE_LIMIT = 200;
 const MIN_COLUMN_WIDTH = 320;
 
 const getFallbackColumnCount = (width: number): number => {
-  if (width >= 1600) return 4;
-  if (width >= 1200) return 3;
   if (width >= 900) return 2;
   return 1;
 };
 
 const computeColumnCount = (width: number): number => {
   const count = Math.floor(width / MIN_COLUMN_WIDTH);
-  return Math.min(4, Math.max(1, count));
+  return Math.min(2, Math.max(1, count));
 };
 
 const sumExamples = (counts?: WordPackListItem['examples_count']): number => {
@@ -141,7 +139,7 @@ export const WordPackListPanel: React.FC = () => {
   const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(null);
   const [senseOpenIds, setSenseOpenIds] = useState<Set<string>>(() => new Set());
   const [showAllSense, setShowAllSense] = useState(false);
-  // グリッドの可視幅に基づき列数を算出（最大4列）
+  // グリッドの可視幅に基づき列数を算出（最大2列）
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [columnCount, setColumnCount] = useState<number>(() =>
     typeof window === 'undefined' ? 1 : getFallbackColumnCount(window.innerWidth)
