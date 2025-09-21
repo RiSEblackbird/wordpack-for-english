@@ -28,7 +28,7 @@ from .observability import request_trace
 from .providers import ChromaClientFactory, shutdown_providers
 from .routers import article as article_router
 from .routers import config as cfg
-from .routers import health, word
+from .routers import health, tts, word
 
 
 async def access_log_and_metrics(
@@ -160,6 +160,7 @@ def create_app() -> FastAPI:
     app.include_router(article_router.router, prefix="/api/article")
     app.include_router(health.router)
     app.include_router(cfg.router, prefix="/api")
+    app.include_router(tts.router)
 
     app.add_event_handler("shutdown", _on_shutdown)
     app.add_event_handler("startup", _on_startup_seed)

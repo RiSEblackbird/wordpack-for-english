@@ -12,6 +12,7 @@
 - 発音情報（IPA/音節/強勢）の付与
 - 例文（Dev/CS/LLM/Business/Common）の追加・削除
 - 文章インポートと関連 WordPack の紐付け
+- OpenAI gpt-4o-mini-tts を用いた例文の音声読み上げ
 
 ## クイックスタート
 
@@ -64,6 +65,10 @@ pytest
 cd apps/frontend
 npm run test
 ```
+
+## REST API（抜粋）
+- `POST /api/word/pack` … WordPack を生成して語義や例文、語源、学習カード要点を返却
+- `POST /api/tts` … OpenAI gpt-4o-mini-tts で読み上げた音声（audio/mpeg）をストリーミング返却
 
 ## ディレクトリ
 ```

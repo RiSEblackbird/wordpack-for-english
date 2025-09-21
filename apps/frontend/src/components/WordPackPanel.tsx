@@ -7,6 +7,7 @@ import { LoadingIndicator } from './LoadingIndicator';
 import { useNotifications } from '../NotificationsContext';
 import { Modal } from './Modal';
 import { formatDateJst } from '../lib/date';
+import { TTSButton } from './TTSButton';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -661,34 +662,41 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                       {ex.grammar_ja ? (
                         <div className="ex-grammar"><span className="ex-label">解説</span> {ex.grammar_ja}</div>
                       ) : null}
-                      {currentWordPackId ? (
-                        <div style={{ marginTop: 6, display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-                          <button
-                            onClick={() => deleteExample(k, i)}
-                            disabled={loading}
-                            aria-label={`delete-example-${k}-${i}`}
-                            style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                          >
-                            削除
-                          </button>
-                          <button
-                            onClick={() => importArticleFromExample(k, i)}
-                            disabled={loading}
-                            aria-label={`import-article-from-example-${k}-${i}`}
-                            style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                          >
-                            文章インポート
-                          </button>
-                          <button
-                            onClick={() => copyExampleText(k, i)}
-                            disabled={loading}
-                            aria-label={`copy-example-${k}-${i}`}
-                            style={{ fontSize: '0.85em', color: '#2e7d32', border: '1px solid #2e7d32', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                          >
-                            コピー
-                          </button>
-                        </div>
-                      ) : null}
+                      <div style={{ marginTop: 6, display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+                        <TTSButton
+                          text={ex.en}
+                          voice="alloy"
+                          style={{ fontSize: '0.85em', color: '#6a1b9a', border: '1px solid #6a1b9a', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                        />
+                        {currentWordPackId ? (
+                          <>
+                            <button
+                              onClick={() => deleteExample(k, i)}
+                              disabled={loading}
+                              aria-label={`delete-example-${k}-${i}`}
+                              style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                            >
+                              削除
+                            </button>
+                            <button
+                              onClick={() => importArticleFromExample(k, i)}
+                              disabled={loading}
+                              aria-label={`import-article-from-example-${k}-${i}`}
+                              style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                            >
+                              文章インポート
+                            </button>
+                            <button
+                              onClick={() => copyExampleText(k, i)}
+                              disabled={loading}
+                              aria-label={`copy-example-${k}-${i}`}
+                              style={{ fontSize: '0.85em', color: '#2e7d32', border: '1px solid #2e7d32', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                            >
+                              コピー
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
                     </article>
                   ))}
                 </div>

@@ -51,6 +51,7 @@
   - 絞り込み: カテゴリ（Dev/CS/LLM/Business/Common）
 - 操作:
   - 「訳表示」ボタン: 原文の下に日本語訳を展開/畳む
+  - 「音声読み上げ」ボタン: OpenAI gpt-4o-mini-tts で原文を音声再生（音量は端末で調整）
   - 項目クリック: 詳細モーダル（原文/日本語訳/解説）を表示
 
 
@@ -66,6 +67,7 @@
 - 例文表示:
   - カテゴリ例: Dev/CS/LLM/Business/Common（必要数が足りない場合は空欄のまま）
   - 各例文は「英 / 訳 / 解説」をカード型で縦に表示
+  - 各カード下部の「音声読み上げ」ボタンで原文をその場で再生（OpenAI gpt-4o-mini-tts を使用）
 - 語義表示（各 sense 単位）:
   - 見出し語義/定義/ニュアンス/典型パターン/類義・反義/レジスター/注意点
 
@@ -181,6 +183,7 @@
 - `POST /api/word/pack` … WordPack 生成（語義/共起/対比/例文/語源/学習カード要点/発音RP + `citations`/`confidence`、`pronunciation_enabled`,`regenerate_scope` 対応）
 - 追加（保存済み WordPack 関連）:
   - `DELETE /api/word/packs/{id}/examples/{category}/{index}` … 例文の個別削除
+- `POST /api/tts` … OpenAI gpt-4o-mini-tts を使い、`text`/`voice` を受け取って `audio/mpeg` ストリームを返却
 
 ### B-4. 保存済み WordPack の内部構造（実装メモ）
 - 例文は DB で別テーブルに正規化。部分読み込み/部分削除が高速
