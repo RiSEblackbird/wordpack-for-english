@@ -1,4 +1,4 @@
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
 import '@testing-library/jest-dom';
@@ -45,8 +45,12 @@ describe('App navigation', () => {
     await user.click(examplesButton);
 
     expect(await screen.findByRole('heading', { name: '例文一覧' })).toBeInTheDocument();
-    await waitFor(() => {
-      expect(sidebar).toHaveAttribute('aria-hidden', 'true');
-    });
+    expect(sidebar).toHaveAttribute('aria-hidden', 'false');
+
+    const appShell = document.querySelector('.app-shell');
+    if (!appShell) {
+      throw new Error('app shell not found');
+    }
+    expect(appShell).toHaveClass('sidebar-open');
   });
 });

@@ -65,17 +65,6 @@ export const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!isSidebarOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsSidebarOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [isSidebarOpen]);
-
-  useEffect(() => {
     if (isSidebarOpen) {
       hasSidebarOpened.current = true;
       sidebarCloseRef.current?.focus();
@@ -83,10 +72,6 @@ export const App: React.FC = () => {
       sidebarToggleRef.current?.focus();
     }
   }, [isSidebarOpen]);
-
-  useEffect(() => {
-    setIsSidebarOpen(false);
-  }, [tab]);
 
   const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
 
@@ -99,7 +84,13 @@ export const App: React.FC = () => {
       <ModalProvider>
         <ConfirmDialogProvider>
           <NotificationsProvider>
-            <div style={{ maxWidth: '1000px', margin: '0 auto', ['--main-max-width' as any]: '1000px' }}>
+            <div
+              className={`app-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
+              style={{
+                ['--main-max-width' as any]: '1000px',
+                ['--sidebar-width' as any]: isSidebarOpen ? 'min(280px, 80vw)' : '0px',
+              }}
+            >
               <ThemeApplier />
               <style>{`
           /* テーマ変数 */
@@ -176,6 +167,17 @@ export const App: React.FC = () => {
           .hamburger-button:focus-visible {
             outline: 2px solid var(--color-accent);
             outline-offset: 2px;
+          }
+          .app-shell {
+            width: min(var(--main-max-width), 100%);
+            margin: 0 auto;
+            box-sizing: border-box;
+            transition: margin-left 0.3s ease, width 0.3s ease;
+          }
+          .app-shell.sidebar-open {
+            margin-left: var(--sidebar-width);
+            margin-right: auto;
+            width: min(var(--main-max-width), calc(100% - var(--sidebar-width)));
           }
           .sidebar {
             position: fixed;
