@@ -141,6 +141,7 @@ export const WordPackListPanel: React.FC = () => {
   const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(null);
   const [senseOpenIds, setSenseOpenIds] = useState<Set<string>>(() => new Set());
   const [showAllSense, setShowAllSense] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   // グリッドの可視幅に基づき列数を算出（最大2列）
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [columnCount, setColumnCount] = useState<number>(() =>
@@ -254,6 +255,12 @@ export const WordPackListPanel: React.FC = () => {
       });
       setMsg({ kind: 'status', text: 'WordPackを削除しました' });
       await loadWordPacks(offset);
+      setSelectedIds((prev) => {
+        if (!prev.has(wordPack.id)) return prev;
+        const next = new Set(prev);
+        next.delete(wordPack.id);
+        return next;
+      });
     } catch (e) {
       if (ctrl.signal.aborted) return;
       const m = e instanceof ApiError ? e.message : 'WordPackの削除に失敗しました';
@@ -289,6 +296,22 @@ export const WordPackListPanel: React.FC = () => {
         }
       });
       if (!changed && next.size === prev.size) {
+        return prev;
+      }
+      return next;
+    });
+  }, [wordPacks]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const validIds = new Set(wordPacks.map((wp) => wp.id));
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (validIds.has(id)) {
+          next.add(id);
+        }
+      });
+      if (next.size === prev.size) {
         return prev;
       }
       return next;
@@ -354,6 +377,68 @@ export const WordPackListPanel: React.FC = () => {
     });
   }, [filteredWordPacks, sortKey, sortOrder]);
 
+  const visibleWordPackIds = useMemo(() => sortedWordPacks.map((wp) => wp.id), [sortedWordPacks]);
+  const selectedCount = selectedIds.size;
+  const visibleSelectedCount = useMemo(
+    () => sortedWordPacks.reduce((sum, wp) => (selectedIds.has(wp.id) ? sum + 1 : sum), 0),
+    [sortedWordPacks, selectedIds]
+  );
+  const allVisibleSelected = sortedWordPacks.length > 0 && visibleSelectedCount === sortedWordPacks.length;
+
+  const toggleVisibleSelection = useCallback(() => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const ids = visibleWordPackIds;
+      const shouldClear = ids.length > 0 && ids.every((id) => next.has(id));
+      if (shouldClear) {
+        ids.forEach((id) => next.delete(id));
+      } else {
+        ids.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  }, [visibleWordPackIds]);
+
+  const deleteSelectedWordPacks = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    const confirmed = await confirmDialog(`選択中のWordPack（${ids.length}件）`);
+    if (!confirmed) return;
+
+    setLoading(true);
+    setMsg(null);
+    let deleted = 0;
+    let failure: string | null = null;
+    try {
+      for (const id of ids) {
+        try {
+          await fetchJson(`${apiBase}/word/packs/${id}`, { method: 'DELETE' });
+          deleted += 1;
+        } catch (error) {
+          const err = error instanceof ApiError ? error.message : 'WordPackの削除に失敗しました';
+          failure = err;
+          break;
+        }
+      }
+      if (deleted > 0) {
+        await loadWordPacks(offset);
+        setSelectedIds(new Set());
+      }
+      if (failure) {
+        const text = deleted > 0
+          ? `WordPackを${deleted}件削除しましたが一部失敗しました: ${failure}`
+          : `WordPackの削除に失敗しました: ${failure}`;
+        setMsg({ kind: 'alert', text });
+      } else if (deleted > 0) {
+        setMsg({ kind: 'status', text: `WordPackを${deleted}件削除しました` });
+      } else {
+        setMsg({ kind: 'alert', text: '削除対象がありません' });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedIds, confirmDialog, apiBase, loadWordPacks, offset]);
+
   const handleApplySearch = useCallback(() => {
     setAppliedSearch({ mode: searchMode, value: searchInput.trim() });
   }, [searchMode, searchInput]);
@@ -390,6 +475,22 @@ export const WordPackListPanel: React.FC = () => {
     });
   }, [wordPacks]);
 
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
   useEffect(() => {
     if (showAllSense) {
       setSenseOpenIds(new Set(wordPacks.map((wp) => wp.id)));
@@ -420,11 +521,12 @@ export const WordPackListPanel: React.FC = () => {
         .wp-search-button:hover { background: #f5f5f5; }
         .wp-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
         .wp-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.4rem; background:rgb(173, 159, 211); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
-        .wp-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.2rem; }
+        .wp-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; gap: 0.5rem; }
         .wp-card-actions { display: flex; gap: 0.3rem; align-items: center; margin-left: auto; flex-wrap: wrap; }
         .wp-card-tts-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; }
         .wp-card-title { font-size: 1.0em; font-weight: bold; color: #333; margin: 0; }
         .wp-card-meta { font-size: 0.50em; color: #666; margin: 0.25rem 0; }
+        .wp-card-header-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
         .wp-sense-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; border: 1px solid #5c6bc0; background: #f5f7ff; color: #3f51b5; cursor: pointer; }
         .wp-sense-btn[aria-pressed="true"] { background: #e8eaf6; border-color: #3f51b5; color: #283593; }
         .wp-card-sense-title { margin: 0.35rem 0 0.2rem; font-size: 0.70em; color: #2f2f2f; background: rgba(255,255,255,0.86); padding: 0.25rem 0.35rem; border-left: 3px solid #5c6bc0; border-radius: 4px; line-height: 1.4; }
@@ -455,6 +557,11 @@ export const WordPackListPanel: React.FC = () => {
         .wp-index-title { font-size: 0.75em; font-weight: bold; color:rgb(233, 233, 233); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .wp-index-sense { font-size: 0.55em; color: #212121; background: rgba(255,255,255,0.85); padding: 0.05rem 0.35rem; border-radius: 4px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .wp-index-meta { font-size: 0.10em; color: #666; }
+        .wp-selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-size: 0.85em; }
+        .wp-selection-bar button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
+        .wp-selection-bar button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .wp-select-checkbox { display: inline-flex; align-items: center; justify-content: center; }
+        .wp-select-checkbox input { width: 1rem; height: 1rem; cursor: pointer; }
         @media (max-width: 640px) { 
           .wp-list-grid { grid-template-columns: 1fr; }
           .wp-card-header { flex-direction: column; align-items: flex-start; }
@@ -486,6 +593,21 @@ export const WordPackListPanel: React.FC = () => {
             onClick={() => setViewMode('list')}
             title="リスト表示（索引）"
           >リスト</button>
+        </div>
+
+        <div className="wp-selection-bar" role="group" aria-label="WordPack選択操作">
+          <span>選択中: {selectedCount}件</span>
+          <button type="button" onClick={toggleVisibleSelection} disabled={sortedWordPacks.length === 0}>
+            {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
+          </button>
+          <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
+            全選択解除
+          </button>
+          <button
+            type="button"
+            onClick={deleteSelectedWordPacks}
+            disabled={selectedCount === 0 || loading}
+          >選択したWordPackを削除</button>
         </div>
 
         <ListControls<SortKey>
@@ -563,9 +685,20 @@ export const WordPackListPanel: React.FC = () => {
                     }}
                   >
                     <div className="wp-card-header">
-                      <h3 className="wp-card-title">
-                        {wp.lemma}
-                      </h3>
+                      <label
+                        className="wp-select-checkbox"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(wp.id)}
+                          onChange={() => toggleSelect(wp.id)}
+                          aria-label={`WordPack ${wp.lemma} を選択`}
+                        />
+                      </label>
+                      <div className="wp-card-header-main">
+                        <h3 className="wp-card-title">{wp.lemma}</h3>
+                      </div>
                       <div className="wp-card-actions" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
@@ -650,12 +783,20 @@ export const WordPackListPanel: React.FC = () => {
                     key={wp.id}
                     className="wp-index-item"
                     data-testid="wp-index-item"
-                    onClick={() => { 
-                      setPreviewWordPackId(wp.id); 
+                    onClick={() => {
+                      setPreviewWordPackId(wp.id);
                       setPreviewOpen(true);
                       setModalOpen(true);
                     }}
                   >
+                    <label className="wp-select-checkbox" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(wp.id)}
+                        onChange={() => toggleSelect(wp.id)}
+                        aria-label={`WordPack ${wp.lemma} を選択`}
+                      />
+                    </label>
                     <div className="wp-index-title-row" data-testid="wp-index-title-row">
                       <span className="wp-index-title">{wp.lemma}</span>
                       {(showAllSense || senseOpenIds.has(wp.id)) && (

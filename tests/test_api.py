@@ -317,6 +317,54 @@ def test_delete_example_from_word_pack(client):
     assert after == max(0, before - 1)
 
 
+def test_bulk_delete_examples(client):
+    # WordPack を作成して例文を追加
+    resp_create = client.post("/api/word/pack", json={"lemma": "bulk-delete"})
+    assert resp_create.status_code == 200
+
+    # 対象の WordPack ID を取得
+    resp_list = client.get("/api/word/packs")
+    assert resp_list.status_code == 200
+    items = resp_list.json().get("items", [])
+    pack_id = next((it["id"] for it in items if it.get("lemma") == "bulk-delete"), None)
+    assert pack_id, "created word pack should exist"
+
+    # 例文を直接追加しておく
+    from backend.store import store  # 遅延インポートでテスト用のストアを利用
+
+    appended = store.append_examples(
+        pack_id,
+        "Dev",
+        [
+            {"en": "bulk example 1", "ja": "一括削除テスト1"},
+            {"en": "bulk example 2", "ja": "一括削除テスト2"},
+            {"en": "bulk example 3", "ja": "一括削除テスト3"},
+        ],
+    )
+    assert appended == 3
+
+    # 追加直後の一覧から example id を取得
+    resp_examples = client.get("/api/word/examples?limit=10&offset=0")
+    assert resp_examples.status_code == 200
+    payload = resp_examples.json()
+    target_ids = [it["id"] for it in payload.get("items", []) if it.get("word_pack_id") == pack_id]
+    assert len(target_ids) == 3
+
+    # 2件だけ削除要求
+    resp_delete = client.post("/api/word/examples/bulk-delete", json={"ids": target_ids[:2]})
+    assert resp_delete.status_code == 200
+    delete_body = resp_delete.json()
+    assert delete_body.get("deleted") == 2
+    assert delete_body.get("not_found") == []
+
+    # 残っているのは1件のみ
+    resp_examples_after = client.get("/api/word/examples?limit=10&offset=0")
+    assert resp_examples_after.status_code == 200
+    payload_after = resp_examples_after.json()
+    remaining = [it for it in payload_after.get("items", []) if it.get("word_pack_id") == pack_id]
+    assert len(remaining) == 1
+    assert remaining[0]["en"] == "bulk example 3"
+
 def test_word_pack_list_pagination(client):
     """WordPack一覧のページネーション機能のテスト"""
     # 複数のWordPackを生成

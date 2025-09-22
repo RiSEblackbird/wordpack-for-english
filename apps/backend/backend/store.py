@@ -424,6 +424,57 @@ class AppSQLiteStore:
                 remaining = len(ids)
                 return remaining
 
+    def delete_examples_by_ids(self, example_ids: Iterable[int]) -> tuple[int, list[int]]:
+        """例文ID一覧を受け取り、一括削除する。
+
+        戻り値は (削除件数, 未削除ID一覧)。同一カテゴリの再採番も行う。
+        """
+        normalized: list[int] = []
+        for eid in example_ids:
+            try:
+                normalized.append(int(eid))
+            except (TypeError, ValueError):
+                continue
+        if not normalized:
+            return 0, []
+
+        deleted = 0
+        not_found: list[int] = []
+        touched: set[tuple[str, str]] = set()
+
+        with self._conn() as conn:
+            with conn:
+                for example_id in normalized:
+                    cur = conn.execute(
+                        "SELECT word_pack_id, category FROM word_pack_examples WHERE id = ?;",
+                        (example_id,),
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        not_found.append(example_id)
+                        continue
+                    conn.execute("DELETE FROM word_pack_examples WHERE id = ?;", (example_id,))
+                    deleted += 1
+                    touched.add((row["word_pack_id"], row["category"]))
+
+                for word_pack_id, category in touched:
+                    cur2 = conn.execute(
+                        """
+                        SELECT id FROM word_pack_examples
+                        WHERE word_pack_id = ? AND category = ?
+                        ORDER BY position ASC, id ASC;
+                        """,
+                        (word_pack_id, category),
+                    )
+                    ids = [int(r["id"]) for r in cur2.fetchall()]
+                    for new_pos, rid in enumerate(ids):
+                        conn.execute(
+                            "UPDATE word_pack_examples SET position = ? WHERE id = ?;",
+                            (new_pos, rid),
+                        )
+
+        return deleted, not_found
+
     # --- WordPack helpers ---
     def find_word_pack_id_by_lemma(self, lemma: str) -> Optional[str]:
         """見出し語から既存のWordPack IDを1件返す（更新日時降順）。無ければNone。"""

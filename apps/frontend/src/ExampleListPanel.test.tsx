@@ -144,6 +144,125 @@ describe('ExampleListPanel pagination offset behavior', () => {
 
     expect(firstTranslationButton).not.toBeDisabled();
   }, 15000);
+
+  it('選択した例文をまとめて削除できる', async () => {
+    const itemsFirstPage = [
+      {
+        id: 1,
+        word_pack_id: 'wp:test:1',
+        lemma: 'alpha',
+        category: 'Dev' as const,
+        en: 'example en 1',
+        ja: '例文 ja 1',
+        grammar_ja: null,
+        created_at: new Date().toISOString(),
+        word_pack_updated_at: null,
+      },
+      {
+        id: 2,
+        word_pack_id: 'wp:test:2',
+        lemma: 'beta',
+        category: 'CS' as const,
+        en: 'example en 2',
+        ja: '例文 ja 2',
+        grammar_ja: null,
+        created_at: new Date().toISOString(),
+        word_pack_updated_at: null,
+      },
+      {
+        id: 3,
+        word_pack_id: 'wp:test:3',
+        lemma: 'gamma',
+        category: 'LLM' as const,
+        en: 'example en 3',
+        ja: '例文 ja 3',
+        grammar_ja: null,
+        created_at: new Date().toISOString(),
+        word_pack_updated_at: null,
+      },
+    ];
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString();
+      const method = init?.method ?? 'GET';
+
+      if (url.endsWith('/api/config') && method === 'GET') {
+        return new Response(
+          JSON.stringify({ request_timeout_ms: 60000 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (url.startsWith('/api/word/packs') && method === 'GET') {
+        return new Response(
+          JSON.stringify({ items: [], total: 0, limit: 200, offset: 0 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (url.startsWith('/api/word/examples?') && method === 'GET') {
+        const remainingIds = (fetchMock as any)._deleted ? [3] : [1, 2, 3];
+        const items = itemsFirstPage.filter((it) => remainingIds.includes(it.id));
+        return new Response(
+          JSON.stringify({ items, total: items.length, limit: 200, offset: 0 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (url.endsWith('/api/word/examples/bulk-delete') && method === 'POST') {
+        const body = init?.body ? JSON.parse(init.body as string) : { ids: [] };
+        expect(body.ids).toEqual([1, 2]);
+        (fetchMock as any)._deleted = true;
+        return new Response(
+          JSON.stringify({ deleted: 2, not_found: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    render(<App />);
+    const user = userEvent.setup();
+
+    const examplesTabBtn = await screen.findByRole('button', { name: '例文一覧' });
+    await act(async () => {
+      await user.click(examplesTabBtn);
+    });
+
+    await screen.findByRole('heading', { name: '例文一覧' });
+    await screen.findByText('example en 1');
+
+    const checkbox1 = await screen.findByRole('checkbox', { name: '例文 example en 1 を選択' });
+    const checkbox2 = await screen.findByRole('checkbox', { name: '例文 example en 2 を選択' });
+    expect(checkbox1).not.toBeChecked();
+    expect(checkbox2).not.toBeChecked();
+
+    await act(async () => {
+      await user.click(checkbox1);
+      await user.click(checkbox2);
+    });
+
+    const bulkButton = await screen.findByRole('button', { name: '選択した例文を削除' });
+    expect(bulkButton).not.toBeDisabled();
+
+    await act(async () => {
+      await user.click(bulkButton);
+    });
+
+    const confirmYes = await screen.findByRole('button', { name: 'はい' });
+    await act(async () => {
+      await user.click(confirmYes);
+    });
+
+    await screen.findByText('例文を2件削除しました', undefined, { timeout: 5000 });
+
+    await waitFor(() => {
+      expect(screen.queryByText('example en 1')).not.toBeInTheDocument();
+      expect(screen.queryByText('example en 2')).not.toBeInTheDocument();
+      expect(screen.getByText('example en 3')).toBeInTheDocument();
+    });
+  }, 15000);
 });
 
 
