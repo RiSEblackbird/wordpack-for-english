@@ -22,6 +22,30 @@ const NAV_ITEMS: Array<{ key: Tab; label: string }> = [
 ];
 
 const SIDEBAR_ID = 'app-sidebar';
+const MAIN_MAX_WIDTH = 1000;
+const SIDEBAR_MAX_WIDTH = 280;
+const SIDEBAR_VIEWPORT_RATIO = 0.8;
+
+type SidebarMetrics = {
+  width: number;
+  leftMargin: number | null;
+  contentWidth: number | null;
+};
+
+const calculateSidebarMetrics = (open: boolean): SidebarMetrics => {
+  if (!open || typeof window === 'undefined') {
+    return { width: 0, leftMargin: null, contentWidth: null };
+  }
+
+  const viewportWidth = window.innerWidth;
+  const sidebarWidth = Math.min(SIDEBAR_MAX_WIDTH, viewportWidth * SIDEBAR_VIEWPORT_RATIO);
+  const baseMargin = Math.max((viewportWidth - MAIN_MAX_WIDTH) / 2, 0);
+  const leftMargin = Math.max(baseMargin, sidebarWidth);
+  const availableWidth = Math.max(viewportWidth - leftMargin, 0);
+  const contentWidth = Math.min(MAIN_MAX_WIDTH, availableWidth);
+
+  return { width: sidebarWidth, leftMargin, contentWidth };
+};
 
 const HamburgerIcon: React.FC = () => (
   <svg
@@ -47,8 +71,9 @@ export const App: React.FC = () => {
   const focusRef = useRef<HTMLElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
-  const sidebarCloseRef = useRef<HTMLButtonElement>(null);
+  const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
+  const [sidebarMetrics, setSidebarMetrics] = useState<SidebarMetrics>(() => calculateSidebarMetrics(false));
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -67,13 +92,35 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (isSidebarOpen) {
       hasSidebarOpened.current = true;
-      sidebarCloseRef.current?.focus();
+      firstSidebarItemRef.current?.focus();
     } else if (hasSidebarOpened.current) {
       sidebarToggleRef.current?.focus();
     }
   }, [isSidebarOpen]);
 
-  const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
+  useEffect(() => {
+    if (!isSidebarOpen) {
+      setSidebarMetrics(calculateSidebarMetrics(false));
+      return;
+    }
+
+    const updateMetrics = () => setSidebarMetrics(calculateSidebarMetrics(true));
+    updateMetrics();
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', updateMetrics);
+      return () => window.removeEventListener('resize', updateMetrics);
+    }
+
+    return () => undefined;
+  }, [isSidebarOpen]);
+
+  const toggleSidebar = () =>
+    setIsSidebarOpen((prev) => {
+      const next = !prev;
+      setSidebarMetrics(calculateSidebarMetrics(next));
+      return next;
+    });
 
   const handleSelectTab = (next: Tab) => {
     setTab(next);
@@ -87,8 +134,18 @@ export const App: React.FC = () => {
             <div
               className={`app-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
               style={{
-                ['--main-max-width' as any]: '1000px',
-                ['--sidebar-width' as any]: isSidebarOpen ? 'min(280px, 80vw)' : '0px',
+                ['--main-max-width' as any]: `${MAIN_MAX_WIDTH}px`,
+                ['--sidebar-width' as any]: `${sidebarMetrics.width}px`,
+                width:
+                  isSidebarOpen && sidebarMetrics.contentWidth !== null
+                    ? `${sidebarMetrics.contentWidth}px`
+                    : undefined,
+                marginLeft:
+                  isSidebarOpen && sidebarMetrics.leftMargin !== null
+                    ? `${sidebarMetrics.leftMargin}px`
+                    : undefined,
+                marginRight:
+                  isSidebarOpen && sidebarMetrics.leftMargin !== null ? 'auto' : undefined,
               }}
             >
               <ThemeApplier />
@@ -175,8 +232,6 @@ export const App: React.FC = () => {
             transition: margin-left 0.3s ease, width 0.3s ease;
           }
           .app-shell.sidebar-open {
-            margin-left: var(--sidebar-width);
-            margin-right: auto;
             width: min(var(--main-max-width), calc(100% - var(--sidebar-width)));
           }
           .sidebar {
@@ -200,6 +255,7 @@ export const App: React.FC = () => {
             display: grid;
             gap: 1rem;
             align-content: flex-start;
+            padding-top: 0.5rem;
           }
           header {
             padding-top: 1rem;
@@ -237,16 +293,6 @@ export const App: React.FC = () => {
                 aria-hidden={isSidebarOpen ? 'false' : 'true'}
               >
                 <nav className="sidebar-nav" aria-label="主要メニュー">
-                  <button
-                    ref={sidebarCloseRef}
-                    type="button"
-                    className="hamburger-button"
-                    aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
-                    onClick={toggleSidebar}
-                    tabIndex={isSidebarOpen ? 0 : -1}
-                  >
-                    <HamburgerIcon />
-                  </button>
                   {NAV_ITEMS.map((item) => (
                     <button
                       key={item.key}
@@ -256,6 +302,7 @@ export const App: React.FC = () => {
                       aria-current={tab === item.key ? 'page' : undefined}
                       onClick={() => handleSelectTab(item.key)}
                       tabIndex={isSidebarOpen ? 0 : -1}
+                      ref={item.key === NAV_ITEMS[0].key ? firstSidebarItemRef : undefined}
                     >
                       {item.label}
                     </button>
