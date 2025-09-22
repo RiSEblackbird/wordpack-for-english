@@ -18,6 +18,8 @@ from ..models.word import (
     ExampleCategory,
     ExampleListResponse,
     ExampleListItem,
+    ExamplesBulkDeleteRequest,
+    ExamplesBulkDeleteResponse,
 )
 from ..store import store
 from ..sense_title import choose_sense_title
@@ -578,3 +580,15 @@ async def list_examples(
             )
         )
     return ExampleListResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.post(
+    "/examples/bulk-delete",
+    response_model=ExamplesBulkDeleteResponse,
+    summary="例文をID指定で一括削除",
+)
+async def bulk_delete_examples(req: ExamplesBulkDeleteRequest) -> ExamplesBulkDeleteResponse:
+    """例文IDのリストを受け取り、一括で削除する。"""
+
+    deleted, not_found = store.delete_examples_by_ids(req.ids)
+    return ExamplesBulkDeleteResponse(deleted=deleted, not_found=not_found)

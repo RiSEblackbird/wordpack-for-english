@@ -14,6 +14,7 @@
 - 文章インポートと関連 WordPack の紐付け
 - OpenAI gpt-4o-mini-tts を用いた例文／日本語訳／インポート文章／WordPack語彙（一覧・プレビュー）の音声再生（「音声」ボタン）
 - 保存済みWordPack一覧で語義タイトルを即座に確認できる「語義」ボタンと「語義一括表示」スイッチ
+- WordPack・文章・例文の一覧で複数選択して一括削除できる管理機能
 - 例文一覧で訳文を一括開閉できる「訳一括表示」スイッチ
 
 ## クイックスタート
@@ -70,6 +71,7 @@ npm run test
 
 ## REST API（抜粋）
 - `POST /api/word/pack` … WordPack を生成して語義タイトル・語義・例文・語源・学習カード要点を返却
+- `POST /api/word/examples/bulk-delete` … 例文IDの配列を受け取り一括削除
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts で読み上げた音声（audio/mpeg）をストリーミング返却
 
 ## ディレクトリ

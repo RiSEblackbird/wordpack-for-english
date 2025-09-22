@@ -38,6 +38,7 @@ export const ArticleListPanel: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [preview, setPreview] = useState<ArticleDetailResponse | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
 
   const load = async (newOffset = 0) => {
@@ -58,6 +59,48 @@ export const ArticleListPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const valid = new Set(items.map((it) => it.id));
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (valid.has(id)) next.add(id);
+      });
+      if (next.size === prev.size) {
+        return prev;
+      }
+      return next;
+    });
+  }, [items]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const allVisibleSelected = items.length > 0 && items.every((it) => selectedIds.has(it.id));
+
+  const toggleVisibleSelection = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) {
+        items.forEach((it) => next.delete(it.id));
+      } else {
+        items.forEach((it) => next.add(it.id));
+      }
+      return next;
+    });
   };
 
   const open = async (id: string) => {
@@ -85,6 +128,12 @@ export const ArticleListPanel: React.FC = () => {
     try {
       await fetchJson(`${settings.apiBase}/article/${item.id}`, { method: 'DELETE' });
       await load(offset);
+      setSelectedIds((prev) => {
+        if (!prev.has(item.id)) return prev;
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
       setMsg({ kind: 'status', text: '削除しました' });
     } catch (e) {
       const m = e instanceof ApiError ? e.message : '削除に失敗しました';
@@ -172,24 +221,95 @@ export const ArticleListPanel: React.FC = () => {
 
   const hasNext = offset + limit < total;
   const hasPrev = offset > 0;
+  const selectedCount = selectedIds.size;
+
+  const deleteSelectedArticles = async () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    const confirmed = await confirmDialog(`選択中の文章（${ids.length}件）`);
+    if (!confirmed) return;
+    setLoading(true);
+    setMsg(null);
+    let deleted = 0;
+    let failure: string | null = null;
+    try {
+      for (const id of ids) {
+        try {
+          await fetchJson(`${settings.apiBase}/article/${id}`, { method: 'DELETE' });
+          deleted += 1;
+        } catch (error) {
+          const message = error instanceof ApiError ? error.message : '削除に失敗しました';
+          failure = message;
+          break;
+        }
+      }
+      if (deleted > 0) {
+        await load(offset);
+        setSelectedIds(new Set());
+      }
+      if (failure) {
+        const text = deleted > 0
+          ? `文章を${deleted}件削除しましたが一部失敗しました: ${failure}`
+          : `文章の削除に失敗しました: ${failure}`;
+        setMsg({ kind: 'alert', text });
+      } else if (deleted > 0) {
+        setMsg({ kind: 'status', text: `文章を${deleted}件削除しました` });
+      } else {
+        setMsg({ kind: 'alert', text: '削除対象がありません' });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <section>
       <style>{`
         .al-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.5rem; }
         .al-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem; background: var(--color-surface); cursor: pointer; }
+        .al-card-header { display: flex; align-items: center; gap: 0.5rem; }
+        .al-card-title-row { display: flex; align-items: center; gap: 0.5rem; flex: 1; }
+        .wp-selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0; font-size: 0.9em; }
+        .wp-selection-bar button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
+        .wp-selection-bar button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .wp-select-checkbox { display: inline-flex; align-items: center; justify-content: center; }
+        .wp-select-checkbox input { width: 1rem; height: 1rem; cursor: pointer; }
       `}</style>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h2>インポート済み文章</h2>
         <button onClick={() => load(offset)} disabled={loading}>更新</button>
       </div>
       {msg && <div role={msg.kind}>{msg.text}</div>}
+      <div className="wp-selection-bar" role="group" aria-label="文章選択操作">
+        <span>選択中: {selectedCount}件</span>
+        <button type="button" onClick={toggleVisibleSelection} disabled={items.length === 0}>
+          {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
+        </button>
+        <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
+          全選択解除
+        </button>
+        <button
+          type="button"
+          onClick={deleteSelectedArticles}
+          disabled={selectedCount === 0 || loading}
+        >選択した文章を削除</button>
+      </div>
       <div className="al-grid">
         {items.map((it) => (
           <div key={it.id} className="al-card" onClick={() => open(it.id)}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <strong style={{ flex: 1, fontSize: '12px' }}>{it.title_en}</strong>
-              <button onClick={(e) => { e.stopPropagation(); del(it); }} aria-label={`delete-article-${it.id}`}>削除</button>
+            <div className="al-card-header">
+              <label className="wp-select-checkbox" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(it.id)}
+                  onChange={() => toggleSelect(it.id)}
+                  aria-label={`文章 ${it.title_en} を選択`}
+                />
+              </label>
+              <div className="al-card-title-row">
+                <strong style={{ flex: 1, fontSize: '12px' }}>{it.title_en}</strong>
+                <button onClick={(e) => { e.stopPropagation(); del(it); }} aria-label={`delete-article-${it.id}`}>削除</button>
+              </div>
             </div>
             <div style={{ fontSize: '10px', color: 'var(--color-subtle)' }}>更新: {formatDateJst(it.updated_at)}</div>
           </div>

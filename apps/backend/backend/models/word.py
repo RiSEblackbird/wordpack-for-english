@@ -156,6 +156,15 @@ class ExampleListResponse(BaseModel):
     offset: int
 
 
+class ExamplesBulkDeleteRequest(BaseModel):
+    ids: List[int] = Field(default_factory=list, description="削除対象の例文ID一覧", min_length=1, max_length=200)
+
+
+class ExamplesBulkDeleteResponse(BaseModel):
+    deleted: int = Field(description="削除に成功した件数")
+    not_found: List[int] = Field(default_factory=list, description="削除できなかったID一覧（未存在など）")
+
+
 class Pronunciation(BaseModel):
     ipa_GA: Optional[str] = None
     ipa_RP: Optional[str] = None
