@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { useConfirmDialog } from '../ConfirmDialogContext';
+import { useNotifications } from '../NotificationsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
+import { regenerateWordPackRequest } from '../lib/wordpack';
 import { Modal } from './Modal';
 import { ListControls } from './ListControls';
 import { WordPackPanel } from './WordPackPanel';
@@ -120,9 +122,20 @@ interface WordPackListResponse {
 }
 
 export const WordPackListPanel: React.FC = () => {
-  const { settings: { apiBase } } = useSettings();
+  const { settings } = useSettings();
+  const {
+    apiBase,
+    pronunciationEnabled,
+    regenerateScope,
+    requestTimeoutMs,
+    temperature,
+    reasoningEffort,
+    textVerbosity,
+    model,
+  } = settings;
   const { setModalOpen } = useModal();
   const confirmDialog = useConfirmDialog();
+  const { add: addNotification, update: updateNotification } = useNotifications();
   const [wordPacks, setWordPacks] = useState<WordPackListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
@@ -142,6 +155,7 @@ export const WordPackListPanel: React.FC = () => {
   const [senseOpenIds, setSenseOpenIds] = useState<Set<string>>(() => new Set());
   const [showAllSense, setShowAllSense] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [generatingIds, setGeneratingIds] = useState<Set<string>>(() => new Set());
   // グリッドの可視幅に基づき列数を算出（最大2列）
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [columnCount, setColumnCount] = useState<number>(() =>
@@ -236,6 +250,62 @@ export const WordPackListPanel: React.FC = () => {
       setLoading(false);
     }
   }, [apiBase]);
+
+  const generateWordPack = useCallback(async (wordPack: WordPackListItem) => {
+    const id = wordPack.id;
+    const lemmaLabel = (wordPack.lemma ?? '').trim() || 'WordPack';
+    setGeneratingIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    setMsg(null);
+    try {
+      await regenerateWordPackRequest({
+        apiBase,
+        wordPackId: id,
+        settings: {
+          pronunciationEnabled,
+          regenerateScope,
+          requestTimeoutMs,
+          temperature,
+          reasoningEffort,
+          textVerbosity,
+        },
+        model,
+        lemma: lemmaLabel,
+        notify: { add: addNotification, update: updateNotification },
+        messages: {
+          progress: 'WordPackを生成しています',
+          success: '生成が完了しました',
+          failure: 'WordPackの生成に失敗しました',
+        },
+      });
+      setMsg({ kind: 'status', text: `【${lemmaLabel}】の例文生成が完了しました` });
+    } catch (e) {
+      const m = e instanceof ApiError ? e.message : 'WordPackの生成に失敗しました';
+      setMsg({ kind: 'alert', text: m });
+    } finally {
+      setGeneratingIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }, [
+    addNotification,
+    apiBase,
+    model,
+    pronunciationEnabled,
+    regenerateScope,
+    requestTimeoutMs,
+    temperature,
+    textVerbosity,
+    reasoningEffort,
+    updateNotification,
+  ]);
 
   const deleteWordPack = useCallback(async (wordPack: WordPackListItem) => {
     const targetLabel = wordPack.lemma?.trim() || 'WordPack';
@@ -529,6 +599,9 @@ export const WordPackListPanel: React.FC = () => {
         .wp-card-header-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
         .wp-sense-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; border: 1px solid #5c6bc0; background: #f5f7ff; color: #3f51b5; cursor: pointer; }
         .wp-sense-btn[aria-pressed="true"] { background: #e8eaf6; border-color: #3f51b5; color: #283593; }
+        .wp-generate-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; border: 1px solid #2e7d32; background: #e8f5e9; color: #1b5e20; cursor: pointer; }
+        .wp-generate-btn:hover:not(:disabled) { background: #d0f0d5; }
+        .wp-generate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .wp-card-sense-title { margin: 0.35rem 0 0.2rem; font-size: 0.70em; color: #2f2f2f; background: rgba(255,255,255,0.86); padding: 0.25rem 0.35rem; border-left: 3px solid #5c6bc0; border-radius: 4px; line-height: 1.4; }
         .wp-badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 999px; font-size: 0.75em; margin-left: 0.5rem; }
         .wp-badge.empty { background: #fff3cd; color: #7a5b00; border: 1px solid #ffe08a; }
@@ -710,6 +783,17 @@ export const WordPackListPanel: React.FC = () => {
                             toggleSenseOpen(wp.id);
                           }}
                         >語義</button>
+                        {wp.is_empty && (
+                          <button
+                            type="button"
+                            className="wp-generate-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              generateWordPack(wp);
+                            }}
+                            disabled={loading || generatingIds.has(wp.id)}
+                          >生成</button>
+                        )}
                         <TTSButton text={wp.lemma} className="wp-card-tts-btn" />
                         <DeleteButton
                           onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
@@ -815,6 +899,17 @@ export const WordPackListPanel: React.FC = () => {
                           toggleSenseOpen(wp.id);
                         }}
                       >語義</button>
+                      {wp.is_empty && (
+                        <button
+                          type="button"
+                          className="wp-generate-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            generateWordPack(wp);
+                          }}
+                          disabled={loading || generatingIds.has(wp.id)}
+                        >生成</button>
+                      )}
                       <TTSButton text={wp.lemma} className="wp-index-tts-btn" />
                       <DeleteButton
                         onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
