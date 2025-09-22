@@ -38,12 +38,15 @@ describe('App navigation', () => {
     const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
     await user.click(openButton);
 
+    const sidebar = screen.getByLabelText('アプリ内共通メニュー');
+    expect(sidebar).toHaveAttribute('aria-hidden', 'false');
+
     const examplesButton = await screen.findByRole('button', { name: '例文一覧' });
     await user.click(examplesButton);
 
     expect(await screen.findByRole('heading', { name: '例文一覧' })).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByLabelText('サイドバーを閉じる')).not.toBeInTheDocument();
+      expect(sidebar).toHaveAttribute('aria-hidden', 'true');
     });
   });
 });

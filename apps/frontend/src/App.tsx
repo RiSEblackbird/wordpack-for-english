@@ -159,23 +159,23 @@ export const App: React.FC = () => {
             cursor: pointer;
             transition: background 0.2s ease, color 0.2s ease;
           }
+          .hamburger-toggle {
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 980;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+            background: var(--color-surface);
+          }
+          .hamburger-toggle[aria-expanded='true'] {
+            box-shadow: none;
+          }
           .hamburger-button:hover {
             background: var(--color-neutral-surface);
           }
           .hamburger-button:focus-visible {
             outline: 2px solid var(--color-accent);
             outline-offset: 2px;
-          }
-          .sidebar-overlay {
-            position: fixed;
-            inset: 0;
-            background: var(--color-inverse-overlay);
-            backdrop-filter: blur(2px);
-            border: none;
-            margin: 0;
-            padding: 0;
-            cursor: pointer;
-            z-index: 900;
           }
           .sidebar {
             position: fixed;
@@ -198,6 +198,12 @@ export const App: React.FC = () => {
             display: grid;
             gap: 1rem;
             align-content: flex-start;
+          }
+          header {
+            padding-top: 1rem;
+          }
+          .header-bar {
+            padding-left: 3.5rem;
           }
           .sidebar-nav-button {
             font-size: 1rem;
@@ -222,20 +228,11 @@ export const App: React.FC = () => {
             outline-offset: 2px;
           }
         `}</style>
-              {isSidebarOpen && (
-                <button
-                  type="button"
-                  className="sidebar-overlay"
-                  aria-label="サイドバーを閉じる"
-                  onClick={() => setIsSidebarOpen(false)}
-                  tabIndex={-1}
-                />
-              )}
               <aside
                 id={SIDEBAR_ID}
                 className="sidebar"
                 aria-label="アプリ内共通メニュー"
-                aria-hidden={isSidebarOpen ? undefined : true}
+                aria-hidden={isSidebarOpen ? 'false' : 'true'}
               >
                 <nav className="sidebar-nav" aria-label="主要メニュー">
                   <button
@@ -268,7 +265,7 @@ export const App: React.FC = () => {
                   <button
                     ref={sidebarToggleRef}
                     type="button"
-                    className="hamburger-button"
+                    className="hamburger-button hamburger-toggle"
                     aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
                     aria-expanded={isSidebarOpen}
                     aria-controls={SIDEBAR_ID}
