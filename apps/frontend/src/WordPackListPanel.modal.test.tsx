@@ -25,7 +25,7 @@ describe('WordPackListPanel modal preview', () => {
         const now = new Date();
         const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-        
+
         return new Response(
           JSON.stringify({
             items: [
@@ -63,7 +63,14 @@ describe('WordPackListPanel modal preview', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
-      
+
+      if (url.endsWith('/api/word/packs/wp:test:1/regenerate')) {
+        return new Response(
+          JSON.stringify({ message: 'regenerating' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
       if (url.endsWith('/api/word/packs/wp:test:1')) {
         return new Response(
           JSON.stringify({
@@ -417,6 +424,38 @@ describe('WordPackListPanel modal preview', () => {
     });
     await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(3));
   }, 10000);
+
+  it('例文未生成のWordPackに生成ボタンが表示され、押下で生成APIを呼び出す', async () => {
+    const fetchMock = setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.keyboard('{Alt>}{4}{/Alt}');
+    });
+
+    const cards = await screen.findAllByTestId('wp-card');
+    const targetCard = cards.find((card) => /delta/i.test(card.textContent || ''));
+    expect(targetCard).toBeDefined();
+    const generateButton = within(targetCard as HTMLElement).getByRole('button', { name: '生成' });
+    expect(generateButton).toBeEnabled();
+
+    await act(async () => {
+      await user.click(generateButton);
+    });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/word/packs/wp:test:1/regenerate',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('【delta】の例文生成が完了しました')).toBeInTheDocument(),
+    );
+  });
 
   it('検索機能（前方/後方/部分一致と適用操作）が正しく動作する', async () => {
     setupFetchMocks();
