@@ -1,4 +1,4 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
 import '@testing-library/jest-dom';
@@ -29,5 +29,21 @@ describe('App navigation', () => {
     expect(screen.getByRole('button', { name: '生成' })).toBeInTheDocument();
     // モデル選択の存在
     expect(screen.getByLabelText('モデル')).toBeInTheDocument();
+  });
+
+  it('allows switching tabs via sidebar navigation', async () => {
+    render(<App />);
+    const user = userEvent.setup();
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await user.click(openButton);
+
+    const examplesButton = await screen.findByRole('button', { name: '例文一覧' });
+    await user.click(examplesButton);
+
+    expect(await screen.findByRole('heading', { name: '例文一覧' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByLabelText('サイドバーを閉じる')).not.toBeInTheDocument();
+    });
   });
 });

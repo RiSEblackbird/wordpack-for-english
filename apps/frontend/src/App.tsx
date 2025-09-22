@@ -14,10 +14,41 @@ import { useSettings } from './SettingsContext';
 
 type Tab = 'wordpack' | 'article' | 'examples' | 'settings';
 
+const NAV_ITEMS: Array<{ key: Tab; label: string }> = [
+  { key: 'wordpack', label: 'WordPack' },
+  { key: 'article', label: '文章インポート' },
+  { key: 'examples', label: '例文一覧' },
+  { key: 'settings', label: '設定' },
+];
+
+const SIDEBAR_ID = 'app-sidebar';
+
+const HamburgerIcon: React.FC = () => (
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <line x1="4" y1="6" x2="20" y2="6" />
+    <line x1="4" y1="12" x2="20" y2="12" />
+    <line x1="4" y1="18" x2="20" y2="18" />
+  </svg>
+);
+
 export const App: React.FC = () => {
   const [tab, setTab] = useState<Tab>('wordpack');
   const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
   const focusRef = useRef<HTMLElement>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const sidebarToggleRef = useRef<HTMLButtonElement>(null);
+  const sidebarCloseRef = useRef<HTMLButtonElement>(null);
+  const hasSidebarOpened = useRef(false);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -33,7 +64,35 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  useEffect(() => {}, [tab]);
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (isSidebarOpen) {
+      hasSidebarOpened.current = true;
+      sidebarCloseRef.current?.focus();
+    } else if (hasSidebarOpened.current) {
+      sidebarToggleRef.current?.focus();
+    }
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [tab]);
+
+  const toggleSidebar = () => setIsSidebarOpen((prev) => !prev);
+
+  const handleSelectTab = (next: Tab) => {
+    setTab(next);
+  };
 
   return (
     <SettingsProvider>
@@ -81,9 +140,142 @@ export const App: React.FC = () => {
           nav { display: flex; gap: 0.5rem; }
           nav button[aria-selected='true'] { font-weight: bold; }
           main, header, footer, nav { padding: 0.5rem; }
+          .header-bar {
+            height: 50px;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+          }
+          .hamburger-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            color: var(--color-text);
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+          }
+          .hamburger-button:hover {
+            background: var(--color-neutral-surface);
+          }
+          .hamburger-button:focus-visible {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 2px;
+          }
+          .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--color-inverse-overlay);
+            backdrop-filter: blur(2px);
+            border: none;
+            margin: 0;
+            padding: 0;
+            cursor: pointer;
+            z-index: 900;
+          }
+          .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: min(280px, 80vw);
+            background: var(--color-surface);
+            box-shadow: 2px 0 20px rgba(0, 0, 0, 0.2);
+            padding: 2rem 1.5rem;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            z-index: 950;
+            display: grid;
+          }
+          .sidebar[aria-hidden='false'] {
+            transform: translateX(0);
+          }
+          .sidebar-nav {
+            display: grid;
+            gap: 1rem;
+            align-content: flex-start;
+          }
+          .sidebar-nav-button {
+            font-size: 1rem;
+            border: none;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            text-align: left;
+            background: transparent;
+            color: var(--color-text);
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease;
+          }
+          .sidebar-nav-button:hover {
+            background: var(--color-neutral-surface);
+          }
+          .sidebar-nav-button[aria-pressed='true'] {
+            background: var(--color-accent);
+            color: #ffffff;
+          }
+          .sidebar-nav-button:focus-visible {
+            outline: 2px solid var(--color-accent);
+            outline-offset: 2px;
+          }
         `}</style>
+              {isSidebarOpen && (
+                <button
+                  type="button"
+                  className="sidebar-overlay"
+                  aria-label="サイドバーを閉じる"
+                  onClick={() => setIsSidebarOpen(false)}
+                  tabIndex={-1}
+                />
+              )}
+              <aside
+                id={SIDEBAR_ID}
+                className="sidebar"
+                aria-label="アプリ内共通メニュー"
+                aria-hidden={isSidebarOpen ? undefined : true}
+              >
+                <nav className="sidebar-nav" aria-label="主要メニュー">
+                  <button
+                    ref={sidebarCloseRef}
+                    type="button"
+                    className="hamburger-button"
+                    aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
+                    onClick={toggleSidebar}
+                    tabIndex={isSidebarOpen ? 0 : -1}
+                  >
+                    <HamburgerIcon />
+                  </button>
+                  {NAV_ITEMS.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className="sidebar-nav-button"
+                      aria-pressed={tab === item.key}
+                      aria-current={tab === item.key ? 'page' : undefined}
+                      onClick={() => handleSelectTab(item.key)}
+                      tabIndex={isSidebarOpen ? 0 : -1}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </nav>
+              </aside>
               <header>
-                <div style={{ height: '50px', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div className="header-bar">
+                  <button
+                    ref={sidebarToggleRef}
+                    type="button"
+                    className="hamburger-button"
+                    aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
+                    aria-expanded={isSidebarOpen}
+                    aria-controls={SIDEBAR_ID}
+                    onClick={toggleSidebar}
+                  >
+                    <HamburgerIcon />
+                  </button>
                   <h1>WordPack</h1>
                   <a
                     href="https://github.com/RiSEblackbird/wordpack-for-english"
@@ -112,12 +304,6 @@ export const App: React.FC = () => {
                   </a>
                 </div>
               </header>
-              <nav>
-                <button onClick={() => setTab('wordpack')} aria-selected={tab === 'wordpack'}>WordPack</button>
-                <button onClick={() => setTab('article')} aria-selected={tab === 'article'}>文章インポート</button>
-                <button onClick={() => setTab('examples')} aria-selected={tab === 'examples'}>例文一覧</button>
-                <button onClick={() => setTab('settings')} aria-selected={tab === 'settings'}>設定</button>
-              </nav>
               <main>
                 {tab === 'wordpack' && (
                   <>

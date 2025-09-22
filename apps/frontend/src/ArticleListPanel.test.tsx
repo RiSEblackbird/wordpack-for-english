@@ -64,16 +64,24 @@ describe('ArticleListPanel bulk delete', () => {
     return mock;
   }
 
+  const openTab = async (user: ReturnType<typeof userEvent.setup>, label: string) => {
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
+    const tabButton = await screen.findByRole('button', { name: label });
+    await act(async () => {
+      await user.click(tabButton);
+    });
+  };
+
   it('allows selecting multiple articles and deleting them together', async () => {
     setupFetchMocks();
     render(<App />);
 
     const user = userEvent.setup();
 
-    const articleTabBtn = await screen.findByRole('button', { name: '文章インポート' });
-    await act(async () => {
-      await user.click(articleTabBtn);
-    });
+    await openTab(user, '文章インポート');
 
     await waitFor(() => expect(screen.getByText('インポート済み文章')).toBeInTheDocument());
 

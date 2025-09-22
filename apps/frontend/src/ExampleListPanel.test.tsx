@@ -11,6 +11,17 @@ describe('ExampleListPanel pagination offset behavior', () => {
     try { sessionStorage.clear(); } catch {}
   });
 
+  const openTab = async (user: ReturnType<typeof userEvent.setup>, label: string) => {
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
+    const tabButton = await screen.findByRole('button', { name: label });
+    await act(async () => {
+      await user.click(tabButton);
+    });
+  };
+
   function setupFetchMocks() {
     const mock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: any) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
@@ -59,10 +70,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
     const user = userEvent.setup();
 
     // 例文一覧タブへ（設定ロード完了を待ってボタンが出てからクリック）
-    const examplesTabBtn = await screen.findByRole('button', { name: '例文一覧' });
-    await act(async () => {
-      await user.click(examplesTabBtn);
-    });
+    await openTab(user, '例文一覧');
 
     // 初期ロードのレンジ表記とボタン状態（見出しをheadingロールで特定）
     await screen.findByRole('heading', { name: '例文一覧' });
@@ -108,10 +116,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
 
     const user = userEvent.setup();
 
-    const examplesTabBtn = await screen.findByRole('button', { name: '例文一覧' });
-    await act(async () => {
-      await user.click(examplesTabBtn);
-    });
+    await openTab(user, '例文一覧');
 
     await screen.findByRole('heading', { name: '例文一覧' });
 
@@ -225,10 +230,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
     render(<App />);
     const user = userEvent.setup();
 
-    const examplesTabBtn = await screen.findByRole('button', { name: '例文一覧' });
-    await act(async () => {
-      await user.click(examplesTabBtn);
-    });
+    await openTab(user, '例文一覧');
 
     await screen.findByRole('heading', { name: '例文一覧' });
     await screen.findByText('example en 1');
