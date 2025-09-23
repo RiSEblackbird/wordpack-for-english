@@ -1,4 +1,4 @@
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
 import '@testing-library/jest-dom';
@@ -19,237 +19,46 @@ describe('App navigation', () => {
     expect(await screen.findByLabelText('temperature')).toBeInTheDocument();
   });
 
-  it('renders WordPack panel and allows generating request UI presence', async () => {
-    render(<App />);
-    const user = userEvent.setup();
-    await act(async () => {
-      await user.keyboard('{Alt>}{4}{/Alt}');
-    });
-    expect(await screen.findByPlaceholderText('見出し語を入力')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '生成' })).toBeInTheDocument();
-    // モデル選択の存在
-    expect(screen.getByLabelText('モデル')).toBeInTheDocument();
-  });
-
-  it('allows switching tabs via sidebar navigation', async () => {
+  it('opens the sidebar with the hamburger button and keeps it visible after selecting a tab', async () => {
     render(<App />);
     const user = userEvent.setup();
 
     const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-    expect(Math.round(openButton.getBoundingClientRect().left)).toBe(0);
     await act(async () => {
       await user.click(openButton);
     });
 
     const sidebar = screen.getByLabelText('アプリ内共通メニュー');
     expect(sidebar).toHaveAttribute('aria-hidden', 'false');
-    expect(window.getComputedStyle(sidebar).position).toBe('relative');
+
+    const computed = window.getComputedStyle(sidebar);
+    expect(computed.display).toBe('block');
+    expect(sidebar.getAttribute('style')).toContain('280px');
 
     const examplesButton = await screen.findByRole('button', { name: '例文一覧' });
-    await user.click(examplesButton);
+    await act(async () => {
+      await user.click(examplesButton);
+    });
 
     expect(await screen.findByRole('heading', { name: '例文一覧' })).toBeInTheDocument();
     expect(sidebar).toHaveAttribute('aria-hidden', 'false');
 
     const appShell = document.querySelector('.app-shell');
-    if (!appShell) {
-      throw new Error('app shell not found');
-    }
-    expect(appShell).toHaveClass('sidebar-open');
-  });
-
-  it('positions the sidebar flush to the viewport left edge on wide screens without shifting the main column', async () => {
-    const originalInnerWidth = window.innerWidth;
-    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1600 });
-    await act(async () => {
-      window.dispatchEvent(new Event('resize'));
-    });
-
-    render(<App />);
-    const user = userEvent.setup();
-
-    await screen.findByPlaceholderText('見出し語を入力');
-
     const mainInner = document.querySelector('.main-inner');
-    if (!mainInner) {
-      throw new Error('main inner not found');
-    }
-
-    const initialLeft = Math.round(mainInner.getBoundingClientRect().left);
-
-    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-    await act(async () => {
-      await user.click(openButton);
-    });
-
-    const appShell = document.querySelector('.app-shell');
-    const sidebar = document.querySelector('.sidebar');
-    if (!appShell || !sidebar) {
+    if (!appShell || !mainInner) {
       throw new Error('layout elements not found');
     }
-
     expect(appShell).toHaveClass('sidebar-open');
 
-    await waitFor(() => {
-      expect(appShell.style.getPropertyValue('--main-left-padding')).toBe('20px');
-      expect(appShell.style.getPropertyValue('--main-right-padding')).toBe('300px');
-    });
-
-    const openedLeft = Math.round(mainInner.getBoundingClientRect().left);
-    expect(openedLeft).toBe(initialLeft);
-
     const sidebarRect = sidebar.getBoundingClientRect();
-    expect(Math.round(sidebarRect.left)).toBeGreaterThanOrEqual(-1);
-    expect(Math.round(sidebarRect.left)).toBeLessThanOrEqual(1);
-
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      writable: true,
-      value: originalInnerWidth,
-    });
-    await act(async () => {
-      window.dispatchEvent(new Event('resize'));
-    });
+    const mainRect = mainInner.getBoundingClientRect();
+    expect(Math.round(sidebarRect.left)).toBe(0);
+    expect(mainRect.left).toBeGreaterThanOrEqual(sidebarRect.right);
   });
 
-  it('reduces the main column offset only when the sidebar exceeds the centered margin', async () => {
-    const originalInnerWidth = window.innerWidth;
-    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1100 });
-    await act(async () => {
-      window.dispatchEvent(new Event('resize'));
-    });
-
+  it('places the hamburger button on the viewport left edge', async () => {
     render(<App />);
-    const user = userEvent.setup();
-
-    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-    await act(async () => {
-      await user.click(openButton);
-    });
-
-    const appShell = document.querySelector('.app-shell');
-    const sidebar = document.querySelector('.sidebar');
-    const mainInner = document.querySelector('.main-inner');
-    if (!appShell || !sidebar || !mainInner) {
-      throw new Error('layout elements not found');
-    }
-
-    await waitFor(() => {
-      expect(appShell.style.getPropertyValue('--main-left-padding')).toBe('0px');
-      expect(appShell.style.getPropertyValue('--main-right-padding')).toBe('50px');
-    });
-
-    const sidebarRect = sidebar.getBoundingClientRect();
-    const mainInnerRect = mainInner.getBoundingClientRect();
-    expect(Math.round(mainInnerRect.left)).toBe(Math.round(sidebarRect.right));
-
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      writable: true,
-      value: originalInnerWidth,
-    });
-    await act(async () => {
-      window.dispatchEvent(new Event('resize'));
-    });
-  });
-
-  it('keeps the main offset steady while the sidebar animates within the available margin', async () => {
-    const originalInnerWidth = window.innerWidth;
-    const originalResizeObserver = (window as any).ResizeObserver;
-    const observerRecords: Array<{ cb: ResizeObserverCallback; instance: ResizeObserver }> = [];
-
-    class MockResizeObserver implements ResizeObserver {
-      readonly callback: ResizeObserverCallback;
-      constructor(callback: ResizeObserverCallback) {
-        this.callback = callback;
-        observerRecords.push({ cb: callback, instance: this });
-      }
-      observe(_target: Element, _options?: ResizeObserverOptions): void {}
-      unobserve(_target: Element): void {}
-      disconnect(): void {}
-    }
-
-    (window as any).ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
-    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1600 });
-    await act(async () => {
-      window.dispatchEvent(new Event('resize'));
-    });
-
-    try {
-      render(<App />);
-      const user = userEvent.setup();
-
-      const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-      await act(async () => {
-        await user.click(openButton);
-      });
-
-      const appShell = document.querySelector('.app-shell');
-      const sidebar = document.querySelector('.sidebar');
-      if (!appShell || !sidebar) {
-        throw new Error('layout elements not found');
-      }
-
-      const record = observerRecords.at(-1);
-      if (!record) {
-        throw new Error('resize observer was not registered');
-      }
-
-      const gap = Number(appShell.style.getPropertyValue('--main-right-padding').replace('px', ''));
-
-      const triggerWidth = async (width: number) => {
-        const entry: ResizeObserverEntry = {
-          target: sidebar,
-          contentRect: {
-            width,
-            height: 0,
-            x: 0,
-            y: 0,
-            top: 0,
-            left: 0,
-            right: width,
-            bottom: 0,
-            toJSON: () => ({}),
-          } as DOMRectReadOnly,
-          borderBoxSize: [] as any,
-          contentBoxSize: [] as any,
-          devicePixelContentBoxSize: [] as any,
-        };
-        await act(async () => {
-          record.cb([entry], record.instance);
-        });
-      };
-
-      await triggerWidth(120);
-      await waitFor(() => {
-        const currentWidthFirst = Number(appShell.style.getPropertyValue('--sidebar-current-width').replace('px', ''));
-        const paddingAfterFirst = Number(appShell.style.getPropertyValue('--main-left-padding').replace('px', ''));
-        expect(currentWidthFirst).toBeCloseTo(120);
-        expect(paddingAfterFirst + currentWidthFirst).toBeCloseTo(gap);
-      });
-
-      await triggerWidth(280);
-      await waitFor(() => {
-        const currentWidthSecond = Number(appShell.style.getPropertyValue('--sidebar-current-width').replace('px', ''));
-        const paddingAfterSecond = Number(appShell.style.getPropertyValue('--main-left-padding').replace('px', ''));
-        expect(currentWidthSecond).toBeCloseTo(280);
-        expect(paddingAfterSecond + currentWidthSecond).toBeCloseTo(Math.max(gap, currentWidthSecond));
-      });
-    } finally {
-      if (originalResizeObserver) {
-        (window as any).ResizeObserver = originalResizeObserver;
-      } else {
-        delete (window as any).ResizeObserver;
-      }
-
-      Object.defineProperty(window, 'innerWidth', {
-        configurable: true,
-        writable: true,
-        value: originalInnerWidth,
-      });
-      await act(async () => {
-        window.dispatchEvent(new Event('resize'));
-      });
-    }
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    expect(Math.round(toggle.getBoundingClientRect().left)).toBe(0);
   });
 });

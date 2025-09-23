@@ -23,32 +23,7 @@ const NAV_ITEMS: Array<{ key: Tab; label: string }> = [
 
 const SIDEBAR_ID = 'app-sidebar';
 const MAIN_MAX_WIDTH = 1000;
-const SIDEBAR_MAX_WIDTH = 280;
-const SIDEBAR_VIEWPORT_RATIO = 0.8;
-
-type SidebarMetrics = {
-  sidebarTargetWidth: number;
-  sidebarLeftGap: number;
-};
-
-const calculateSidebarMetrics = (): SidebarMetrics => {
-  if (typeof window === 'undefined') {
-    return {
-      sidebarTargetWidth: SIDEBAR_MAX_WIDTH,
-      sidebarLeftGap: 0,
-    };
-  }
-
-  const viewportWidth = window.innerWidth;
-  const sidebarTargetWidth = Math.min(SIDEBAR_MAX_WIDTH, viewportWidth * SIDEBAR_VIEWPORT_RATIO);
-  const baseMainWidth = Math.min(MAIN_MAX_WIDTH, viewportWidth);
-  const sidebarLeftGap = Math.max(0, (viewportWidth - baseMainWidth) / 2);
-
-  return {
-    sidebarLeftGap,
-    sidebarTargetWidth,
-  };
-};
+const SIDEBAR_WIDTH = 280;
 
 const HamburgerIcon: React.FC = () => (
   <svg
@@ -73,17 +48,9 @@ export const App: React.FC = () => {
   const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
   const focusRef = useRef<HTMLElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const sidebarRef = useRef<HTMLElement | null>(null);
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
-  const [sidebarMetrics, setSidebarMetrics] = useState<SidebarMetrics>(() =>
-    calculateSidebarMetrics(),
-  );
-  const [sidebarVisibleWidth, setSidebarVisibleWidth] = useState<number>(0);
-  const { sidebarTargetWidth, sidebarLeftGap } = sidebarMetrics;
-  const mainRightPadding = sidebarLeftGap;
-  const mainLeftPadding = Math.max(sidebarLeftGap, sidebarVisibleWidth) - sidebarVisibleWidth;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -108,64 +75,6 @@ export const App: React.FC = () => {
     }
   }, [isSidebarOpen]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const updateMetrics = () => setSidebarMetrics(calculateSidebarMetrics());
-    updateMetrics();
-
-    window.addEventListener('resize', updateMetrics);
-    return () => window.removeEventListener('resize', updateMetrics);
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const el = sidebarRef.current;
-    const supportsObserver = 'ResizeObserver' in window;
-
-    if (!el || !supportsObserver) {
-      setSidebarVisibleWidth(isSidebarOpen ? sidebarTargetWidth : 0);
-      return;
-    }
-
-    let frame: number | null = null;
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) {
-        return;
-      }
-      const width = entry.contentRect.width;
-      const applyWidth = () => {
-        setSidebarVisibleWidth((prev) => (Math.abs(prev - width) <= 0.5 ? prev : width));
-      };
-      if (frame !== null && 'cancelAnimationFrame' in window) {
-        window.cancelAnimationFrame(frame);
-      }
-      if ('requestAnimationFrame' in window) {
-        frame = window.requestAnimationFrame(() => {
-          applyWidth();
-          frame = null;
-        });
-      } else {
-        applyWidth();
-      }
-    });
-
-    observer.observe(el);
-
-    return () => {
-      observer.disconnect();
-      if (frame !== null && 'cancelAnimationFrame' in window) {
-        window.cancelAnimationFrame(frame);
-      }
-    };
-  }, [isSidebarOpen, sidebarTargetWidth]);
-
   const toggleSidebar = () =>
     setIsSidebarOpen((prev) => !prev);
 
@@ -182,10 +91,6 @@ export const App: React.FC = () => {
               className={`app-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
               style={{
                 ['--main-max-width' as any]: `${MAIN_MAX_WIDTH}px`,
-                ['--sidebar-open-width' as any]: `${sidebarTargetWidth}px`,
-                ['--sidebar-current-width' as any]: `${sidebarVisibleWidth}px`,
-                ['--main-left-padding' as any]: `${mainLeftPadding}px`,
-                ['--main-right-padding' as any]: `${mainRightPadding}px`,
               }}
             >
               <ThemeApplier />
@@ -266,10 +171,6 @@ export const App: React.FC = () => {
             outline-offset: 2px;
           }
           .app-shell {
-            --sidebar-current-width: 0px;
-            --sidebar-open-width: 0px;
-            --main-left-padding: 0px;
-            --main-right-padding: 0px;
             margin: 0 auto;
             box-sizing: border-box;
             width: 100%;
@@ -279,28 +180,20 @@ export const App: React.FC = () => {
             min-height: 100vh;
           }
           .sidebar {
-            position: relative;
-            width: var(--sidebar-current-width);
-            max-width: var(--sidebar-open-width);
-            transition: width 0.3s ease;
+            width: 0;
+            flex-shrink: 0;
+            background: var(--color-surface);
+            box-shadow: none;
             overflow: hidden;
           }
-          .sidebar-content {
-            width: var(--sidebar-open-width);
-            max-width: var(--sidebar-open-width);
-            min-height: 100vh;
-            background: var(--color-surface);
+          .app-shell.sidebar-open .sidebar {
             box-shadow: 2px 0 20px rgba(0, 0, 0, 0.2);
+          }
+          .sidebar-content {
+            min-height: 100vh;
             padding: 2rem 1.5rem;
             display: grid;
-            transform: translateX(calc(var(--sidebar-current-width) - var(--sidebar-open-width)));
-            transition: transform 0.3s ease;
-          }
-          .sidebar[aria-hidden='true'] .sidebar-content {
-            box-shadow: none;
-          }
-          .app-shell.sidebar-open .sidebar-content {
-            transform: translateX(0);
+            width: 100%;
           }
           .sidebar-nav {
             display: grid;
@@ -314,15 +207,14 @@ export const App: React.FC = () => {
             display: flex;
             justify-content: flex-start;
             box-sizing: border-box;
-            padding-left: var(--main-left-padding);
-            padding-right: var(--main-right-padding);
+            padding: 0 20px;
           }
           .main-inner {
             display: flex;
             flex-direction: column;
             max-width: var(--main-max-width);
             width: min(100%, var(--main-max-width));
-            margin: 0;
+            margin: 0 auto;
           }
           header {
             padding-top: 1rem;
@@ -359,8 +251,7 @@ export const App: React.FC = () => {
                   className="sidebar"
                   aria-label="アプリ内共通メニュー"
                   aria-hidden={isSidebarOpen ? 'false' : 'true'}
-                  style={{ width: isSidebarOpen ? `${sidebarTargetWidth}px` : '0px' }}
-                  ref={sidebarRef}
+                  style={{ width: isSidebarOpen ? `${SIDEBAR_WIDTH}px` : '0px' }}
                 >
                   <div className="sidebar-content">
                     <nav className="sidebar-nav" aria-label="主要メニュー">
