@@ -1,4 +1,4 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
 import '@testing-library/jest-dom';
@@ -36,7 +36,9 @@ describe('App navigation', () => {
     const user = userEvent.setup();
 
     const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-    await user.click(openButton);
+    await act(async () => {
+      await user.click(openButton);
+    });
 
     const sidebar = screen.getByLabelText('アプリ内共通メニュー');
     expect(sidebar).toHaveAttribute('aria-hidden', 'false');
@@ -65,8 +67,19 @@ describe('App navigation', () => {
     render(<App />);
     const user = userEvent.setup();
 
+    await screen.findByPlaceholderText('見出し語を入力');
+
+    const mainInner = document.querySelector('.main-inner');
+    if (!mainInner) {
+      throw new Error('main inner not found');
+    }
+
+    const initialLeft = Math.round(mainInner.getBoundingClientRect().left);
+
     const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-    await user.click(openButton);
+    await act(async () => {
+      await user.click(openButton);
+    });
 
     const appShell = document.querySelector('.app-shell');
     const sidebar = document.querySelector('.sidebar');
@@ -75,7 +88,13 @@ describe('App navigation', () => {
     }
 
     expect(appShell).toHaveClass('sidebar-open');
-    expect(appShell.style.getPropertyValue('--main-offset')).toBe('0px');
+
+    await waitFor(() => {
+      expect(appShell.style.getPropertyValue('--main-offset')).toBe('-140px');
+    });
+
+    const openedLeft = Math.round(mainInner.getBoundingClientRect().left);
+    expect(openedLeft).toBe(initialLeft);
 
     const sidebarRect = sidebar.getBoundingClientRect();
     expect(Math.round(sidebarRect.left)).toBeGreaterThanOrEqual(-1);
@@ -102,14 +121,24 @@ describe('App navigation', () => {
     const user = userEvent.setup();
 
     const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-    await user.click(openButton);
+    await act(async () => {
+      await user.click(openButton);
+    });
 
     const appShell = document.querySelector('.app-shell');
-    if (!appShell) {
-      throw new Error('app shell not found');
+    const sidebar = document.querySelector('.sidebar');
+    const mainInner = document.querySelector('.main-inner');
+    if (!appShell || !sidebar || !mainInner) {
+      throw new Error('layout elements not found');
     }
 
-    expect(appShell.style.getPropertyValue('--main-offset')).toBe('230px');
+    await waitFor(() => {
+      expect(appShell.style.getPropertyValue('--main-offset')).toBe('0px');
+    });
+
+    const sidebarRect = sidebar.getBoundingClientRect();
+    const mainInnerRect = mainInner.getBoundingClientRect();
+    expect(Math.round(mainInnerRect.left)).toBe(Math.round(sidebarRect.right));
 
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,

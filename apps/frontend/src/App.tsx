@@ -32,24 +32,32 @@ type SidebarMetrics = {
   mainOffset: number;
 };
 
-const calculateSidebarMetrics = (): SidebarMetrics => {
+const calculateSidebarMetrics = (isSidebarOpen: boolean): SidebarMetrics => {
   if (typeof window === 'undefined') {
     return {
       sidebarWidth: SIDEBAR_MAX_WIDTH,
       sidebarLeftGap: 0,
-      mainOffset: SIDEBAR_MAX_WIDTH,
+      mainOffset: 0,
     };
   }
 
   const viewportWidth = window.innerWidth;
   const sidebarWidth = Math.min(SIDEBAR_MAX_WIDTH, viewportWidth * SIDEBAR_VIEWPORT_RATIO);
-  const mainContentWidth = Math.min(MAIN_MAX_WIDTH, viewportWidth);
-  const availableMargin = Math.max(0, (viewportWidth - mainContentWidth) / 2);
-  const mainOffset = Math.max(0, sidebarWidth - availableMargin);
+  const baseMainWidth = Math.min(MAIN_MAX_WIDTH, viewportWidth);
+  const sidebarLeftGap = Math.max(0, (viewportWidth - baseMainWidth) / 2);
+  const effectiveSidebarWidth = isSidebarOpen ? sidebarWidth : 0;
+  const mainColumnWidth = Math.max(0, viewportWidth - effectiveSidebarWidth);
+  const mainInnerWidth = Math.min(MAIN_MAX_WIDTH, mainColumnWidth);
+  const centeredLeftGap = Math.max(0, (mainColumnWidth - mainInnerWidth) / 2);
+  const actualMainInnerLeft = effectiveSidebarWidth + centeredLeftGap;
+  const desiredMainInnerLeft = isSidebarOpen
+    ? Math.max(sidebarLeftGap, sidebarWidth)
+    : sidebarLeftGap;
+  const mainOffset = desiredMainInnerLeft - actualMainInnerLeft;
 
   return {
     sidebarWidth,
-    sidebarLeftGap: availableMargin,
+    sidebarLeftGap,
     mainOffset,
   };
 };
@@ -80,8 +88,10 @@ export const App: React.FC = () => {
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
-  const [sidebarMetrics, setSidebarMetrics] = useState<SidebarMetrics>(() => calculateSidebarMetrics());
-  const { sidebarWidth, sidebarLeftGap, mainOffset } = sidebarMetrics;
+  const [sidebarMetrics, setSidebarMetrics] = useState<SidebarMetrics>(() =>
+    calculateSidebarMetrics(false),
+  );
+  const { sidebarWidth, mainOffset } = sidebarMetrics;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -111,12 +121,12 @@ export const App: React.FC = () => {
       return;
     }
 
-    const updateMetrics = () => setSidebarMetrics(calculateSidebarMetrics());
+    const updateMetrics = () => setSidebarMetrics(calculateSidebarMetrics(isSidebarOpen));
     updateMetrics();
 
     window.addEventListener('resize', updateMetrics);
     return () => window.removeEventListener('resize', updateMetrics);
-  }, []);
+  }, [isSidebarOpen]);
 
   const toggleSidebar = () =>
     setIsSidebarOpen((prev) => !prev);
@@ -138,8 +148,7 @@ export const App: React.FC = () => {
                 ['--sidebar-current-width' as any]: isSidebarOpen
                   ? `${sidebarWidth}px`
                   : '0px',
-                ['--sidebar-left-gap' as any]: `${sidebarLeftGap}px`,
-                ['--main-offset' as any]: isSidebarOpen ? `${mainOffset}px` : '0px',
+                ['--main-offset' as any]: `${mainOffset}px`,
               }}
             >
               <ThemeApplier />
@@ -224,8 +233,7 @@ export const App: React.FC = () => {
             --sidebar-open-width: 0px;
             margin: 0 auto;
             box-sizing: border-box;
-            width: min(100%, calc(var(--main-max-width) + var(--sidebar-current-width)));
-            transition: width 0.3s ease;
+            width: 100%;
           }
           .app-layout {
             display: flex;
@@ -233,7 +241,6 @@ export const App: React.FC = () => {
           }
           .sidebar {
             position: relative;
-            left: calc(-1 * var(--sidebar-left-gap));
             width: var(--sidebar-current-width);
             max-width: var(--sidebar-open-width);
             transition: width 0.3s ease;
@@ -268,14 +275,15 @@ export const App: React.FC = () => {
             display: flex;
             justify-content: center;
             box-sizing: border-box;
-            padding-left: var(--main-offset);
-            transition: padding-left 0.3s ease;
           }
           .main-inner {
             display: flex;
             flex-direction: column;
             max-width: var(--main-max-width);
             width: 100%;
+            margin: 0 auto;
+            transform: translateX(var(--main-offset));
+            transition: transform 0.3s ease;
           }
           header {
             padding-top: 1rem;
