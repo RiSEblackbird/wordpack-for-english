@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WordPackPanel } from './components/WordPackPanel';
 import { WordPackListPanel } from './components/WordPackListPanel';
@@ -24,32 +24,6 @@ const NAV_ITEMS: Array<{ key: Tab; label: string }> = [
 const SIDEBAR_ID = 'app-sidebar';
 const MAIN_MAX_WIDTH = 1000;
 const SIDEBAR_WIDTH = 280;
-const MAIN_SIDE_PADDING = 20;
-
-const calculateMainShift = (viewportWidth: number, sidebarOpen: boolean) => {
-  if (!sidebarOpen) {
-    return 0;
-  }
-
-  const horizontalPadding = MAIN_SIDE_PADDING * 2;
-  const contentWidthClosed = Math.max(viewportWidth - horizontalPadding, 0);
-  const mainWidthClosed = Math.min(MAIN_MAX_WIDTH, contentWidthClosed);
-  const leftClosed =
-    MAIN_SIDE_PADDING + Math.max((contentWidthClosed - mainWidthClosed) / 2, 0);
-
-  const mainColumnWidth = Math.max(viewportWidth - SIDEBAR_WIDTH, 0);
-  const contentWidthOpen = Math.max(mainColumnWidth - horizontalPadding, 0);
-  const mainWidthOpen = Math.min(MAIN_MAX_WIDTH, contentWidthOpen);
-  const defaultLeftOpen =
-    SIDEBAR_WIDTH +
-    MAIN_SIDE_PADDING +
-    Math.max((contentWidthOpen - mainWidthOpen) / 2, 0);
-
-  const minimumLeft = SIDEBAR_WIDTH + MAIN_SIDE_PADDING;
-  const targetLeft = Math.max(leftClosed, minimumLeft);
-
-  return targetLeft - defaultLeftOpen;
-};
 
 const HamburgerIcon: React.FC = () => (
   <svg
@@ -74,12 +48,9 @@ export const App: React.FC = () => {
   const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
   const focusRef = useRef<HTMLElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [mainShift, setMainShift] = useState(0);
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
-  const layoutUpdateTimeoutRef = useRef<number | null>(null);
-  const isSidebarOpenRef = useRef(isSidebarOpen);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -107,62 +78,6 @@ export const App: React.FC = () => {
   const toggleSidebar = () =>
     setIsSidebarOpen((prev) => !prev);
 
-  useEffect(() => {
-    isSidebarOpenRef.current = isSidebarOpen;
-  }, [isSidebarOpen]);
-
-  const applyMainShift = useCallback(() => {
-    if (typeof window === 'undefined') {
-      setMainShift(0);
-      return;
-    }
-    setMainShift(calculateMainShift(window.innerWidth, isSidebarOpenRef.current));
-  }, []);
-
-  const scheduleMainShiftUpdate = useCallback(
-    (delayMs: number) => {
-      if (layoutUpdateTimeoutRef.current !== null) {
-        window.clearTimeout(layoutUpdateTimeoutRef.current);
-        layoutUpdateTimeoutRef.current = null;
-      }
-
-      if (delayMs === 0) {
-        applyMainShift();
-        return;
-      }
-
-      layoutUpdateTimeoutRef.current = window.setTimeout(() => {
-        applyMainShift();
-        layoutUpdateTimeoutRef.current = null;
-      }, delayMs);
-    },
-    [applyMainShift],
-  );
-
-  useEffect(() => {
-    scheduleMainShiftUpdate(isSidebarOpen ? 100 : 0);
-
-    return () => {
-      if (layoutUpdateTimeoutRef.current !== null) {
-        window.clearTimeout(layoutUpdateTimeoutRef.current);
-        layoutUpdateTimeoutRef.current = null;
-      }
-    };
-  }, [isSidebarOpen, scheduleMainShiftUpdate]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      scheduleMainShiftUpdate(isSidebarOpenRef.current ? 100 : 0);
-    };
-
-    window.addEventListener('resize', handleResize);
-    handleResize();
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [scheduleMainShiftUpdate]);
-
   const handleSelectTab = (next: Tab) => {
     setTab(next);
   };
@@ -176,7 +91,6 @@ export const App: React.FC = () => {
               className={`app-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
               style={{
                 ['--main-max-width' as any]: `${MAIN_MAX_WIDTH}px`,
-                ['--main-shift' as any]: `${mainShift}px`,
               }}
             >
               <ThemeApplier />
@@ -299,8 +213,6 @@ export const App: React.FC = () => {
             max-width: var(--main-max-width);
             width: min(100%, var(--main-max-width));
             margin: 0 auto;
-            position: relative;
-            left: var(--main-shift);
             transition: none;
           }
           header {

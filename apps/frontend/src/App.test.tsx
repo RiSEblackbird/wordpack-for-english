@@ -2,7 +2,6 @@ import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
 
 describe('App navigation', () => {
   it('renders WordPack by default and navigates with keyboard', async () => {
@@ -80,139 +79,34 @@ describe('App navigation', () => {
     expect(styles.transitionProperty === 'all' || styles.transitionProperty === '').toBe(true);
   });
 
-  it('shifts the main content only after the sidebar has fully opened', async () => {
-    const originalWidth = window.innerWidth;
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      value: 1600,
+  it('does not rely on deferred timers to stabilize the layout', async () => {
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'WordPack' });
+
+    const appShell = document.querySelector('.app-shell');
+    if (!appShell) {
+      throw new Error('app shell not found');
+    }
+
+    expect(appShell.style.getPropertyValue('--main-shift')).toBe('');
+
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.click(toggle);
     });
 
-    try {
-      render(<App />);
+    expect(appShell.style.getPropertyValue('--main-shift')).toBe('');
 
-      const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-
-      vi.useFakeTimers();
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-      await act(async () => {
-        await user.click(openButton);
-      });
-
-      const appShell = document.querySelector('.app-shell');
-      if (!appShell) {
-        throw new Error('app shell not found');
-      }
-
-      const immediateShift = appShell.style.getPropertyValue('--main-shift');
-      expect(immediateShift === '0px' || immediateShift === '').toBe(true);
-
-      await act(async () => {
-        vi.advanceTimersByTime(99);
-      });
-
-      const shiftBeforeDelay = appShell.style.getPropertyValue('--main-shift');
-      expect(shiftBeforeDelay === '0px' || shiftBeforeDelay === '').toBe(true);
-
-      await act(async () => {
-        vi.advanceTimersByTime(100);
-      });
-
-      const shiftAfterDelay = appShell.style.getPropertyValue('--main-shift');
-      expect(parseFloat(shiftAfterDelay)).not.toBeCloseTo(0, 5);
-    } finally {
-      Object.defineProperty(window, 'innerWidth', {
-        configurable: true,
-        value: originalWidth,
-      });
-      act(() => {
-        window.dispatchEvent(new Event('resize'));
-      });
-      vi.useRealTimers();
+    const mainInner = document.querySelector('.main-inner');
+    if (!mainInner) {
+      throw new Error('main content wrapper not found');
     }
-  });
 
-  it('keeps the main content position when enough horizontal margin remains', async () => {
-    const originalWidth = window.innerWidth;
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      value: 1600,
-    });
-
-    try {
-      render(<App />);
-
-      const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-
-      vi.useFakeTimers();
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-      await act(async () => {
-        await user.click(openButton);
-      });
-
-      await act(async () => {
-        vi.advanceTimersByTime(100);
-      });
-
-      const appShell = document.querySelector('.app-shell');
-      if (!appShell) {
-        throw new Error('app shell not found');
-      }
-
-      const shiftValue = parseFloat(appShell.style.getPropertyValue('--main-shift'));
-      expect(shiftValue).toBeCloseTo(-140, 1);
-    } finally {
-      Object.defineProperty(window, 'innerWidth', {
-        configurable: true,
-        value: originalWidth,
-      });
-      act(() => {
-        window.dispatchEvent(new Event('resize'));
-      });
-      vi.useRealTimers();
-    }
-  });
-
-  it('does not move the main content unnecessarily on tighter viewports', async () => {
-    const originalWidth = window.innerWidth;
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      value: 1100,
-    });
-
-    try {
-      render(<App />);
-
-      const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-
-      vi.useFakeTimers();
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-      await act(async () => {
-        await user.click(openButton);
-      });
-
-      await act(async () => {
-        vi.advanceTimersByTime(100);
-      });
-
-      const appShell = document.querySelector('.app-shell');
-      if (!appShell) {
-        throw new Error('app shell not found');
-      }
-
-      const shiftValue = parseFloat(appShell.style.getPropertyValue('--main-shift'));
-      expect(shiftValue).toBeCloseTo(0, 1);
-    } finally {
-      Object.defineProperty(window, 'innerWidth', {
-        configurable: true,
-        value: originalWidth,
-      });
-      act(() => {
-        window.dispatchEvent(new Event('resize'));
-      });
-      vi.useRealTimers();
-    }
+    const computed = window.getComputedStyle(mainInner);
+    expect(mainInner.style.left).toBe('');
+    expect(computed.position === 'static' || computed.position === '').toBe(true);
   });
 });
