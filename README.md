@@ -2,9 +2,11 @@
 
 英単語トレーナー。バックエンド（FastAPI）とフロントエンド（React + Vite）のモノレポです。
 
-| | | |
+| WordPack | 文章インポート | 例文一覧 |
 |---|---|---|
-| <img width="600" alt="image" src="https://github.com/user-attachments/assets/0e1cee28-af2a-4a0e-9eff-975cb693c50f" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/c4b000bf-aa7c-4d94-bc6c-f639fdce515a" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/bc3af0f4-e2e9-4d93-85ec-2ffb38a5643c" /> |
+| <img width="600" alt="image" src="https://github.com/user-attachments/assets/11c5cb6c-dcb8-4ad2-9bfb-0c47bef9b0a4" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/8fbf2d62-69e7-48f9-b7ba-7eb34e6fcd40" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/6d01da80-3844-4641-a93c-efb7414f65d2" /> |
+| <img width="600" alt="image" src="https://github.com/user-attachments/assets/7932f36a-68cb-4acd-8ce7-113a8139a8d9" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/860e20ce-2651-4c39-891c-894b56ff7a4d" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/4dae1671-38c7-4482-a632-4dffed49dacd" /> |
+| <img width="600" alt="image" src="https://github.com/user-attachments/assets/8427f4fa-a718-4cf4-b761-e3fb90acd252" /> |  |  |
 
 ## 主な機能
 - バックエンド: FastAPI / フロントエンド: React + TypeScript + Vite
