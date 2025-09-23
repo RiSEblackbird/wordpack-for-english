@@ -194,6 +194,8 @@ export const App: React.FC = () => {
             display: grid;
             width: 85%;
             gap: 1.5rem;
+            /* グリッドの余白を上部に詰め、要素間を均等配置しない */
+            align-content: flex-start;
           }
           .sidebar-nav {
             display: grid;
