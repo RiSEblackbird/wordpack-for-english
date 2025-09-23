@@ -65,6 +65,8 @@ def test_word_pack(client):
     assert "senses" in body
     # 生成結果の基本フィールド
     assert "citations" in body and "confidence" in body
+    assert body.get("checked_only_count") == 0
+    assert body.get("learned_count") == 0
 
 
 def test_word_pack_sanitizes_english_sense_title(
@@ -158,6 +160,71 @@ def test_word_lookup(client):
     resp = client.get("/api/word")
     assert resp.status_code == 200
     assert resp.json() == {"definition": None, "examples": []}
+
+
+def test_word_pack_study_progress_endpoint(client):
+    # 生成してIDを特定
+    r_create = client.post("/api/word/pack", json={"lemma": "delta"})
+    assert r_create.status_code == 200
+    r_list = client.get("/api/word/packs")
+    assert r_list.status_code == 200
+    items = r_list.json().get("items", [])
+    target = next((it for it in items if it.get("lemma") == "delta"), None)
+    assert target and target["checked_only_count"] == 0 and target["learned_count"] == 0
+    pack_id = target["id"]
+
+    # 確認のみカウント
+    r_checked = client.post(f"/api/word/packs/{pack_id}/study-progress", json={"kind": "checked"})
+    assert r_checked.status_code == 200
+    assert r_checked.json() == {"checked_only_count": 1, "learned_count": 0}
+
+    # 学習済みカウント（確認にも加算）
+    r_learned = client.post(f"/api/word/packs/{pack_id}/study-progress", json={"kind": "learned"})
+    assert r_learned.status_code == 200
+    assert r_learned.json() == {"checked_only_count": 2, "learned_count": 1}
+
+    r_list2 = client.get("/api/word/packs")
+    latest = next((it for it in r_list2.json().get("items", []) if it.get("id") == pack_id), None)
+    assert latest
+    assert latest["checked_only_count"] == 2
+    assert latest["learned_count"] == 1
+
+
+def test_example_study_progress_endpoint(client):
+    r_create = client.post("/api/word/pack", json={"lemma": "epsilon"})
+    assert r_create.status_code == 200
+
+    r_list = client.get("/api/word/packs")
+    assert r_list.status_code == 200
+    pack_items = r_list.json().get("items", [])
+    pack = next((it for it in pack_items if it.get("lemma") == "epsilon"), None)
+    assert pack, "generated pack not found"
+    pack_id = pack["id"]
+
+    from backend.store import store as backend_store
+
+    backend_store.append_examples(pack_id, 'Dev', [
+        {"en": "Manual progress test example.", "ja": "学習進捗テスト用の例文です。"}
+    ])
+
+    r_examples = client.get("/api/word/examples?limit=1&order_by=created_at&order_dir=desc")
+    assert r_examples.status_code == 200
+    examples = r_examples.json().get("items", [])
+    assert examples, "expected at least one example"
+    ex = examples[0]
+    example_id = ex["id"]
+
+    r_checked = client.post(f"/api/word/examples/{example_id}/study-progress", json={"kind": "checked"})
+    assert r_checked.status_code == 200
+    body1 = r_checked.json()
+    assert body1["checked_only_count"] == 1
+    assert body1["learned_count"] == 0
+
+    r_learned = client.post(f"/api/word/examples/{example_id}/study-progress", json={"kind": "learned"})
+    assert r_learned.status_code == 200
+    body2 = r_learned.json()
+    assert body2["checked_only_count"] == 2
+    assert body2["learned_count"] == 1
 
 
 def test_sentence_check_removed(client):

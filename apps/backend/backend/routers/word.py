@@ -20,6 +20,9 @@ from ..models.word import (
     ExampleListItem,
     ExamplesBulkDeleteRequest,
     ExamplesBulkDeleteResponse,
+    StudyProgressRequest,
+    WordPackStudyProgressResponse,
+    ExampleStudyProgressResponse,
 )
 from ..store import store
 from ..sense_title import choose_sense_title
@@ -258,7 +261,17 @@ async def list_word_packs(
     """保存済みWordPackの一覧を取得する。"""
     items_with_flags = store.list_word_packs_with_flags(limit=limit, offset=offset)
     items: list[WordPackListItem] = []
-    for wp_id, lemma, sense_title, created_at, updated_at, is_empty, examples_count in items_with_flags:
+    for (
+        wp_id,
+        lemma,
+        sense_title,
+        created_at,
+        updated_at,
+        is_empty,
+        examples_count,
+        checked_only,
+        learned,
+    ) in items_with_flags:
         items.append(
             WordPackListItem(
                 id=wp_id,
@@ -268,6 +281,8 @@ async def list_word_packs(
                 updated_at=updated_at,
                 is_empty=bool(is_empty),
                 examples_count=examples_count,
+                checked_only_count=checked_only,
+                learned_count=learned,
             )
         )
 
@@ -278,6 +293,31 @@ async def list_word_packs(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post(
+    "/packs/{word_pack_id}/study-progress",
+    response_model=WordPackStudyProgressResponse,
+    summary="WordPackの学習進捗を記録",
+)
+async def update_word_pack_study_progress(
+    word_pack_id: str,
+    req: StudyProgressRequest,
+) -> WordPackStudyProgressResponse:
+    """WordPack単位の確認/学習済みカウントを更新する。"""
+
+    checked_increment = 1
+    learned_increment = 0
+    if req.kind == "learned":
+        learned_increment = 1
+    result = store.update_word_pack_study_progress(word_pack_id, checked_increment, learned_increment)
+    if result is None:
+        raise HTTPException(status_code=404, detail="WordPack not found")
+    checked_only_count, learned_count = result
+    return WordPackStudyProgressResponse(
+        checked_only_count=checked_only_count,
+        learned_count=learned_count,
     )
 
 
@@ -606,3 +646,30 @@ async def bulk_delete_examples(req: ExamplesBulkDeleteRequest) -> ExamplesBulkDe
 
     deleted, not_found = store.delete_examples_by_ids(req.ids)
     return ExamplesBulkDeleteResponse(deleted=deleted, not_found=not_found)
+
+
+@router.post(
+    "/examples/{example_id}/study-progress",
+    response_model=ExampleStudyProgressResponse,
+    summary="例文の学習進捗を記録",
+)
+async def update_example_study_progress(
+    example_id: int,
+    req: StudyProgressRequest,
+) -> ExampleStudyProgressResponse:
+    """例文単位の確認/学習済みカウントを更新する。"""
+
+    checked_increment = 1
+    learned_increment = 0
+    if req.kind == "learned":
+        learned_increment = 1
+    result = store.update_example_study_progress(example_id, checked_increment, learned_increment)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Example not found")
+    word_pack_id, checked_only_count, learned_count = result
+    return ExampleStudyProgressResponse(
+        id=example_id,
+        word_pack_id=word_pack_id,
+        checked_only_count=checked_only_count,
+        learned_count=learned_count,
+    )

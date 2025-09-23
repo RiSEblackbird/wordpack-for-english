@@ -64,6 +64,8 @@ interface WordPackListItem {
     Business: number;
     Common: number;
   };
+  checked_only_count: number;
+  learned_count: number;
 }
 
 type SortKey = 'created_at' | 'updated_at' | 'lemma' | 'total_examples';
@@ -239,7 +241,13 @@ export const WordPackListPanel: React.FC = () => {
       const res = await fetchJson<WordPackListResponse>(`${apiBase}/word/packs?limit=${PAGE_LIMIT}&offset=${newOffset}`, {
         signal: ctrl.signal,
       });
-      setWordPacks(res.items);
+      setWordPacks(
+        res.items.map((item) => ({
+          ...item,
+          checked_only_count: item.checked_only_count ?? 0,
+          learned_count: item.learned_count ?? 0,
+        })),
+      );
       setTotal(res.total);
       setOffset(newOffset);
     } catch (e) {
@@ -250,6 +258,20 @@ export const WordPackListPanel: React.FC = () => {
       setLoading(false);
     }
   }, [apiBase]);
+
+  const applyStudyProgress = useCallback(
+    (payload: { wordPackId: string; checked_only_count: number; learned_count: number }) => {
+      if (!payload?.wordPackId) return;
+      setWordPacks((prev) =>
+        prev.map((wp) =>
+          wp.id === payload.wordPackId
+            ? { ...wp, checked_only_count: payload.checked_only_count, learned_count: payload.learned_count }
+            : wp,
+        ),
+      );
+    },
+    [],
+  );
 
   const generateWordPack = useCallback(async (wordPack: WordPackListItem) => {
     const id = wordPack.id;
@@ -352,6 +374,22 @@ export const WordPackListPanel: React.FC = () => {
       try { window.removeEventListener('wordpack:updated', onUpdated as EventListener); } catch {}
     };
   }, [loadWordPacks, offset]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ wordPackId?: string; checked_only_count?: number; learned_count?: number }>).detail;
+      if (!detail || typeof detail !== 'object' || !detail.wordPackId) return;
+      applyStudyProgress({
+        wordPackId: detail.wordPackId,
+        checked_only_count: typeof detail.checked_only_count === 'number' ? detail.checked_only_count : 0,
+        learned_count: typeof detail.learned_count === 'number' ? detail.learned_count : 0,
+      });
+    };
+    try { window.addEventListener('wordpack:study-progress', handler as EventListener); } catch {}
+    return () => {
+      try { window.removeEventListener('wordpack:study-progress', handler as EventListener); } catch {}
+    };
+  }, [applyStudyProgress]);
 
   useEffect(() => {
     setSenseOpenIds((prev) => {
@@ -596,6 +634,12 @@ export const WordPackListPanel: React.FC = () => {
         .wp-card-tts-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; }
         .wp-card-title { font-size: 1.0em; font-weight: bold; color: #333; margin: 0; }
         .wp-card-meta { font-size: 0.50em; color: #666; margin: 0.25rem 0; }
+        .wp-progress-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.35rem; }
+        .wp-progress-badge { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.15rem 0.45rem; border-radius: 999px; font-size: 0.65em; font-weight: bold; border: 1px solid transparent; }
+        .wp-progress-badge.learned { background: #e8f5e9; border-color: #81c784; color: #1b5e20; }
+        .wp-progress-badge.checked { background: #fff3e0; border-color: #ffcc80; color: #ef6c00; }
+        .wp-progress-badge.small { font-size: 0.55em; padding: 0.1rem 0.35rem; }
+        .wp-index-progress { display: inline-flex; gap: 0.25rem; align-items: center; }
         .wp-card-header-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
         .wp-sense-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; border: 1px solid #5c6bc0; background: #f5f7ff; color: #3f51b5; cursor: pointer; }
         .wp-sense-btn[aria-pressed="true"] { background: #e8eaf6; border-color: #3f51b5; color: #283593; }
@@ -808,6 +852,10 @@ export const WordPackListPanel: React.FC = () => {
                     )}
                     <div className="wp-card-meta">
                       <div>作成: {formatDate(wp.created_at)} / 更新: {formatDate(wp.updated_at)}</div>
+                      <div className="wp-progress-badges" aria-label="学習状況">
+                        <span className="wp-progress-badge learned">学 {wp.learned_count}</span>
+                        <span className="wp-progress-badge checked">確 {wp.checked_only_count}</span>
+                      </div>
                       {wp.is_empty ? (
                         <div style={{ marginTop: '0.5rem', fontSize: '0.8em' }}>
                           <span style={{
@@ -887,6 +935,10 @@ export const WordPackListPanel: React.FC = () => {
                         <span className="wp-index-sense">{resolveSenseTitle(wp.sense_title)}</span>
                       )}
                       <span className="wp-index-meta">{wp.is_empty ? ' / 未' : ` / 例文: ${wp.totalExamples}件`}</span>
+                      <span className="wp-index-progress" aria-label="学習状況">
+                        <span className="wp-progress-badge small learned">学 {wp.learned_count}</span>
+                        <span className="wp-progress-badge small checked">確 {wp.checked_only_count}</span>
+                      </span>
                     </div>
                     <div className="wp-index-actions" onClick={(e) => e.stopPropagation()}>
                       <button
@@ -964,6 +1016,7 @@ export const WordPackListPanel: React.FC = () => {
                 // 再生成後に一覧を最新化（更新日時の整合）
                 await loadWordPacks(offset);
               }}
+              onStudyProgressRecorded={applyStudyProgress}
             />
           </div>
         ) : null}

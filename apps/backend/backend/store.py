@@ -478,10 +478,10 @@ class AppSQLiteStore:
 
     def list_word_packs_with_flags(
         self, limit: int = 50, offset: int = 0
-    ) -> list[tuple[str, str, str, str, str, bool, Optional[dict]]]:
+    ) -> list[tuple[str, str, str, str, str, bool, Optional[dict], int, int]]:
         """一覧取得のための軽量フラグ/集計付きリストを返す。
 
-        戻り値: [(id, lemma, sense_title, created_at, updated_at, is_empty, examples_count_dict|None), ...]
+        戻り値: [(id, lemma, sense_title, created_at, updated_at, is_empty, examples_count_dict|None, checked_only, learned), ...]
 
         - is_empty: examples と study_card/senses の有無に依存するが、一覧は軽量化のため
           examples の件数のみで空判定の近似値を算出する。
@@ -495,7 +495,9 @@ class AppSQLiteStore:
                        SUM(CASE WHEN wpe.category = 'CS' THEN 1 ELSE 0 END) AS cnt_cs,
                        SUM(CASE WHEN wpe.category = 'LLM' THEN 1 ELSE 0 END) AS cnt_llm,
                        SUM(CASE WHEN wpe.category = 'Business' THEN 1 ELSE 0 END) AS cnt_biz,
-                       SUM(CASE WHEN wpe.category = 'Common' THEN 1 ELSE 0 END) AS cnt_common
+                       SUM(CASE WHEN wpe.category = 'Common' THEN 1 ELSE 0 END) AS cnt_common,
+                       wp.checked_only_count AS checked_only_count,
+                       wp.learned_count AS learned_count
                 FROM word_packs wp
                 LEFT JOIN word_pack_examples wpe ON wpe.word_pack_id = wp.id
                 GROUP BY wp.id
@@ -520,6 +522,8 @@ class AppSQLiteStore:
                     "Business": cnt_biz,
                     "Common": cnt_common,
                 }
+                checked_only = self._normalize_non_negative_int(row["checked_only_count"])
+                learned = self._normalize_non_negative_int(row["learned_count"])
                 items.append(
                     (
                         row["id"],
@@ -529,6 +533,8 @@ class AppSQLiteStore:
                         row["updated_at"],
                         is_empty,
                         examples_count,
+                        checked_only,
+                        learned,
                     )
                 )
             return items
@@ -539,6 +545,64 @@ class AppSQLiteStore:
             with conn:
                 cur = conn.execute("DELETE FROM word_packs WHERE id = ?;", (word_pack_id,))
                 return cur.rowcount > 0
+
+    def update_word_pack_study_progress(
+        self, word_pack_id: str, checked_increment: int, learned_increment: int
+    ) -> Optional[tuple[int, int]]:
+        """WordPackの学習進捗カウントを加算し、更新後の値を返す。"""
+
+        with self._conn() as conn:
+            with conn:
+                cur = conn.execute(
+                    "SELECT checked_only_count, learned_count FROM word_packs WHERE id = ?;",
+                    (word_pack_id,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                current_checked = self._normalize_non_negative_int(row["checked_only_count"])
+                current_learned = self._normalize_non_negative_int(row["learned_count"])
+                next_checked = max(0, current_checked + int(checked_increment))
+                next_learned = max(0, current_learned + int(learned_increment))
+                if next_checked != current_checked or next_learned != current_learned:
+                    conn.execute(
+                        "UPDATE word_packs SET checked_only_count = ?, learned_count = ? WHERE id = ?;",
+                        (next_checked, next_learned, word_pack_id),
+                    )
+                return next_checked, next_learned
+
+    def update_example_study_progress(
+        self, example_id: int, checked_increment: int, learned_increment: int
+    ) -> Optional[tuple[str, int, int]]:
+        """例文単位の学習進捗カウントを加算し、更新後の値と所属WordPack IDを返す。"""
+
+        with self._conn() as conn:
+            with conn:
+                cur = conn.execute(
+                    """
+                    SELECT word_pack_id, checked_only_count, learned_count
+                    FROM word_pack_examples
+                    WHERE id = ?;
+                    """,
+                    (example_id,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return None
+                current_checked = self._normalize_non_negative_int(row["checked_only_count"])
+                current_learned = self._normalize_non_negative_int(row["learned_count"])
+                next_checked = max(0, current_checked + int(checked_increment))
+                next_learned = max(0, current_learned + int(learned_increment))
+                if next_checked != current_checked or next_learned != current_learned:
+                    conn.execute(
+                        """
+                        UPDATE word_pack_examples
+                        SET checked_only_count = ?, learned_count = ?
+                        WHERE id = ?;
+                        """,
+                        (next_checked, next_learned, example_id),
+                    )
+                return str(row["word_pack_id"]), next_checked, next_learned
 
     # --- WordPack Examples operations (optimized) ---
     def delete_example(self, word_pack_id: str, category: str, index: int) -> Optional[int]:

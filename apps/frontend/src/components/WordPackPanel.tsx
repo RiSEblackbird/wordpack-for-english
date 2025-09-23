@@ -16,6 +16,7 @@ interface Props {
   selectedWordPackId?: string | null;
   onWordPackGenerated?: (wordPackId: string | null) => void;
   selectedMeta?: { created_at: string; updated_at: string } | null;
+  onStudyProgressRecorded?: (payload: { wordPackId: string; checked_only_count: number; learned_count: number }) => void;
 }
 
 // --- API types ---
@@ -65,10 +66,12 @@ interface WordPack {
   study_card: string;
   citations: Citation[];
   confidence: 'low' | 'medium' | 'high';
+  checked_only_count?: number;
+  learned_count?: number;
 }
 
 
-export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta }) => {
+export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta, onStudyProgressRecorded }) => {
   const { settings, setSettings } = useSettings();
   const { isModalOpen, setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
@@ -87,6 +90,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [detailOpen, setDetailOpen] = useState(false);
   const mountedRef = useRef(true);
   const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
+  const [progressUpdating, setProgressUpdating] = useState(false);
 
   const {
     apiBase,
@@ -122,6 +126,15 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       }),
     }),
     [model, temperature, reasoningEffort, textVerbosity]
+  );
+
+  const normalizeWordPack = useCallback(
+    (wp: WordPack): WordPack => ({
+      ...wp,
+      checked_only_count: wp.checked_only_count ?? 0,
+      learned_count: wp.learned_count ?? 0,
+    }),
+    [],
   );
 
   const formatDate = (dateStr?: string | null) => {
@@ -160,6 +173,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     [data, exampleCategories]
   );
 
+  const packCheckedCount = data?.checked_only_count ?? 0;
+  const packLearnedCount = data?.learned_count ?? 0;
+
   const generate = async () => {
     // 直前のフォアグラウンド処理は中断するが、生成処理自体はバックグラウンド継続を許可する
     // （タブ移動/アンマウントしても通知を完了に更新できるように、abortRef には紐付けない）
@@ -188,7 +204,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         timeoutMs: requestTimeoutMs,
       });
       if (mountedRef.current) {
-        setData(res);
+        setData(normalizeWordPack(res));
         setCurrentWordPackId(null); // 新規生成なのでIDはnull
         setMsg({ kind: 'status', text: 'WordPack を生成しました' });
       }
@@ -258,7 +274,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       const res = await fetchJson<WordPack>(`${apiBase}/word/packs/${wordPackId}`, {
         signal: ctrl.signal,
       });
-      setData(res);
+      setData(normalizeWordPack(res));
       setCurrentWordPackId(wordPackId);
       // 例文に付与された llm_model/llm_params からAI情報を推測
       try {
@@ -284,6 +300,48 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setLoading(false);
     }
   }, [apiBase]);
+
+  const recordStudyProgress = useCallback(
+    async (kind: 'checked' | 'learned') => {
+      if (!currentWordPackId) return;
+      setProgressUpdating(true);
+      try {
+        const res = await fetchJson<{ checked_only_count: number; learned_count: number }>(
+          `${apiBase}/word/packs/${currentWordPackId}/study-progress`,
+          {
+            method: 'POST',
+            body: { kind },
+          },
+        );
+        setData((prev) =>
+          prev
+            ? {
+                ...prev,
+                checked_only_count: res.checked_only_count,
+                learned_count: res.learned_count,
+              }
+            : prev,
+        );
+        const detail = {
+          wordPackId: currentWordPackId,
+          checked_only_count: res.checked_only_count,
+          learned_count: res.learned_count,
+        };
+        try { onStudyProgressRecorded?.(detail); } catch {}
+        try { window.dispatchEvent(new CustomEvent('wordpack:study-progress', { detail })); } catch {}
+        setMsg({
+          kind: 'status',
+          text: kind === 'learned' ? '学習済みとして記録しました' : '確認済みとして記録しました',
+        });
+      } catch (e) {
+        const m = e instanceof ApiError ? e.message : '学習状況の記録に失敗しました';
+        setMsg({ kind: 'alert', text: m });
+      } finally {
+        setProgressUpdating(false);
+      }
+    },
+    [apiBase, currentWordPackId, onStudyProgressRecorded],
+  );
 
   const regenerateWordPack = async (wordPackId: string) => {
     // 再生成はバックグラウンド継続を許可するため、モーダル閉鎖/アンマウントで中断しない
@@ -320,7 +378,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           timeoutMs: requestTimeoutMs,
         });
         if (mountedRef.current) {
-          setData(refreshed);
+          setData(normalizeWordPack(refreshed));
           setCurrentWordPackId(wordPackId);
           setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
         }
@@ -552,10 +610,55 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               ))}
             </div>
           </div>
-          <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              marginTop: '0.5rem',
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              alignItems: 'center',
+            }}
+          >
+            <div
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
+              aria-label="学習記録の操作"
+            >
+              <strong style={{ fontSize: '0.9em' }}>学習記録</strong>
+              <button
+                type="button"
+                onClick={() => recordStudyProgress('checked')}
+                disabled={!currentWordPackId || progressUpdating}
+                title={!currentWordPackId ? '保存済みWordPackのみ記録できます' : undefined}
+                style={{
+                  padding: '0.3rem 0.7rem',
+                  borderRadius: 6,
+                  border: '1px solid #ffa726',
+                  backgroundColor: '#fff3e0',
+                  color: '#ef6c00',
+                }}
+              >
+                確認した ({packCheckedCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => recordStudyProgress('learned')}
+                disabled={!currentWordPackId || progressUpdating}
+                title={!currentWordPackId ? '保存済みWordPackのみ記録できます' : undefined}
+                style={{
+                  padding: '0.3rem 0.7rem',
+                  borderRadius: 6,
+                  border: '1px solid #81c784',
+                  backgroundColor: '#e8f5e9',
+                  color: '#1b5e20',
+                }}
+              >
+                学習した ({packLearnedCount})
+              </button>
+            </div>
             {currentWordPackId && (
-              <button 
-                onClick={() => regenerateWordPack(currentWordPackId)} 
+              <button
+                type="button"
+                onClick={() => regenerateWordPack(currentWordPackId)}
                 disabled={loading}
                 style={{ marginLeft: 'auto', backgroundColor: 'var(--color-neutral-surface)' }}
               >

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { useConfirmDialog } from '../ConfirmDialogContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
@@ -119,6 +119,24 @@ export const ExampleListPanel: React.FC = () => {
     }
   }, [showAllTranslations, items]);
 
+  const handleExampleProgressRecorded = useCallback(
+    (payload: { id: number; word_pack_id: string; checked_only_count: number; learned_count: number }) => {
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === payload.id
+            ? { ...it, checked_only_count: payload.checked_only_count, learned_count: payload.learned_count }
+            : it,
+        ),
+      );
+      setPreviewItem((prev) =>
+        prev && prev.id === payload.id
+          ? { ...prev, checked_only_count: payload.checked_only_count, learned_count: payload.learned_count }
+          : prev,
+      );
+    },
+    [],
+  );
+
   const toggleSelect = (id: number) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -170,7 +188,13 @@ export const ExampleListPanel: React.FC = () => {
     try {
       const q = buildQuery(newOffset);
       const res = await fetchJson<ExampleListResponse>(`${settings.apiBase}/word/examples?${q}`, { signal: ctrl.signal });
-      setItems(res.items);
+      setItems(
+        res.items.map((it) => ({
+          ...it,
+          checked_only_count: it.checked_only_count ?? 0,
+          learned_count: it.learned_count ?? 0,
+        })),
+      );
       setTotal(res.total);
       setOffset(newOffset);
     } catch (e) {
@@ -445,7 +469,12 @@ export const ExampleListPanel: React.FC = () => {
         )}
       </div>
 
-      <ExampleDetailModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} item={previewItem} />
+      <ExampleDetailModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        item={previewItem}
+        onStudyProgressRecorded={handleExampleProgressRecorded}
+      />
     </section>
   );
 };
