@@ -59,7 +59,24 @@ describe('App navigation', () => {
   it('places the hamburger button on the viewport left edge', async () => {
     render(<App />);
     const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
-    expect(Math.round(toggle.getBoundingClientRect().left)).toBe(0);
+    const rect = toggle.getBoundingClientRect();
+    expect(Math.round(rect.left)).toBe(0);
+    expect(Math.round(rect.top)).toBe(0);
+  });
+
+  it('renders the main content without a shift animation', async () => {
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'WordPack' });
+
+    const mainInner = document.querySelector('.main-inner');
+    if (!mainInner) {
+      throw new Error('main content wrapper not found');
+    }
+
+    const styles = window.getComputedStyle(mainInner);
+    expect(styles.transitionDuration === '0s' || styles.transitionDuration === '').toBe(true);
+    expect(styles.transitionProperty === 'all' || styles.transitionProperty === '').toBe(true);
   });
 
   it('keeps the main content position when enough horizontal margin remains', async () => {

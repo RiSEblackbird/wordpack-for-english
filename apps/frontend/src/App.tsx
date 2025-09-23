@@ -190,7 +190,7 @@ export const App: React.FC = () => {
           }
           .hamburger-toggle {
             position: fixed;
-            top: 1rem;
+            top: 0;
             left: 0;
             z-index: 980;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
@@ -252,7 +252,7 @@ export const App: React.FC = () => {
             width: min(100%, var(--main-max-width));
             margin: 0 auto;
             transform: translateX(var(--main-shift));
-            transition: transform 0.2s ease;
+            transition: none;
           }
           header {
             padding-top: 1rem;
