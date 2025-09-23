@@ -55,10 +55,48 @@ describe('App navigation', () => {
     expect(appShell).toHaveClass('sidebar-open');
   });
 
-  it('positions the sidebar flush to the viewport left edge on wide screens', async () => {
+  it('positions the sidebar flush to the viewport left edge on wide screens without shifting the main column', async () => {
     const originalInnerWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1600 });
-    window.dispatchEvent(new Event('resize'));
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    render(<App />);
+    const user = userEvent.setup();
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await user.click(openButton);
+
+    const appShell = document.querySelector('.app-shell');
+    const sidebar = document.querySelector('.sidebar');
+    if (!appShell || !sidebar) {
+      throw new Error('layout elements not found');
+    }
+
+    expect(appShell).toHaveClass('sidebar-open');
+    expect(appShell.style.getPropertyValue('--main-offset')).toBe('0px');
+
+    const sidebarRect = sidebar.getBoundingClientRect();
+    expect(Math.round(sidebarRect.left)).toBeGreaterThanOrEqual(-1);
+    expect(Math.round(sidebarRect.left)).toBeLessThanOrEqual(1);
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: originalInnerWidth,
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'));
+    });
+  });
+
+  it('reduces the main column offset only when the sidebar exceeds the centered margin', async () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1100 });
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'));
+    });
 
     render(<App />);
     const user = userEvent.setup();
@@ -71,14 +109,15 @@ describe('App navigation', () => {
       throw new Error('app shell not found');
     }
 
-    expect(appShell).toHaveClass('sidebar-open');
-    expect(window.getComputedStyle(appShell).marginLeft).toBe('0px');
+    expect(appShell.style.getPropertyValue('--main-offset')).toBe('230px');
 
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
       writable: true,
       value: originalInnerWidth,
     });
-    window.dispatchEvent(new Event('resize'));
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'));
+    });
   });
 });
