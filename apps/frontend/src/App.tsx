@@ -192,7 +192,7 @@ export const App: React.FC = () => {
             min-height: 100vh;
             padding: 2rem 1.5rem;
             display: grid;
-            width: 100%;
+            width: 85%;
             gap: 1.5rem;
           }
           .sidebar-nav {
