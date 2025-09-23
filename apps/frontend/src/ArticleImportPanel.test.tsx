@@ -140,7 +140,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     await openTab(user, '文章インポート');
 
     // カテゴリ選択→インポート
-    const categorySelect = await screen.findByRole('combobox', { name: '' });
+    const categorySelect = await screen.findByLabelText('カテゴリ');
     await act(async () => {
       await user.selectOptions(categorySelect, 'Dev');
     });
@@ -199,7 +199,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     const user = userEvent.setup();
     await openTab(user, '文章インポート');
 
-    const categorySelect = await screen.findByRole('combobox', { name: '' });
+    const categorySelect = await screen.findByLabelText('カテゴリ');
     await act(async () => {
       await user.selectOptions(categorySelect, 'Dev');
     });

@@ -109,4 +109,21 @@ describe('App navigation', () => {
     expect(mainInner.style.left).toBe('');
     expect(computed.position === 'static' || computed.position === '').toBe(true);
   });
+
+  it('aligns sidebar content to the top (no space-between stretching)', async () => {
+    render(<App />);
+    const user = userEvent.setup();
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(openButton);
+    });
+
+    const sidebarContent = document.querySelector('.sidebar-content');
+    if (!sidebarContent) throw new Error('sidebar content not found');
+
+    const styles = window.getComputedStyle(sidebarContent as Element);
+    // JSDOM は 'flex-start' を返す
+    expect(styles.alignContent === 'flex-start' || styles.alignContent === 'start').toBe(true);
+  });
 });

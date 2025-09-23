@@ -11,6 +11,7 @@ import { ConfirmDialogProvider } from './ConfirmDialogContext';
 import { NotificationsProvider } from './NotificationsContext';
 import { NotificationsOverlay } from './components/NotificationsOverlay';
 import { useSettings } from './SettingsContext';
+import { SIDEBAR_PORTAL_CONTAINER_ID } from './components/SidebarPortal';
 
 type Tab = 'wordpack' | 'article' | 'examples' | 'settings';
 
@@ -191,13 +192,47 @@ export const App: React.FC = () => {
             min-height: 100vh;
             padding: 2rem 1.5rem;
             display: grid;
-            width: 100%;
+            width: 85%;
+            gap: 1.5rem;
+            /* グリッドの余白を上部に詰め、要素間を均等配置しない */
+            align-content: flex-start;
           }
           .sidebar-nav {
             display: grid;
             gap: 1rem;
             align-content: flex-start;
             padding-top: 0.5rem;
+          }
+          .sidebar-controls {
+            display: grid;
+            gap: 1.5rem;
+            align-content: flex-start;
+          }
+          .sidebar-section {
+            display: grid;
+            gap: 0.75rem;
+          }
+          .sidebar-section h2 {
+            margin: 0;
+            font-size: 1.05rem;
+          }
+          .sidebar-field {
+            display: grid;
+            gap: 0.35rem;
+          }
+          .sidebar-field label {
+            font-size: 0.85rem;
+            color: var(--color-subtle);
+          }
+          .sidebar-actions {
+            display: grid;
+            gap: 0.5rem;
+          }
+          .sidebar-inline {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
           }
           .main-column {
             flex: 1;
@@ -269,6 +304,12 @@ export const App: React.FC = () => {
                         </button>
                       ))}
                     </nav>
+                    <div
+                      id={SIDEBAR_PORTAL_CONTAINER_ID}
+                      className="sidebar-controls"
+                      role="region"
+                      aria-label="ページ固有の操作"
+                    />
                   </div>
                 </aside>
                 <div className="main-column">

@@ -9,6 +9,7 @@ import { useNotifications } from '../NotificationsContext';
 import { Modal } from './Modal';
 import { formatDateJst } from '../lib/date';
 import { TTSButton } from './TTSButton';
+import { SidebarPortal } from './SidebarPortal';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -96,6 +97,19 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     reasoningEffort,
     textVerbosity,
   } = settings;
+
+  const showAdvancedModelOptions = useMemo(() => {
+    const lower = (model || '').toLowerCase();
+    return lower === 'gpt-5-mini' || lower === 'gpt-5-nano';
+  }, [model]);
+
+  const handleChangeModel = useCallback(
+    (value: string) => {
+      setModel(value);
+      setSettings((prev) => ({ ...prev, model: value }));
+    },
+    [setSettings],
+  );
 
   const applyModelRequestFields = useCallback(
     (base: Record<string, unknown> = {}) => ({
@@ -797,7 +811,86 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   );
 
   return (
-    <section>
+    <>
+      {!isInModalView && (
+        <SidebarPortal>
+          <section className="sidebar-section" aria-label="WordPackの生成">
+            <h2>WordPack生成</h2>
+            <div className="sidebar-field">
+              <label htmlFor="wordpack-lemma-input">見出し語</label>
+              <input
+                id="wordpack-lemma-input"
+                ref={focusRef as React.RefObject<HTMLInputElement>}
+                value={lemma}
+                onChange={(e) => setLemma(e.target.value)}
+                placeholder="見出し語を入力"
+                disabled={loading}
+              />
+            </div>
+            <div className="sidebar-actions">
+              <button type="button" onClick={generate} disabled={!lemma.trim() || loading}>
+                生成
+              </button>
+              <button
+                type="button"
+                onClick={createEmpty}
+                disabled={!lemma.trim() || loading}
+                title="内容の生成を行わず、空のWordPackのみ保存"
+              >
+                WordPackのみ作成
+              </button>
+            </div>
+            <div className="sidebar-field">
+              <label htmlFor="wordpack-model-select">モデル</label>
+              <select
+                id="wordpack-model-select"
+                value={model}
+                onChange={(e) => handleChangeModel(e.target.value)}
+                disabled={loading}
+              >
+                <option value="gpt-5-mini">gpt-5-mini</option>
+                <option value="gpt-5-nano">gpt-5-nano</option>
+                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
+              </select>
+            </div>
+            {showAdvancedModelOptions && (
+              <div className="sidebar-inline">
+                <div className="sidebar-field">
+                  <label htmlFor="wordpack-reasoning-select">reasoning.effort</label>
+                  <select
+                    id="wordpack-reasoning-select"
+                    aria-label="reasoning.effort"
+                    value={reasoningEffort || 'minimal'}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
+                    disabled={loading}
+                  >
+                    <option value="minimal">minimal</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </div>
+                <div className="sidebar-field">
+                  <label htmlFor="wordpack-verbosity-select">text.verbosity</label>
+                  <select
+                    id="wordpack-verbosity-select"
+                    aria-label="text.verbosity"
+                    value={textVerbosity || 'medium'}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
+                    disabled={loading}
+                  >
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </section>
+        </SidebarPortal>
+      )}
+      <section>
       <style>{`
         .wp-container { display: grid; grid-template-columns: minmax(80px, 100px) 1fr; gap: 1rem; }
         .wp-nav { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; gap: 0.25rem; }
@@ -813,66 +906,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         @media (max-width: 840px) { .wp-container { grid-template-columns: 1fr; } }
       `}</style>
 
-      {!isInModalView && (
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-          <input
-            ref={focusRef as React.RefObject<HTMLInputElement>}
-            value={lemma}
-            onChange={(e) => setLemma(e.target.value)}
-            placeholder="見出し語を入力"
-          />
-          <button onClick={generate} disabled={!lemma.trim()}>生成</button>
-          <button onClick={createEmpty} disabled={!lemma.trim()} title="内容の生成を行わず、空のWordPackのみ保存">WordPackのみ作成</button>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            モデル
-            <select
-              value={model}
-              onChange={(e) => {
-                const v = e.target.value;
-                setModel(v);
-                setSettings((prev) => ({ ...prev, model: v }));
-              }}
-              disabled={loading}
-            >
-              <option value="gpt-5-mini">gpt-5-mini</option>
-              <option value="gpt-5-nano">gpt-5-nano</option>
-              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-              <option value="gpt-4o-mini">gpt-4o-mini</option>
-            </select>
-          </label>
-          {(((model || '').toLowerCase() === 'gpt-5-mini') || ((model || '').toLowerCase() === 'gpt-5-nano')) && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                reasoning.effort
-                <select
-                  aria-label="reasoning.effort"
-                  value={reasoningEffort || 'minimal'}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
-                  disabled={loading}
-                >
-                  <option value="minimal">minimal</option>
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
-              </label>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                text.verbosity
-                <select
-                  aria-label="text.verbosity"
-                  value={textVerbosity || 'medium'}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
-                  disabled={loading}
-                >
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
-              </label>
-            </div>
-          )}
-        </div>
-      )}
+      {!isInModalView && <div style={{ marginBottom: '0.75rem' }} />}
 
       {/* 進捗ヘッダー */}
 
@@ -892,6 +926,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         </Modal>
       )}
     </section>
+    </>
   );
 };
 
