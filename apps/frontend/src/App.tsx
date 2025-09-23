@@ -168,9 +168,7 @@ export const App: React.FC = () => {
           }
           body { background: var(--color-bg); color: var(--color-text); }
           a { color: var(--color-link); }
-          nav { display: flex; gap: 0.5rem; }
-          nav button[aria-selected='true'] { font-weight: bold; }
-          main, header, footer, nav { padding: 0.5rem; }
+          main, header, footer { padding: 0.5rem; }
           .header-bar {
             height: 50px;
             display: flex;
