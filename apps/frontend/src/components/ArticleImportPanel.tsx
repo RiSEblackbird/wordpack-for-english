@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { useConfirmDialog } from '../ConfirmDialogContext';
@@ -8,6 +8,7 @@ import { regenerateWordPackRequest } from '../lib/wordpack';
 import { Modal } from './Modal';
 import { WordPackPanel } from './WordPackPanel';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
+import { SidebarPortal } from './SidebarPortal';
 
 interface ArticleWordPackLink {
   word_pack_id: string;
@@ -35,6 +36,16 @@ export const ArticleImportPanel: React.FC = () => {
   const abortRef = useRef<AbortController | null>(null);
 
   const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
+
+  const showAdvancedModelOptions = useMemo(() => {
+    const lower = (model || '').toLowerCase();
+    return lower === 'gpt-5-mini' || lower === 'gpt-5-nano';
+  }, [model]);
+
+  const handleChangeModel = (value: string) => {
+    setModel(value);
+    setSettings((prev) => ({ ...prev, model: value }));
+  };
 
   const importArticle = async () => {
     const selectedModel = model;
@@ -150,76 +161,85 @@ export const ArticleImportPanel: React.FC = () => {
   };
 
   return (
-    <section>
-      <style>{`
-        .ai-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
-        .ai-textarea { width: 60%; min-height: 5rem; padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px; }
-        .ai-wp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.5rem; }
-        .ai-card { border: 1px solid var(--color-border); border-radius: 6px; padding: 0.5rem; background: var(--color-surface); }
-        .ai-badge { font-size: 0.75em; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid var(--color-border); }
-      `}</style>
-
-      <h2>文章インポート</h2>
-      <div className="ai-grid">
-        <textarea
-          className="ai-textarea"
-          placeholder="文章を貼り付け（日本語/英語）"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={loading}
-        />
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <button onClick={importArticle} disabled={loading || !text.trim()}>インポート</button>
-          <select value={category} onChange={(e) => setCategory(e.target.value as any)}>
-            <option value="Dev">Dev</option>
-            <option value="CS">CS</option>
-            <option value="LLM">LLM</option>
-            <option value="Business">Business</option>
-            <option value="Common">Common</option>
-          </select>
-          <button
-            onClick={async () => {
-              const selectedCategory = category;
-              const selectedModel = model;
-              setMsg(null);
-              setArticle(null);
-              setGenRunning((n) => n + 1);
-              const notifId = addNotification({ title: `【${selectedCategory}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
-              try {
-                const reqBody: any = { category: selectedCategory };
-                // generate_and_import は text キーで受け取る
-                reqBody.model = selectedModel;
-                if ((selectedModel || '').toLowerCase() === 'gpt-5-mini' || (selectedModel || '').toLowerCase() === 'gpt-5-nano') {
-                  reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
-                  reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
-                } else {
-                  reqBody.temperature = settings.temperature;
+    <>
+      <SidebarPortal>
+        <section className="sidebar-section" aria-label="文章インポート">
+          <h2>文章インポート</h2>
+          <div className="sidebar-field">
+            <label htmlFor="article-import-text">文章</label>
+            <textarea
+              id="article-import-text"
+              placeholder="文章を貼り付け（日本語/英語）"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              disabled={loading}
+              style={{ width: '100%', minHeight: '5rem', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+            />
+          </div>
+          <div className="sidebar-actions">
+            <button type="button" onClick={importArticle} disabled={loading || !text.trim()}>
+              インポート
+            </button>
+            <div className="sidebar-field">
+              <label htmlFor="article-category-select">カテゴリ</label>
+              <select
+                id="article-category-select"
+                value={category}
+                onChange={(e) => setCategory(e.target.value as any)}
+                disabled={loading}
+              >
+                <option value="Dev">Dev</option>
+                <option value="CS">CS</option>
+                <option value="LLM">LLM</option>
+                <option value="Business">Business</option>
+                <option value="Common">Common</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                const selectedCategory = category;
+                const selectedModel = model;
+                setMsg(null);
+                setArticle(null);
+                setGenRunning((n) => n + 1);
+                const notifId = addNotification({ title: `【${selectedCategory}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
+                try {
+                  const reqBody: any = { category: selectedCategory };
+                  reqBody.model = selectedModel;
+                  if ((selectedModel || '').toLowerCase() === 'gpt-5-mini' || (selectedModel || '').toLowerCase() === 'gpt-5-nano') {
+                    reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+                    reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
+                  } else {
+                    reqBody.temperature = settings.temperature;
+                  }
+                  const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
+                    method: 'POST',
+                    body: reqBody,
+                    timeoutMs: settings.requestTimeoutMs,
+                  });
+                  updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
+                  try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
+                  setMsg({ kind: 'status', text: '生成＆インポートを実行しました' });
+                } catch (e) {
+                  const m = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
+                  setMsg({ kind: 'alert', text: m });
+                  updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message: m, model: selectedModel, category: selectedCategory });
+                } finally {
+                  setGenRunning((n) => Math.max(0, n - 1));
                 }
-                const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
-                  method: 'POST',
-                  body: reqBody,
-                  // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
-                  timeoutMs: settings.requestTimeoutMs,
-                });
-                updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
-                try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
-                setMsg({ kind: 'status', text: '生成＆インポートを実行しました' });
-              } catch (e) {
-                const m = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
-                setMsg({ kind: 'alert', text: m });
-                updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message: m, model: selectedModel, category: selectedCategory });
-              } finally {
-                setGenRunning((n) => Math.max(0, n - 1));
-              }
-            }}
-          >
-            生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
-          </button>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            モデル
+              }}
+              disabled={loading}
+            >
+              生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
+            </button>
+          </div>
+          <div className="sidebar-field">
+            <label htmlFor="article-model-select">モデル</label>
             <select
+              id="article-model-select"
               value={model}
-              onChange={(e) => { const v = e.target.value; setModel(v); setSettings({ ...settings, model: v }); }}
+              onChange={(e) => handleChangeModel(e.target.value)}
               disabled={loading}
             >
               <option value="gpt-5-mini">gpt-5-mini</option>
@@ -227,15 +247,16 @@ export const ArticleImportPanel: React.FC = () => {
               <option value="gpt-4.1-mini">gpt-4.1-mini</option>
               <option value="gpt-4o-mini">gpt-4o-mini</option>
             </select>
-          </label>
-          {(((model || '').toLowerCase() === 'gpt-5-mini') || ((model || '').toLowerCase() === 'gpt-5-nano')) && (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                reasoning.effort
+          </div>
+          {showAdvancedModelOptions && (
+            <div className="sidebar-inline">
+              <div className="sidebar-field">
+                <label htmlFor="article-reasoning-select">reasoning.effort</label>
                 <select
+                  id="article-reasoning-select"
                   aria-label="reasoning.effort"
                   value={settings.reasoningEffort || 'minimal'}
-                  onChange={(e) => setSettings({ ...settings, reasoningEffort: e.target.value as any })}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
                   disabled={loading}
                 >
                   <option value="minimal">minimal</option>
@@ -243,25 +264,33 @@ export const ArticleImportPanel: React.FC = () => {
                   <option value="medium">medium</option>
                   <option value="high">high</option>
                 </select>
-              </label>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                text.verbosity
+              </div>
+              <div className="sidebar-field">
+                <label htmlFor="article-verbosity-select">text.verbosity</label>
                 <select
+                  id="article-verbosity-select"
                   aria-label="text.verbosity"
                   value={settings.textVerbosity || 'medium'}
-                  onChange={(e) => setSettings({ ...settings, textVerbosity: e.target.value as any })}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
                   disabled={loading}
                 >
                   <option value="low">low</option>
                   <option value="medium">medium</option>
                   <option value="high">high</option>
                 </select>
-              </label>
+              </div>
             </div>
           )}
-        </div>
+        </section>
+      </SidebarPortal>
+      <section>
+        <style>{`
+        .ai-wp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.5rem; }
+        .ai-card { border: 1px solid var(--color-border); border-radius: 6px; padding: 0.5rem; background: var(--color-surface); }
+        .ai-badge { font-size: 0.75em; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid var(--color-border); }
+      `}</style>
+
         {msg && <div role={msg.kind}>{msg.text}</div>}
-      </div>
 
       <ArticleDetailModal
         isOpen={!!article && detailOpen}
@@ -295,7 +324,8 @@ export const ArticleImportPanel: React.FC = () => {
           </div>
         ) : null}
       </Modal>
-    </section>
+      </section>
+    </>
   );
 };
 

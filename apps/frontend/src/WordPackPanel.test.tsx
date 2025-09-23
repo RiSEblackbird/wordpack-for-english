@@ -113,6 +113,10 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
     await act(async () => {
       await user.keyboard('{Alt>}{1}{/Alt}');
     });
@@ -179,6 +183,10 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
     await act(async () => {
       await user.keyboard('{Alt>}{1}{/Alt}');
     });
