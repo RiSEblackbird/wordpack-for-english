@@ -19,15 +19,106 @@ describe('App navigation', () => {
     expect(await screen.findByLabelText('temperature')).toBeInTheDocument();
   });
 
-  it('renders WordPack panel and allows generating request UI presence', async () => {
+  it('opens the sidebar with the hamburger button and keeps it visible after selecting a tab', async () => {
     render(<App />);
     const user = userEvent.setup();
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
     await act(async () => {
-      await user.keyboard('{Alt>}{4}{/Alt}');
+      await user.click(openButton);
     });
-    expect(await screen.findByPlaceholderText('見出し語を入力')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '生成' })).toBeInTheDocument();
-    // モデル選択の存在
-    expect(screen.getByLabelText('モデル')).toBeInTheDocument();
+
+    const sidebar = screen.getByLabelText('アプリ内共通メニュー');
+    expect(sidebar).toHaveAttribute('aria-hidden', 'false');
+
+    const computed = window.getComputedStyle(sidebar);
+    expect(computed.display).toBe('block');
+    expect(sidebar.getAttribute('style')).toContain('280px');
+
+    const examplesButton = await screen.findByRole('button', { name: '例文一覧' });
+    await act(async () => {
+      await user.click(examplesButton);
+    });
+
+    expect(await screen.findByRole('heading', { name: '例文一覧' })).toBeInTheDocument();
+    expect(sidebar).toHaveAttribute('aria-hidden', 'false');
+
+    const appShell = document.querySelector('.app-shell');
+    const mainInner = document.querySelector('.main-inner');
+    if (!appShell || !mainInner) {
+      throw new Error('layout elements not found');
+    }
+    expect(appShell).toHaveClass('sidebar-open');
+
+    const sidebarRect = sidebar.getBoundingClientRect();
+    const mainRect = mainInner.getBoundingClientRect();
+    expect(Math.round(sidebarRect.left)).toBe(0);
+    expect(mainRect.left).toBeGreaterThanOrEqual(sidebarRect.right);
+  });
+
+  it('places the hamburger button on the viewport left edge', async () => {
+    render(<App />);
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    expect(Math.round(toggle.getBoundingClientRect().left)).toBe(0);
+  });
+
+  it('keeps the main content position when enough horizontal margin remains', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1600,
+    });
+
+    render(<App />);
+    const user = userEvent.setup();
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(openButton);
+    });
+
+    const appShell = document.querySelector('.app-shell');
+    if (!appShell) {
+      throw new Error('app shell not found');
+    }
+
+    const shiftValue = parseFloat(appShell.style.getPropertyValue('--main-shift'));
+    expect(shiftValue).toBeCloseTo(-140, 1);
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: originalWidth,
+    });
+    window.dispatchEvent(new Event('resize'));
+  });
+
+  it('does not move the main content unnecessarily on tighter viewports', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1100,
+    });
+
+    render(<App />);
+    const user = userEvent.setup();
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(openButton);
+    });
+
+    const appShell = document.querySelector('.app-shell');
+    if (!appShell) {
+      throw new Error('app shell not found');
+    }
+
+    const shiftValue = parseFloat(appShell.style.getPropertyValue('--main-shift'));
+    expect(shiftValue).toBeCloseTo(0, 1);
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: originalWidth,
+    });
+    window.dispatchEvent(new Event('resize'));
   });
 });

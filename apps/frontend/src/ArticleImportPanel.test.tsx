@@ -57,15 +57,23 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     return mock;
   }
 
+  const openTab = async (user: ReturnType<typeof userEvent.setup>, label: string) => {
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
+    const tabButton = await screen.findByRole('button', { name: label });
+    await act(async () => {
+      await user.click(tabButton);
+    });
+  };
+
   it('sends model/temperature for sampling model on import', async () => {
     const fetchMock = setupFetchMocks();
     render(<App />);
 
     const user = userEvent.setup();
-    const importTab = await screen.findByRole('button', { name: '文章インポート' });
-    await act(async () => {
-      await user.click(importTab);
-    });
+    await openTab(user, '文章インポート');
 
     // モデルUIが表示される
     const modelSelect = await screen.findByLabelText('モデル');
@@ -92,10 +100,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
-    const importTab = await screen.findByRole('button', { name: '文章インポート' });
-    await act(async () => {
-      await user.click(importTab);
-    });
+    await openTab(user, '文章インポート');
 
     // gpt-5-mini 選択で追加UIが表示
     const modelSelect = await screen.findByLabelText('モデル');
@@ -132,10 +137,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
-    const importTab = await screen.findByRole('button', { name: '文章インポート' });
-    await act(async () => {
-      await user.click(importTab);
-    });
+    await openTab(user, '文章インポート');
 
     // カテゴリ選択→インポート
     const categorySelect = await screen.findByRole('combobox', { name: '' });
@@ -160,10 +162,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
-    const importTab = await screen.findByRole('button', { name: '文章インポート' });
-    await act(async () => {
-      await user.click(importTab);
-    });
+    await openTab(user, '文章インポート');
 
     const modelSelect = await screen.findByLabelText('モデル');
     await act(async () => {
@@ -198,10 +197,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
-    const importTab = await screen.findByRole('button', { name: '文章インポート' });
-    await act(async () => {
-      await user.click(importTab);
-    });
+    await openTab(user, '文章インポート');
 
     const categorySelect = await screen.findByRole('combobox', { name: '' });
     await act(async () => {
@@ -225,10 +221,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
-    const importTab = await screen.findByRole('button', { name: '文章インポート' });
-    await act(async () => {
-      await user.click(importTab);
-    });
+    await openTab(user, '文章インポート');
 
     const modelSelect = await screen.findByLabelText('モデル');
     await act(async () => {
@@ -256,10 +249,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     render(<App />);
 
     const user = userEvent.setup();
-    const importTab = await screen.findByRole('button', { name: '文章インポート' });
-    await act(async () => {
-      await user.click(importTab);
-    });
+    await openTab(user, '文章インポート');
 
     const modelSelect = await screen.findByLabelText('モデル');
     await act(async () => {
