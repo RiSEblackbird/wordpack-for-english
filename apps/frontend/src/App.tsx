@@ -199,7 +199,7 @@ export const App: React.FC = () => {
           }
           .sidebar-nav {
             display: grid;
-            gap: 1rem;
+            gap: 0.2rem;
             align-content: flex-start;
             padding-top: 0.5rem;
           }
@@ -257,10 +257,10 @@ export const App: React.FC = () => {
             padding-left: 3.5rem;
           }
           .sidebar-nav-button {
-            font-size: 1rem;
+            font-size: 1.2rem;
             border: none;
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
+            border-radius: 4px;
+            padding: 0.3rem 0.5rem;
             text-align: left;
             background: transparent;
             color: var(--color-text);

@@ -35,7 +35,9 @@ describe('WordPackListPanel modal preview', () => {
                 sense_title: 'デルタ概説',
                 created_at: twoDaysAgo.toISOString(),
                 updated_at: yesterday.toISOString(),
-                is_empty: true
+                is_empty: true,
+                checked_only_count: 5,
+                learned_count: 3
               },
               {
                 id: 'wp:test:2',
@@ -44,7 +46,9 @@ describe('WordPackListPanel modal preview', () => {
                 created_at: yesterday.toISOString(),
                 updated_at: now.toISOString(),
                 is_empty: false,
-                examples_count: { Dev: 2, CS: 1, LLM: 0, Business: 3, Common: 4 }
+                examples_count: { Dev: 2, CS: 1, LLM: 0, Business: 3, Common: 4 },
+                checked_only_count: 8,
+                learned_count: 6
               },
               {
                 id: 'wp:test:3',
@@ -53,7 +57,9 @@ describe('WordPackListPanel modal preview', () => {
                 created_at: now.toISOString(),
                 updated_at: twoDaysAgo.toISOString(),
                 is_empty: false,
-                examples_count: { Dev: 1, CS: 2, LLM: 1, Business: 1, Common: 2 }
+                examples_count: { Dev: 1, CS: 2, LLM: 1, Business: 1, Common: 2 },
+                checked_only_count: 2,
+                learned_count: 1
               },
             ],
             total: 3,
@@ -210,6 +216,39 @@ describe('WordPackListPanel modal preview', () => {
     });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'WordPack プレビュー' })).not.toBeInTheDocument(), { timeout: 3000 });
   }, 15000);
+
+  it('カードに学習記録バッジを表示し、イベントでリアルタイム更新される', async () => {
+    setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.keyboard('{Alt>}{4}{/Alt}');
+    });
+
+    const cards = await screen.findAllByTestId('wp-card');
+    expect(cards).toHaveLength(3);
+
+    const deltaCard = cards.find((card) => card.textContent?.includes('delta'));
+    expect(deltaCard).toBeDefined();
+    const targetCard = deltaCard!;
+    expect(within(targetCard).getByText('学 3')).toBeInTheDocument();
+    expect(within(targetCard).getByText('確 5')).toBeInTheDocument();
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('wordpack:study-progress', {
+          detail: { wordPackId: 'wp:test:1', learned_count: 9, checked_only_count: 12 },
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(within(targetCard).getByText('学 9')).toBeInTheDocument();
+      expect(within(targetCard).getByText('確 12')).toBeInTheDocument();
+    });
+  });
 
   it('カード/リスト表示ともにWordPack語彙の読み上げボタンが表示される', async () => {
     setupFetchMocks();

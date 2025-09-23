@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -248,6 +248,16 @@ class WordPackListItem(BaseModel):
     updated_at: str
     is_empty: bool = Field(default=False, description="内容が空のWordPackかどうか（UI用）")
     examples_count: Optional[dict] = Field(default=None, description="カテゴリごとの例文数（UI用）")
+    checked_only_count: int = Field(
+        default=0,
+        ge=0,
+        description="WordPack全体を確認しただけの回数（非負整数）",
+    )
+    learned_count: int = Field(
+        default=0,
+        ge=0,
+        description="WordPack全体を学習した回数（非負整数）",
+    )
 
 
 class WordPackListResponse(BaseModel):
@@ -256,6 +266,36 @@ class WordPackListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class StudyProgressRequest(BaseModel):
+    kind: Literal["checked", "learned"] = Field(
+        description="学習記録の種類: checked=確認のみ / learned=学習完了",
+    )
+
+
+class WordPackStudyProgressResponse(BaseModel):
+    checked_only_count: int = Field(
+        description="更新後の確認のみカウント",
+        ge=0,
+    )
+    learned_count: int = Field(
+        description="更新後の学習済みカウント",
+        ge=0,
+    )
+
+
+class ExampleStudyProgressResponse(BaseModel):
+    id: int = Field(description="対象の例文ID")
+    word_pack_id: str = Field(description="例文が属するWordPack ID")
+    checked_only_count: int = Field(
+        description="更新後の確認のみカウント",
+        ge=0,
+    )
+    learned_count: int = Field(
+        description="更新後の学習済みカウント",
+        ge=0,
+    )
 
 
 class WordPackRegenerateRequest(BaseModel):
