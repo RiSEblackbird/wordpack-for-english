@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WordPackPanel } from './components/WordPackPanel';
 import { WordPackListPanel } from './components/WordPackListPanel';
@@ -78,6 +78,8 @@ export const App: React.FC = () => {
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
+  const layoutUpdateTimeoutRef = useRef<number | null>(null);
+  const isSidebarOpenRef = useRef(isSidebarOpen);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -106,14 +108,60 @@ export const App: React.FC = () => {
     setIsSidebarOpen((prev) => !prev);
 
   useEffect(() => {
-    const updateLayout = () => {
-      setMainShift(calculateMainShift(window.innerWidth, isSidebarOpen));
+    isSidebarOpenRef.current = isSidebarOpen;
+  }, [isSidebarOpen]);
+
+  const applyMainShift = useCallback(() => {
+    if (typeof window === 'undefined') {
+      setMainShift(0);
+      return;
+    }
+    setMainShift(calculateMainShift(window.innerWidth, isSidebarOpenRef.current));
+  }, []);
+
+  const scheduleMainShiftUpdate = useCallback(
+    (delayMs: number) => {
+      if (layoutUpdateTimeoutRef.current !== null) {
+        window.clearTimeout(layoutUpdateTimeoutRef.current);
+      }
+
+      if (delayMs <= 0) {
+        applyMainShift();
+        layoutUpdateTimeoutRef.current = null;
+        return;
+      }
+
+      layoutUpdateTimeoutRef.current = window.setTimeout(() => {
+        applyMainShift();
+        layoutUpdateTimeoutRef.current = null;
+      }, delayMs);
+    },
+    [applyMainShift],
+  );
+
+  useEffect(() => {
+    scheduleMainShiftUpdate(isSidebarOpen ? 100 : 0);
+
+    return () => {
+      if (layoutUpdateTimeoutRef.current !== null) {
+        window.clearTimeout(layoutUpdateTimeoutRef.current);
+        layoutUpdateTimeoutRef.current = null;
+      }
+    };
+  }, [isSidebarOpen, scheduleMainShiftUpdate]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      scheduleMainShiftUpdate(isSidebarOpenRef.current ? 100 : 0);
     };
 
-    updateLayout();
-    window.addEventListener('resize', updateLayout);
-    return () => window.removeEventListener('resize', updateLayout);
-  }, [isSidebarOpen]);
+    window.addEventListener('resize', handleResize);
+    handleResize();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [scheduleMainShiftUpdate]);
 
   const handleSelectTab = (next: Tab) => {
     setTab(next);
@@ -166,7 +214,7 @@ export const App: React.FC = () => {
             --color-level: #93c5fd;
             --color-neutral-surface: #374151;
           }
-          body { background: var(--color-bg); color: var(--color-text); }
+          body { margin: 0; background: var(--color-bg); color: var(--color-text); }
           a { color: var(--color-link); }
           main, header, footer { padding: 0.5rem; }
           .header-bar {
