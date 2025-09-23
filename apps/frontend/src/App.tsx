@@ -24,6 +24,32 @@ const NAV_ITEMS: Array<{ key: Tab; label: string }> = [
 const SIDEBAR_ID = 'app-sidebar';
 const MAIN_MAX_WIDTH = 1000;
 const SIDEBAR_WIDTH = 280;
+const MAIN_SIDE_PADDING = 20;
+
+const calculateMainShift = (viewportWidth: number, sidebarOpen: boolean) => {
+  if (!sidebarOpen) {
+    return 0;
+  }
+
+  const horizontalPadding = MAIN_SIDE_PADDING * 2;
+  const contentWidthClosed = Math.max(viewportWidth - horizontalPadding, 0);
+  const mainWidthClosed = Math.min(MAIN_MAX_WIDTH, contentWidthClosed);
+  const leftClosed =
+    MAIN_SIDE_PADDING + Math.max((contentWidthClosed - mainWidthClosed) / 2, 0);
+
+  const mainColumnWidth = Math.max(viewportWidth - SIDEBAR_WIDTH, 0);
+  const contentWidthOpen = Math.max(mainColumnWidth - horizontalPadding, 0);
+  const mainWidthOpen = Math.min(MAIN_MAX_WIDTH, contentWidthOpen);
+  const defaultLeftOpen =
+    SIDEBAR_WIDTH +
+    MAIN_SIDE_PADDING +
+    Math.max((contentWidthOpen - mainWidthOpen) / 2, 0);
+
+  const minimumLeft = SIDEBAR_WIDTH + MAIN_SIDE_PADDING;
+  const targetLeft = Math.max(leftClosed, minimumLeft);
+
+  return targetLeft - defaultLeftOpen;
+};
 
 const HamburgerIcon: React.FC = () => (
   <svg
@@ -48,6 +74,7 @@ export const App: React.FC = () => {
   const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
   const focusRef = useRef<HTMLElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [mainShift, setMainShift] = useState(0);
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
@@ -78,6 +105,16 @@ export const App: React.FC = () => {
   const toggleSidebar = () =>
     setIsSidebarOpen((prev) => !prev);
 
+  useEffect(() => {
+    const updateLayout = () => {
+      setMainShift(calculateMainShift(window.innerWidth, isSidebarOpen));
+    };
+
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    return () => window.removeEventListener('resize', updateLayout);
+  }, [isSidebarOpen]);
+
   const handleSelectTab = (next: Tab) => {
     setTab(next);
   };
@@ -91,6 +128,7 @@ export const App: React.FC = () => {
               className={`app-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
               style={{
                 ['--main-max-width' as any]: `${MAIN_MAX_WIDTH}px`,
+                ['--main-shift' as any]: `${mainShift}px`,
               }}
             >
               <ThemeApplier />
@@ -215,6 +253,8 @@ export const App: React.FC = () => {
             max-width: var(--main-max-width);
             width: min(100%, var(--main-max-width));
             margin: 0 auto;
+            transform: translateX(var(--main-shift));
+            transition: transform 0.2s ease;
           }
           header {
             padding-top: 1rem;

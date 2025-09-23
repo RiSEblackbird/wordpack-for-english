@@ -61,4 +61,64 @@ describe('App navigation', () => {
     const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
     expect(Math.round(toggle.getBoundingClientRect().left)).toBe(0);
   });
+
+  it('keeps the main content position when enough horizontal margin remains', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1600,
+    });
+
+    render(<App />);
+    const user = userEvent.setup();
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(openButton);
+    });
+
+    const appShell = document.querySelector('.app-shell');
+    if (!appShell) {
+      throw new Error('app shell not found');
+    }
+
+    const shiftValue = parseFloat(appShell.style.getPropertyValue('--main-shift'));
+    expect(shiftValue).toBeCloseTo(-140, 1);
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: originalWidth,
+    });
+    window.dispatchEvent(new Event('resize'));
+  });
+
+  it('does not move the main content unnecessarily on tighter viewports', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: 1100,
+    });
+
+    render(<App />);
+    const user = userEvent.setup();
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(openButton);
+    });
+
+    const appShell = document.querySelector('.app-shell');
+    if (!appShell) {
+      throw new Error('app shell not found');
+    }
+
+    const shiftValue = parseFloat(appShell.style.getPropertyValue('--main-shift'));
+    expect(shiftValue).toBeCloseTo(0, 1);
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      value: originalWidth,
+    });
+    window.dispatchEvent(new Event('resize'));
+  });
 });
