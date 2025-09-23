@@ -80,7 +80,7 @@ describe('App navigation', () => {
     expect(styles.transitionProperty === 'all' || styles.transitionProperty === '').toBe(true);
   });
 
-  it('defers main content shifting until the sidebar layout settles', async () => {
+  it('updates the main content position immediately and reaffirms it after the sidebar settles', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -104,20 +104,23 @@ describe('App navigation', () => {
         throw new Error('app shell not found');
       }
 
-      expect(appShell.style.getPropertyValue('--main-shift')).toBe('0px');
+      const immediateShift = appShell.style.getPropertyValue('--main-shift');
+      expect(immediateShift).not.toBe('0px');
 
       await act(async () => {
         vi.advanceTimersByTime(100);
       });
 
       const shiftAfterDelay = appShell.style.getPropertyValue('--main-shift');
-      expect(shiftAfterDelay).not.toBe('0px');
+      expect(parseFloat(shiftAfterDelay)).toBeCloseTo(parseFloat(immediateShift), 5);
     } finally {
       Object.defineProperty(window, 'innerWidth', {
         configurable: true,
         value: originalWidth,
       });
-      window.dispatchEvent(new Event('resize'));
+      act(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
       vi.useRealTimers();
     }
   });
@@ -157,7 +160,9 @@ describe('App navigation', () => {
         configurable: true,
         value: originalWidth,
       });
-      window.dispatchEvent(new Event('resize'));
+      act(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
       vi.useRealTimers();
     }
   });
@@ -197,7 +202,9 @@ describe('App navigation', () => {
         configurable: true,
         value: originalWidth,
       });
-      window.dispatchEvent(new Event('resize'));
+      act(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
       vi.useRealTimers();
     }
   });

@@ -123,18 +123,17 @@ export const App: React.FC = () => {
     (delayMs: number) => {
       if (layoutUpdateTimeoutRef.current !== null) {
         window.clearTimeout(layoutUpdateTimeoutRef.current);
+        layoutUpdateTimeoutRef.current = null;
       }
 
-      if (delayMs <= 0) {
-        applyMainShift();
-        layoutUpdateTimeoutRef.current = null;
-        return;
-      }
+      applyMainShift();
 
-      layoutUpdateTimeoutRef.current = window.setTimeout(() => {
-        applyMainShift();
-        layoutUpdateTimeoutRef.current = null;
-      }, delayMs);
+      if (delayMs > 0) {
+        layoutUpdateTimeoutRef.current = window.setTimeout(() => {
+          applyMainShift();
+          layoutUpdateTimeoutRef.current = null;
+        }, delayMs);
+      }
     },
     [applyMainShift],
   );
@@ -299,7 +298,8 @@ export const App: React.FC = () => {
             max-width: var(--main-max-width);
             width: min(100%, var(--main-max-width));
             margin: 0 auto;
-            transform: translateX(var(--main-shift));
+            position: relative;
+            left: var(--main-shift);
             transition: none;
           }
           header {
