@@ -40,6 +40,7 @@ describe('App navigation', () => {
 
     const sidebar = screen.getByLabelText('アプリ内共通メニュー');
     expect(sidebar).toHaveAttribute('aria-hidden', 'false');
+    expect(window.getComputedStyle(sidebar).position).toBe('relative');
 
     const examplesButton = await screen.findByRole('button', { name: '例文一覧' });
     await user.click(examplesButton);
