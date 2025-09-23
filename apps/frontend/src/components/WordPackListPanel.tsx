@@ -628,11 +628,11 @@ export const WordPackListPanel: React.FC = () => {
         .wp-search-button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
         .wp-search-button:hover { background: #f5f5f5; }
         .wp-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
-        .wp-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.4rem; background:rgb(173, 159, 211); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
+        .wp-card { border: 1px solid #ddd; border-radius: 5px; padding: 0.2rem; background:rgb(173, 159, 211); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
         .wp-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; gap: 0.5rem; }
-        .wp-card-actions { display: flex; gap: 0.3rem; align-items: center; margin-left: auto; flex-wrap: wrap; }
-        .wp-card-tts-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; }
-        .wp-card-title { font-size: 1.0em; font-weight: bold; color: #333; margin: 0; }
+        .wp-card-actions { display: flex; gap: 0.15rem; align-items: center; margin-left: auto; flex-wrap: wrap; }
+        .wp-card-tts-btn { font-size: 0.55em; padding: 0.1rem 0.2rem; border-radius: 4px; }
+        .wp-card-title { font-size: 0.8em; font-weight: bold; color: #333; margin: 0; }
         .wp-card-meta { font-size: 0.50em; color: #666; margin: 0.25rem 0; }
         .wp-progress-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.35rem; }
         .wp-progress-badge { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.15rem 0.45rem; border-radius: 999px; font-size: 0.65em; font-weight: bold; border: 1px solid transparent; }
@@ -641,9 +641,9 @@ export const WordPackListPanel: React.FC = () => {
         .wp-progress-badge.small { font-size: 0.55em; padding: 0.1rem 0.35rem; }
         .wp-index-progress { display: inline-flex; gap: 0.25rem; align-items: center; }
         .wp-card-header-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-        .wp-sense-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; border: 1px solid #5c6bc0; background: #f5f7ff; color: #3f51b5; cursor: pointer; }
+        .wp-sense-btn { font-size: 0.55em; padding: 0.1rem 0.2rem; border-radius: 4px; border: 1px solid #5c6bc0; background: #f5f7ff; color: #3f51b5; cursor: pointer; }
         .wp-sense-btn[aria-pressed="true"] { background: #e8eaf6; border-color: #3f51b5; color: #283593; }
-        .wp-generate-btn { font-size: 0.55em; padding: 0.1rem 0.3rem; border-radius: 4px; border: 1px solid #2e7d32; background: #e8f5e9; color: #1b5e20; cursor: pointer; }
+        .wp-generate-btn { font-size: 0.55em; padding: 0.1rem 0.2rem; border-radius: 4px; border: 1px solid #2e7d32; background: #e8f5e9; color: #1b5e20; cursor: pointer; }
         .wp-generate-btn:hover:not(:disabled) { background: #d0f0d5; }
         .wp-generate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .wp-card-sense-title { margin: 0.35rem 0 0.2rem; font-size: 0.70em; color: #2f2f2f; background: rgba(255,255,255,0.86); padding: 0.25rem 0.35rem; border-left: 3px solid #5c6bc0; border-radius: 4px; line-height: 1.4; }
@@ -857,7 +857,7 @@ export const WordPackListPanel: React.FC = () => {
                         <span className="wp-progress-badge checked">確 {wp.checked_only_count}</span>
                       </div>
                       {wp.is_empty ? (
-                        <div style={{ marginTop: '0.5rem', fontSize: '0.8em' }}>
+                        <div style={{ marginTop: '0.3rem', fontSize: '0.7em' }}>
                           <span style={{
                             display: 'inline-flex',
                             alignItems: 'center',
