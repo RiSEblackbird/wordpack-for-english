@@ -44,6 +44,24 @@ class AppSQLiteStore:
         if p.parent and not p.parent.exists():
             p.parent.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def _normalize_non_negative_int(value: Any) -> int:
+        """入力を非負整数に正規化する（不正値/負値は0）。"""
+
+        try:
+            ivalue = int(value)
+        except (TypeError, ValueError):
+            return 0
+        return ivalue if ivalue >= 0 else 0
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+        """指定列が存在しなければ ALTER TABLE で追加する。"""
+
+        cur = conn.execute(f"PRAGMA table_info({table});")
+        existing = {str(row["name"]) for row in cur.fetchall()}
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition};")
+
     def _init_db(self) -> None:
         with self._conn() as conn:
             with conn:
@@ -55,7 +73,9 @@ class AppSQLiteStore:
                         sense_title TEXT NOT NULL DEFAULT '',
                         data TEXT NOT NULL,
                         created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL
+                        updated_at TEXT NOT NULL,
+                        checked_only_count INTEGER NOT NULL DEFAULT 0,
+                        learned_count INTEGER NOT NULL DEFAULT 0
                     );
                     """
                 )
@@ -74,6 +94,8 @@ class AppSQLiteStore:
                         grammar_ja TEXT,
                         llm_model TEXT,
                         llm_params TEXT,
+                        checked_only_count INTEGER NOT NULL DEFAULT 0,
+                        learned_count INTEGER NOT NULL DEFAULT 0,
                         created_at TEXT NOT NULL,
                         FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
                     );
@@ -81,6 +103,32 @@ class AppSQLiteStore:
                 )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack ON word_pack_examples(word_pack_id);")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack_cat_pos ON word_pack_examples(word_pack_id, category, position);")
+
+                # 既存DBでも列が存在するように補正
+                self._ensure_column(
+                    conn,
+                    "word_packs",
+                    "checked_only_count",
+                    "checked_only_count INTEGER NOT NULL DEFAULT 0",
+                )
+                self._ensure_column(
+                    conn,
+                    "word_packs",
+                    "learned_count",
+                    "learned_count INTEGER NOT NULL DEFAULT 0",
+                )
+                self._ensure_column(
+                    conn,
+                    "word_pack_examples",
+                    "checked_only_count",
+                    "checked_only_count INTEGER NOT NULL DEFAULT 0",
+                )
+                self._ensure_column(
+                    conn,
+                    "word_pack_examples",
+                    "learned_count",
+                    "learned_count INTEGER NOT NULL DEFAULT 0",
+                )
 
                 # Articles 永続化テーブル
                 conn.execute(
@@ -124,7 +172,9 @@ class AppSQLiteStore:
 
     def _split_examples_from_payload(
         self, data: str | Mapping[str, Any]
-    ) -> tuple[str, Mapping[str, Any] | None, str, list[str]]:
+    ) -> tuple[str, Mapping[str, Any] | None, str, list[str], tuple[int, int]]:
+        checked_only_count = 0
+        learned_count = 0
         if isinstance(data, Mapping):
             parsed: Mapping[str, Any] = dict(data)
         else:
@@ -137,6 +187,7 @@ class AppSQLiteStore:
                     None,
                     "",
                     [],
+                    (checked_only_count, learned_count),
                 )
             if not isinstance(parsed, Mapping):
                 empty_json = json.dumps({}, ensure_ascii=False)
@@ -145,6 +196,7 @@ class AppSQLiteStore:
                     None,
                     "",
                     [],
+                    (checked_only_count, learned_count),
                 )
 
         sense_title = ""
@@ -153,6 +205,19 @@ class AppSQLiteStore:
             sense_title = str(parsed.get("sense_title") or "").strip()
         except Exception:
             sense_title = ""
+
+        try:
+            checked_only_count = self._normalize_non_negative_int(
+                (parsed or {}).get("checked_only_count")
+            )
+        except Exception:
+            checked_only_count = 0
+        try:
+            learned_count = self._normalize_non_negative_int(
+                (parsed or {}).get("learned_count")
+            )
+        except Exception:
+            learned_count = 0
 
         senses_payload = parsed.get("senses") if isinstance(parsed, Mapping) else None
         if isinstance(senses_payload, Sequence):
@@ -171,13 +236,19 @@ class AppSQLiteStore:
         if isinstance(examples, Mapping):
             core = dict(parsed)
             core.pop("examples", None)
-            return json.dumps(core, ensure_ascii=False), examples, sense_title, sense_candidates
+            return (
+                json.dumps(core, ensure_ascii=False),
+                examples,
+                sense_title,
+                sense_candidates,
+                (checked_only_count, learned_count),
+            )
         serialized = json.dumps(parsed, ensure_ascii=False) if not isinstance(data, str) else data
-        return serialized, None, sense_title, sense_candidates
+        return serialized, None, sense_title, sense_candidates, (checked_only_count, learned_count)
 
     def _iter_example_rows(
         self, examples: Mapping[str, Any]
-    ) -> Iterable[tuple[str, int, str, str, str | None, str | None, str | None]]:
+    ) -> Iterable[tuple[str, int, str, str, str | None, str | None, str | None, int, int]]:
         for category in EXAMPLE_CATEGORIES:
             arr = examples.get(category)
             if not isinstance(arr, Sequence):
@@ -192,12 +263,36 @@ class AppSQLiteStore:
                 grammar_ja = str(item.get("grammar_ja") or "").strip() or None
                 llm_model = str(item.get("llm_model") or "").strip() or None
                 llm_params = str(item.get("llm_params") or "").strip() or None
-                yield category, pos, en, ja, grammar_ja, llm_model, llm_params
+                checked_only_count = self._normalize_non_negative_int(
+                    (item or {}).get("checked_only_count")
+                )
+                learned_count = self._normalize_non_negative_int(
+                    (item or {}).get("learned_count")
+                )
+                yield (
+                    category,
+                    pos,
+                    en,
+                    ja,
+                    grammar_ja,
+                    llm_model,
+                    llm_params,
+                    checked_only_count,
+                    learned_count,
+                )
 
     def _load_examples_rows(self, conn: sqlite3.Connection, word_pack_id: str) -> Sequence[sqlite3.Row]:
         cur = conn.execute(
             """
-            SELECT category, en, ja, grammar_ja, llm_model, llm_params
+            SELECT
+                category,
+                en,
+                ja,
+                grammar_ja,
+                llm_model,
+                llm_params,
+                checked_only_count,
+                learned_count
             FROM word_pack_examples
             WHERE word_pack_id = ?
             ORDER BY category ASC, position ASC, id ASC;
@@ -221,6 +316,12 @@ class AppSQLiteStore:
                 item["llm_model"] = r["llm_model"]
             if r["llm_params"]:
                 item["llm_params"] = r["llm_params"]
+            item["checked_only_count"] = self._normalize_non_negative_int(
+                r["checked_only_count"]
+            )
+            item["learned_count"] = self._normalize_non_negative_int(
+                r["learned_count"]
+            )
             examples.setdefault(cat, []).append(item)
         # ensure categories exist even if absent in DB
         for cat in EXAMPLE_CATEGORIES:
@@ -236,7 +337,13 @@ class AppSQLiteStore:
         core 部分（examples を除く）を word_packs.data に保存する。
         """
         now = datetime.now(UTC).isoformat()
-        core_json, examples, sense_title_raw, sense_candidates = self._split_examples_from_payload(data)
+        (
+            core_json,
+            examples,
+            sense_title_raw,
+            sense_candidates,
+            (checked_only_count, learned_count),
+        ) = self._split_examples_from_payload(data)
         sense_title = choose_sense_title(
             sense_title_raw,
             sense_candidates,
@@ -248,31 +355,70 @@ class AppSQLiteStore:
             with conn:
                 conn.execute(
                     """
-                    INSERT INTO word_packs(id, lemma, sense_title, data, created_at, updated_at)
+                    INSERT INTO word_packs(
+                        id, lemma, sense_title, data, created_at, updated_at, checked_only_count, learned_count
+                    )
                     VALUES (
                         ?, ?, ?, ?,
                         COALESCE((SELECT created_at FROM word_packs WHERE id = ?), ?),
+                        ?,
+                        ?,
                         ?
                     )
                     ON CONFLICT(id) DO UPDATE SET
                         lemma = excluded.lemma,
                         sense_title = excluded.sense_title,
                         data = excluded.data,
-                        updated_at = excluded.updated_at;
+                        updated_at = excluded.updated_at,
+                        checked_only_count = excluded.checked_only_count,
+                        learned_count = excluded.learned_count;
                     """,
-                    (word_pack_id, lemma, sense_title, core_json, word_pack_id, now, now),
+                    (
+                        word_pack_id,
+                        lemma,
+                        sense_title,
+                        core_json,
+                        word_pack_id,
+                        now,
+                        now,
+                        checked_only_count,
+                        learned_count,
+                    ),
                 )
 
                 if isinstance(examples, Mapping):
                     conn.execute("DELETE FROM word_pack_examples WHERE word_pack_id = ?;", (word_pack_id,))
-                    for cat, pos, en, ja, grammar_ja, llm_model, llm_params in self._iter_example_rows(examples):
+                    for (
+                        cat,
+                        pos,
+                        en,
+                        ja,
+                        grammar_ja,
+                        llm_model,
+                        llm_params,
+                        checked_only_count,
+                        learned_count,
+                    ) in self._iter_example_rows(examples):
                         conn.execute(
                             """
                             INSERT INTO word_pack_examples(
-                                word_pack_id, category, position, en, ja, grammar_ja, llm_model, llm_params, created_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                                word_pack_id, category, position, en, ja, grammar_ja, llm_model, llm_params,
+                                checked_only_count, learned_count, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                             """,
-                            (word_pack_id, cat, pos, en, ja, grammar_ja, llm_model, llm_params, now),
+                            (
+                                word_pack_id,
+                                cat,
+                                pos,
+                                en,
+                                ja,
+                                grammar_ja,
+                                llm_model,
+                                llm_params,
+                                checked_only_count,
+                                learned_count,
+                                now,
+                            ),
                         )
 
     def get_word_pack(self, word_pack_id: str) -> Optional[tuple[str, str, str, str]]:
@@ -282,7 +428,11 @@ class AppSQLiteStore:
         """
         with self._conn() as conn:
             cur = conn.execute(
-                "SELECT lemma, data, created_at, updated_at FROM word_packs WHERE id = ?;",
+                """
+                SELECT lemma, data, created_at, updated_at, checked_only_count, learned_count
+                FROM word_packs
+                WHERE id = ?;
+                """,
                 (word_pack_id,),
             )
             row = cur.fetchone()
@@ -291,7 +441,21 @@ class AppSQLiteStore:
 
             rows = self._load_examples_rows(conn, word_pack_id)
             data_json = self._merge_core_with_examples(row["data"], rows)
-            return (row["lemma"], data_json, row["created_at"], row["updated_at"])
+            try:
+                data_dict = json.loads(data_json) if data_json else {}
+            except Exception:
+                data_dict = {}
+            data_dict["checked_only_count"] = self._normalize_non_negative_int(
+                row["checked_only_count"]
+            )
+            data_dict["learned_count"] = self._normalize_non_negative_int(row["learned_count"])
+            data_json_with_progress = json.dumps(data_dict, ensure_ascii=False)
+            return (
+                row["lemma"],
+                data_json_with_progress,
+                row["created_at"],
+                row["updated_at"],
+            )
 
     def list_word_packs(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str, str]]:
         """WordPack一覧を取得する。戻り値: [(id, lemma, sense_title, created_at, updated_at), ...]"""
@@ -689,7 +853,7 @@ class AppSQLiteStore:
     def append_examples(self, word_pack_id: str, category: str, items: list[dict]) -> int:
         """指定カテゴリに例文を末尾追記し、追加件数を返す。
 
-        - `items`: {en, ja, grammar_ja?, llm_model?, llm_params?} の辞書配列
+        - `items`: {en, ja, grammar_ja?, llm_model?, llm_params?, checked_only_count?, learned_count?} の辞書配列
         - `word_packs.updated_at` を現在時刻で更新する
         """
         if not items:
@@ -719,13 +883,32 @@ class AppSQLiteStore:
                     grammar_ja = (str((item or {}).get("grammar_ja") or "").strip() or None)
                     llm_model = (str((item or {}).get("llm_model") or "").strip() or None)
                     llm_params = (str((item or {}).get("llm_params") or "").strip() or None)
+                    checked_only_count = self._normalize_non_negative_int(
+                        (item or {}).get("checked_only_count")
+                    )
+                    learned_count = self._normalize_non_negative_int(
+                        (item or {}).get("learned_count")
+                    )
                     conn.execute(
                         """
                         INSERT INTO word_pack_examples(
-                            word_pack_id, category, position, en, ja, grammar_ja, llm_model, llm_params, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                            word_pack_id, category, position, en, ja, grammar_ja, llm_model, llm_params,
+                            checked_only_count, learned_count, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                         """,
-                        (word_pack_id, category, start_pos + offset, en, ja, grammar_ja, llm_model, llm_params, now),
+                        (
+                            word_pack_id,
+                            category,
+                            start_pos + offset,
+                            en,
+                            ja,
+                            grammar_ja,
+                            llm_model,
+                            llm_params,
+                            checked_only_count,
+                            learned_count,
+                            now,
+                        ),
                     )
                     inserted += 1
 
@@ -787,10 +970,10 @@ class AppSQLiteStore:
         search: str | None = None,
         search_mode: str = "contains",
         category: str | None = None,
-    ) -> list[tuple[int, str, str, str, str, str | None, str, str | None]]:
+    ) -> list[tuple[int, str, str, str, str, str, str | None, str, str | None, int, int]]:
         """例文一覧（WordPack結合）を返す。
 
-        戻り値: [(id, word_pack_id, lemma, category, en, grammar_ja, created_at, word_pack_updated_at)]
+        戻り値: [(id, word_pack_id, lemma, category, en, ja, grammar_ja, created_at, word_pack_updated_at, checked_only, learned)]
         """
         # ORDER BY の安全なマッピング
         order_map = {
@@ -832,7 +1015,9 @@ class AppSQLiteStore:
                     wpe.ja AS ja,
                     wpe.grammar_ja AS grammar_ja,
                     wpe.created_at AS created_at,
-                    wp.updated_at AS pack_updated_at
+                    wp.updated_at AS pack_updated_at,
+                    wpe.checked_only_count AS checked_only_count,
+                    wpe.learned_count AS learned_count
                 FROM word_pack_examples wpe
                 JOIN word_packs wp ON wp.id = wpe.word_pack_id
                 {where_sql}
@@ -841,7 +1026,7 @@ class AppSQLiteStore:
                 """,
                 tuple(params + [limit, offset]),
             )
-            items: list[tuple[int, str, str, str, str, str | None, str, str | None]] = []
+            items: list[tuple[int, str, str, str, str, str, str | None, str, str | None, int, int]] = []
             for r in cur.fetchall():
                 items.append(
                     (
@@ -854,6 +1039,8 @@ class AppSQLiteStore:
                         r["grammar_ja"],
                         r["created_at"],
                         r["pack_updated_at"],
+                        self._normalize_non_negative_int(r["checked_only_count"]),
+                        self._normalize_non_negative_int(r["learned_count"]),
                     )
                 )
             return items

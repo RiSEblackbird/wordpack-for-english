@@ -123,6 +123,16 @@ class Examples(BaseModel):
         category: Optional[ExampleCategory] = Field(default=None, description="例文カテゴリ（後方互換のため任意）")
         llm_model: Optional[str] = Field(default=None, description="例文生成に使用したLLMモデル名（任意）")
         llm_params: Optional[str] = Field(default=None, description="LLMパラメータ情報を連結した文字列（任意）")
+        checked_only_count: int = Field(
+            default=0,
+            ge=0,
+            description="この例文を確認しただけの回数（非負整数）",
+        )
+        learned_count: int = Field(
+            default=0,
+            ge=0,
+            description="この例文を学習完了と記録した回数（非負整数）",
+        )
 
     Dev: List[ExampleItem] = Field(default_factory=list)
     CS: List[ExampleItem] = Field(default_factory=list)
@@ -147,6 +157,16 @@ class ExampleListItem(BaseModel):
     grammar_ja: Optional[str] = None
     created_at: str
     word_pack_updated_at: Optional[str] = None
+    checked_only_count: int = Field(
+        default=0,
+        ge=0,
+        description="例文を確認しただけの回数（非負整数）",
+    )
+    learned_count: int = Field(
+        default=0,
+        ge=0,
+        description="例文を学習済みと記録した回数（非負整数）",
+    )
 
 
 class ExampleListResponse(BaseModel):
@@ -207,6 +227,16 @@ class WordPack(BaseModel):
     # 生成に使用したAIのメタ（任意）
     llm_model: Optional[str] = Field(default=None)
     llm_params: Optional[str] = Field(default=None)
+    checked_only_count: int = Field(
+        default=0,
+        ge=0,
+        description="WordPack全体を確認しただけの回数（非負整数）",
+    )
+    learned_count: int = Field(
+        default=0,
+        ge=0,
+        description="WordPack全体を学習した回数（非負整数）",
+    )
 
 
 class WordPackListItem(BaseModel):

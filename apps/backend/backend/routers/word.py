@@ -565,7 +565,19 @@ async def list_examples(
     )
 
     items: list[ExampleListItem] = []
-    for (rid, wp_id, lemma, cat, en, ja, grammar_ja, created_at, pack_updated_at) in items_raw:
+    for (
+        rid,
+        wp_id,
+        lemma,
+        cat,
+        en,
+        ja,
+        grammar_ja,
+        created_at,
+        pack_updated_at,
+        checked_only_count,
+        learned_count,
+    ) in items_raw:
         items.append(
             ExampleListItem(
                 id=rid,
@@ -577,6 +589,8 @@ async def list_examples(
                 grammar_ja=grammar_ja,
                 created_at=created_at,
                 word_pack_updated_at=pack_updated_at,
+                checked_only_count=checked_only_count,
+                learned_count=learned_count,
             )
         )
     return ExampleListResponse(items=items, total=total, limit=limit, offset=offset)
