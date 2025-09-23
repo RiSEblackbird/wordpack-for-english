@@ -59,66 +59,54 @@ describe('App navigation', () => {
   it('places the hamburger button on the viewport left edge', async () => {
     render(<App />);
     const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
-    expect(Math.round(toggle.getBoundingClientRect().left)).toBe(0);
+    const rect = toggle.getBoundingClientRect();
+    expect(Math.round(rect.left)).toBe(0);
+    expect(Math.round(rect.top)).toBe(0);
   });
 
-  it('keeps the main content position when enough horizontal margin remains', async () => {
-    const originalWidth = window.innerWidth;
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      value: 1600,
-    });
-
+  it('renders the main content without a shift animation', async () => {
     render(<App />);
-    const user = userEvent.setup();
 
-    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
-    await act(async () => {
-      await user.click(openButton);
-    });
+    await screen.findByRole('heading', { name: 'WordPack' });
+
+    const mainInner = document.querySelector('.main-inner');
+    if (!mainInner) {
+      throw new Error('main content wrapper not found');
+    }
+
+    const styles = window.getComputedStyle(mainInner);
+    expect(styles.transitionDuration === '0s' || styles.transitionDuration === '').toBe(true);
+    expect(styles.transitionProperty === 'all' || styles.transitionProperty === '').toBe(true);
+  });
+
+  it('does not rely on deferred timers to stabilize the layout', async () => {
+    render(<App />);
+
+    await screen.findByRole('heading', { name: 'WordPack' });
 
     const appShell = document.querySelector('.app-shell');
     if (!appShell) {
       throw new Error('app shell not found');
     }
 
-    const shiftValue = parseFloat(appShell.style.getPropertyValue('--main-shift'));
-    expect(shiftValue).toBeCloseTo(-140, 1);
+    expect(appShell.style.getPropertyValue('--main-shift')).toBe('');
 
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      value: originalWidth,
-    });
-    window.dispatchEvent(new Event('resize'));
-  });
-
-  it('does not move the main content unnecessarily on tighter viewports', async () => {
-    const originalWidth = window.innerWidth;
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      value: 1100,
-    });
-
-    render(<App />);
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
     const user = userEvent.setup();
 
-    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
     await act(async () => {
-      await user.click(openButton);
+      await user.click(toggle);
     });
 
-    const appShell = document.querySelector('.app-shell');
-    if (!appShell) {
-      throw new Error('app shell not found');
+    expect(appShell.style.getPropertyValue('--main-shift')).toBe('');
+
+    const mainInner = document.querySelector('.main-inner');
+    if (!mainInner) {
+      throw new Error('main content wrapper not found');
     }
 
-    const shiftValue = parseFloat(appShell.style.getPropertyValue('--main-shift'));
-    expect(shiftValue).toBeCloseTo(0, 1);
-
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      value: originalWidth,
-    });
-    window.dispatchEvent(new Event('resize'));
+    const computed = window.getComputedStyle(mainInner);
+    expect(mainInner.style.left).toBe('');
+    expect(computed.position === 'static' || computed.position === '').toBe(true);
   });
 });
