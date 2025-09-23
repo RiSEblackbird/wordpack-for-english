@@ -29,7 +29,8 @@ const SIDEBAR_VIEWPORT_RATIO = 0.8;
 type SidebarMetrics = {
   sidebarWidth: number;
   sidebarLeftGap: number;
-  mainOffset: number;
+  mainLeftPadding: number;
+  mainRightPadding: number;
 };
 
 const calculateSidebarMetrics = (isSidebarOpen: boolean): SidebarMetrics => {
@@ -37,7 +38,8 @@ const calculateSidebarMetrics = (isSidebarOpen: boolean): SidebarMetrics => {
     return {
       sidebarWidth: SIDEBAR_MAX_WIDTH,
       sidebarLeftGap: 0,
-      mainOffset: 0,
+      mainLeftPadding: 0,
+      mainRightPadding: 0,
     };
   }
 
@@ -46,19 +48,14 @@ const calculateSidebarMetrics = (isSidebarOpen: boolean): SidebarMetrics => {
   const baseMainWidth = Math.min(MAIN_MAX_WIDTH, viewportWidth);
   const sidebarLeftGap = Math.max(0, (viewportWidth - baseMainWidth) / 2);
   const effectiveSidebarWidth = isSidebarOpen ? sidebarWidth : 0;
-  const mainColumnWidth = Math.max(0, viewportWidth - effectiveSidebarWidth);
-  const mainInnerWidth = Math.min(MAIN_MAX_WIDTH, mainColumnWidth);
-  const centeredLeftGap = Math.max(0, (mainColumnWidth - mainInnerWidth) / 2);
-  const actualMainInnerLeft = effectiveSidebarWidth + centeredLeftGap;
-  const desiredMainInnerLeft = isSidebarOpen
-    ? Math.max(sidebarLeftGap, sidebarWidth)
-    : sidebarLeftGap;
-  const mainOffset = desiredMainInnerLeft - actualMainInnerLeft;
+  const mainLeftPadding = Math.max(0, sidebarLeftGap - effectiveSidebarWidth);
+  const mainRightPadding = sidebarLeftGap;
 
   return {
     sidebarWidth,
     sidebarLeftGap,
-    mainOffset,
+    mainLeftPadding,
+    mainRightPadding,
   };
 };
 
@@ -91,7 +88,7 @@ export const App: React.FC = () => {
   const [sidebarMetrics, setSidebarMetrics] = useState<SidebarMetrics>(() =>
     calculateSidebarMetrics(false),
   );
-  const { sidebarWidth, mainOffset } = sidebarMetrics;
+  const { sidebarWidth, mainLeftPadding, mainRightPadding } = sidebarMetrics;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -148,7 +145,8 @@ export const App: React.FC = () => {
                 ['--sidebar-current-width' as any]: isSidebarOpen
                   ? `${sidebarWidth}px`
                   : '0px',
-                ['--main-offset' as any]: `${mainOffset}px`,
+                ['--main-left-padding' as any]: `${mainLeftPadding}px`,
+                ['--main-right-padding' as any]: `${mainRightPadding}px`,
               }}
             >
               <ThemeApplier />
@@ -213,7 +211,7 @@ export const App: React.FC = () => {
           .hamburger-toggle {
             position: fixed;
             top: 1rem;
-            left: 1rem;
+            left: 0;
             z-index: 980;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
             background: var(--color-surface);
@@ -231,6 +229,8 @@ export const App: React.FC = () => {
           .app-shell {
             --sidebar-current-width: 0px;
             --sidebar-open-width: 0px;
+            --main-left-padding: 0px;
+            --main-right-padding: 0px;
             margin: 0 auto;
             box-sizing: border-box;
             width: 100%;
@@ -273,17 +273,17 @@ export const App: React.FC = () => {
             flex: 1;
             min-width: 0;
             display: flex;
-            justify-content: center;
+            justify-content: flex-start;
             box-sizing: border-box;
+            padding-left: var(--main-left-padding);
+            padding-right: var(--main-right-padding);
           }
           .main-inner {
             display: flex;
             flex-direction: column;
             max-width: var(--main-max-width);
-            width: 100%;
-            margin: 0 auto;
-            transform: translateX(var(--main-offset));
-            transition: transform 0.3s ease;
+            width: min(100%, var(--main-max-width));
+            margin: 0;
           }
           header {
             padding-top: 1rem;

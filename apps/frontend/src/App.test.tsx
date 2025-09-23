@@ -36,6 +36,7 @@ describe('App navigation', () => {
     const user = userEvent.setup();
 
     const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    expect(Math.round(openButton.getBoundingClientRect().left)).toBe(0);
     await act(async () => {
       await user.click(openButton);
     });
@@ -90,7 +91,8 @@ describe('App navigation', () => {
     expect(appShell).toHaveClass('sidebar-open');
 
     await waitFor(() => {
-      expect(appShell.style.getPropertyValue('--main-offset')).toBe('-140px');
+      expect(appShell.style.getPropertyValue('--main-left-padding')).toBe('20px');
+      expect(appShell.style.getPropertyValue('--main-right-padding')).toBe('300px');
     });
 
     const openedLeft = Math.round(mainInner.getBoundingClientRect().left);
@@ -133,7 +135,8 @@ describe('App navigation', () => {
     }
 
     await waitFor(() => {
-      expect(appShell.style.getPropertyValue('--main-offset')).toBe('0px');
+      expect(appShell.style.getPropertyValue('--main-left-padding')).toBe('0px');
+      expect(appShell.style.getPropertyValue('--main-right-padding')).toBe('50px');
     });
 
     const sidebarRect = sidebar.getBoundingClientRect();
