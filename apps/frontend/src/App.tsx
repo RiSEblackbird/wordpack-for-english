@@ -205,6 +205,10 @@ export const App: React.FC = () => {
             width: min(100%, calc(var(--main-max-width) + var(--sidebar-current-width)));
             transition: width 0.3s ease;
           }
+          .app-shell.sidebar-open {
+            margin-left: 0;
+            margin-right: auto;
+          }
           .app-layout {
             display: flex;
             min-height: 100vh;

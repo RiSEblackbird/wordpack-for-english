@@ -54,4 +54,31 @@ describe('App navigation', () => {
     }
     expect(appShell).toHaveClass('sidebar-open');
   });
+
+  it('positions the sidebar flush to the viewport left edge on wide screens', async () => {
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1600 });
+    window.dispatchEvent(new Event('resize'));
+
+    render(<App />);
+    const user = userEvent.setup();
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await user.click(openButton);
+
+    const appShell = document.querySelector('.app-shell');
+    if (!appShell) {
+      throw new Error('app shell not found');
+    }
+
+    expect(appShell).toHaveClass('sidebar-open');
+    expect(window.getComputedStyle(appShell).marginLeft).toBe('0px');
+
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: originalInnerWidth,
+    });
+    window.dispatchEvent(new Event('resize'));
+  });
 });
