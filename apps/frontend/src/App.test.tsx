@@ -152,4 +152,104 @@ describe('App navigation', () => {
       window.dispatchEvent(new Event('resize'));
     });
   });
+
+  it('keeps the main offset steady while the sidebar animates within the available margin', async () => {
+    const originalInnerWidth = window.innerWidth;
+    const originalResizeObserver = (window as any).ResizeObserver;
+    const observerRecords: Array<{ cb: ResizeObserverCallback; instance: ResizeObserver }> = [];
+
+    class MockResizeObserver implements ResizeObserver {
+      readonly callback: ResizeObserverCallback;
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+        observerRecords.push({ cb: callback, instance: this });
+      }
+      observe(_target: Element, _options?: ResizeObserverOptions): void {}
+      unobserve(_target: Element): void {}
+      disconnect(): void {}
+    }
+
+    (window as any).ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1600 });
+    await act(async () => {
+      window.dispatchEvent(new Event('resize'));
+    });
+
+    try {
+      render(<App />);
+      const user = userEvent.setup();
+
+      const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+      await act(async () => {
+        await user.click(openButton);
+      });
+
+      const appShell = document.querySelector('.app-shell');
+      const sidebar = document.querySelector('.sidebar');
+      if (!appShell || !sidebar) {
+        throw new Error('layout elements not found');
+      }
+
+      const record = observerRecords.at(-1);
+      if (!record) {
+        throw new Error('resize observer was not registered');
+      }
+
+      const gap = Number(appShell.style.getPropertyValue('--main-right-padding').replace('px', ''));
+
+      const triggerWidth = async (width: number) => {
+        const entry: ResizeObserverEntry = {
+          target: sidebar,
+          contentRect: {
+            width,
+            height: 0,
+            x: 0,
+            y: 0,
+            top: 0,
+            left: 0,
+            right: width,
+            bottom: 0,
+            toJSON: () => ({}),
+          } as DOMRectReadOnly,
+          borderBoxSize: [] as any,
+          contentBoxSize: [] as any,
+          devicePixelContentBoxSize: [] as any,
+        };
+        await act(async () => {
+          record.cb([entry], record.instance);
+        });
+      };
+
+      await triggerWidth(120);
+      await waitFor(() => {
+        const currentWidthFirst = Number(appShell.style.getPropertyValue('--sidebar-current-width').replace('px', ''));
+        const paddingAfterFirst = Number(appShell.style.getPropertyValue('--main-left-padding').replace('px', ''));
+        expect(currentWidthFirst).toBeCloseTo(120);
+        expect(paddingAfterFirst + currentWidthFirst).toBeCloseTo(gap);
+      });
+
+      await triggerWidth(280);
+      await waitFor(() => {
+        const currentWidthSecond = Number(appShell.style.getPropertyValue('--sidebar-current-width').replace('px', ''));
+        const paddingAfterSecond = Number(appShell.style.getPropertyValue('--main-left-padding').replace('px', ''));
+        expect(currentWidthSecond).toBeCloseTo(280);
+        expect(paddingAfterSecond + currentWidthSecond).toBeCloseTo(Math.max(gap, currentWidthSecond));
+      });
+    } finally {
+      if (originalResizeObserver) {
+        (window as any).ResizeObserver = originalResizeObserver;
+      } else {
+        delete (window as any).ResizeObserver;
+      }
+
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        writable: true,
+        value: originalInnerWidth,
+      });
+      await act(async () => {
+        window.dispatchEvent(new Event('resize'));
+      });
+    }
+  });
 });
