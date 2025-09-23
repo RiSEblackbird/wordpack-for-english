@@ -126,14 +126,15 @@ export const App: React.FC = () => {
         layoutUpdateTimeoutRef.current = null;
       }
 
-      applyMainShift();
-
-      if (delayMs > 0) {
-        layoutUpdateTimeoutRef.current = window.setTimeout(() => {
-          applyMainShift();
-          layoutUpdateTimeoutRef.current = null;
-        }, delayMs);
+      if (delayMs === 0) {
+        applyMainShift();
+        return;
       }
+
+      layoutUpdateTimeoutRef.current = window.setTimeout(() => {
+        applyMainShift();
+        layoutUpdateTimeoutRef.current = null;
+      }, delayMs);
     },
     [applyMainShift],
   );

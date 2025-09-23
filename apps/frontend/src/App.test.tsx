@@ -80,7 +80,7 @@ describe('App navigation', () => {
     expect(styles.transitionProperty === 'all' || styles.transitionProperty === '').toBe(true);
   });
 
-  it('updates the main content position immediately and reaffirms it after the sidebar settles', async () => {
+  it('shifts the main content only after the sidebar has fully opened', async () => {
     const originalWidth = window.innerWidth;
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -105,14 +105,21 @@ describe('App navigation', () => {
       }
 
       const immediateShift = appShell.style.getPropertyValue('--main-shift');
-      expect(immediateShift).not.toBe('0px');
+      expect(immediateShift === '0px' || immediateShift === '').toBe(true);
+
+      await act(async () => {
+        vi.advanceTimersByTime(99);
+      });
+
+      const shiftBeforeDelay = appShell.style.getPropertyValue('--main-shift');
+      expect(shiftBeforeDelay === '0px' || shiftBeforeDelay === '').toBe(true);
 
       await act(async () => {
         vi.advanceTimersByTime(100);
       });
 
       const shiftAfterDelay = appShell.style.getPropertyValue('--main-shift');
-      expect(parseFloat(shiftAfterDelay)).toBeCloseTo(parseFloat(immediateShift), 5);
+      expect(parseFloat(shiftAfterDelay)).not.toBeCloseTo(0, 5);
     } finally {
       Object.defineProperty(window, 'innerWidth', {
         configurable: true,
