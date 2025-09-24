@@ -719,6 +719,26 @@ class AppSQLiteStore:
             row = cur.fetchone()
             return row["id"] if row is not None else None
 
+    def find_word_pack_by_lemma_ci(self, lemma: str) -> Optional[tuple[str, str, str]]:
+        """大文字小文字を無視して lemma を検索し、(id, lemma, sense_title) を返す。無ければ None。
+
+        複合語（空白含む）でも完全一致を前提とする。
+        """
+        with self._conn() as conn:
+            cur = conn.execute(
+                """
+                SELECT id, lemma, sense_title FROM word_packs
+                WHERE lower(lemma) = lower(?)
+                ORDER BY updated_at DESC
+                LIMIT 1;
+                """,
+                (lemma,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return (row["id"], row["lemma"], row["sense_title"])  # type: ignore[return-value]
+
     # --- Articles operations ---
     def save_article(
         self,

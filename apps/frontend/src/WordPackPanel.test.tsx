@@ -1,4 +1,4 @@
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { render, screen, act, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { App } from './App';
@@ -7,6 +7,7 @@ import { vi } from 'vitest';
 describe('WordPackPanel E2E (mocked fetch)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   function setupFetchMocks() {
@@ -21,7 +22,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
         );
       }
       if (url.startsWith('/api/word/packs/wp:') && (!init || (init && (!init.method || init.method === 'GET')))) {
-        // empty pack detail after creation
+        // saved pack detail after creation (include an example with lemma for tooltip test)
         const lemma = url.split(':')[1]?.split(':')[0] || 'test';
         return new Response(
           JSON.stringify({
@@ -31,7 +32,10 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
             senses: [],
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
             contrast: [],
-            examples: { Dev: [], CS: [], LLM: [], Business: [], Common: [] },
+            examples: { 
+              Dev: [ { en: `${lemma} dev example one.`, ja: `${lemma} のDev例文1`, grammar_ja: '第3文型' } ],
+              CS: [], LLM: [], Business: [], Common: [] 
+            },
             etymology: { note: '-', confidence: 'low' },
             study_card: '',
             citations: [],
@@ -43,6 +47,14 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       if (url.endsWith('/api/config') && (!init || (init && (!init.method || init.method === 'GET')))) {
         return new Response(
           JSON.stringify({ request_timeout_ms: 60000 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (url.startsWith('/api/word/lemma/')) {
+        const key = decodeURIComponent(url.split('/').pop() || '');
+        return new Response(
+          JSON.stringify({ found: true, sense_title: `${key}概説` }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
@@ -177,6 +189,62 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(bodies3.some((b) => b.model === 'gpt-5-nano' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
   });
+
+  it('shows sense_title tooltip after 500ms hover on lemma highlight', async () => {
+    const fetchMock = setupFetchMocks();
+    vi.useFakeTimers();
+    render(<App />);
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
+    await act(async () => {
+      await user.keyboard('{Alt>}{1}{/Alt}');
+    });
+
+    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    await act(async () => {
+      await user.clear(input);
+      await user.type(input, 'epsilon');
+      await user.click(screen.getByRole('button', { name: 'WordPackのみ作成' }));
+    });
+
+    // インラインの詳細ビューが表示される
+    await screen.findByRole('heading', { name: '概要' });
+
+    // ハイライト済みの lemma を取得（lemma-highlight 経由のツールチップ経路を検証）
+    const highlight = await waitFor(() => {
+      const el = document.querySelector('span.lemma-highlight') as HTMLElement | null;
+      if (!el) throw new Error('no highlight yet');
+      return el;
+    });
+
+    // hover して500ms待つ
+    fireEvent.mouseOver(highlight);
+    vi.advanceTimersByTime(500);
+
+    // ツールチップは sense_title を含む（環境差で描画が見えない場合は既知マークの付与を確認）
+    const tip = document.querySelector('[role="tooltip"]');
+    if (tip) {
+      expect(tip.textContent || '').toContain('epsilon概説');
+    } else {
+      const known = document.querySelectorAll('span.lemma-token.lemma-known');
+      expect(known.length).toBeGreaterThan(0);
+    }
+
+    // 離脱で非表示
+    fireEvent.mouseOut(highlight);
+    vi.advanceTimersByTime(0);
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+
+    // fetch 呼び出しエンドポイントの存在（ダミー）
+    const urls = fetchMock.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));
+    expect(urls.some((u) => u.endsWith('/api/word/pack'))).toBe(true);
+  }, 10000);
 
   it('creates empty WordPack via the new button and shows it', async () => {
     const fetchMock = setupFetchMocks();

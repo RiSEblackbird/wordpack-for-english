@@ -537,6 +537,40 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   }, []);
 
 
+  function renderExampleEnText(text: string, lemma: string): React.ReactNode {
+    const highlighted = highlightLemma(text, lemma);
+    const nodes: React.ReactNode[] = [];
+    let tokenSerial = 0;
+    const wrapWords = (s: string) => {
+      const parts = s.split(/([A-Za-z][A-Za-z\-']*)/g);
+      for (let idx = 0; idx < parts.length; idx++) {
+        const p = parts[idx];
+        if (!p) continue;
+        if (/^[A-Za-z][A-Za-z\-']*$/.test(p)) {
+          nodes.push(
+            <span key={`tok-${tokenSerial}-${idx}`} className="lemma-token" data-tok-idx={tokenSerial++}>{p}</span>
+          );
+        } else {
+          nodes.push(p);
+        }
+      }
+    };
+    if (Array.isArray(highlighted)) {
+      highlighted.forEach((n) => {
+        if (typeof n === 'string') {
+          wrapWords(n);
+        } else {
+          nodes.push(n);
+        }
+      });
+    } else if (typeof highlighted === 'string') {
+      wrapWords(highlighted);
+    } else {
+      nodes.push(highlighted);
+    }
+    return nodes;
+  }
+
   const renderDetails = () => (
     <div className="wp-container">
       <nav className="wp-nav" aria-label="セクション">
@@ -766,6 +800,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             .ex-grammar { color: var(--color-subtle); font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
             .ex-level { font-weight: 600; margin: 0.25rem 0; color: var(--color-level); }
             .lemma-highlight { color: #1565c0; }
+            .lemma-known { font-weight: 700; }
+            .lemma-tooltip { position: fixed; z-index: 10000; background: #212121; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); pointer-events: none; }
           `}</style>
           {(['Dev','CS','LLM','Business','Common'] as const).map((k) => (
             <div key={k} id={`examples-${k}`} style={{ marginBottom: '0.5rem' }}>
@@ -785,7 +821,102 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 <div className="ex-grid">
                   {(data!.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
                     <article key={i} className="ex-card" aria-label={`example-${k}-${i}`}>
-                      <div className="ex-en"><span className="ex-label">[{i + 1}] 英</span> {highlightLemma(ex.en, data!.lemma)}</div>
+                      <div className="ex-en" data-lemma={data!.lemma} data-sense-title={data!.sense_title}
+                        onMouseOver={async (e) => {
+                          const target = e.target as HTMLElement;
+                          const hl = target.closest('span.lemma-highlight') as HTMLElement | null;
+                          const tok = hl ? null : (target.closest('span.lemma-token') as HTMLElement | null);
+                          const container = (e.currentTarget as HTMLElement);
+                          const apiBase = (document.querySelector('meta[name="wp-api-base"]') as HTMLMetaElement)?.content || '/api';
+                          (window as any).__lemmaCache = (window as any).__lemmaCache || new Map<string, any>();
+                          const cache = (window as any).__lemmaCache as Map<string, any>;
+
+                          if (hl) {
+                            const display = container.getAttribute('data-sense-title') || '';
+                            if (!display) return;
+                            try { window.clearTimeout((hl as any).__ttimer); } catch {}
+                            ;(hl as any).__ttimer = window.setTimeout(() => {
+                              document.querySelectorAll('.lemma-tooltip').forEach((n) => n.remove());
+                              const rect = hl.getBoundingClientRect();
+                              const tip = document.createElement('div');
+                              tip.setAttribute('role', 'tooltip');
+                              tip.className = 'lemma-tooltip';
+                              tip.textContent = display;
+                              document.body.appendChild(tip);
+                              const pad = 6;
+                              const x = Math.min(Math.max(rect.left, 8), (window.innerWidth - tip.offsetWidth - 8));
+                              const y = Math.max(rect.top - tip.offsetHeight - pad, 8);
+                              tip.style.left = `${x}px`;
+                              tip.style.top = `${y}px`;
+                            }, 500);
+                            return;
+                          }
+
+                          if (!tok) return;
+                          const row = container;
+                          const tokens = Array.from(row.querySelectorAll('span.lemma-token')) as HTMLElement[];
+                          const iTok = Number(tok.getAttribute('data-tok-idx')) || 0;
+                          const getText = (el: HTMLElement) => (el.textContent || '').replace(/[\s\u00A0]+/g, ' ').trim();
+                          const cands: { idxs: number[]; text: string }[] = [];
+                          const push = (idxs: number[]) => {
+                            const txt = idxs.map((k) => getText(tokens[k])).join(' ').trim();
+                            if (txt) cands.push({ idxs, text: txt });
+                          };
+                          if (iTok > 0 && iTok < tokens.length - 1) push([iTok - 1, iTok, iTok + 1]);
+                          if (iTok < tokens.length - 1) push([iTok, iTok + 1]);
+                          if (iTok > 0) push([iTok - 1, iTok]);
+                          push([iTok]);
+
+                          let foundSense = '';
+                          let foundIdxs: number[] | null = null;
+                          for (const c of cands) {
+                            const key = `lemma:${c.text.toLowerCase()}`;
+                            let info = cache.get(key);
+                            if (!info) {
+                              try {
+                                const res = await fetch(`${apiBase}/word/lemma/${encodeURIComponent(c.text)}`);
+                                info = res.ok ? await res.json() : { found: false };
+                                cache.set(key, info);
+                              } catch { info = { found: false }; }
+                            }
+                            if (info && info.found && info.sense_title) {
+                              foundSense = info.sense_title;
+                              foundIdxs = c.idxs;
+                              break;
+                            }
+                          }
+                          if (!foundSense || !foundIdxs) return;
+                          foundIdxs.forEach((k) => tokens[k]?.classList.add('lemma-known'));
+                          try { window.clearTimeout((tok as any).__ttimer); } catch {}
+                          ;(tok as any).__ttimer = window.setTimeout(() => {
+                            document.querySelectorAll('.lemma-tooltip').forEach((n) => n.remove());
+                            const rect = tok.getBoundingClientRect();
+                            const tip = document.createElement('div');
+                            tip.setAttribute('role', 'tooltip');
+                            tip.className = 'lemma-tooltip';
+                            tip.textContent = foundSense;
+                            document.body.appendChild(tip);
+                            const pad = 6;
+                            const x = Math.min(Math.max(rect.left, 8), (window.innerWidth - tip.offsetWidth - 8));
+                            const y = Math.max(rect.top - tip.offsetHeight - pad, 8);
+                            tip.style.left = `${x}px`;
+                            tip.style.top = `${y}px`;
+                          }, 500);
+                        }}
+                        onMouseOut={(e) => {
+                          const target = e.target as HTMLElement;
+                          const hl = target.closest('span.lemma-highlight') as HTMLElement | null;
+                          const tok = target.closest('span.lemma-token') as HTMLElement | null;
+                          if (hl) { try { window.clearTimeout((hl as any).__ttimer); } catch {} }
+                          if (tok) { try { window.clearTimeout((tok as any).__ttimer); } catch {} }
+                          // 太字をクリア（行内の既知マーキングをリセット）
+                          const row = (e.currentTarget as HTMLElement);
+                          row.querySelectorAll('span.lemma-token.lemma-known').forEach((el) => el.classList.remove('lemma-known'));
+                          document.querySelectorAll('.lemma-tooltip').forEach((n) => n.remove());
+                        }}
+                      >
+                        <span className="ex-label">[{i + 1}] 英</span> {renderExampleEnText(ex.en, data!.lemma)}
+                      </div>
                       <div className="ex-ja"><span className="ex-label">訳</span> {ex.ja}</div>
                       {ex.grammar_ja ? (
                         <div className="ex-grammar"><span className="ex-label">解説</span> {ex.grammar_ja}</div>

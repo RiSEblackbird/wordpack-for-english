@@ -673,3 +673,28 @@ async def update_example_study_progress(
         checked_only_count=checked_only_count,
         learned_count=learned_count,
     )
+
+
+class LemmaLookupResponse(BaseModel):
+    found: bool = Field(..., description="lemma がDBに存在するか")
+    id: Optional[str] = Field(default=None, description="WordPack ID（存在時）")
+    lemma: Optional[str] = Field(default=None, description="保存されている lemma（正規化反映後）")
+    sense_title: Optional[str] = Field(default=None, description="語義タイトル（存在時）")
+
+
+@router.get(
+    "/lemma/{lemma}",
+    response_model=LemmaLookupResponse,
+    summary="lemma から WordPack を検索（case-insensitive）",
+)
+async def lookup_by_lemma(lemma: str) -> LemmaLookupResponse:
+    """DB内の WordPack を lemma=完全一致（大文字小文字無視）で検索し返す。
+
+    - ヒット時: {found:true, id, lemma, sense_title}
+    - 未ヒット: {found:false}
+    """
+    result = store.find_word_pack_by_lemma_ci(lemma)
+    if result is None:
+        return LemmaLookupResponse(found=False)
+    wp_id, saved_lemma, sense_title = result
+    return LemmaLookupResponse(found=True, id=wp_id, lemma=saved_lemma, sense_title=sense_title)
