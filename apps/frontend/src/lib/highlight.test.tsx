@@ -20,6 +20,22 @@ describe('highlightLemma', () => {
     const highlighted = document.querySelectorAll('span.lemma-highlight');
     expect(highlighted.length).toBe(0);
   });
+
+  it('highlights lemmas with trailing symbols like C++', () => {
+    const lemma = 'C++';
+    const text = 'I love C++ and also enjoy C but not Cplusplus.';
+    render(<p>{highlightLemma(text, lemma)}</p>);
+    const spans = screen.getAllByText('C++', { selector: 'span.lemma-highlight' });
+    expect(spans.length).toBe(1);
+  });
+
+  it('highlights lemmas with trailing symbols like C#', () => {
+    const lemma = 'C#';
+    const text = 'Learning C# is fun. Csharp is different from C#.';
+    render(<p>{highlightLemma(text, lemma)}</p>);
+    const spans = screen.getAllByText('C#', { selector: 'span.lemma-highlight' });
+    expect(spans.length).toBe(2);
+  });
 });
 
 
