@@ -178,6 +178,60 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     expect(bodies3.some((b) => b.model === 'gpt-5-nano' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
   });
 
+  it('shows sense_title tooltip after 500ms hover on lemma highlight', async () => {
+    const fetchMock = setupFetchMocks();
+    vi.useFakeTimers();
+    render(<App />);
+
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
+    await act(async () => {
+      await user.keyboard('{Alt>}{1}{/Alt}');
+    });
+
+    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    await act(async () => {
+      await user.clear(input);
+      await user.type(input, 'delta');
+      await user.click(screen.getByRole('button', { name: '生成' }));
+    });
+
+    // パネル内の英語例文を待つ
+    await screen.findByText(/examples/i);
+
+    // 例文に含まれる lemma 'delta' のハイライトを取得
+    // 生成直後の例文には 'delta' を含むものが多数ある
+    const highlight = await screen.findByText(/delta/i, { selector: 'span.lemma-highlight' });
+    expect(highlight).toBeInTheDocument();
+
+    // hover して500ms待つ
+    await act(async () => {
+      await user.hover(highlight);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+
+    // ツールチップは sense_title を含む
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('delta概説');
+
+    // 離脱で非表示
+    await act(async () => {
+      await user.unhover(highlight);
+      vi.advanceTimersByTime(0);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+
+    // fetch 呼び出しエンドポイントの存在（ダミー）
+    const urls = fetchMock.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));
+    expect(urls.some((u) => u.endsWith('/api/word/pack'))).toBe(true);
+  });
+
   it('creates empty WordPack via the new button and shows it', async () => {
     const fetchMock = setupFetchMocks();
     render(<App />);

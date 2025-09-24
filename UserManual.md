@@ -213,6 +213,11 @@
 - API の入出力は `sense_title`（語義タイトル）と `examples` を含む完全な `WordPack`
 - `word_packs` テーブルには `sense_title` 列を新設し、一覧表示用に語義タイトルを保持します
 
+### B-4-1. WordPack プレビューのツールチップ
+- 例文中で見出し語（lemma）がハイライトされます。
+- ハイライト部分にマウスカーソルを重ねて約0.5秒待つと、語義タイトル（`sense_title`）の小さなツールチップが表示されます。
+- マウスカーソルを外すとツールチップは消えます。
+
 ### B-5. 運用・監視・品質
 - `/metrics` で API パス別の p95・件数・エラー・タイムアウトを確認
 - ログは `structlog` による JSON 形式。`request_complete` に `path`/`latency_ms`

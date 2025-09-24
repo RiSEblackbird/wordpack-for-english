@@ -6,8 +6,10 @@ function escapeRegExp(input: string): string {
 
 export function highlightLemma(text: string, lemma: string): React.ReactNode {
   if (!text || !lemma) return text;
-  const escaped = escapeRegExp(lemma);
-  const re = new RegExp(escaped, 'gi');
+  // Allow flexible whitespace for multi-word lemmas
+  const tokens = lemma.trim().split(/\s+/).map(escapeRegExp);
+  const pattern = tokens.join('\\s+');
+  const re = new RegExp(pattern, 'gi');
   const isWordChar = (ch: string) => /[A-Za-z0-9_]/.test(ch);
 
   const nodes: React.ReactNode[] = [];
