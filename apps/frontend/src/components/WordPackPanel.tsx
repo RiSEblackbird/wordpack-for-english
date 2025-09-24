@@ -10,6 +10,7 @@ import { Modal } from './Modal';
 import { formatDateJst } from '../lib/date';
 import { TTSButton } from './TTSButton';
 import { SidebarPortal } from './SidebarPortal';
+import { highlightLemma } from '../lib/highlight';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -764,6 +765,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             .ex-ja { color: var(--color-text); opacity: 0.9; margin-top: 2px; line-height: 1.6; }
             .ex-grammar { color: var(--color-subtle); font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
             .ex-level { font-weight: 600; margin: 0.25rem 0; color: var(--color-level); }
+            .lemma-highlight { color: #1565c0; }
           `}</style>
           {(['Dev','CS','LLM','Business','Common'] as const).map((k) => (
             <div key={k} id={`examples-${k}`} style={{ marginBottom: '0.5rem' }}>
@@ -783,7 +785,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 <div className="ex-grid">
                   {(data!.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
                     <article key={i} className="ex-card" aria-label={`example-${k}-${i}`}>
-                      <div className="ex-en"><span className="ex-label">[{i + 1}] 英</span> {ex.en}</div>
+                      <div className="ex-en"><span className="ex-label">[{i + 1}] 英</span> {highlightLemma(ex.en, data!.lemma)}</div>
                       <div className="ex-ja"><span className="ex-label">訳</span> {ex.ja}</div>
                       {ex.grammar_ja ? (
                         <div className="ex-grammar"><span className="ex-label">解説</span> {ex.grammar_ja}</div>
