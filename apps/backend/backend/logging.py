@@ -10,7 +10,15 @@ def configure_logging() -> None:
     structlog で ISO タイムスタンプと JSON 形式の出力を有効化する。
     運用環境では集約・可観測性ツールに連携しやすい形で出力される。
     """
-    logging.basicConfig(level=logging.INFO)
+    # stdlib 側の出力に余計なプレフィックス（"INFO:logger:" など）を付けない
+    # ため、フォーマットはメッセージのみ(%(message)s)に固定する。
+    # force=True で既存ハンドラ（uvicorn 等）を上書きして一貫化。
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+        handlers=[logging.StreamHandler()],
+        force=True,
+    )
     structlog.configure(
         processors=[
             structlog.processors.TimeStamper(fmt="iso"),

@@ -116,6 +116,43 @@ class WordPackFlow:
                 return t[m1 : m2 + 1]
             return t
 
+        def _sanitize_control_chars(text: str) -> str:
+            """JSON 文字列リテラル内に素で含まれた制御文字 (U+0000〜U+001F) を \\uXXXX に正規化する。
+
+            目的: OpenAI などの応答がコードフェンス外し後も未エスケープの制御文字を含み、
+                 json.loads で "Invalid control character" を起こすケースを回避する。
+            """
+            if not text:
+                return text
+            out_chars: list[str] = []
+            in_string = False
+            escaped = False
+            for ch in text:
+                if in_string:
+                    if escaped:
+                        out_chars.append(ch)
+                        escaped = False
+                        continue
+                    if ch == "\\":
+                        out_chars.append(ch)
+                        escaped = True
+                        continue
+                    if ch == '"':
+                        out_chars.append(ch)
+                        in_string = False
+                        continue
+                    code = ord(ch)
+                    if 0 <= code <= 0x1F:
+                        out_chars.append(f"\\u{code:04x}")
+                    else:
+                        out_chars.append(ch)
+                else:
+                    out_chars.append(ch)
+                    if ch == '"' and not escaped:
+                        in_string = True
+                        escaped = False
+            return "".join(out_chars)
+
         # OpenAI LLM を使用して語の詳細情報を生成
         try:
             if self.llm is not None and hasattr(self.llm, "complete"):
@@ -148,6 +185,8 @@ class WordPackFlow:
                 logger.info("wordpack_llm_output_received", lemma=lemma, output_chars=len(out or ""))
                 if isinstance(out, str) and out.strip():
                     raw = _strip_code_fences(out)
+                    # 制御文字の未エスケープで失敗するケースを事前に回避
+                    raw = _sanitize_control_chars(raw)
                     try:
                         llm_data = json.loads(raw)
                         logger.info(
@@ -248,7 +287,7 @@ class WordPackFlow:
                         patterns=patterns,
                         synonyms=synonyms,
                         antonyms=antonyms,
-                        register=register,
+                        register_=register,
                         notes_ja=notes_ja,
                         term_overview_ja=(str(s.get("term_overview_ja") or "").strip() or None),
                         term_core_ja=(str(s.get("term_core_ja") or "").strip() or None),

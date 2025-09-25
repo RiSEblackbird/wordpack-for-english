@@ -67,6 +67,33 @@ def test_word_pack(client):
     assert "citations" in body and "confidence" in body
     assert body.get("checked_only_count") == 0
     assert body.get("learned_count") == 0
+def test_create_empty_word_pack_generates_japanese_sense_title(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "empty_pack_llm.sqlite3")
+    from fastapi.testclient import TestClient
+    import backend.providers as providers_mod
+
+    class _StubLLM:
+        def complete(self, prompt: str) -> str:
+            # 空パック用の短い日本語タイトル生成プロンプトに対して固定応答
+            return "処理量"
+
+    providers_mod._LLM_INSTANCE = _StubLLM()
+
+    client = TestClient(backend_main.app)
+
+    r = client.post("/api/word/packs", json={"lemma": "throughput"})
+    assert r.status_code == 200
+    pack_id = r.json().get("id")
+    assert isinstance(pack_id, str) and pack_id.startswith("wp:")
+
+    rlist = client.get("/api/word/packs")
+    assert rlist.status_code == 200
+    items = rlist.json().get("items", [])
+    target = next((it for it in items if it.get("id") == pack_id), None)
+    assert target is not None
+    assert target.get("lemma") == "throughput"
+    assert target.get("sense_title") == "処理量"
+
 
 
 def test_word_pack_sanitizes_english_sense_title(
@@ -268,6 +295,38 @@ def test_word_pack_strict_llm_json_parse_failure_to_502(monkeypatch: pytest.Monk
     r = client.post("/api/word/pack", json={"lemma": "no_data"})
     assert r.status_code == 502
 
+
+def test_word_pack_sanitizes_control_chars_in_llm_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """STRICT_MODE で LLM が未エスケープの制御文字を含む JSON を返しても、
+    サニタイザによりパースが成功して 200 を返すことを検証する。"""
+    backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=tmp_path / "strict_cc.sqlite3")
+    from fastapi.testclient import TestClient
+    import backend.providers as providers_mod
+
+    class _StubLLM:
+        def complete(self, prompt: str) -> str:
+            # gloss_ja に RAW 制御文字 (U+0001) を混入させ、未エスケープ JSON を返す
+            cc = chr(1)
+            return (
+                '{"senses":[{"id":"s1","gloss_ja":"テ' + cc + 'スト語義","patterns":["p"]}],'
+                '"sense_title":"タイトル",'
+                '"collocations":{"general":{"verb_object":[],"adj_noun":[],"prep_noun":[]},"academic":{"verb_object":[],"adj_noun":[],"prep_noun":[]}},'
+                '"contrast":[],'
+                '"examples":{"Dev":[],"CS":[],"LLM":[],"Business":[],"Common":[]},'
+                '"etymology":{"note":"","confidence":"low"},'
+                '"study_card":"カード",'
+                '"pronunciation":{"ipa_RP":"/t/"}'
+                "}"
+            )
+
+    providers_mod._LLM_INSTANCE = _StubLLM()
+
+    client = TestClient(backend_main.app, raise_server_exceptions=False)
+    r = client.post("/api/word/pack", json={"lemma": "control-char"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["lemma"] == "control-char"
+    assert isinstance(body.get("senses"), list) and len(body["senses"]) >= 1
 
 def test_review_popular_removed(client):
     assert client.get("/api/review/popular?limit=5").status_code in (404, 405)
@@ -778,7 +837,7 @@ def test_store_prefers_japanese_sense_title(tmp_path: Path):
     assert rows and rows[0][2] == "整列"
 
 
-def test_store_uses_placeholder_when_no_japanese(tmp_path: Path):
+def test_store_uses_lemma_when_no_japanese(tmp_path: Path):
     backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
     if str(backend_root) not in sys.path:
         sys.path.insert(0, str(backend_root))
@@ -792,4 +851,25 @@ def test_store_uses_placeholder_when_no_japanese(tmp_path: Path):
     }
     store.save_word_pack("wp:test:2", "alignment", json.dumps(payload, ensure_ascii=False))
     rows = store.list_word_packs()
-    assert rows and rows[0][2] == "語義タイトル未設定"
+    # 仕様変更: 候補に日本語が無い場合は lemma 自体を採用（日本語未含でも非空）
+    assert rows and rows[0][2] == "alignment"
+
+
+def test_empty_wordpack_creation_sets_sense_title_from_lemma(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "empty_pack.sqlite3")
+    from fastapi.testclient import TestClient
+    client = TestClient(backend_main.app)
+
+    # 空パック作成
+    r = client.post("/api/word/packs", json={"lemma": "throughput"})
+    assert r.status_code == 200
+    pack_id = r.json()["id"]
+
+    # 一覧で sense_title が lemma と同値で返る（未設定プレースホルダではない）
+    rlist = client.get("/api/word/packs")
+    assert rlist.status_code == 200
+    items = rlist.json().get("items", [])
+    target = next((it for it in items if it.get("id") == pack_id), None)
+    assert target is not None
+    assert target.get("lemma") == "throughput"
+    assert target.get("sense_title") == "throughput"

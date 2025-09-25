@@ -530,7 +530,11 @@ class AppSQLiteStore:
         else:
             new_label = original_label or stored_label
         stripped_sense = str(sense_title or "").strip()
-        new_sense_title = stripped_sense or row["sense_title"]
+        stored_sense_title = str(row["sense_title"] or "")
+        if stored_sense_title:
+            new_sense_title = stored_sense_title
+        else:
+            new_sense_title = stripped_sense
         new_llm_model = llm_model if llm_model is not None else row["llm_model"]
         new_llm_params = llm_params if llm_params is not None else row["llm_params"]
         conn.execute(

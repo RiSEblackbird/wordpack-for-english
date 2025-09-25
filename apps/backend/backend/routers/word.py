@@ -50,20 +50,53 @@ async def lookup_word() -> dict[str, object]:
     response_description="作成されたWordPackのIDを返します",
 )
 async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
-    """生成を行わず、各情報を空としてWordPackを作成・保存する。
+    """空のWordPackを作成・保存する（sense_title は短い日本語をLLMで生成）。
 
-    - 既存の生成フローやLLMには依存しない
     - スキーマに適合する空のWordPack JSONを構築して保存
+    - sense_title は日本語の短い見出しを優先（LLM）。失敗時のフォールバックは choose_sense_title。
     - 保存ID（wp:{lemma}:{短縮uuid}）を返す
     """
     lemma = req.lemma.strip()
     if not lemma:
         raise HTTPException(status_code=400, detail="lemma is required")
 
+    # 短い日本語の語義タイトルを LLM で生成（説明なし・1行・最大12文字程度）
+    generated_title: str | None = None
+    try:
+        llm = get_llm_provider()
+        prompt = (
+            "次の英語の見出し語に対して、日本語の短い語義タイトルを1つだけ返してください。\n"
+            "条件: 最大12文字、名詞句ベース、日本語のみ、説明文や引用符や記号は不要。\n"
+            "見出し語: "
+            f"{lemma}\n"
+            "出力:"
+        )
+        try:
+            out: str = llm.complete(prompt)  # type: ignore[attr-defined]
+        except Exception as exc:  # LLM 呼出し失敗
+            if settings.strict_mode:
+                raise HTTPException(status_code=502, detail={
+                    "message": "LLM failed to generate sense_title (strict mode)",
+                    "reason_code": "LLM_FAILURE",
+                    "diagnostics": {"lemma": lemma, "error": str(exc)[:200]},
+                }) from exc
+            out = ""
+        cand = (out or "").strip().splitlines()[0] if isinstance(out, str) else ""
+        # 余分な引用符や記号を簡易除去
+        cand = cand.strip().strip('"').strip("'")
+        if cand:
+            generated_title = cand[:20]
+    except HTTPException:
+        # strict のみ再送出。それ以外はフォールバック
+        raise
+    except Exception:
+        # 非 strict: 静かにフォールバック
+        generated_title = None
+
     # スキーマ準拠の空WordPackを構築
     empty_word_pack = WordPack(
         lemma=lemma,
-        sense_title=choose_sense_title(None, [], lemma=lemma, limit=20),
+        sense_title=(generated_title or choose_sense_title(None, [], lemma=lemma, limit=20)),
         pronunciation={
             "ipa_GA": None,
             "ipa_RP": None,

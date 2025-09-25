@@ -53,6 +53,11 @@ def choose_sense_title(
         if _contains_japanese(truncated):
             return truncated
 
+    # 仕様変更: 日本語候補がない場合は lemma をそのまま（または切り詰めて）返す
+    lemma_trimmed = (lemma or "").strip()
+    if lemma_trimmed:
+        return lemma_trimmed[:limit]
+
     return _PLACEHOLDER
 
 
