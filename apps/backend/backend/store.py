@@ -496,13 +496,15 @@ class AppSQLiteStore:
     ) -> str:
         """lemma テーブルに label を upsert し、ID を返す。"""
 
-        normalized = str(label or "").strip()
-        if not normalized:
+        original_label = str(label or "").strip()
+        if not original_label:
             raise ValueError("lemma label must not be empty")
+
+        normalized = original_label.lower()
 
         cur = conn.execute(
             """
-            SELECT id
+            SELECT id, label, sense_title, llm_model, llm_params
             FROM lemmas
             WHERE lower(label) = lower(?)
             LIMIT 1;
@@ -517,11 +519,20 @@ class AppSQLiteStore:
                 INSERT INTO lemmas(id, label, sense_title, llm_model, llm_params, created_at)
                 VALUES (?, ?, ?, ?, ?, ?);
                 """,
-                (lemma_id, normalized, sense_title or "", llm_model, llm_params, now),
+                (lemma_id, original_label, sense_title or "", llm_model, llm_params, now),
             )
             return lemma_id
 
         lemma_id = row["id"]
+        stored_label = str(row["label"] or "")
+        if stored_label and stored_label.lower() == original_label.lower():
+            new_label = stored_label
+        else:
+            new_label = original_label or stored_label
+        stripped_sense = str(sense_title or "").strip()
+        new_sense_title = stripped_sense or row["sense_title"]
+        new_llm_model = llm_model if llm_model is not None else row["llm_model"]
+        new_llm_params = llm_params if llm_params is not None else row["llm_params"]
         conn.execute(
             """
             UPDATE lemmas
@@ -531,7 +542,7 @@ class AppSQLiteStore:
                 llm_params = ?
             WHERE id = ?;
             """,
-            (normalized, sense_title or "", llm_model, llm_params, lemma_id),
+            (new_label, new_sense_title, new_llm_model, new_llm_params, lemma_id),
         )
         return lemma_id
 
