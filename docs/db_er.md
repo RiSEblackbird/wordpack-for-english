@@ -4,17 +4,28 @@
 
 ```mermaid
 erDiagram
+    lemmas    ||--o{ word_packs        : labels
     word_packs ||--o{ word_pack_examples : has
     articles   ||--o{ article_word_packs : links
     word_packs ||--o{ article_word_packs : linked_by
 
+    lemmas {
+        TEXT id PK
+        TEXT label
+        TEXT sense_title
+        TEXT llm_model
+        TEXT llm_params
+        TEXT created_at
+    }
+
     word_packs {
         TEXT id PK
-        TEXT lemma
-        TEXT sense_title
+        TEXT lemma_id FK
         TEXT data
         TEXT created_at
         TEXT updated_at
+        INTEGER checked_only_count
+        INTEGER learned_count
     }
 
     word_pack_examples {
@@ -57,11 +68,13 @@ erDiagram
 
 補足:
 - `word_pack_examples.word_pack_id` は `word_packs.id` を参照（ON DELETE CASCADE）。
+- `word_packs.lemma_id` は `lemmas.id` を参照（ON DELETE CASCADE）。
 - `article_word_packs.article_id` は `articles.id` を参照（ON DELETE CASCADE）。
 - `article_word_packs.word_pack_id` は `word_packs.id` を参照（ON DELETE CASCADE）。
 - `article_word_packs` の主キーは `(article_id, word_pack_id)` の複合主キー。
 - インデックス（実装由来）
-  - `idx_word_packs_lemma(lemma)`, `idx_word_packs_created_at(created_at)`
+  - `idx_lemmas_label_ci(lower(label))`
+  - `idx_word_packs_lemma_id(lemma_id)`, `idx_word_packs_created_at(created_at)`
   - `idx_wpex_pack(word_pack_id)`, `idx_wpex_pack_cat_pos(word_pack_id, category, position)`
   - `idx_articles_created_at(created_at)`, `idx_articles_title(title_en)`
   - `idx_article_wps_article(article_id)`, `idx_article_wps_lemma(lemma)`

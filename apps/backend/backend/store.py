@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,127 +55,260 @@ class AppSQLiteStore:
             return 0
         return ivalue if ivalue >= 0 else 0
 
-    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
-        """指定列が存在しなければ ALTER TABLE で追加する。"""
-
-        cur = conn.execute(f"PRAGMA table_info({table});")
-        existing = {str(row["name"]) for row in cur.fetchall()}
-        if column not in existing:
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition};")
-
     def _init_db(self) -> None:
         with self._conn() as conn:
             with conn:
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS word_packs (
-                        id TEXT PRIMARY KEY,
-                        lemma TEXT NOT NULL,
-                        sense_title TEXT NOT NULL DEFAULT '',
-                        data TEXT NOT NULL,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        checked_only_count INTEGER NOT NULL DEFAULT 0,
-                        learned_count INTEGER NOT NULL DEFAULT 0
-                    );
-                    """
-                )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_lemma ON word_packs(lemma);")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_created_at ON word_packs(created_at);")
-                # 例文正規化テーブル（WordPack 1:多 Examples）
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS word_pack_examples (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        word_pack_id TEXT NOT NULL,
-                        category TEXT NOT NULL,
-                        position INTEGER NOT NULL,
-                        en TEXT NOT NULL,
-                        ja TEXT NOT NULL,
-                        grammar_ja TEXT,
-                        llm_model TEXT,
-                        llm_params TEXT,
-                        checked_only_count INTEGER NOT NULL DEFAULT 0,
-                        learned_count INTEGER NOT NULL DEFAULT 0,
-                        created_at TEXT NOT NULL,
-                        FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
-                    );
-                    """
-                )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack ON word_pack_examples(word_pack_id);")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack_cat_pos ON word_pack_examples(word_pack_id, category, position);")
+                self._ensure_lemmas_table(conn)
+                self._migrate_word_packs_lemma_schema(conn)
+                self._ensure_word_packs_table(conn)
+                self._ensure_word_pack_examples_table(conn)
+                self._ensure_articles_table(conn)
+                self._ensure_article_word_packs_table(conn)
 
-                # 既存DBでも列が存在するように補正
-                self._ensure_column(
+    def _ensure_lemmas_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lemmas (
+                id TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                sense_title TEXT NOT NULL DEFAULT '',
+                llm_model TEXT,
+                llm_params TEXT,
+                created_at TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_lemmas_label_ci ON lemmas(lower(label));"
+        )
+
+    def _ensure_word_packs_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS word_packs (
+                id TEXT PRIMARY KEY,
+                lemma_id TEXT NOT NULL,
+                data TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                checked_only_count INTEGER NOT NULL DEFAULT 0,
+                learned_count INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY(lemma_id) REFERENCES lemmas(id) ON DELETE CASCADE
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_lemma_id ON word_packs(lemma_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_created_at ON word_packs(created_at);")
+
+    def _ensure_word_pack_examples_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS word_pack_examples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                word_pack_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                en TEXT NOT NULL,
+                ja TEXT NOT NULL,
+                grammar_ja TEXT,
+                llm_model TEXT,
+                llm_params TEXT,
+                checked_only_count INTEGER NOT NULL DEFAULT 0,
+                learned_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack ON word_pack_examples(word_pack_id);")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_wpex_pack_cat_pos ON word_pack_examples(word_pack_id, category, position);"
+        )
+
+    def _ensure_articles_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS articles (
+                id TEXT PRIMARY KEY,
+                title_en TEXT NOT NULL,
+                body_en TEXT NOT NULL,
+                body_ja TEXT NOT NULL,
+                notes_ja TEXT,
+                llm_model TEXT,
+                llm_params TEXT,
+                generation_category TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                generation_started_at TEXT,
+                generation_completed_at TEXT,
+                generation_duration_ms INTEGER
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title_en);")
+
+    def _ensure_article_word_packs_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS article_word_packs (
+                article_id TEXT NOT NULL,
+                word_pack_id TEXT NOT NULL,
+                lemma TEXT NOT NULL,
+                status TEXT NOT NULL, -- 'existing' | 'created'
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(article_id, word_pack_id),
+                FOREIGN KEY(article_id) REFERENCES articles(id) ON DELETE CASCADE,
+                FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_article ON article_word_packs(article_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_lemma ON article_word_packs(lemma);")
+
+    def _migrate_word_packs_lemma_schema(self, conn: sqlite3.Connection) -> None:
+        cur = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='word_packs';"
+        )
+        if cur.fetchone() is None:
+            return
+
+        columns_cur = conn.execute("PRAGMA table_info(word_packs);")
+        columns = {row[1] for row in columns_cur.fetchall()}
+        if "lemma_id" in columns:
+            return
+
+        fk_state_row = conn.execute("PRAGMA foreign_keys;").fetchone()
+        fk_enabled = bool(fk_state_row[0]) if fk_state_row else False
+        if fk_enabled:
+            conn.execute("PRAGMA foreign_keys=OFF;")
+
+        try:
+            conn.execute("ALTER TABLE word_packs RENAME TO word_packs_legacy;")
+            conn.execute(
+                """
+                CREATE TABLE word_packs (
+                    id TEXT PRIMARY KEY,
+                    lemma_id TEXT NOT NULL,
+                    data TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    checked_only_count INTEGER NOT NULL DEFAULT 0,
+                    learned_count INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY(lemma_id) REFERENCES lemmas(id) ON DELETE CASCADE
+                );
+                """
+            )
+
+            legacy_rows = conn.execute(
+                """
+                SELECT
+                    id,
+                    lemma,
+                    sense_title,
+                    data,
+                    created_at,
+                    updated_at,
+                    COALESCE(checked_only_count, 0) AS checked_only_count,
+                    COALESCE(learned_count, 0) AS learned_count
+                FROM word_packs_legacy;
+                """
+            ).fetchall()
+
+            now_iso = datetime.now(UTC).isoformat()
+            lemma_entries: dict[str, dict[str, str]] = {}
+            for row in legacy_rows:
+                label = str(row["lemma"] or "").strip()
+                if not label:
+                    continue
+                normalized = label.lower()
+                sense_title = str(row["sense_title"] or "").strip()
+                created_at = str(row["created_at"] or now_iso)
+                entry = lemma_entries.get(normalized)
+                if entry is None:
+                    lemma_entries[normalized] = {
+                        "label": label,
+                        "sense_title": sense_title,
+                        "created_at": created_at,
+                    }
+                else:
+                    if sense_title and not entry["sense_title"]:
+                        entry["sense_title"] = sense_title
+                    if created_at and entry["created_at"]:
+                        if created_at < entry["created_at"]:
+                            entry["created_at"] = created_at
+
+            lemma_ids: dict[str, str] = {}
+            for normalized, entry in lemma_entries.items():
+                lemma_id = self._upsert_lemma(
                     conn,
-                    "word_packs",
-                    "checked_only_count",
-                    "checked_only_count INTEGER NOT NULL DEFAULT 0",
+                    label=entry["label"],
+                    sense_title=entry["sense_title"],
+                    llm_model=None,
+                    llm_params=None,
+                    now=entry["created_at"] or now_iso,
                 )
-                self._ensure_column(
-                    conn,
-                    "word_packs",
-                    "learned_count",
-                    "learned_count INTEGER NOT NULL DEFAULT 0",
-                )
-                self._ensure_column(
-                    conn,
-                    "word_pack_examples",
-                    "checked_only_count",
-                    "checked_only_count INTEGER NOT NULL DEFAULT 0",
-                )
-                self._ensure_column(
-                    conn,
-                    "word_pack_examples",
-                    "learned_count",
-                    "learned_count INTEGER NOT NULL DEFAULT 0",
+                lemma_ids[normalized] = lemma_id
+
+            for row in legacy_rows:
+                label = str(row["lemma"] or "").strip()
+                normalized = label.lower()
+                lemma_id = lemma_ids.get(normalized)
+                if not lemma_id:
+                    fallback_label = label or str(row["id"])
+                    lemma_id = self._upsert_lemma(
+                        conn,
+                        label=fallback_label,
+                        sense_title=str(row["sense_title"] or ""),
+                        llm_model=None,
+                        llm_params=None,
+                        now=str(row["created_at"] or now_iso),
+                    )
+                    lemma_ids[fallback_label.lower()] = lemma_id
+
+                created_at = str(row["created_at"] or now_iso)
+                updated_at = str(row["updated_at"] or created_at)
+                checked_only = self._normalize_non_negative_int(row["checked_only_count"])
+                learned = self._normalize_non_negative_int(row["learned_count"])
+                conn.execute(
+                    """
+                    INSERT INTO word_packs(
+                        id, lemma_id, data, created_at, updated_at, checked_only_count, learned_count
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        row["id"],
+                        lemma_id,
+                        row["data"],
+                        created_at,
+                        updated_at,
+                        checked_only,
+                        learned,
+                    ),
                 )
 
-                # Articles 永続化テーブル
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS articles (
-                        id TEXT PRIMARY KEY,
-                        title_en TEXT NOT NULL,
-                        body_en TEXT NOT NULL,
-                        body_ja TEXT NOT NULL,
-                        notes_ja TEXT,
-                        llm_model TEXT,
-                        llm_params TEXT,
-                        generation_category TEXT,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        generation_started_at TEXT,
-                        generation_completed_at TEXT,
-                        generation_duration_ms INTEGER
-                    );
-                    """
-                )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at);")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title_en);")
-                # Article と WordPack の関連（多対多）
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS article_word_packs (
-                        article_id TEXT NOT NULL,
-                        word_pack_id TEXT NOT NULL,
-                        lemma TEXT NOT NULL,
-                        status TEXT NOT NULL, -- 'existing' | 'created'
-                        created_at TEXT NOT NULL,
-                        PRIMARY KEY(article_id, word_pack_id),
-                        FOREIGN KEY(article_id) REFERENCES articles(id) ON DELETE CASCADE,
-                        FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
-                    );
-                    """
-                )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_article ON article_word_packs(article_id);")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_lemma ON article_word_packs(lemma);")
+            conn.execute("DROP TABLE word_packs_legacy;")
+        finally:
+            if fk_enabled:
+                conn.execute("PRAGMA foreign_keys=ON;")
 
     def _split_examples_from_payload(
         self, data: str | Mapping[str, Any]
-    ) -> tuple[str, Mapping[str, Any] | None, str, list[str], tuple[int, int]]:
+    ) -> tuple[
+        str,
+        Mapping[str, Any] | None,
+        str,
+        list[str],
+        tuple[int, int],
+        tuple[str | None, str | None],
+    ]:
+        """payload(JSON or dict) から examples を分離し、コアJSONと例文テーブル保存用データに分ける。"""
+
         checked_only_count = 0
         learned_count = 0
+        lemma_llm_model: str | None = None
+        lemma_llm_params: str | None = None
+
         if isinstance(data, Mapping):
             parsed: Mapping[str, Any] = dict(data)
         else:
@@ -188,6 +322,7 @@ class AppSQLiteStore:
                     "",
                     [],
                     (checked_only_count, learned_count),
+                    (lemma_llm_model, lemma_llm_params),
                 )
             if not isinstance(parsed, Mapping):
                 empty_json = json.dumps({}, ensure_ascii=False)
@@ -197,6 +332,7 @@ class AppSQLiteStore:
                     "",
                     [],
                     (checked_only_count, learned_count),
+                    (lemma_llm_model, lemma_llm_params),
                 )
 
         sense_title = ""
@@ -205,6 +341,17 @@ class AppSQLiteStore:
             sense_title = str(parsed.get("sense_title") or "").strip()
         except Exception:
             sense_title = ""
+
+        try:
+            val = str(parsed.get("llm_model") or "").strip()
+            lemma_llm_model = val or None
+        except Exception:
+            lemma_llm_model = None
+        try:
+            val = str(parsed.get("llm_params") or "").strip()
+            lemma_llm_params = val or None
+        except Exception:
+            lemma_llm_params = None
 
         try:
             checked_only_count = self._normalize_non_negative_int(
@@ -242,9 +389,17 @@ class AppSQLiteStore:
                 sense_title,
                 sense_candidates,
                 (checked_only_count, learned_count),
+                (lemma_llm_model, lemma_llm_params),
             )
         serialized = json.dumps(parsed, ensure_ascii=False) if not isinstance(data, str) else data
-        return serialized, None, sense_title, sense_candidates, (checked_only_count, learned_count)
+        return (
+            serialized,
+            None,
+            sense_title,
+            sense_candidates,
+            (checked_only_count, learned_count),
+            (lemma_llm_model, lemma_llm_params),
+        )
 
     def _iter_example_rows(
         self, examples: Mapping[str, Any]
@@ -329,6 +484,68 @@ class AppSQLiteStore:
         core["examples"] = examples
         return json.dumps(core, ensure_ascii=False)
 
+    def _upsert_lemma(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        label: str,
+        sense_title: str,
+        llm_model: str | None,
+        llm_params: str | None,
+        now: str,
+    ) -> str:
+        """lemma テーブルに label を upsert し、ID を返す。"""
+
+        original_label = str(label or "").strip()
+        if not original_label:
+            raise ValueError("lemma label must not be empty")
+
+        normalized = original_label.lower()
+
+        cur = conn.execute(
+            """
+            SELECT id, label, sense_title, llm_model, llm_params
+            FROM lemmas
+            WHERE lower(label) = lower(?)
+            LIMIT 1;
+            """,
+            (normalized,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            lemma_id = f"lm:{normalized}:{uuid.uuid4().hex[:8]}"
+            conn.execute(
+                """
+                INSERT INTO lemmas(id, label, sense_title, llm_model, llm_params, created_at)
+                VALUES (?, ?, ?, ?, ?, ?);
+                """,
+                (lemma_id, original_label, sense_title or "", llm_model, llm_params, now),
+            )
+            return lemma_id
+
+        lemma_id = row["id"]
+        stored_label = str(row["label"] or "")
+        if stored_label and stored_label.lower() == original_label.lower():
+            new_label = stored_label
+        else:
+            new_label = original_label or stored_label
+        stripped_sense = str(sense_title or "").strip()
+        new_sense_title = stripped_sense or row["sense_title"]
+        new_llm_model = llm_model if llm_model is not None else row["llm_model"]
+        new_llm_params = llm_params if llm_params is not None else row["llm_params"]
+        conn.execute(
+            """
+            UPDATE lemmas
+            SET label = ?,
+                sense_title = ?,
+                llm_model = ?,
+                llm_params = ?
+            WHERE id = ?;
+            """,
+            (new_label, new_sense_title, new_llm_model, new_llm_params, lemma_id),
+        )
+        return lemma_id
+
     # --- WordPack 永続化機能 ---
     def save_word_pack(self, word_pack_id: str, lemma: str, data: str) -> None:
         """WordPackをデータベースに保存する。
@@ -343,6 +560,7 @@ class AppSQLiteStore:
             sense_title_raw,
             sense_candidates,
             (checked_only_count, learned_count),
+            (lemma_llm_model, lemma_llm_params),
         ) = self._split_examples_from_payload(data)
         sense_title = choose_sense_title(
             sense_title_raw,
@@ -353,21 +571,28 @@ class AppSQLiteStore:
 
         with self._conn() as conn:
             with conn:
+                lemma_id = self._upsert_lemma(
+                    conn,
+                    label=lemma,
+                    sense_title=sense_title,
+                    llm_model=lemma_llm_model,
+                    llm_params=lemma_llm_params,
+                    now=now,
+                )
                 conn.execute(
                     """
                     INSERT INTO word_packs(
-                        id, lemma, sense_title, data, created_at, updated_at, checked_only_count, learned_count
+                        id, lemma_id, data, created_at, updated_at, checked_only_count, learned_count
                     )
                     VALUES (
-                        ?, ?, ?, ?,
+                        ?, ?, ?,
                         COALESCE((SELECT created_at FROM word_packs WHERE id = ?), ?),
                         ?,
                         ?,
                         ?
                     )
                     ON CONFLICT(id) DO UPDATE SET
-                        lemma = excluded.lemma,
-                        sense_title = excluded.sense_title,
+                        lemma_id = excluded.lemma_id,
                         data = excluded.data,
                         updated_at = excluded.updated_at,
                         checked_only_count = excluded.checked_only_count,
@@ -375,8 +600,7 @@ class AppSQLiteStore:
                     """,
                     (
                         word_pack_id,
-                        lemma,
-                        sense_title,
+                        lemma_id,
                         core_json,
                         word_pack_id,
                         now,
@@ -429,9 +653,11 @@ class AppSQLiteStore:
         with self._conn() as conn:
             cur = conn.execute(
                 """
-                SELECT lemma, data, created_at, updated_at, checked_only_count, learned_count
-                FROM word_packs
-                WHERE id = ?;
+                SELECT lm.label AS lemma, wp.data, wp.created_at, wp.updated_at,
+                       wp.checked_only_count, wp.learned_count
+                FROM word_packs AS wp
+                JOIN lemmas AS lm ON lm.id = wp.lemma_id
+                WHERE wp.id = ?;
                 """,
                 (word_pack_id,),
             )
@@ -461,7 +687,13 @@ class AppSQLiteStore:
         """WordPack一覧を取得する。戻り値: [(id, lemma, sense_title, created_at, updated_at), ...]"""
         with self._conn() as conn:
             cur = conn.execute(
-                "SELECT id, lemma, sense_title, created_at, updated_at FROM word_packs ORDER BY created_at DESC LIMIT ? OFFSET ?;",
+                """
+                SELECT wp.id, lm.label AS lemma, lm.sense_title, wp.created_at, wp.updated_at
+                FROM word_packs AS wp
+                JOIN lemmas AS lm ON lm.id = wp.lemma_id
+                ORDER BY wp.created_at DESC
+                LIMIT ? OFFSET ?;
+                """,
                 (limit, offset),
             )
             return [
@@ -490,7 +722,7 @@ class AppSQLiteStore:
         with self._conn() as conn:
             cur = conn.execute(
                 """
-                SELECT wp.id, wp.lemma, wp.sense_title, wp.created_at, wp.updated_at,
+                SELECT wp.id, lm.label AS lemma, lm.sense_title, wp.created_at, wp.updated_at,
                        SUM(CASE WHEN wpe.category = 'Dev' THEN 1 ELSE 0 END) AS cnt_dev,
                        SUM(CASE WHEN wpe.category = 'CS' THEN 1 ELSE 0 END) AS cnt_cs,
                        SUM(CASE WHEN wpe.category = 'LLM' THEN 1 ELSE 0 END) AS cnt_llm,
@@ -499,8 +731,9 @@ class AppSQLiteStore:
                        wp.checked_only_count AS checked_only_count,
                        wp.learned_count AS learned_count
                 FROM word_packs wp
+                JOIN lemmas lm ON lm.id = wp.lemma_id
                 LEFT JOIN word_pack_examples wpe ON wpe.word_pack_id = wp.id
-                GROUP BY wp.id
+                GROUP BY wp.id, lm.label, lm.sense_title, wp.created_at, wp.updated_at, wp.checked_only_count, wp.learned_count
                 ORDER BY wp.created_at DESC
                 LIMIT ? OFFSET ?;
                 """,
@@ -709,9 +942,11 @@ class AppSQLiteStore:
         with self._conn() as conn:
             cur = conn.execute(
                 """
-                SELECT id FROM word_packs
-                WHERE lemma = ?
-                ORDER BY updated_at DESC
+                SELECT wp.id
+                FROM word_packs AS wp
+                JOIN lemmas AS lm ON lm.id = wp.lemma_id
+                WHERE lm.label = ?
+                ORDER BY wp.updated_at DESC
                 LIMIT 1;
                 """,
                 (lemma,),
@@ -727,9 +962,11 @@ class AppSQLiteStore:
         with self._conn() as conn:
             cur = conn.execute(
                 """
-                SELECT id, lemma, sense_title FROM word_packs
-                WHERE lower(lemma) = lower(?)
-                ORDER BY updated_at DESC
+                SELECT wp.id, lm.label AS lemma, lm.sense_title
+                FROM word_packs AS wp
+                JOIN lemmas AS lm ON lm.id = wp.lemma_id
+                WHERE lower(lm.label) = lower(?)
+                ORDER BY wp.updated_at DESC
                 LIMIT 1;
                 """,
                 (lemma,),
@@ -1063,7 +1300,7 @@ class AppSQLiteStore:
         order_map = {
             "created_at": "wpe.created_at",
             "pack_updated_at": "wp.updated_at",
-            "lemma": "wp.lemma",
+            "lemma": "lm.label",
             "category": "wpe.category",
         }
         order_col = order_map.get(order_by, "wpe.created_at")
@@ -1093,7 +1330,7 @@ class AppSQLiteStore:
                 SELECT
                     wpe.id AS id,
                     wpe.word_pack_id AS word_pack_id,
-                    wp.lemma AS lemma,
+                    lm.label AS lemma,
                     wpe.category AS category,
                     wpe.en AS en,
                     wpe.ja AS ja,
@@ -1104,6 +1341,7 @@ class AppSQLiteStore:
                     wpe.learned_count AS learned_count
                 FROM word_pack_examples wpe
                 JOIN word_packs wp ON wp.id = wpe.word_pack_id
+                JOIN lemmas lm ON lm.id = wp.lemma_id
                 {where_sql}
                 ORDER BY {order_col} {order_dir_sql}, wpe.id ASC
                 LIMIT ? OFFSET ?;
