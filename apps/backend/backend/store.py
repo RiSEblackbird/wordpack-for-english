@@ -58,101 +58,239 @@ class AppSQLiteStore:
     def _init_db(self) -> None:
         with self._conn() as conn:
             with conn:
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS lemmas (
-                        id TEXT PRIMARY KEY,
-                        label TEXT NOT NULL,
-                        sense_title TEXT NOT NULL DEFAULT '',
-                        llm_model TEXT,
-                        llm_params TEXT,
-                        created_at TEXT NOT NULL
-                    );
-                    """
-                )
-                conn.execute(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_lemmas_label_ci ON lemmas(lower(label));"
-                )
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS word_packs (
-                        id TEXT PRIMARY KEY,
-                        lemma_id TEXT NOT NULL,
-                        data TEXT NOT NULL,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        checked_only_count INTEGER NOT NULL DEFAULT 0,
-                        learned_count INTEGER NOT NULL DEFAULT 0,
-                        FOREIGN KEY(lemma_id) REFERENCES lemmas(id) ON DELETE CASCADE
-                    );
-                    """
-                )
-                conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_word_packs_lemma_id ON word_packs(lemma_id);"
-                )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_created_at ON word_packs(created_at);")
-                # 例文正規化テーブル（WordPack 1:多 Examples）
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS word_pack_examples (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        word_pack_id TEXT NOT NULL,
-                        category TEXT NOT NULL,
-                        position INTEGER NOT NULL,
-                        en TEXT NOT NULL,
-                        ja TEXT NOT NULL,
-                        grammar_ja TEXT,
-                        llm_model TEXT,
-                        llm_params TEXT,
-                        checked_only_count INTEGER NOT NULL DEFAULT 0,
-                        learned_count INTEGER NOT NULL DEFAULT 0,
-                        created_at TEXT NOT NULL,
-                        FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
-                    );
-                    """
-                )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack ON word_pack_examples(word_pack_id);")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack_cat_pos ON word_pack_examples(word_pack_id, category, position);")
+                self._ensure_lemmas_table(conn)
+                self._migrate_word_packs_lemma_schema(conn)
+                self._ensure_word_packs_table(conn)
+                self._ensure_word_pack_examples_table(conn)
+                self._ensure_articles_table(conn)
+                self._ensure_article_word_packs_table(conn)
 
-                # Articles 永続化テーブル
+    def _ensure_lemmas_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lemmas (
+                id TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                sense_title TEXT NOT NULL DEFAULT '',
+                llm_model TEXT,
+                llm_params TEXT,
+                created_at TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_lemmas_label_ci ON lemmas(lower(label));"
+        )
+
+    def _ensure_word_packs_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS word_packs (
+                id TEXT PRIMARY KEY,
+                lemma_id TEXT NOT NULL,
+                data TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                checked_only_count INTEGER NOT NULL DEFAULT 0,
+                learned_count INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY(lemma_id) REFERENCES lemmas(id) ON DELETE CASCADE
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_lemma_id ON word_packs(lemma_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_created_at ON word_packs(created_at);")
+
+    def _ensure_word_pack_examples_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS word_pack_examples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                word_pack_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                position INTEGER NOT NULL,
+                en TEXT NOT NULL,
+                ja TEXT NOT NULL,
+                grammar_ja TEXT,
+                llm_model TEXT,
+                llm_params TEXT,
+                checked_only_count INTEGER NOT NULL DEFAULT 0,
+                learned_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack ON word_pack_examples(word_pack_id);")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_wpex_pack_cat_pos ON word_pack_examples(word_pack_id, category, position);"
+        )
+
+    def _ensure_articles_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS articles (
+                id TEXT PRIMARY KEY,
+                title_en TEXT NOT NULL,
+                body_en TEXT NOT NULL,
+                body_ja TEXT NOT NULL,
+                notes_ja TEXT,
+                llm_model TEXT,
+                llm_params TEXT,
+                generation_category TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                generation_started_at TEXT,
+                generation_completed_at TEXT,
+                generation_duration_ms INTEGER
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title_en);")
+
+    def _ensure_article_word_packs_table(self, conn: sqlite3.Connection) -> None:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS article_word_packs (
+                article_id TEXT NOT NULL,
+                word_pack_id TEXT NOT NULL,
+                lemma TEXT NOT NULL,
+                status TEXT NOT NULL, -- 'existing' | 'created'
+                created_at TEXT NOT NULL,
+                PRIMARY KEY(article_id, word_pack_id),
+                FOREIGN KEY(article_id) REFERENCES articles(id) ON DELETE CASCADE,
+                FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
+            );
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_article ON article_word_packs(article_id);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_lemma ON article_word_packs(lemma);")
+
+    def _migrate_word_packs_lemma_schema(self, conn: sqlite3.Connection) -> None:
+        cur = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='word_packs';"
+        )
+        if cur.fetchone() is None:
+            return
+
+        columns_cur = conn.execute("PRAGMA table_info(word_packs);")
+        columns = {row[1] for row in columns_cur.fetchall()}
+        if "lemma_id" in columns:
+            return
+
+        fk_state_row = conn.execute("PRAGMA foreign_keys;").fetchone()
+        fk_enabled = bool(fk_state_row[0]) if fk_state_row else False
+        if fk_enabled:
+            conn.execute("PRAGMA foreign_keys=OFF;")
+
+        try:
+            conn.execute("ALTER TABLE word_packs RENAME TO word_packs_legacy;")
+            conn.execute(
+                """
+                CREATE TABLE word_packs (
+                    id TEXT PRIMARY KEY,
+                    lemma_id TEXT NOT NULL,
+                    data TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    checked_only_count INTEGER NOT NULL DEFAULT 0,
+                    learned_count INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY(lemma_id) REFERENCES lemmas(id) ON DELETE CASCADE
+                );
+                """
+            )
+
+            legacy_rows = conn.execute(
+                """
+                SELECT
+                    id,
+                    lemma,
+                    sense_title,
+                    data,
+                    created_at,
+                    updated_at,
+                    COALESCE(checked_only_count, 0) AS checked_only_count,
+                    COALESCE(learned_count, 0) AS learned_count
+                FROM word_packs_legacy;
+                """
+            ).fetchall()
+
+            now_iso = datetime.now(UTC).isoformat()
+            lemma_entries: dict[str, dict[str, str]] = {}
+            for row in legacy_rows:
+                label = str(row["lemma"] or "").strip()
+                if not label:
+                    continue
+                normalized = label.lower()
+                sense_title = str(row["sense_title"] or "").strip()
+                created_at = str(row["created_at"] or now_iso)
+                entry = lemma_entries.get(normalized)
+                if entry is None:
+                    lemma_entries[normalized] = {
+                        "label": label,
+                        "sense_title": sense_title,
+                        "created_at": created_at,
+                    }
+                else:
+                    if sense_title and not entry["sense_title"]:
+                        entry["sense_title"] = sense_title
+                    if created_at and entry["created_at"]:
+                        if created_at < entry["created_at"]:
+                            entry["created_at"] = created_at
+
+            lemma_ids: dict[str, str] = {}
+            for normalized, entry in lemma_entries.items():
+                lemma_id = self._upsert_lemma(
+                    conn,
+                    label=entry["label"],
+                    sense_title=entry["sense_title"],
+                    llm_model=None,
+                    llm_params=None,
+                    now=entry["created_at"] or now_iso,
+                )
+                lemma_ids[normalized] = lemma_id
+
+            for row in legacy_rows:
+                label = str(row["lemma"] or "").strip()
+                normalized = label.lower()
+                lemma_id = lemma_ids.get(normalized)
+                if not lemma_id:
+                    fallback_label = label or str(row["id"])
+                    lemma_id = self._upsert_lemma(
+                        conn,
+                        label=fallback_label,
+                        sense_title=str(row["sense_title"] or ""),
+                        llm_model=None,
+                        llm_params=None,
+                        now=str(row["created_at"] or now_iso),
+                    )
+                    lemma_ids[fallback_label.lower()] = lemma_id
+
+                created_at = str(row["created_at"] or now_iso)
+                updated_at = str(row["updated_at"] or created_at)
+                checked_only = self._normalize_non_negative_int(row["checked_only_count"])
+                learned = self._normalize_non_negative_int(row["learned_count"])
                 conn.execute(
                     """
-                    CREATE TABLE IF NOT EXISTS articles (
-                        id TEXT PRIMARY KEY,
-                        title_en TEXT NOT NULL,
-                        body_en TEXT NOT NULL,
-                        body_ja TEXT NOT NULL,
-                        notes_ja TEXT,
-                        llm_model TEXT,
-                        llm_params TEXT,
-                        generation_category TEXT,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        generation_started_at TEXT,
-                        generation_completed_at TEXT,
-                        generation_duration_ms INTEGER
-                    );
-                    """
+                    INSERT INTO word_packs(
+                        id, lemma_id, data, created_at, updated_at, checked_only_count, learned_count
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    (
+                        row["id"],
+                        lemma_id,
+                        row["data"],
+                        created_at,
+                        updated_at,
+                        checked_only,
+                        learned,
+                    ),
                 )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at);")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title_en);")
-                # Article と WordPack の関連（多対多）
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS article_word_packs (
-                        article_id TEXT NOT NULL,
-                        word_pack_id TEXT NOT NULL,
-                        lemma TEXT NOT NULL,
-                        status TEXT NOT NULL, -- 'existing' | 'created'
-                        created_at TEXT NOT NULL,
-                        PRIMARY KEY(article_id, word_pack_id),
-                        FOREIGN KEY(article_id) REFERENCES articles(id) ON DELETE CASCADE,
-                        FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
-                    );
-                    """
-                )
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_article ON article_word_packs(article_id);")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_lemma ON article_word_packs(lemma);")
+
+            conn.execute("DROP TABLE word_packs_legacy;")
+        finally:
+            if fk_enabled:
+                conn.execute("PRAGMA foreign_keys=ON;")
 
     def _split_examples_from_payload(
         self, data: str | Mapping[str, Any]
