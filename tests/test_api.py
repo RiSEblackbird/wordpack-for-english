@@ -269,6 +269,38 @@ def test_word_pack_strict_llm_json_parse_failure_to_502(monkeypatch: pytest.Monk
     assert r.status_code == 502
 
 
+def test_word_pack_sanitizes_control_chars_in_llm_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """STRICT_MODE で LLM が未エスケープの制御文字を含む JSON を返しても、
+    サニタイザによりパースが成功して 200 を返すことを検証する。"""
+    backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=tmp_path / "strict_cc.sqlite3")
+    from fastapi.testclient import TestClient
+    import backend.providers as providers_mod
+
+    class _StubLLM:
+        def complete(self, prompt: str) -> str:
+            # gloss_ja に RAW 制御文字 (U+0001) を混入させ、未エスケープ JSON を返す
+            cc = chr(1)
+            return (
+                '{"senses":[{"id":"s1","gloss_ja":"テ' + cc + 'スト語義","patterns":["p"]}],'
+                '"sense_title":"タイトル",'
+                '"collocations":{"general":{"verb_object":[],"adj_noun":[],"prep_noun":[]},"academic":{"verb_object":[],"adj_noun":[],"prep_noun":[]}},'
+                '"contrast":[],'
+                '"examples":{"Dev":[],"CS":[],"LLM":[],"Business":[],"Common":[]},'
+                '"etymology":{"note":"","confidence":"low"},'
+                '"study_card":"カード",'
+                '"pronunciation":{"ipa_RP":"/t/"}'
+                "}"
+            )
+
+    providers_mod._LLM_INSTANCE = _StubLLM()
+
+    client = TestClient(backend_main.app, raise_server_exceptions=False)
+    r = client.post("/api/word/pack", json={"lemma": "control-char"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["lemma"] == "control-char"
+    assert isinstance(body.get("senses"), list) and len(body["senses"]) >= 1
+
 def test_review_popular_removed(client):
     assert client.get("/api/review/popular?limit=5").status_code in (404, 405)
 
