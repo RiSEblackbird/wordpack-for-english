@@ -55,7 +55,7 @@ class WordPackRequest(BaseModel):
 
 
 class Sense(BaseModel):
-    model_config = ConfigDict(json_schema_extra={
+    model_config = ConfigDict(populate_by_name=True, json_schema_extra={
         "examples": [
             {
                 "id": "s1",
@@ -84,7 +84,8 @@ class Sense(BaseModel):
     patterns: List[str] = Field(default_factory=list)
     synonyms: List[str] = Field(default_factory=list)
     antonyms: List[str] = Field(default_factory=list)
-    register: Optional[str] = None
+    # BaseModel の属性名と衝突するため、フィールド名を register_ に変更し、API 互換のためエイリアスを維持
+    register_: Optional[str] = Field(default=None, alias="register")
     notes_ja: Optional[str] = None
 
 

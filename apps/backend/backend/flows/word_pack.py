@@ -248,7 +248,7 @@ class WordPackFlow:
                         patterns=patterns,
                         synonyms=synonyms,
                         antonyms=antonyms,
-                        register=register,
+                        register_=register,
                         notes_ja=notes_ja,
                         term_overview_ja=(str(s.get("term_overview_ja") or "").strip() or None),
                         term_core_ja=(str(s.get("term_core_ja") or "").strip() or None),
