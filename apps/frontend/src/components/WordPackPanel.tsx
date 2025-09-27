@@ -157,56 +157,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     lemmaActionRef.current = null;
   }, []);
 
-  const triggerUnknownLemmaGeneration = useCallback(async (lemmaText: string) => {
-    const trimmed = lemmaText.trim();
-    if (!trimmed) return false;
-    const ctrl = new AbortController();
-    const active = lemmaActionRef.current;
-    if (active) {
-      active.aborter = ctrl;
-    }
-    try {
-      const res = await fetchJson<WordPack>(`${apiBase}/word/pack`, {
-        method: 'POST',
-        body: applyModelRequestFields({
-          lemma: trimmed,
-          pronunciation_enabled: pronunciationEnabled,
-          regenerate_scope: regenerateScope,
-        }),
-        signal: ctrl.signal,
-        timeoutMs: requestTimeoutMs,
-      });
-      const normalized = normalizeWordPack(res);
-      setData(normalized);
-      setCurrentWordPackId(null);
-      setMsg({ kind: 'status', text: `【${normalized.lemma}】のWordPackを生成しました` });
-      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
-      openLemmaExplorer(normalized.lemma);
-      detachLemmaActionTooltip();
-      return true;
-    } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'WordPack生成に失敗しました';
-      setMsg({ kind: 'alert', text: message });
-      if (lemmaActionRef.current && lemmaActionRef.current.aborter === ctrl) {
-        lemmaActionRef.current.aborter = null;
-      }
-      return false;
-    }
-  }, [apiBase, applyModelRequestFields, detachLemmaActionTooltip, normalizeWordPack, openLemmaExplorer, pronunciationEnabled, regenerateScope, requestTimeoutMs]);
-
-  const showAdvancedModelOptions = useMemo(() => {
-    const lower = (model || '').toLowerCase();
-    return lower === 'gpt-5-mini' || lower === 'gpt-5-nano';
-  }, [model]);
-
-  const handleChangeModel = useCallback(
-    (value: string) => {
-      setModel(value);
-      setSettings((prev) => ({ ...prev, model: value }));
-    },
-    [setSettings],
-  );
-
   const normalizeWordPack = useCallback(
     (wp: WordPack): WordPack => ({
       ...wp,
@@ -270,7 +220,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           return {
             ...prev,
             status: 'ready',
-          senseTitle: (detail.sense_title || prev.senseTitle) ?? null,
+            senseTitle: (detail.sense_title || prev.senseTitle) ?? null,
             data: normalizeWordPack(detail),
             errorMessage: null,
           };
@@ -288,6 +238,56 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       }
     },
     [apiBase, ensureLemmaCache, normalizeWordPack, requestTimeoutMs],
+  );
+
+  const triggerUnknownLemmaGeneration = useCallback(async (lemmaText: string) => {
+    const trimmed = lemmaText.trim();
+    if (!trimmed) return false;
+    const ctrl = new AbortController();
+    const active = lemmaActionRef.current;
+    if (active) {
+      active.aborter = ctrl;
+    }
+    try {
+      const res = await fetchJson<WordPack>(`${apiBase}/word/pack`, {
+        method: 'POST',
+        body: applyModelRequestFields({
+          lemma: trimmed,
+          pronunciation_enabled: pronunciationEnabled,
+          regenerate_scope: regenerateScope,
+        }),
+        signal: ctrl.signal,
+        timeoutMs: requestTimeoutMs,
+      });
+      const normalized = normalizeWordPack(res);
+      setData(normalized);
+      setCurrentWordPackId(null);
+      setMsg({ kind: 'status', text: `【${normalized.lemma}】のWordPackを生成しました` });
+      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+      openLemmaExplorer(normalized.lemma);
+      detachLemmaActionTooltip();
+      return true;
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'WordPack生成に失敗しました';
+      setMsg({ kind: 'alert', text: message });
+      if (lemmaActionRef.current && lemmaActionRef.current.aborter === ctrl) {
+        lemmaActionRef.current.aborter = null;
+      }
+      return false;
+    }
+  }, [apiBase, applyModelRequestFields, detachLemmaActionTooltip, normalizeWordPack, openLemmaExplorer, pronunciationEnabled, regenerateScope, requestTimeoutMs]);
+
+  const showAdvancedModelOptions = useMemo(() => {
+    const lower = (model || '').toLowerCase();
+    return lower === 'gpt-5-mini' || lower === 'gpt-5-nano';
+  }, [model]);
+
+  const handleChangeModel = useCallback(
+    (value: string) => {
+      setModel(value);
+      setSettings((prev) => ({ ...prev, model: value }));
+    },
+    [setSettings],
   );
 
   const closeLemmaExplorer = useCallback(() => setLemmaExplorer(null), []);
@@ -1302,12 +1302,15 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                             return;
                           }
                           const row = e.currentTarget as HTMLElement;
+                          const pendingLemma = row.getAttribute('data-pending-lemma') || '';
+                          const fallbackLemma = row.getAttribute('data-last-lemma') || '';
+                          const lemmaForClick = (pendingLemma || fallbackLemma).trim();
                           detachLemmaActionTooltip();
                           row.removeAttribute('data-pending-lemma');
                           row.querySelectorAll('span.lemma-token.lemma-known').forEach((el) => el.classList.remove('lemma-known'));
                           document.querySelectorAll('.lemma-tooltip').forEach((n) => n.remove());
                           if (
-                            lemmaForClick.trim() &&
+                            lemmaForClick &&
                             (!related ||
                               !(related instanceof HTMLElement) ||
                               (!row.contains(related) && !related.closest('.lemma-tooltip[data-kind="cta"]')))

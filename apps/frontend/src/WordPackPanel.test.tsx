@@ -71,8 +71,6 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
       if (url.startsWith('/api/word/lemma/')) {
         const keyRaw = decodeURIComponent(url.split('/').pop() || '');
-        const key = keyRaw.toLowerCase();
-        lemmaLookupCallCount[key] = (lemmaLookupCallCount[key] || 0) + 1;
         if (keyRaw.includes(' ')) {
           return new Response(JSON.stringify({ found: false }), {
             status: 200,
