@@ -50,7 +50,8 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
               Business: [],
               Common: [
                 { en: `Paths ${lemma} at the main square downtown.`, ja: `${lemma} のCommon例文1`, grammar_ja: '前置詞句' },
-                { en: `Schedules ${lemma} around the team’s availability.`, ja: `${lemma} のCommon例文2`, grammar_ja: '三単現' }
+                { en: `Schedules ${lemma} around the team’s availability.`, ja: `${lemma} のCommon例文2`, grammar_ja: '三単現' },
+                { en: 'Ghosts linger without a defined sense in the archive.', ja: 'Ghosts のCommon例文 (senseなし)', grammar_ja: '動詞句' }
               ]
             },
             etymology: { note: '-', confidence: 'low' },
@@ -69,15 +70,17 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       }
 
       if (url.startsWith('/api/word/lemma/')) {
-        const key = decodeURIComponent(url.split('/').pop() || '');
-        if (key.includes(' ')) {
+        const keyRaw = decodeURIComponent(url.split('/').pop() || '');
+        const key = keyRaw.toLowerCase();
+        lemmaLookupCallCount[key] = (lemmaLookupCallCount[key] || 0) + 1;
+        if (keyRaw.includes(' ')) {
           return new Response(JSON.stringify({ found: false }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           });
         }
         return new Response(
-          JSON.stringify({ found: true, id: `wp:${key}:lemma`, lemma: key, sense_title: `${key}概説` }),
+          JSON.stringify({ found: true, id: `wp:${keyRaw}:lemma`, lemma: keyRaw, sense_title: `${keyRaw}概説` }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
@@ -127,6 +130,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
                 { en: `Tastes ${lemma} as people grow older and gain experience.`, ja: `Common例4`, grammar_ja: '現在形' },
                 { en: `Schedules ${lemma} around the team’s availability.`, ja: `Common例5`, grammar_ja: '三単現' },
                 { en: `Trains ${lemma} at this station every hour.`, ja: `Common例6`, grammar_ja: '進行形' },
+                { en: `Ghosts linger without a defined sense in the archive.`, ja: `Common例Ghost`, grammar_ja: '動詞句' },
               ],
             },
             etymology: { note: '-', confidence: 'low' },
@@ -300,6 +304,101 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.click(trayButton);
     });
     await waitFor(() => expect(screen.getByRole('complementary', { name: 'Paths のWordPack概要' })).toBeInTheDocument());
+  });
+
+  it('offers generation CTA for unknown lemma token and opens overview after generation', async () => {
+    const fetchMock = setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
+    await act(async () => {
+      await user.keyboard('{Alt>}{1}{/Alt}');
+    });
+
+    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    await act(async () => {
+      await user.clear(input);
+      await user.type(input, 'theta');
+      await user.click(screen.getByRole('button', { name: 'WordPackのみ作成' }));
+    });
+
+    const ghostToken = await screen.findByText((content, element) => {
+      if (!element) return false;
+      if (!element.matches('span.lemma-token')) return false;
+      return content.trim() === 'Ghosts';
+    });
+
+    await act(async () => {
+      await user.hover(ghostToken);
+    });
+
+    const ctaContainer = await screen.findByRole('dialog', { name: '「Ghosts」のWordPackを生成' });
+    expect(ctaContainer).toHaveAttribute('data-kind', 'cta');
+    const ctaButton = within(ctaContainer).getByRole('button', { name: /^「Ghosts」のWordPackを生成$/ });
+    expect(ctaButton).toBeInTheDocument();
+    expect(ctaContainer.childElementCount).toBe(1);
+
+    await act(async () => {
+      await user.hover(ctaButton);
+    });
+    expect(ctaButton).toBeInTheDocument();
+
+    await act(async () => {
+      await user.click(ctaButton);
+    });
+
+    await waitFor(() => expect(screen.getByRole('complementary', { name: 'Ghosts のWordPack概要' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^「Ghosts」のWordPackを生成$/ })).not.toBeInTheDocument());
+
+    const generatedBodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(generatedBodies.some((body) => body.lemma === 'Ghosts')).toBe(true);
+  });
+
+  it('generates unknown lemma when token is clicked directly', async () => {
+    const fetchMock = setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
+    await act(async () => {
+      await user.keyboard('{Alt>}{1}{/Alt}');
+    });
+
+    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    await act(async () => {
+      await user.clear(input);
+      await user.type(input, 'theta');
+      await user.click(screen.getByRole('button', { name: 'WordPackのみ作成' }));
+    });
+
+    const ghostToken = await screen.findByText((content, element) => {
+      if (!element) return false;
+      if (!element.matches('span.lemma-token')) return false;
+      return content.trim() === 'Ghosts';
+    });
+
+    await act(async () => {
+      await user.hover(ghostToken);
+    });
+
+    await act(async () => {
+      await user.click(ghostToken);
+    });
+
+    await waitFor(() => expect(screen.getByRole('complementary', { name: 'Ghosts のWordPack概要' })).toBeInTheDocument());
+    const generatedBodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(generatedBodies.some((body) => body.lemma === 'Ghosts')).toBe(true);
   });
 
   // Note: 二重採点防止のテストは実装の複雑さのため、手動テストで確認

@@ -96,6 +96,15 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const { isModalOpen, setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
   const confirmDialog = useConfirmDialog();
+  const {
+    apiBase,
+    pronunciationEnabled,
+    regenerateScope,
+    requestTimeoutMs,
+    temperature,
+    reasoningEffort,
+    textVerbosity,
+  } = settings;
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
   const [loading, setLoading] = useState(false);
@@ -113,29 +122,13 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
   const [progressUpdating, setProgressUpdating] = useState(false);
   const lemmaCacheRef = useRef<Map<string, LemmaLookupResponseData>>(new Map());
-
-  const {
-    apiBase,
-    pronunciationEnabled,
-    regenerateScope,
-    requestTimeoutMs,
-    temperature,
-    reasoningEffort,
-    textVerbosity,
-  } = settings;
-
-  const showAdvancedModelOptions = useMemo(() => {
-    const lower = (model || '').toLowerCase();
-    return lower === 'gpt-5-mini' || lower === 'gpt-5-nano';
-  }, [model]);
-
-  const handleChangeModel = useCallback(
-    (value: string) => {
-      setModel(value);
-      setSettings((prev) => ({ ...prev, model: value }));
-    },
-    [setSettings],
-  );
+  const lemmaActionRef = useRef<{
+    tooltip: HTMLElement;
+    aborter: AbortController | null;
+    outsideHandler: (ev: MouseEvent) => void;
+    keyHandler: (ev: KeyboardEvent) => void;
+    blockHandler: (ev: Event) => void;
+  } | null>(null);
 
   const applyModelRequestFields = useCallback(
     (base: Record<string, unknown> = {}) => ({
@@ -148,6 +141,70 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       }),
     }),
     [model, temperature, reasoningEffort, textVerbosity]
+  );
+
+  const detachLemmaActionTooltip = useCallback(() => {
+    const active = lemmaActionRef.current;
+    if (!active) return;
+    const { tooltip, aborter, outsideHandler, keyHandler, blockHandler } = active;
+    if (aborter) {
+      try { aborter.abort(); } catch {}
+    }
+    document.removeEventListener('click', outsideHandler, true);
+    tooltip.removeEventListener('keydown', keyHandler);
+    tooltip.removeEventListener('pointerdown', blockHandler, true);
+    if (tooltip.isConnected) tooltip.remove();
+    lemmaActionRef.current = null;
+  }, []);
+
+  const triggerUnknownLemmaGeneration = useCallback(async (lemmaText: string) => {
+    const trimmed = lemmaText.trim();
+    if (!trimmed) return false;
+    const ctrl = new AbortController();
+    const active = lemmaActionRef.current;
+    if (active) {
+      active.aborter = ctrl;
+    }
+    try {
+      const res = await fetchJson<WordPack>(`${apiBase}/word/pack`, {
+        method: 'POST',
+        body: applyModelRequestFields({
+          lemma: trimmed,
+          pronunciation_enabled: pronunciationEnabled,
+          regenerate_scope: regenerateScope,
+        }),
+        signal: ctrl.signal,
+        timeoutMs: requestTimeoutMs,
+      });
+      const normalized = normalizeWordPack(res);
+      setData(normalized);
+      setCurrentWordPackId(null);
+      setMsg({ kind: 'status', text: `【${normalized.lemma}】のWordPackを生成しました` });
+      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+      openLemmaExplorer(normalized.lemma);
+      detachLemmaActionTooltip();
+      return true;
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : 'WordPack生成に失敗しました';
+      setMsg({ kind: 'alert', text: message });
+      if (lemmaActionRef.current && lemmaActionRef.current.aborter === ctrl) {
+        lemmaActionRef.current.aborter = null;
+      }
+      return false;
+    }
+  }, [apiBase, applyModelRequestFields, detachLemmaActionTooltip, normalizeWordPack, openLemmaExplorer, pronunciationEnabled, regenerateScope, requestTimeoutMs]);
+
+  const showAdvancedModelOptions = useMemo(() => {
+    const lower = (model || '').toLowerCase();
+    return lower === 'gpt-5-mini' || lower === 'gpt-5-nano';
+  }, [model]);
+
+  const handleChangeModel = useCallback(
+    (value: string) => {
+      setModel(value);
+      setSettings((prev) => ({ ...prev, model: value }));
+    },
+    [setSettings],
   );
 
   const normalizeWordPack = useCallback(
@@ -272,10 +329,18 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           return;
         }
       }
+      const pending = container.getAttribute('data-pending-lemma');
+      if (pending && pending.trim()) {
+        container.removeAttribute('data-pending-lemma');
+        container.removeAttribute('data-last-lemma');
+        detachLemmaActionTooltip();
+        void triggerUnknownLemmaGeneration(pending);
+        return;
+      }
       const fallback = container.getAttribute('data-last-lemma') || container.getAttribute('data-lemma');
       if (fallback) openLemmaExplorer(fallback);
     },
-    [openLemmaExplorer],
+    [detachLemmaActionTooltip, openLemmaExplorer, triggerUnknownLemmaGeneration],
   );
 
   const formatDate = (dateStr?: string | null) => {
@@ -731,6 +796,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     return () => { mountedRef.current = false; abortRef.current?.abort(); };
   }, []);
 
+  useEffect(() => () => detachLemmaActionTooltip(), [detachLemmaActionTooltip]);
+
 
   function renderExampleEnText(text: string, lemma: string): React.ReactNode {
     const highlighted = highlightLemma(text, lemma, {
@@ -1001,6 +1068,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             .lemma-highlight { color: #1565c0; }
             .lemma-known { font-weight: 700; }
             .lemma-tooltip { position: fixed; z-index: 10000; background: #212121; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); pointer-events: none; }
+            .lemma-tooltip[data-kind="cta"] { background: transparent; color: #283593; border: none; padding: 0; pointer-events: auto; box-shadow: none; border-radius: 999px; font-size: 12px; min-width: 0; max-width: none; }
+            .lemma-tooltip[data-kind="cta"] button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: #e8eaf6; color: #283593; border: 1px solid #283593; border-radius: 999px; padding: 0.35rem 0.9rem; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+            .lemma-tooltip[data-kind="cta"] button:disabled { opacity: 0.6; cursor: not-allowed; }
+            .lemma-tooltip[data-kind="cta"] button:hover:not(:disabled) { background: #c5cae9; }
+            .lemma-tooltip[data-kind="cta"] button:focus-visible { outline: 2px solid #3949ab; outline-offset: 2px; }
             .lemma-window { position: fixed; bottom: 24px; right: 16px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 16px 32px rgba(0,0,0,0.25); display: flex; flex-direction: column; max-height: min(70vh, 520px); overflow: hidden; z-index: 950; }
             .lemma-window-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--color-neutral-surface); border-bottom: 1px solid var(--color-border); }
             .lemma-window-title { font-size: 1rem; font-weight: 700; }
@@ -1054,8 +1126,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                           const cache = ensureLemmaCache();
                           let matchedInfo: LemmaLookupResponseData | null = null;
                           let matchedCandidate: { idxs: number[]; text: string } | null = null;
+                          const cleanup = detachLemmaActionTooltip;
 
                           if (hl) {
+                            cleanup();
                             const display = container.getAttribute('data-sense-title') || '';
                             if (!display) return;
                             try { window.clearTimeout((hl as any).__ttimer); } catch {}
@@ -1076,9 +1150,15 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                             return;
                           }
 
-                          if (!tok) return;
+                          if (!tok) {
+                            cleanup();
+                            return;
+                          }
+                          cleanup();
                           const row = container;
                           const tokens = Array.from(row.querySelectorAll('span.lemma-token')) as HTMLElement[];
+                          row.removeAttribute('data-last-lemma');
+                          row.removeAttribute('data-pending-lemma');
                           const iTok = Number(tok.getAttribute('data-tok-idx')) || 0;
                           const getText = (el: HTMLElement) => (el.textContent || '').replace(/[\s\u00A0]+/g, ' ').trim();
                           const cands: { idxs: number[]; text: string }[] = [];
@@ -1113,7 +1193,72 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                               break;
                             }
                           }
-                          if (!foundSense || !foundIdxs) return;
+                          if (!foundSense || !foundIdxs) {
+                            const candidateText = matchedCandidate?.text || tok.textContent || '';
+                            if (candidateText) {
+                              row.setAttribute('data-last-lemma', candidateText);
+                              row.setAttribute('data-pending-lemma', candidateText);
+                            }
+                            const tooltip = document.createElement('div');
+                            tooltip.className = 'lemma-tooltip';
+                            tooltip.setAttribute('data-kind', 'cta');
+                            tooltip.setAttribute('role', 'dialog');
+                            tooltip.setAttribute('aria-live', 'polite');
+                            tooltip.setAttribute('aria-label', candidateText ? `「${candidateText}」のWordPackを生成` : 'WordPackを生成');
+                            tooltip.tabIndex = -1;
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.textContent = candidateText ? `「${candidateText}」のWordPackを生成` : 'WordPackを生成';
+                            tooltip.appendChild(btn);
+                            const rect = tok.getBoundingClientRect();
+                            const pad = 6;
+                            document.body.appendChild(tooltip);
+                            const x = Math.min(Math.max(rect.left, 8), (window.innerWidth - tooltip.offsetWidth - 8));
+                            const y = Math.max(rect.top - tooltip.offsetHeight - pad, 8);
+                            tooltip.style.left = `${x}px`;
+                            tooltip.style.top = `${y}px`;
+                            tooltip.focus({ preventScroll: true });
+                            const onOutsideClick = (ev: MouseEvent) => {
+                              if (!tooltip.contains(ev.target as Node)) {
+                                detachLemmaActionTooltip();
+                              }
+                            };
+                            const onBlockPointer = (ev: Event) => {
+                              ev.stopPropagation();
+                            };
+                            const onKeyDown = (ev: KeyboardEvent) => {
+                              if (ev.key === 'Escape') {
+                                ev.preventDefault();
+                                detachLemmaActionTooltip();
+                              }
+                            };
+                            tooltip.addEventListener('keydown', onKeyDown);
+                            tooltip.addEventListener('pointerdown', onBlockPointer, true);
+                            document.addEventListener('click', onOutsideClick, true);
+
+                            const lemmaText = (candidateText || '').trim();
+                            if (!lemmaText) {
+                              btn.disabled = true;
+                            }
+
+                            btn.addEventListener('click', async () => {
+                              if (btn.disabled) return;
+                              btn.disabled = true;
+                              const ok = await triggerUnknownLemmaGeneration(lemmaText);
+                              if (!ok) {
+                                btn.disabled = false;
+                              }
+                            });
+
+                            lemmaActionRef.current = {
+                              tooltip,
+                              aborter: null,
+                              outsideHandler: onOutsideClick,
+                              keyHandler: onKeyDown,
+                              blockHandler: onBlockPointer,
+                            };
+                            return;
+                          }
                           const lemmaValue = (matchedInfo?.lemma || matchedCandidate?.text || '').trim();
                           foundIdxs.forEach((k) => {
                             const tokenEl = tokens[k];
@@ -1147,14 +1292,28 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                         }}
                         onMouseOut={(e) => {
                           const target = e.target as HTMLElement;
+                          const related = e.relatedTarget as Node | null;
                           const hl = target.closest('span.lemma-highlight') as HTMLElement | null;
                           const tok = target.closest('span.lemma-token') as HTMLElement | null;
                           if (hl) { try { window.clearTimeout((hl as any).__ttimer); } catch {} }
                           if (tok) { try { window.clearTimeout((tok as any).__ttimer); } catch {} }
-                          // 太字をクリア（行内の既知マーキングをリセット）
-                          const row = (e.currentTarget as HTMLElement);
+                          const activeTooltip = lemmaActionRef.current?.tooltip || null;
+                          if (activeTooltip && related && activeTooltip.contains(related)) {
+                            return;
+                          }
+                          const row = e.currentTarget as HTMLElement;
+                          detachLemmaActionTooltip();
+                          row.removeAttribute('data-pending-lemma');
                           row.querySelectorAll('span.lemma-token.lemma-known').forEach((el) => el.classList.remove('lemma-known'));
                           document.querySelectorAll('.lemma-tooltip').forEach((n) => n.remove());
+                          if (
+                            lemmaForClick.trim() &&
+                            (!related ||
+                              !(related instanceof HTMLElement) ||
+                              (!row.contains(related) && !related.closest('.lemma-tooltip[data-kind="cta"]')))
+                          ) {
+                            triggerUnknownLemmaGeneration(lemmaForClick);
+                          }
                         }}
                       >
                         <span className="ex-label">[{i + 1}] 英</span> {renderExampleEnText(ex.en, data!.lemma)}

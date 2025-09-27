@@ -4,6 +4,28 @@ import { App } from './App';
 import '@testing-library/jest-dom';
 
 describe('App navigation', () => {
+  it('shows retry option when /api/config fetch fails', async () => {
+    const fetchMock = vi.mocked(globalThis.fetch as typeof fetch);
+    fetchMock.mockImplementationOnce(() => Promise.reject(new Error('connection refused')));
+    fetchMock.mockImplementationOnce(() => Promise.resolve(new Response(
+      JSON.stringify({ request_timeout_ms: 60000, llm_model: 'gpt-5-mini' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    )));
+
+    render(<App />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('/api/config から設定を取得できませんでした');
+
+    const retryButton = screen.getByRole('button', { name: '再試行' });
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(retryButton);
+    });
+
+    expect(await screen.findByPlaceholderText('見出し語を入力')).toBeInTheDocument();
+  });
+
   it('renders WordPack by default and navigates with keyboard', async () => {
     render(<App />);
 
