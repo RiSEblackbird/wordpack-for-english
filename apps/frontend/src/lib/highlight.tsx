@@ -4,13 +4,20 @@ function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function highlightLemma(text: string, lemma: string): React.ReactNode {
+interface HighlightOptions {
+  spanProps?: React.HTMLAttributes<HTMLSpanElement>;
+}
+
+export function highlightLemma(text: string, lemma: string, options: HighlightOptions = {}): React.ReactNode {
   if (!text || !lemma) return text;
   // Allow flexible whitespace for multi-word lemmas
   const tokens = lemma.trim().split(/\s+/).map(escapeRegExp);
   const pattern = tokens.join('\\s+');
   const re = new RegExp(pattern, 'gi');
   const isWordChar = (ch: string) => /[A-Za-z0-9_]/.test(ch);
+  const { spanProps } = options;
+  const { className: customClassName, ...restSpanProps } = spanProps ?? {};
+  const combinedClassName = ['lemma-highlight', customClassName].filter(Boolean).join(' ');
 
   const nodes: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -25,7 +32,11 @@ export function highlightLemma(text: string, lemma: string): React.ReactNode {
     const isEndBoundary = after === '' || !isWordChar(after);
     if (isStartBoundary && isEndBoundary) {
       if (lastIndex < start) nodes.push(text.slice(lastIndex, start));
-      nodes.push(<span key={nodes.length} className="lemma-highlight">{match[0]}</span>);
+      nodes.push(
+        <span key={nodes.length} className={combinedClassName} {...restSpanProps}>
+          {match[0]}
+        </span>
+      );
       anyHighlighted = true;
       lastIndex = end;
     }

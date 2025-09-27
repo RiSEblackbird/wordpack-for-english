@@ -11,6 +11,7 @@ import { formatDateJst } from '../lib/date';
 import { TTSButton } from './TTSButton';
 import { SidebarPortal } from './SidebarPortal';
 import { highlightLemma } from '../lib/highlight';
+import { LemmaExplorerWindow } from './LemmaExplorerWindow';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -71,6 +72,24 @@ interface WordPack {
   learned_count?: number;
 }
 
+interface LemmaLookupResponseData {
+  found: boolean;
+  id?: string | null;
+  lemma?: string | null;
+  sense_title?: string | null;
+}
+
+interface LemmaExplorerState {
+  lemma: string;
+  senseTitle?: string | null;
+  wordPackId: string;
+  status: 'loading' | 'ready' | 'error';
+  data?: WordPack | null;
+  errorMessage?: string | null;
+  minimized: boolean;
+  width: number;
+}
+
 
 export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta, onStudyProgressRecorded }) => {
   const { settings, setSettings } = useSettings();
@@ -86,12 +105,14 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const abortRef = useRef<AbortController | null>(null);
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
   const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
+  const [lemmaExplorer, setLemmaExplorer] = useState<LemmaExplorerState | null>(null);
   // 直近のAIメタ（一覧メタ or 例文メタから推定表示）
   const [aiMeta, setAiMeta] = useState<{ model?: string | null; params?: string | null } | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const mountedRef = useRef(true);
   const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
   const [progressUpdating, setProgressUpdating] = useState(false);
+  const lemmaCacheRef = useRef<Map<string, LemmaLookupResponseData>>(new Map());
 
   const {
     apiBase,
@@ -138,6 +159,124 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     [],
   );
 
+  const ensureLemmaCache = useCallback((): Map<string, LemmaLookupResponseData> => {
+    if (typeof window === 'undefined') {
+      return lemmaCacheRef.current;
+    }
+    const w = window as typeof window & { __lemmaCache?: Map<string, LemmaLookupResponseData> };
+    if (!w.__lemmaCache) {
+      w.__lemmaCache = lemmaCacheRef.current;
+    }
+    lemmaCacheRef.current = w.__lemmaCache;
+    return lemmaCacheRef.current;
+  }, []);
+
+  const openLemmaExplorer = useCallback(
+    async (raw: string) => {
+      const target = raw.trim();
+      if (!target) return;
+      const cache = ensureLemmaCache();
+      const key = `lemma:${target.toLowerCase()}`;
+      let info = cache.get(key);
+      if (!info) {
+        try {
+          info = await fetchJson<LemmaLookupResponseData>(`${apiBase}/word/lemma/${encodeURIComponent(target)}`, {
+            timeoutMs: requestTimeoutMs,
+          });
+        } catch {
+          info = { found: false };
+        }
+        cache.set(key, info);
+      }
+      if (!info || !info.found || !info.id) {
+        setMsg({ kind: 'alert', text: `「${target}」のWordPackは保存されていません` });
+        return;
+      }
+      if (!mountedRef.current) return;
+      setLemmaExplorer((prev) => ({
+        lemma: info!.lemma || target,
+        senseTitle: info!.sense_title ?? null,
+        wordPackId: info!.id!,
+        status: 'loading',
+        data: prev && prev.wordPackId === info!.id ? prev.data : null,
+        errorMessage: null,
+        minimized: false,
+        width: prev?.width ?? 360,
+      }));
+      try {
+        const detail = await fetchJson<WordPack>(`${apiBase}/word/packs/${info.id}`, {
+          timeoutMs: requestTimeoutMs,
+        });
+        if (!mountedRef.current) return;
+        setLemmaExplorer((prev) => {
+          if (!prev || prev.wordPackId !== info!.id) return prev;
+          return {
+            ...prev,
+            status: 'ready',
+            data: normalizeWordPack(detail),
+            errorMessage: null,
+          };
+        });
+      } catch (error) {
+        if (!mountedRef.current) return;
+        setLemmaExplorer((prev) => {
+          if (!prev || prev.wordPackId !== info!.id) return prev;
+          return {
+            ...prev,
+            status: 'error',
+            errorMessage: error instanceof Error ? error.message : null,
+          };
+        });
+      }
+    },
+    [apiBase, ensureLemmaCache, normalizeWordPack, requestTimeoutMs],
+  );
+
+  const closeLemmaExplorer = useCallback(() => setLemmaExplorer(null), []);
+
+  const minimizeLemmaExplorer = useCallback(
+    () => setLemmaExplorer((prev) => (prev ? { ...prev, minimized: true } : prev)),
+    [],
+  );
+
+  const restoreLemmaExplorer = useCallback(
+    () => setLemmaExplorer((prev) => (prev ? { ...prev, minimized: false } : prev)),
+    [],
+  );
+
+  const resizeLemmaExplorer = useCallback(
+    (nextWidth: number) => setLemmaExplorer((prev) => (prev ? { ...prev, width: nextWidth } : prev)),
+    [],
+  );
+
+  const handleExampleActivation = useCallback(
+    (event: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>) => {
+      if ('key' in event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+      }
+      const container = event.currentTarget;
+      const target = event.target as HTMLElement;
+      const highlight = target.closest('span.lemma-highlight') as HTMLElement | null;
+      if (highlight) {
+        const lemmaAttr = highlight.getAttribute('data-lemma') || highlight.textContent?.trim();
+        if (lemmaAttr) openLemmaExplorer(lemmaAttr);
+        return;
+      }
+      const token = target.closest('span.lemma-token') as HTMLElement | null;
+      if (token) {
+        const lemmaMatch = token.getAttribute('data-lemma-match') || token.textContent?.trim();
+        if (lemmaMatch) {
+          openLemmaExplorer(lemmaMatch);
+          return;
+        }
+      }
+      const fallback = container.getAttribute('data-last-lemma') || container.getAttribute('data-lemma');
+      if (fallback) openLemmaExplorer(fallback);
+    },
+    [openLemmaExplorer],
+  );
+
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
     return formatDateJst(dateStr);
@@ -176,6 +315,61 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
   const packCheckedCount = data?.checked_only_count ?? 0;
   const packLearnedCount = data?.learned_count ?? 0;
+
+  const lemmaExplorerContent = useMemo(() => {
+    if (!lemmaExplorer || !lemmaExplorer.data) return null;
+    const pack = lemmaExplorer.data;
+    const senses = pack.senses?.slice(0, 3) ?? [];
+    const exampleSummary = exampleCategories.map((category) => ({
+      category,
+      count: pack.examples?.[category]?.length ?? 0,
+    }));
+    return (
+      <div className="lemma-window-meta">
+        <div>
+          <strong>語義タイトル</strong>
+          <div>{pack.sense_title || '-'}</div>
+        </div>
+        <div>
+          <strong>語義（上位3件）</strong>
+          {senses.length ? (
+            <ol>
+              {senses.map((sense) => (
+                <li key={sense.id}>
+                  <span>{sense.gloss_ja}</span>
+                  {sense.definition_ja ? (
+                    <div style={{ fontSize: '0.85em', color: '#555' }}>{sense.definition_ja}</div>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>語義情報なし</p>
+          )}
+        </div>
+        <div>
+          <strong>例文数</strong>
+          <ul>
+            {exampleSummary.map(({ category, count }) => (
+              <li key={category}>{category}: {count}件</li>
+            ))}
+          </ul>
+        </div>
+        {pack.study_card ? (
+          <div>
+            <strong>学習カード</strong>
+            <p>{pack.study_card}</p>
+          </div>
+        ) : null}
+        {pack.confidence ? (
+          <div>
+            <strong>信頼度</strong>
+            <span>{pack.confidence}</span>
+          </div>
+        ) : null}
+      </div>
+    );
+  }, [lemmaExplorer, exampleCategories]);
 
   const generate = async () => {
     // 直前のフォアグラウンド処理は中断するが、生成処理自体はバックグラウンド継続を許可する
@@ -538,7 +732,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
 
   function renderExampleEnText(text: string, lemma: string): React.ReactNode {
-    const highlighted = highlightLemma(text, lemma);
+    const highlighted = highlightLemma(text, lemma, {
+      spanProps: {
+        'data-lemma': lemma,
+      },
+    });
     const nodes: React.ReactNode[] = [];
     let tokenSerial = 0;
     const wrapWords = (s: string) => {
@@ -802,6 +1000,23 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             .lemma-highlight { color: #1565c0; }
             .lemma-known { font-weight: 700; }
             .lemma-tooltip { position: fixed; z-index: 10000; background: #212121; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); pointer-events: none; }
+            .lemma-window { position: fixed; bottom: 24px; right: 16px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: 0 16px 32px rgba(0,0,0,0.25); display: flex; flex-direction: column; max-height: min(70vh, 520px); overflow: hidden; z-index: 950; }
+            .lemma-window-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--color-neutral-surface); border-bottom: 1px solid var(--color-border); }
+            .lemma-window-title { font-size: 1rem; font-weight: 700; }
+            .lemma-window-subtitle { font-size: 0.8rem; color: var(--color-subtle); margin-top: 0.2rem; }
+            .lemma-window-actions { margin-left: auto; display: inline-flex; gap: 0.5rem; }
+            .lemma-window-body { padding: 0.75rem 1rem 1rem; overflow-y: auto; line-height: 1.6; font-size: 0.9rem; }
+            .lemma-window-resizer { position: absolute; top: 0; bottom: 0; width: 12px; cursor: ew-resize; }
+            .lemma-window-resizer.left { left: -6px; }
+            .lemma-window-resizer.right { right: -6px; }
+            .lemma-window-footer { margin-top: 0.75rem; font-size: 0.75rem; color: var(--color-subtle); }
+            .lemma-window-tray { position: fixed; bottom: 16px; right: 16px; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-end; z-index: 940; }
+            .lemma-window-tray button { border-radius: 999px; padding: 0.4rem 0.9rem; background: var(--color-surface); border: 1px solid var(--color-border); box-shadow: 0 6px 18px rgba(0,0,0,0.25); cursor: pointer; font-size: 0.85rem; color: var(--color-text); }
+            .lemma-window-minimize-btn, .lemma-window-close-btn { border: none; background: transparent; cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.85rem; }
+            .lemma-window-minimize-btn:hover, .lemma-window-close-btn:hover { background: var(--color-neutral-surface); }
+            .lemma-window-minimize-btn:focus-visible, .lemma-window-close-btn:focus-visible, .lemma-window-tray button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+            .ex-en[role="button"] { cursor: pointer; }
+            .ex-en[role="button"]:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
           `}</style>
           {(['Dev','CS','LLM','Business','Common'] as const).map((k) => (
             <div key={k} id={`examples-${k}`} style={{ marginBottom: '0.5rem' }}>
@@ -821,15 +1036,23 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 <div className="ex-grid">
                   {(data!.examples[k] as ExampleItem[]).map((ex: ExampleItem, i: number) => (
                     <article key={i} className="ex-card" aria-label={`example-${k}-${i}`}>
-                      <div className="ex-en" data-lemma={data!.lemma} data-sense-title={data!.sense_title}
+                      <div
+                        className="ex-en"
+                        data-lemma={data!.lemma}
+                        data-sense-title={data!.sense_title}
+                        role="button"
+                        tabIndex={0}
+                        onClick={handleExampleActivation}
+                        onKeyDown={handleExampleActivation}
                         onMouseOver={async (e) => {
                           const target = e.target as HTMLElement;
                           const hl = target.closest('span.lemma-highlight') as HTMLElement | null;
                           const tok = hl ? null : (target.closest('span.lemma-token') as HTMLElement | null);
                           const container = (e.currentTarget as HTMLElement);
                           const apiBase = (document.querySelector('meta[name="wp-api-base"]') as HTMLMetaElement)?.content || '/api';
-                          (window as any).__lemmaCache = (window as any).__lemmaCache || new Map<string, any>();
-                          const cache = (window as any).__lemmaCache as Map<string, any>;
+                          const cache = ensureLemmaCache();
+                          let matchedInfo: LemmaLookupResponseData | null = null;
+                          let matchedCandidate: { idxs: number[]; text: string } | null = null;
 
                           if (hl) {
                             const display = container.getAttribute('data-sense-title') || '';
@@ -875,18 +1098,36 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                             if (!info) {
                               try {
                                 const res = await fetch(`${apiBase}/word/lemma/${encodeURIComponent(c.text)}`);
-                                info = res.ok ? await res.json() : { found: false };
+                                info = res.ok ? ((await res.json()) as LemmaLookupResponseData) : { found: false };
                                 cache.set(key, info);
-                              } catch { info = { found: false }; }
+                              } catch {
+                                info = { found: false };
+                              }
                             }
                             if (info && info.found && info.sense_title) {
                               foundSense = info.sense_title;
                               foundIdxs = c.idxs;
+                              matchedInfo = info;
+                              matchedCandidate = c;
                               break;
                             }
                           }
                           if (!foundSense || !foundIdxs) return;
-                          foundIdxs.forEach((k) => tokens[k]?.classList.add('lemma-known'));
+                          const lemmaValue = (matchedInfo?.lemma || matchedCandidate?.text || '').trim();
+                          foundIdxs.forEach((k) => {
+                            const tokenEl = tokens[k];
+                            if (!tokenEl) return;
+                            tokenEl.classList.add('lemma-known');
+                            if (lemmaValue) tokenEl.setAttribute('data-lemma-match', lemmaValue);
+                            if (matchedInfo?.sense_title) tokenEl.setAttribute('data-lemma-sense', matchedInfo.sense_title);
+                            if (matchedInfo?.id) tokenEl.setAttribute('data-lemma-id', matchedInfo.id);
+                          });
+                          if (lemmaValue) {
+                            container.setAttribute('data-last-lemma', lemmaValue);
+                          }
+                          if (matchedInfo?.sense_title) {
+                            container.setAttribute('data-last-sense', matchedInfo.sense_title);
+                          }
                           try { window.clearTimeout((tok as any).__ttimer); } catch {}
                           ;(tok as any).__ttimer = window.setTimeout(() => {
                             document.querySelectorAll('.lemma-tooltip').forEach((n) => n.remove());
@@ -1153,7 +1394,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       {selectedWordPackId ? (
         data ? renderDetails() : null
       ) : (
-        <Modal 
+        <Modal
           isOpen={!!data && detailOpen}
           onClose={() => { setDetailOpen(false); try { setModalOpen(false); } catch {} }}
           title="WordPack プレビュー"
@@ -1162,6 +1403,22 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         </Modal>
       )}
     </section>
+      {lemmaExplorer ? (
+        <LemmaExplorerWindow
+          lemma={lemmaExplorer.lemma}
+          senseTitle={lemmaExplorer.senseTitle}
+          minimized={lemmaExplorer.minimized}
+          width={lemmaExplorer.width}
+          status={lemmaExplorer.status}
+          errorMessage={lemmaExplorer.errorMessage}
+          onClose={closeLemmaExplorer}
+          onMinimize={minimizeLemmaExplorer}
+          onRestore={restoreLemmaExplorer}
+          onResize={resizeLemmaExplorer}
+        >
+          {lemmaExplorerContent}
+        </LemmaExplorerWindow>
+      ) : null}
     </>
   );
 };

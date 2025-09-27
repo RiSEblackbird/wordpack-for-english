@@ -54,6 +54,27 @@ describe('highlightLemma', () => {
     const highlighted = document.querySelectorAll('span.lemma-highlight');
     expect(highlighted.length === 0 || highlighted.length === 1).toBe(true);
   });
+
+  it('allows attaching custom data attributes to highlighted spans', () => {
+    const lemma = 'gamma';
+    const text = 'Gamma rays differ from gamma waves.';
+    render(
+      <p>
+        {highlightLemma(text, lemma, {
+          spanProps: {
+            'data-lemma': lemma,
+            'data-source': 'spec',
+            className: 'custom-highlight',
+          },
+        })}
+      </p>
+    );
+    const spans = screen.getAllByText(/gamma/i, { selector: 'span.lemma-highlight' });
+    expect(spans[0]).toHaveAttribute('data-lemma', lemma);
+    expect(spans[0]).toHaveAttribute('data-source', 'spec');
+    expect(spans[0]).toHaveClass('lemma-highlight');
+    expect(spans[0]).toHaveClass('custom-highlight');
+  });
 });
 
 

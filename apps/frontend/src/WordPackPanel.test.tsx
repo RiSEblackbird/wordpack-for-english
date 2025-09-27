@@ -22,24 +22,35 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
         );
       }
       if (url.startsWith('/api/word/packs/wp:') && (!init || (init && (!init.method || init.method === 'GET')))) {
-        // saved pack detail after creation (include an example with lemma for tooltip test)
-        const lemma = url.split(':')[1]?.split(':')[0] || 'test';
+        const idPart = url.split('/').pop() || '';
+        const lemma = idPart.split(':')[1] || 'test';
         return new Response(
           JSON.stringify({
             lemma,
             sense_title: `${lemma}概説`,
             pronunciation: { ipa_GA: null, ipa_RP: null, syllables: null, stress_index: null, linking_notes: [] },
-            senses: [],
+            senses: [{ id: 's1', gloss_ja: '意味', definition_ja: '定義', nuances_ja: 'ニュアンス', patterns: ['p1'], synonyms: ['syn'], antonyms: ['ant'], register: 'formal', notes_ja: '注意' }],
             collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
             contrast: [],
-            examples: { 
-              Dev: [ { en: `${lemma} dev example one.`, ja: `${lemma} のDev例文1`, grammar_ja: '第3文型' } ],
-              CS: [], LLM: [], Business: [], Common: [] 
+            examples: {
+              Dev: [
+                { en: `${lemma} dev example one with around twenty five tokens total.`, ja: `${lemma} のDev例文1`, grammar_ja: '第3文型' },
+                { en: `${lemma} dev example two includes subordinate clauses and clear structure.`, ja: `${lemma} のDev例文2`, grammar_ja: '関係節' }
+              ],
+              CS: [
+                { en: `Paths ${lemma} at the main square downtown.`, ja: `${lemma} のCS例文1`, grammar_ja: '前置詞句' }
+              ],
+              LLM: [],
+              Business: [],
+              Common: [
+                { en: `Paths ${lemma} at the main square downtown.`, ja: `${lemma} のCommon例文1`, grammar_ja: '前置詞句' },
+                { en: `Schedules ${lemma} around the team’s availability.`, ja: `${lemma} のCommon例文2`, grammar_ja: '三単現' }
+              ]
             },
             etymology: { note: '-', confidence: 'low' },
-            study_card: '',
+            study_card: `study of ${lemma}`,
             citations: [],
-            confidence: 'low',
+            confidence: 'medium',
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
@@ -53,8 +64,14 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
       if (url.startsWith('/api/word/lemma/')) {
         const key = decodeURIComponent(url.split('/').pop() || '');
+        if (key.includes(' ')) {
+          return new Response(JSON.stringify({ found: false }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
         return new Response(
-          JSON.stringify({ found: true, sense_title: `${key}概説` }),
+          JSON.stringify({ found: true, id: `wp:${key}:lemma`, lemma: key, sense_title: `${key}概説` }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
@@ -218,6 +235,59 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     expect(urls.some((u) => u.endsWith('/api/word/packs'))).toBe(true);
     // 直後に詳細取得が走る
     expect(urls.some((u) => /\/api\/word\/packs\/wp:epsilon:/.test(u))).toBe(true);
+  });
+
+  it('warms lemma cache on hover and opens/minimizes/restores the lemma window', async () => {
+    const fetchMock = setupFetchMocks();
+    render(<App />);
+
+    const user = userEvent.setup();
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
+    await act(async () => {
+      await user.keyboard('{Alt>}{1}{/Alt}');
+    });
+
+    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    await act(async () => {
+      await user.clear(input);
+      await user.type(input, 'theta');
+      await user.click(screen.getByRole('button', { name: 'WordPackのみ作成' }));
+    });
+
+    const example = await screen.findByLabelText('example-Common-0');
+    const englishRow = within(example).getByRole('button', { name: /英/ });
+    const token = within(englishRow).getByText('Paths', { selector: 'span.lemma-token' });
+
+    await act(async () => {
+      await user.hover(token);
+    });
+    await waitFor(() => expect(token).toHaveClass('lemma-known'));
+
+    await act(async () => {
+      await user.click(token);
+    });
+
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((call) => (typeof call[0] === 'string' ? call[0] : (call[0] as URL).toString()));
+      expect(urls.some((u) => u.includes('/api/word/lemma/Paths'))).toBe(true);
+    });
+    const windowRegion = await screen.findByRole('complementary', { name: 'Paths のWordPack概要' });
+    expect(within(windowRegion).getAllByText(/Paths概説/).length).toBeGreaterThan(0);
+
+    const minimizeButton = within(windowRegion).getByRole('button', { name: '最小化' });
+    await act(async () => {
+      await user.click(minimizeButton);
+    });
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Paths のWordPack概要' })).not.toBeInTheDocument());
+
+    const trayButton = await screen.findByRole('button', { name: /Paths.*概説/ });
+    await act(async () => {
+      await user.click(trayButton);
+    });
+    await waitFor(() => expect(screen.getByRole('complementary', { name: 'Paths のWordPack概要' })).toBeInTheDocument());
   });
 
   // Note: 二重採点防止のテストは実装の複雑さのため、手動テストで確認
