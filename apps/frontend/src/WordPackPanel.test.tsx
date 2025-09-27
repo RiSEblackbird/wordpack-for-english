@@ -13,6 +13,12 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
   function setupFetchMocks() {
     const mock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.includes('/api/word/lemma/Paths')) {
+        return new Response(
+          JSON.stringify({ found: true, id: 'wp:Paths:lemma', lemma: 'Paths', sense_title: '語義タイトルなし' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
       if (url.endsWith('/api/word/packs') && init?.method === 'POST') {
         const body = init?.body ? JSON.parse(init.body as string) : {};
         const lemma = body.lemma || 'test';
@@ -275,6 +281,12 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       expect(urls.some((u) => u.includes('/api/word/lemma/Paths'))).toBe(true);
     });
     const windowRegion = await screen.findByRole('complementary', { name: 'Paths のWordPack概要' });
+    await waitFor(() => {
+      const subtitle = windowRegion.querySelector('.lemma-window-subtitle');
+      expect(subtitle).toBeTruthy();
+      expect(subtitle).toHaveTextContent('Paths概説');
+      expect(subtitle).not.toHaveTextContent('語義タイトルなし');
+    });
     expect(within(windowRegion).getAllByText(/Paths概説/).length).toBeGreaterThan(0);
 
     const minimizeButton = within(windowRegion).getByRole('button', { name: '最小化' });

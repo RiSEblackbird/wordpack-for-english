@@ -213,6 +213,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
           return {
             ...prev,
             status: 'ready',
+          senseTitle: (detail.sense_title || prev.senseTitle) ?? null,
             data: normalizeWordPack(detail),
             errorMessage: null,
           };
