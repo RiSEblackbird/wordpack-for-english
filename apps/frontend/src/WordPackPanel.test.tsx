@@ -11,6 +11,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
   });
 
   function setupFetchMocks() {
+    const generated = new Set<string>();
     const mock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
       if (url.includes('/api/word/lemma/Paths')) {
@@ -69,25 +70,10 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
         );
       }
 
-      if (url.startsWith('/api/word/lemma/')) {
-        const keyRaw = decodeURIComponent(url.split('/').pop() || '');
-        const key = keyRaw.toLowerCase();
-        lemmaLookupCallCount[key] = (lemmaLookupCallCount[key] || 0) + 1;
-        if (keyRaw.includes(' ')) {
-          return new Response(JSON.stringify({ found: false }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-        return new Response(
-          JSON.stringify({ found: true, id: `wp:${keyRaw}:lemma`, lemma: keyRaw, sense_title: `${keyRaw}概説` }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-      
       if (url.endsWith('/api/word/pack') && init?.method === 'POST') {
         const body = init?.body ? JSON.parse(init.body as string) : {};
         const lemma = body.lemma || 'test';
+        generated.add(lemma);
         return new Response(
           JSON.stringify({
             lemma,
@@ -306,7 +292,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     await waitFor(() => expect(screen.getByRole('complementary', { name: 'Paths のWordPack概要' })).toBeInTheDocument());
   });
 
-  it('offers generation CTA for unknown lemma token and opens overview after generation', async () => {
+  it('shows 未生成 tooltip for unknown lemma token and notifies when generating', async () => {
     const fetchMock = setupFetchMocks();
     render(<App />);
 
@@ -336,23 +322,28 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.hover(ghostToken);
     });
 
-    const ctaContainer = await screen.findByRole('dialog', { name: '「Ghosts」のWordPackを生成' });
-    expect(ctaContainer).toHaveAttribute('data-kind', 'cta');
-    const ctaButton = within(ctaContainer).getByRole('button', { name: /^「Ghosts」のWordPackを生成$/ });
-    expect(ctaButton).toBeInTheDocument();
-    expect(ctaContainer.childElementCount).toBe(1);
+    await waitFor(() => {
+      const tipEl = Array.from(document.querySelectorAll('.lemma-tooltip')).find((el) => el.textContent === '未生成');
+      expect(tipEl).toBeTruthy();
+    });
+    const tooltip = Array.from(document.querySelectorAll('.lemma-tooltip')).find((el) => el.textContent === '未生成') as HTMLElement | undefined;
+    expect(tooltip).toBeTruthy();
+    expect(tooltip).toHaveAttribute('role', 'tooltip');
+    expect(tooltip?.querySelector('button')).toBeNull();
+    expect(screen.queryByRole('button', { name: /WordPackを生成/ })).not.toBeInTheDocument();
 
     await act(async () => {
-      await user.hover(ctaButton);
-    });
-    expect(ctaButton).toBeInTheDocument();
-
-    await act(async () => {
-      await user.click(ctaButton);
+      await user.click(ghostToken);
     });
 
-    await waitFor(() => expect(screen.getByRole('complementary', { name: 'Ghosts のWordPack概要' })).toBeInTheDocument());
-    await waitFor(() => expect(screen.queryByRole('button', { name: /^「Ghosts」のWordPackを生成$/ })).not.toBeInTheDocument());
+    const statuses = await screen.findAllByRole('status');
+    const statusLabels = statuses.map((el) => el.getAttribute('aria-label') || '');
+    expect(
+      statusLabels.some(
+        (label) =>
+          label === '【Ghosts】の生成処理中... - progress' || label === '【Ghosts】の生成完了！ - success',
+      ),
+    ).toBe(true);
 
     const generatedBodies = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
@@ -394,7 +385,14 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.click(ghostToken);
     });
 
-    await waitFor(() => expect(screen.getByRole('complementary', { name: 'Ghosts のWordPack概要' })).toBeInTheDocument());
+    const statuses = await screen.findAllByRole('status');
+    const statusLabels = statuses.map((el) => el.getAttribute('aria-label') || '');
+    expect(
+      statusLabels.some(
+        (label) =>
+          label === '【Ghosts】の生成処理中... - progress' || label === '【Ghosts】の生成完了！ - success',
+      ),
+    ).toBe(true);
     const generatedBodies = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
@@ -404,5 +402,3 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
   // Note: 二重採点防止のテストは実装の複雑さのため、手動テストで確認
   // モーダルが開いている間は、WordPackPanelのキーハンドラーが無効化されることを確認済み
 });
-
-

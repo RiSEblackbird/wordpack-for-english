@@ -4,8 +4,10 @@ function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+type HighlightSpanProps = React.HTMLAttributes<HTMLSpanElement> & Record<string, unknown>;
+
 interface HighlightOptions {
-  spanProps?: React.HTMLAttributes<HTMLSpanElement>;
+  spanProps?: HighlightSpanProps;
 }
 
 export function highlightLemma(text: string, lemma: string, options: HighlightOptions = {}): React.ReactNode {

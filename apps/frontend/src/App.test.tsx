@@ -106,7 +106,7 @@ describe('App navigation', () => {
 
     await screen.findByRole('heading', { name: 'WordPack' });
 
-    const appShell = document.querySelector('.app-shell');
+    const appShell = document.querySelector('.app-shell') as HTMLElement | null;
     if (!appShell) {
       throw new Error('app shell not found');
     }
@@ -122,7 +122,7 @@ describe('App navigation', () => {
 
     expect(appShell.style.getPropertyValue('--main-shift')).toBe('');
 
-    const mainInner = document.querySelector('.main-inner');
+    const mainInner = document.querySelector('.main-inner') as HTMLElement | null;
     if (!mainInner) {
       throw new Error('main content wrapper not found');
     }
