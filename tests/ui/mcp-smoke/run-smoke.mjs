@@ -395,6 +395,8 @@ async function runSmokeAssertions(wordPackId) {
     typeof wordPackCardInfo.firstLemma === 'string' && wordPackCardInfo.firstLemma.toLowerCase().includes('automation'),
     `WordPack カードのレマが想定外です (${wordPackCardInfo.firstLemma})`
   );
+  const expectedLemma =
+    typeof wordPackCardInfo.firstLemma === 'string' ? wordPackCardInfo.firstLemma : null;
 
   logStep('WordPack カードのプレビューを開きます');
   const openedPreview = await callEvaluate(
@@ -417,12 +419,22 @@ async function runSmokeAssertions(wordPackId) {
       return {
         hasContent: Boolean(dialog.querySelector("[data-testid=\\"modal-wordpack-content\\"]")),
         hasLemmaInput: Boolean(dialog.querySelector("#wordpack-lemma-input")),
+        lemmaText: dialog.querySelector(".wp-modal-lemma strong")?.textContent?.trim() || null,
         closeButton: dialog.querySelector("button[aria-label=\\"閉じる\\"]")?.textContent?.trim() || null,
       };
     }`
   );
   ensure(modalInfo?.hasContent, 'WordPack プレビューの内容が表示されていません');
-  ensure(modalInfo?.hasLemmaInput, 'モーダル内の入力欄が見つかりません');
+  ensure(
+    modalInfo?.hasLemmaInput || typeof modalInfo?.lemmaText === 'string',
+    'WordPack プレビューで見出し語が表示されていません'
+  );
+  if (typeof modalInfo?.lemmaText === 'string' && typeof expectedLemma === 'string') {
+    ensure(
+      modalInfo.lemmaText.toLowerCase().includes(expectedLemma.toLowerCase()),
+      `モーダルの見出し語が一覧と一致しません (${modalInfo.lemmaText})`
+    );
+  }
   ensure(modalInfo?.closeButton === '閉じる', 'モーダルの閉じるボタン表記が想定外です');
 
   logStep('WordPack プレビューのモーダルを閉じます');
