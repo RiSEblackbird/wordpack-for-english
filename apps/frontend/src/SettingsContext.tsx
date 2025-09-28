@@ -28,6 +28,8 @@ interface SettingsErrorInfo {
   detail?: string;
 }
 
+export const AUTO_RETRY_INTERVAL_MS = 5000;
+
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [settings, setSettings] = useState<Settings>(() => {
     const savedTheme = (() => {
@@ -53,6 +55,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [status, setStatus] = useState<SettingsStatus>('loading');
   const [errorInfo, setErrorInfo] = useState<SettingsErrorInfo | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [autoRetrySecondsLeft, setAutoRetrySecondsLeft] = useState<number | null>(null);
 
   const retrySync = useCallback(() => {
     setStatus('loading');
@@ -98,6 +101,27 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       aborted = true;
     };
   }, [reloadToken]);
+
+  useEffect(() => {
+    if (status !== 'error') {
+      setAutoRetrySecondsLeft(null);
+      return;
+    }
+    setAutoRetrySecondsLeft(Math.ceil(AUTO_RETRY_INTERVAL_MS / 1000));
+    const countdownInterval = window.setInterval(() => {
+      setAutoRetrySecondsLeft((prev) => {
+        if (prev == null) return prev;
+        return prev > 0 ? prev - 1 : 0;
+      });
+    }, 1000);
+    const timer = window.setTimeout(() => {
+      retrySync();
+    }, AUTO_RETRY_INTERVAL_MS);
+    return () => {
+      window.clearInterval(countdownInterval);
+      window.clearTimeout(timer);
+    };
+  }, [status, retrySync]);
   // テーマの永続化
   useEffect(() => {
     try { localStorage.setItem('wp.theme', settings.theme); } catch { /* ignore */ }
@@ -139,6 +163,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 エラー: {errorInfo.message}
                 {errorInfo.detail ? `\n${errorInfo.detail}` : ''}
               </p>
+              {autoRetrySecondsLeft != null ? (
+                <p style={{ marginTop: '0.75rem', marginBottom: 0, color: '#b91c1c' }}>
+                  {autoRetrySecondsLeft > 0 ? `${autoRetrySecondsLeft}秒後に自動再試行します。` : 'まもなく自動再試行します…'}
+                </p>
+              ) : null}
               <button
                 type="button"
                 onClick={retrySync}

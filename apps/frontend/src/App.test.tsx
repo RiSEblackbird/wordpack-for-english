@@ -1,7 +1,8 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { App } from './App';
 import '@testing-library/jest-dom';
+import { AUTO_RETRY_INTERVAL_MS } from './SettingsContext';
 
 describe('App navigation', () => {
   it('shows retry option when /api/config fetch fails', async () => {
@@ -24,6 +25,59 @@ describe('App navigation', () => {
     });
 
     expect(await screen.findByPlaceholderText('見出し語を入力')).toBeInTheDocument();
+  });
+
+  it('automatically retries syncing settings when the backend becomes available', async () => {
+    const fetchMock = vi.mocked(globalThis.fetch as typeof fetch);
+    fetchMock.mockRejectedValueOnce(new Error('connection refused'));
+    fetchMock.mockResolvedValueOnce(new Response(
+      JSON.stringify({ request_timeout_ms: 120000, llm_model: 'gpt-auto' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ));
+
+    let triggerAutoRetry: (() => void) | null = null;
+    const originalSetTimeout = window.setTimeout;
+    const setTimeoutSpy = vi
+      .spyOn(window, 'setTimeout')
+      .mockImplementation(((handler: TimerHandler, timeout?: number, ...args: any[]) => {
+        if (typeof timeout === 'number' && timeout >= AUTO_RETRY_INTERVAL_MS && typeof handler === 'function') {
+          triggerAutoRetry = () => {
+            handler(...args);
+          };
+          return 0 as unknown as ReturnType<typeof window.setTimeout>;
+        }
+        return originalSetTimeout(handler as any, timeout as any, ...(args as any));
+      }) as typeof window.setTimeout);
+
+    try {
+      render(<App />);
+
+      const alert = await screen.findByRole('alert');
+      await waitFor(() => {
+        expect(alert).toHaveTextContent('自動再試行');
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(typeof triggerAutoRetry).toBe('function');
+
+      await act(async () => {
+        triggerAutoRetry?.();
+      });
+
+      await waitFor(() => {
+        const configCalls = fetchMock.mock.calls.filter(([input]) => {
+          if (typeof input === 'string') return input.endsWith('/api/config');
+          if (input instanceof Request) return input.url.endsWith('/api/config');
+          if (input instanceof URL) return input.toString().endsWith('/api/config');
+          return false;
+        });
+        expect(configCalls.length).toBeGreaterThanOrEqual(2);
+      });
+
+      expect(await screen.findByPlaceholderText('見出し語を入力')).toBeInTheDocument();
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   });
 
   it('renders WordPack by default and navigates with keyboard', async () => {
