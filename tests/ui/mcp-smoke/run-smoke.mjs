@@ -24,6 +24,7 @@ const packageDir = __dirname;
 const processes = [];
 let chromeUserDataDir;
 let client;
+let transport;
 
 function logStep(message) {
   const timestamp = new Date().toISOString();
@@ -217,7 +218,7 @@ async function launchChrome(env) {
 async function runSmokeAssertions(wordPackId) {
   logStep('chrome-devtools-mcp クライアントとの接続を開始します');
   const cliEntry = path.resolve(packageDir, 'node_modules/chrome-devtools-mcp/build/src/index.js');
-  const transport = new StdioClientTransport({
+  transport = new StdioClientTransport({
     command: process.execPath,
     args: [cliEntry, '--browserUrl', 'http://127.0.0.1:9222'],
     env: baseEnv,
@@ -265,7 +266,9 @@ async function runSmokeAssertions(wordPackId) {
 
   console.log('✅ UI smoke test completed successfully');
   await client.close();
+  await transport.close();
   client = undefined;
+  transport = undefined;
 }
 
 const baseEnv = {
@@ -290,6 +293,10 @@ async function main() {
       try { await client.close(); } catch {}
       client = undefined;
     }
+    if (transport) {
+      try { await transport.close(); } catch {}
+      transport = undefined;
+    }
     for (const { child, name } of processes.reverse()) {
       await terminate(child, name);
     }
@@ -300,3 +307,4 @@ async function main() {
 }
 
 await main();
+process.exit(process.exitCode ?? 0);
