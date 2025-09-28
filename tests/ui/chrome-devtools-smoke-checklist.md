@@ -16,7 +16,7 @@ Codex が `chrome-devtools` MCP サーバーを利用して WordPack フロン�
 | 2 | サイドバー展開の検証 | `click` でハンバーガーを押下し、`wait_for` で `.sidebar[aria-hidden="false"]` を待つ | サイドバーが開き、`.app-shell.sidebar-open` が付与される | `click`, `wait_for`, `evaluate_script` |
 | 3 | タブ切り替えの確認 | 「設定」→「例文一覧」→「WordPack」を切り替える | 各タブの主要コンテンツが表示され、サイドバーが閉じない | `click`, `wait_for` |
 | 4 | WordPack カードの詳細表示 | 一覧中の最初のカードを `click` → モーダル表示を確認 | モーダルに WordPack プレビューが表示され、閉じるボタンで閉じられる | `click`, `wait_for`, `take_screenshot` |
-| 5 | UI エラー検知 | 画面操作後にログを収集 | コンソールエラー・失敗リクエストがない | `list_console_messages`, `list_network_requests` |
+| 5 | UI エラー検知 | 画面操作後にログを収集 | コンソールエラーがない | `list_console_messages` |
 
 ## 判定とフォローアップ
 

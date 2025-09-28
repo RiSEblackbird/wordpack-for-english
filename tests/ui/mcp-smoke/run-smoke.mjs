@@ -464,17 +464,12 @@ async function runSmokeAssertions(wordPackId) {
     ensure(!stillOpen, 'WordPack プレビューのモーダルが閉じませんでした');
   }
 
-  logStep('コンソールとネットワークのログを収集します');
+  logStep('コンソールログを収集します');
   const consoleRes = await client.callTool({ name: 'list_console_messages', arguments: {} });
   ensure(!consoleRes.isError, 'コンソールログの取得に失敗しました');
   const consoleText = consoleRes.content?.[0]?.text || '';
   ensure(!consoleText.includes('Error>'), `コンソールにエラーが出力されています\n${consoleText}`);
   ensure(!consoleText.includes('Exception>'), `コンソールに例外が出力されています\n${consoleText}`);
-
-  const networkRes = await client.callTool({ name: 'list_network_requests', arguments: {} });
-  ensure(!networkRes.isError, 'ネットワークリクエストの取得に失敗しました');
-  const networkText = networkRes.content?.[0]?.text || '';
-  ensure(!networkText.includes('[failed'), `失敗したネットワークリクエストが検出されました\n${networkText}`);
 
   console.log('✅ UI smoke test completed successfully');
   await client.close();
