@@ -1,0 +1,16 @@
+{
+  "name": "wordpack-mcp-ui-smoke",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "smoke": "node run-smoke.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.2",
+    "chrome-devtools-mcp": "^0.4.0"
+  }
+}

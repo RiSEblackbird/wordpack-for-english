@@ -89,3 +89,4 @@ docs/                   # 詳細ドキュメント
 ## 追加ドキュメント
 - 詳細な API・フロー・モデルは `docs/flows.md`, `docs/models.md`, `docs/環境変数の意味.md` を参照してください。
 - ユーザー向け操作は `UserManual.md` を参照してください。
+- Codex から Chrome DevTools MCP を使って UI 自動テストを実行する方法は `docs/testing/chrome-devtools-mcp-ui-testing.md` を参照してください（Node.js 22 + `tests/ui/mcp-smoke/run-smoke.mjs` を用いたローカルスモークテスト手順を含みます）。

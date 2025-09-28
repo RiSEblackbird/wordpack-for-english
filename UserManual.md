@@ -182,7 +182,12 @@
   - `.env` に `OPENAI_API_KEY`
   - テスト/CI はモックのため不要
   - 本番は `STRICT_MODE=true` 推奨（開発では `false` 可）
-  - 途中切れ対策に `LLM_MAX_TOKENS` を 1200–1800（推奨1500）
+- 途中切れ対策に `LLM_MAX_TOKENS` を 1200–1800（推奨1500）
+
+### B-1-2. Chrome DevTools MCP による UI 自動テスト体制
+- Codex から `chrome-devtools` MCP サーバーを利用し、Headless Chrome を自動操作して UI スモークテストを実行できます。
+- 設定手順やスモークテストの観点、Codex 用プロンプトは `docs/testing/chrome-devtools-mcp-ui-testing.md` と `tests/ui/` 配下の資料を参照してください。
+- テスト結果を基にフロントエンドを修正した際は、Vitest (`npm run test`) と MCP スモークテストを双方とも再実行して回帰を確認してください。
 
 ### B-10. オブザーバビリティ（Langfuse）
 - `.env` に `LANGFUSE_ENABLED=true` と各キーを設定し、`requirements.txt` の `langfuse` を導入してください。
