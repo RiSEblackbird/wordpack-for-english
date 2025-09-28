@@ -12,11 +12,11 @@ Codex が `chrome-devtools` MCP サーバーを利用して WordPack フロン�
 
 | 番号 | 目的 | 操作 | 期待結果 | MCP の主なツール |
 |------|------|------|-----------|--------------------|
-| 1 | 初期表示の確認 | `navigate_page` でトップへ遷移し、`wait_for` で `data-testid="wordpack-list"` を待つ | サイドバーと WordPack 一覧が描画される | `navigate_page`, `wait_for`, `take_screenshot` |
-| 2 | サイドバーのタブ切り替え | `click` で「例文一覧」「設定」を順に選択 | メインコンテンツがそれぞれのタブ内容に変わる。コンソールエラーなし | `click`, `list_console_messages` |
-| 3 | WordPack カードの詳細表示 | 一覧中の最初のカードを `click` | モーダルが開き、語義タイトルと操作ボタンが表示される | `click`, `wait_for`, `take_screenshot` |
-| 4 | UI エラー検知 | 画面操作後にコンソールとネットワークを収集 | エラー・失敗レスポンスがないこと | `list_console_messages`, `list_network_requests` |
-| 5 | レイアウト確認 | メイン画面とモーダルを撮影 | 主要コンポーネントが崩れていない | `take_screenshot` |
+| 1 | 初期表示の確認 | `navigate_page` でトップへ遷移し、`wait_for` で `WordPack` 見出しを待つ | サイドバーと WordPack 一覧が描画される | `navigate_page`, `wait_for`, `take_screenshot` |
+| 2 | サイドバー展開の検証 | `click` でハンバーガーを押下し、`wait_for` で `.sidebar[aria-hidden="false"]` を待つ | サイドバーが開き、`.app-shell.sidebar-open` が付与される | `click`, `wait_for`, `evaluate_script` |
+| 3 | タブ切り替えの確認 | 「設定」→「例文一覧」→「WordPack」を切り替える | 各タブの主要コンテンツが表示され、サイドバーが閉じない | `click`, `wait_for` |
+| 4 | WordPack カードの詳細表示 | 一覧中の最初のカードを `click` → モーダル表示を確認 | モーダルに WordPack プレビューが表示され、閉じるボタンで閉じられる | `click`, `wait_for`, `take_screenshot` |
+| 5 | UI エラー検知 | 画面操作後にログを収集 | コンソールエラーがない | `list_console_messages` |
 
 ## 判定とフォローアップ
 

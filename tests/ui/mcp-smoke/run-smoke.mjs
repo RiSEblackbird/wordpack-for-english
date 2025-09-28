@@ -103,6 +103,22 @@ function ensure(cond, message) {
   }
 }
 
+async function waitForSelector(clientInstance, selector, { timeoutMs = 10000 } = {}) {
+  const start = Date.now();
+  const serializedSelector = JSON.stringify(selector);
+  while (Date.now() - start < timeoutMs) {
+    const exists = await callEvaluate(
+      clientInstance,
+      `() => Boolean(document.querySelector(${serializedSelector}))`
+    );
+    if (exists === true) {
+      return;
+    }
+    await delay(250);
+  }
+  throw new Error(`Timed out waiting for selector: ${selector}`);
+}
+
 function parseEvaluateResultContent(res) {
   if (Array.isArray(res.content)) {
     for (const part of res.content) {
@@ -240,14 +256,82 @@ async function runSmokeAssertions(wordPackId) {
   ensure(snapshotText.includes(wordPackId.slice(3, 10)) || snapshotText.includes('例文未生成'), 'WordPack card snapshot missing expected metadata');
 
   logStep('ナビゲーションタブのラベルを検証します');
-  const navItems = await callEvaluate(client, '() => Array.from(document.querySelectorAll("nav button"), el => el.textContent.trim()).filter(Boolean)');
+  const navItems = await callEvaluate(
+    client,
+    '() => Array.from(document.querySelectorAll("nav[aria-label=\\"主要メニュー\\"] button"), el => el.textContent.trim()).filter(Boolean)'
+  );
   ensure(Array.isArray(navItems), 'Navigation items response malformed');
   for (const label of ['WordPack', '文章インポート', '例文一覧', '設定']) {
     ensure(navItems.includes(label), `Navigation label "${label}" not found`);
   }
 
+  logStep('ハンバーガーボタンの初期配置と状態を確認します');
+  const hamburgerInfo = await callEvaluate(
+    client,
+    `() => {
+      const btn = document.querySelector(".hamburger-toggle");
+      if (!btn) return { found: false };
+      const rect = btn.getBoundingClientRect();
+      return {
+        found: true,
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        ariaExpanded: btn.getAttribute("aria-expanded"),
+        ariaControls: btn.getAttribute("aria-controls"),
+        ariaLabel: btn.getAttribute("aria-label"),
+      };
+    }`
+  );
+  ensure(hamburgerInfo?.found, 'ハンバーガーボタンが見つかりません');
+  ensure(hamburgerInfo.left === 0 && hamburgerInfo.top === 0, 'ハンバーガーボタンが画面左上に固定されていません');
+  ensure(hamburgerInfo.ariaExpanded === 'false', '初期状態でサイドバーが展開されています');
+  ensure(hamburgerInfo.ariaLabel === 'メニューを開く', 'ハンバーガーボタンのラベルが想定外です');
+
+  logStep('ハンバーガーボタンでサイドバーを開きます');
+  const sidebarToggleResult = await callEvaluate(
+    client,
+    `() => {
+      const btn = document.querySelector(".hamburger-toggle");
+      if (!btn) return { clicked: false };
+      btn.click();
+      return { clicked: true, ariaExpanded: btn.getAttribute("aria-expanded") };
+    }`
+  );
+  ensure(sidebarToggleResult?.clicked, 'サイドバーのトグルに失敗しました');
+  ensure(sidebarToggleResult.ariaExpanded === 'true', 'サイドバーが展開状態になっていません');
+
+  const sidebarState = await callEvaluate(
+    client,
+    `() => {
+      const sidebar = document.querySelector(".sidebar");
+      const appShell = document.querySelector(".app-shell");
+      if (!sidebar || !appShell) return null;
+      const rect = sidebar.getBoundingClientRect();
+      return {
+        ariaHidden: sidebar.getAttribute("aria-hidden"),
+        widthStyle: sidebar.style.width,
+        rectLeft: Math.round(rect.left),
+        rectWidth: Math.round(rect.width),
+        shellOpen: appShell.classList.contains("sidebar-open"),
+      };
+    }`
+  );
+  ensure(sidebarState, 'サイドバーの状態を取得できません');
+  ensure(sidebarState.ariaHidden === 'false', 'サイドバーが非表示のままです');
+  ensure(sidebarState.shellOpen, 'app-shell に sidebar-open クラスが付与されていません');
+  ensure(sidebarState.rectLeft === 0, 'サイドバーの左端が 0px ではありません');
+  ensure(sidebarState.rectWidth >= 270, `サイドバーの幅が想定よりも狭いです (${sidebarState.rectWidth}px)`);
+
   logStep('設定タブへ切り替えて初期設定値を確認します');
-  const clickedSettings = await callEvaluate(client, '() => { const btn = Array.from(document.querySelectorAll("nav button"), el => el.textContent?.trim() === "設定" ? el : null).find(Boolean); if (!btn) return { clicked: false }; btn.click(); return { clicked: true }; }');
+  const clickedSettings = await callEvaluate(
+    client,
+    `() => {
+      const btn = Array.from(document.querySelectorAll("nav[aria-label=\\"主要メニュー\\"] button"), el => el.textContent?.trim() === "設定" ? el : null).find(Boolean);
+      if (!btn) return { clicked: false };
+      btn.click();
+      return { clicked: true };
+    }`
+  );
   ensure(clickedSettings?.clicked, 'Failed to switch to 設定 tab');
   logStep('設定タブのコンテンツ表示を待機しています');
   const waitSettings = await client.callTool({ name: 'wait_for', arguments: { text: 'カラーテーマ', timeout: 10000 } });
@@ -256,13 +340,136 @@ async function runSmokeAssertions(wordPackId) {
   ensure(temperatureValue === '0.6', `Unexpected temperature default: ${temperatureValue}`);
 
   logStep('例文一覧タブへ切り替えて初期ビューを確認します');
-  const clickedExamples = await callEvaluate(client, '() => { const btn = Array.from(document.querySelectorAll("nav button"), el => el.textContent?.trim() === "例文一覧" ? el : null).find(Boolean); if (!btn) return { clicked: false }; btn.click(); return { clicked: true }; }');
+  const clickedExamples = await callEvaluate(
+    client,
+    `() => {
+      const btn = Array.from(document.querySelectorAll("nav[aria-label=\\"主要メニュー\\"] button"), el => el.textContent?.trim() === "例文一覧" ? el : null).find(Boolean);
+      if (!btn) return { clicked: false };
+      btn.click();
+      return { clicked: true };
+    }`
+  );
   ensure(clickedExamples?.clicked, 'Failed to switch to 例文一覧 tab');
   logStep('例文一覧のヘッディング表示を待機しています');
   const waitExamples = await client.callTool({ name: 'wait_for', arguments: { text: '例文一覧', timeout: 10000 } });
   ensure(!waitExamples.isError, '例文一覧の見出しが表示されませんでした');
   const exampleViewMode = await callEvaluate(client, '() => document.querySelector(".ex-list-container")?.getAttribute("data-view") || null');
   ensure(exampleViewMode === 'card', `例文一覧の初期ビューが想定外です (data-view=${exampleViewMode})`);
+
+  const sidebarStateAfterExample = await callEvaluate(
+    client,
+    `() => {
+      const sidebar = document.querySelector(".sidebar");
+      if (!sidebar) return null;
+      return { ariaHidden: sidebar.getAttribute("aria-hidden") };
+    }`
+  );
+  ensure(sidebarStateAfterExample?.ariaHidden === 'false', 'タブ切り替え後にサイドバーが閉じてしまいました');
+
+  logStep('WordPack タブへ戻ってカード一覧を検証します');
+  const clickedWordPack = await callEvaluate(
+    client,
+    `() => {
+      const btn = Array.from(document.querySelectorAll("nav[aria-label=\\"主要メニュー\\"] button"), el => el.textContent?.trim() === "WordPack" ? el : null).find(Boolean);
+      if (!btn) return { clicked: false };
+      btn.click();
+      return { clicked: true };
+    }`
+  );
+  ensure(clickedWordPack?.clicked, 'WordPack タブへの戻りに失敗しました');
+  await waitForSelector(client, '[data-testid="wp-card"]', { timeoutMs: 15000 });
+  const wordPackCardInfo = await callEvaluate(
+    client,
+    `() => {
+      const cards = Array.from(document.querySelectorAll("[data-testid=\\"wp-card\\"]"));
+      const first = cards[0];
+      return {
+        count: cards.length,
+        firstLemma: first?.querySelector(".wp-card-title")?.textContent?.trim() || null,
+        firstHasSense: Boolean(first?.querySelector("[data-testid=\\"wp-card-sense-title\\"]")),
+      };
+    }`
+  );
+  ensure(wordPackCardInfo?.count >= 1, 'WordPack カードが 1 件も描画されていません');
+  ensure(
+    typeof wordPackCardInfo.firstLemma === 'string' && wordPackCardInfo.firstLemma.toLowerCase().includes('automation'),
+    `WordPack カードのレマが想定外です (${wordPackCardInfo.firstLemma})`
+  );
+  const expectedLemma =
+    typeof wordPackCardInfo.firstLemma === 'string' ? wordPackCardInfo.firstLemma : null;
+
+  logStep('WordPack カードのプレビューを開きます');
+  const openedPreview = await callEvaluate(
+    client,
+    `() => {
+      const card = document.querySelector("[data-testid=\\"wp-card\\"]");
+      if (!card) return { clicked: false };
+      card.click();
+      return { clicked: true };
+    }`
+  );
+  ensure(openedPreview?.clicked, 'WordPack カードのクリックに失敗しました');
+
+  await waitForSelector(client, '[role="dialog"][aria-label="WordPack プレビュー"]', { timeoutMs: 15000 });
+  const modalInfo = await callEvaluate(
+    client,
+    `() => {
+      const dialog = document.querySelector("[role=\\"dialog\\"][aria-label=\\"WordPack プレビュー\\"]");
+      if (!dialog) return null;
+      return {
+        hasContent: Boolean(dialog.querySelector("[data-testid=\\"modal-wordpack-content\\"]")),
+        hasLemmaInput: Boolean(dialog.querySelector("#wordpack-lemma-input")),
+        lemmaText: dialog.querySelector(".wp-modal-lemma strong")?.textContent?.trim() || null,
+        closeButton: dialog.querySelector("button[aria-label=\\"閉じる\\"]")?.textContent?.trim() || null,
+      };
+    }`
+  );
+  ensure(modalInfo?.hasContent, 'WordPack プレビューの内容が表示されていません');
+  ensure(
+    modalInfo?.hasLemmaInput || typeof modalInfo?.lemmaText === 'string',
+    'WordPack プレビューで見出し語が表示されていません'
+  );
+  if (typeof modalInfo?.lemmaText === 'string' && typeof expectedLemma === 'string') {
+    ensure(
+      modalInfo.lemmaText.toLowerCase().includes(expectedLemma.toLowerCase()),
+      `モーダルの見出し語が一覧と一致しません (${modalInfo.lemmaText})`
+    );
+  }
+  ensure(modalInfo?.closeButton === '閉じる', 'モーダルの閉じるボタン表記が想定外です');
+
+  logStep('WordPack プレビューのモーダルを閉じます');
+  const closedPreview = await callEvaluate(
+    client,
+    `() => {
+      const btn = document.querySelector("[role=\\"dialog\\"][aria-label=\\"WordPack プレビュー\\"] button[aria-label=\\"閉じる\\"]");
+      if (!btn) return { clicked: false };
+      btn.click();
+      return { clicked: true };
+    }`
+  );
+  ensure(closedPreview?.clicked, 'WordPack プレビューを閉じられませんでした');
+  {
+    let stillOpen = true;
+    for (let i = 0; i < 20; i += 1) {
+      const modalVisible = await callEvaluate(
+        client,
+        `() => Boolean(document.querySelector("[role=\\"dialog\\"][aria-label=\\"WordPack プレビュー\\"]"))`
+      );
+      if (!modalVisible) {
+        stillOpen = false;
+        break;
+      }
+      await delay(200);
+    }
+    ensure(!stillOpen, 'WordPack プレビューのモーダルが閉じませんでした');
+  }
+
+  logStep('コンソールログを収集します');
+  const consoleRes = await client.callTool({ name: 'list_console_messages', arguments: {} });
+  ensure(!consoleRes.isError, 'コンソールログの取得に失敗しました');
+  const consoleText = consoleRes.content?.[0]?.text || '';
+  ensure(!consoleText.includes('Error>'), `コンソールにエラーが出力されています\n${consoleText}`);
+  ensure(!consoleText.includes('Exception>'), `コンソールに例外が出力されています\n${consoleText}`);
 
   console.log('✅ UI smoke test completed successfully');
   await client.close();
