@@ -16,18 +16,24 @@
 1. `chrome-devtools` MCP サーバーで新しいページを開き、http://127.0.0.1:5173 に遷移する。
    - `new_page`
    - `navigate_page` (url: "http://127.0.0.1:5173/")
-   - `wait_for` (selector: "[data-testid=\"wordpack-list\"]")
-2. 表示のスクリーンショットを撮影し、保存パスと Base64 を取得する。
+   - `wait_for` (text: "WordPack")
    - `take_screenshot` (selector: "body", save=true)
-3. サイドバーのタブを切り替えて UI が変わることを確認する。
-   - `click` (selector: "[data-testid=\"sidebar-examples-tab\"]")
-   - `wait_for` (selector: "[data-testid=\"examples-list\"]")
-   - `click` (selector: "[data-testid=\"sidebar-settings-tab\"]")
-   - `wait_for` (selector: "[data-testid=\"settings-panel\"]")
+2. ハンバーガーボタンでサイドバーを開き、開閉状態を検証する。
+   - `click` (selector: "button.hamburger-toggle")
+   - `wait_for` (selector: ".sidebar[aria-hidden=\"false\"]")
+   - `evaluate_script` で `document.querySelector('.app-shell').classList.contains('sidebar-open')` が true であることを確認
+3. サイドバーから「設定」「例文一覧」「WordPack」の順にタブを切り替え、主要 UI が表示されることを確認する。
+   - `click` (selector: "nav[aria-label=\"主要メニュー\"] button", text: "設定")
+   - `wait_for` (text: "カラーテーマ")
+   - `click` (selector: "nav[aria-label=\"主要メニュー\"] button", text: "例文一覧")
+   - `wait_for` (text: "例文一覧")
+   - `click` (selector: "nav[aria-label=\"主要メニュー\"] button", text: "WordPack")
+   - `wait_for` (selector: "[data-testid=\"wp-card\"]")
 4. WordPack カードの詳細モーダルを開いて内容を確認する。
-   - `click` (selector: "[data-testid=\"wordpack-card\"] button[aria-label=\"プレビュー\"]", index: 0)
-   - `wait_for` (selector: "[data-testid=\"wordpack-modal\"]")
-   - `take_screenshot` (selector: "[data-testid=\"wordpack-modal\"]", save=true)
+   - `click` (selector: "[data-testid=\"wp-card\"]", index: 0)
+   - `wait_for` (selector: "[role=\"dialog\"][aria-label=\"WordPack プレビュー\"]")
+   - `take_screenshot` (selector: "[role=\"dialog\"][aria-label=\"WordPack プレビュー\"]", save=true)
+   - `click` (selector: "[role=\"dialog\"][aria-label=\"WordPack プレビュー\"] button[aria-label=\"閉じる\"]")
 5. 画面操作後の状態を収集する。
    - `list_console_messages`
    - `list_network_requests`

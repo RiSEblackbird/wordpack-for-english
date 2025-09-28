@@ -98,11 +98,11 @@ WordPack リポジトリには、Chrome DevTools MCP と Headless Chrome を使�
 
 `tests/ui/chrome-devtools-smoke-checklist.md` に、Codex が Chrome DevTools MCP で検証すべき観点を記載しています。基本シナリオは以下の通りです。
 
-1. アプリのトップページに遷移し、サイドバーと WordPack 一覧が描画されること。
-2. サイドバーのタブ切り替え（例: 「例文一覧」→「設定」）が動作すること。
-3. WordPack 保存済みカードを開き、モーダルで語義タイトルが表示されること。
-4. 主要コンポーネントのコンソールエラーが出ていないこと。
-5. UI 崩れがないことをスクリーンショットで保存すること。
+1. アプリのトップページに遷移し、`WordPack` 見出しと一覧が描画されること。
+2. ハンバーガーボタンでサイドバーを展開すると `.app-shell.sidebar-open` が付与されること。
+3. サイドバーの「設定」「例文一覧」「WordPack」タブを巡回して主要コンテンツが表示され、サイドバーが閉じないこと。
+4. WordPack 保存済みカードを開き、モーダルでプレビュー内容が表示され閉じるボタンで戻れること。
+5. 主要コンポーネントにコンソールエラーや失敗リクエストが発生していないこと。
 
 ## Codex からの実行フロー
 
@@ -110,8 +110,8 @@ Codex に渡すプロンプト例は `tests/ui/prompts/codex-smoke-test.md` に�
 
 1. `chrome-devtools` MCP サーバーを使用するよう明示する。
 2. `new_page` → `navigate_page` で対象 URL を開く。
-3. `wait_for` で主要なセレクタ（例: `data-testid="wordpack-list"`）が描画されるまで待機する。
-4. `click` / `fill` などの操作ツールで UI フローを巡回する。
+3. `wait_for` で `WordPack` 見出しや `.sidebar[aria-hidden="false"]` など安定したセレクタが描画されるまで待機する。
+4. `click` / `evaluate_script` などの操作ツールでハンバーガー開閉とタブ切り替え、モーダル表示を検証する。
 5. `list_console_messages`, `take_screenshot`, `list_network_requests` で状態を収集する。
 6. 結果を Codex に解釈させ、改善点を洗い出したうえで修正 PR を作成する。
 
