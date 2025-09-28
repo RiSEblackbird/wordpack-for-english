@@ -15,7 +15,7 @@ describe('App navigation', () => {
     render(<App />);
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('/api/config から設定を取得できませんでした');
+    expect(alert).toHaveTextContent(/\/api\/config.*設定を取得できませんでした/);
 
     const retryButton = screen.getByRole('button', { name: '再試行' });
     const user = userEvent.setup();

@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const backendProxyTarget = process.env.BACKEND_PROXY_TARGET || "http://backend:8000";
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -9,7 +11,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       "/api": {
-        target: "http://backend:8000",
+        target: backendProxyTarget,
         changeOrigin: true,
       },
     },
