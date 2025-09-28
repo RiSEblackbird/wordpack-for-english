@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WordPackPanel } from './components/WordPackPanel';
 import { WordPackListPanel } from './components/WordPackListPanel';
@@ -77,7 +78,9 @@ export const App: React.FC = () => {
   }, [isSidebarOpen]);
 
   const toggleSidebar = () =>
-    setIsSidebarOpen((prev) => !prev);
+    flushSync(() => {
+      setIsSidebarOpen((prev) => !prev);
+    });
 
   const handleSelectTab = (next: Tab) => {
     setTab(next);
@@ -321,7 +324,7 @@ export const App: React.FC = () => {
                           type="button"
                           className="hamburger-button hamburger-toggle"
                           aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
-                          aria-expanded={isSidebarOpen}
+                          aria-expanded={isSidebarOpen ? 'true' : 'false'}
                           aria-controls={SIDEBAR_ID}
                           onClick={toggleSidebar}
                         >
