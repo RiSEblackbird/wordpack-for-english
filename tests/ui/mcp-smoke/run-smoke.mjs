@@ -103,6 +103,22 @@ function ensure(cond, message) {
   }
 }
 
+async function waitForSelector(clientInstance, selector, { timeoutMs = 10000 } = {}) {
+  const start = Date.now();
+  const serializedSelector = JSON.stringify(selector);
+  while (Date.now() - start < timeoutMs) {
+    const exists = await callEvaluate(
+      clientInstance,
+      `() => Boolean(document.querySelector(${serializedSelector}))`
+    );
+    if (exists === true) {
+      return;
+    }
+    await delay(250);
+  }
+  throw new Error(`Timed out waiting for selector: ${selector}`);
+}
+
 function parseEvaluateResultContent(res) {
   if (Array.isArray(res.content)) {
     for (const part of res.content) {
@@ -361,8 +377,7 @@ async function runSmokeAssertions(wordPackId) {
     }`
   );
   ensure(clickedWordPack?.clicked, 'WordPack タブへの戻りに失敗しました');
-  const waitWordPackList = await client.callTool({ name: 'wait_for', arguments: { selector: '[data-testid="wp-card"]', timeout: 15000 } });
-  ensure(!waitWordPackList.isError, 'WordPack カードが描画されませんでした');
+  await waitForSelector(client, '[data-testid="wp-card"]', { timeoutMs: 15000 });
   const wordPackCardInfo = await callEvaluate(
     client,
     `() => {
@@ -393,11 +408,7 @@ async function runSmokeAssertions(wordPackId) {
   );
   ensure(openedPreview?.clicked, 'WordPack カードのクリックに失敗しました');
 
-  const waitPreview = await client.callTool({
-    name: 'wait_for',
-    arguments: { selector: '[role="dialog"][aria-label="WordPack プレビュー"]', timeout: 15000 },
-  });
-  ensure(!waitPreview.isError, 'WordPack プレビューのモーダルが表示されませんでした');
+  await waitForSelector(client, '[role="dialog"][aria-label="WordPack プレビュー"]', { timeoutMs: 15000 });
   const modalInfo = await callEvaluate(
     client,
     `() => {
