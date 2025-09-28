@@ -97,17 +97,33 @@ function ensure(cond, message) {
   }
 }
 
-function extractJsonBlock(text) {
-  const match = text.match(/```json\s*([\s\S]+?)\s*```/);
-  ensure(match && match[1], 'JSON block not found in evaluate_script response');
-  return JSON.parse(match[1]);
+function parseEvaluateResultContent(res) {
+  if (Array.isArray(res.content)) {
+    for (const part of res.content) {
+      if (typeof part?.json !== 'undefined') {
+        return part.json;
+      }
+    }
+
+    const combinedText = res.content
+      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+      .filter(Boolean)
+      .join('\n');
+
+    if (combinedText) {
+      const match = combinedText.match(/```json\s*([\s\S]+?)\s*```/);
+      ensure(match && match[1], 'JSON block not found in evaluate_script response');
+      return JSON.parse(match[1]);
+    }
+  }
+
+  throw new Error('evaluate_script response did not include JSON payload');
 }
 
 async function callEvaluate(clientInstance, fn) {
   const res = await clientInstance.callTool({ name: 'evaluate_script', arguments: { function: fn } });
   ensure(!res.isError, `evaluate_script failed: ${res.content?.[0]?.text || ''}`);
-  const text = res.content?.[0]?.text || '';
-  return extractJsonBlock(text);
+  return parseEvaluateResultContent(res);
 }
 
 async function seedWordPack() {
