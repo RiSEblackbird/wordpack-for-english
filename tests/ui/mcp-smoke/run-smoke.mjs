@@ -25,6 +25,11 @@ const processes = [];
 let chromeUserDataDir;
 let client;
 
+function logStep(message) {
+  const timestamp = new Date().toISOString();
+  console.log(`ℹ️ [${timestamp}] ${message}`);
+}
+
 function prefixLog(name, line, stream = 'stdout') {
   if (!line) return;
   const trimmed = line.toString().trimEnd();
@@ -139,6 +144,7 @@ async function seedWordPack() {
 }
 
 async function setupBackend(env) {
+  logStep('バックエンド (uvicorn) の起動を開始します');
   await fs.mkdir(dataDir, { recursive: true });
   await fs.rm(sqlitePath, { force: true });
   const backendEnv = {
@@ -157,9 +163,11 @@ async function setupBackend(env) {
     timeoutMs: 45000,
     validate: (res) => Promise.resolve(res.ok),
   });
+  logStep('バックエンドのヘルスチェックに成功しました');
 }
 
 async function setupFrontend(env) {
+  logStep('フロントエンド (Vite) の開発サーバーを起動します');
   const frontendEnv = {
     ...env,
     BACKEND_PROXY_TARGET: 'http://127.0.0.1:8000',
@@ -175,6 +183,7 @@ async function setupFrontend(env) {
     validate: (res) => Promise.resolve(res.status === 200),
   });
   await delay(1500);
+  logStep('フロントエンドの起動が完了しました');
 }
 
 async function launchChrome(env) {
@@ -183,6 +192,7 @@ async function launchChrome(env) {
   } catch {
     throw new Error(`Chrome executable not found at ${chromeExecutable}. Set CHROME_EXECUTABLE env var to override.`);
   }
+  logStep(`Headless Chrome を起動します (executable: ${chromeExecutable})`);
   chromeUserDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'wordpack-chrome-'));
   const args = [
     '--headless=new',
@@ -201,9 +211,11 @@ async function launchChrome(env) {
     validate: (res) => Promise.resolve(res.ok),
   });
   await delay(500);
+  logStep('Chrome DevTools のリモートデバッグエンドポイントに接続できました');
 }
 
 async function runSmokeAssertions(wordPackId) {
+  logStep('chrome-devtools-mcp クライアントとの接続を開始します');
   const cliEntry = path.resolve(packageDir, 'node_modules/chrome-devtools-mcp/build/src/index.js');
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -214,30 +226,38 @@ async function runSmokeAssertions(wordPackId) {
   client = new Client({ name: 'wordpack-ui-smoke', version: '1.0.0' });
   await client.connect(transport);
 
+  logStep('WordPack フロントエンドへのナビゲーションを開始します');
   await client.callTool({ name: 'navigate_page', arguments: { url: 'http://127.0.0.1:5173' } });
+  logStep('"WordPack" 見出しの表示を待機しています');
   const waitMain = await client.callTool({ name: 'wait_for', arguments: { text: 'WordPack', timeout: 20000 } });
   ensure(!waitMain.isError, 'Failed to locate WordPack heading');
 
+  logStep('トップ画面のスナップショットを取得します');
   const snapshot = await client.callTool({ name: 'take_snapshot', arguments: {} });
   const snapshotText = snapshot.content?.[0]?.text || '';
   ensure(snapshotText.includes('WordPack automation'), 'WordPack card did not render expected lemma');
   ensure(snapshotText.includes(wordPackId.slice(3, 10)) || snapshotText.includes('例文未生成'), 'WordPack card snapshot missing expected metadata');
 
+  logStep('ナビゲーションタブのラベルを検証します');
   const navItems = await callEvaluate(client, '() => Array.from(document.querySelectorAll("nav button"), el => el.textContent.trim()).filter(Boolean)');
   ensure(Array.isArray(navItems), 'Navigation items response malformed');
   for (const label of ['WordPack', '文章インポート', '例文一覧', '設定']) {
     ensure(navItems.includes(label), `Navigation label "${label}" not found`);
   }
 
+  logStep('設定タブへ切り替えて初期設定値を確認します');
   const clickedSettings = await callEvaluate(client, '() => { const btn = Array.from(document.querySelectorAll("nav button"), el => el.textContent?.trim() === "設定" ? el : null).find(Boolean); if (!btn) return { clicked: false }; btn.click(); return { clicked: true }; }');
   ensure(clickedSettings?.clicked, 'Failed to switch to 設定 tab');
+  logStep('設定タブのコンテンツ表示を待機しています');
   const waitSettings = await client.callTool({ name: 'wait_for', arguments: { text: 'カラーテーマ', timeout: 10000 } });
   ensure(!waitSettings.isError, '設定パネルが表示されませんでした');
   const temperatureValue = await callEvaluate(client, '() => document.querySelector("input[aria-describedby=\\"temperature-help\\"]")?.value ?? null');
   ensure(temperatureValue === '0.6', `Unexpected temperature default: ${temperatureValue}`);
 
+  logStep('例文一覧タブへ切り替えて初期ビューを確認します');
   const clickedExamples = await callEvaluate(client, '() => { const btn = Array.from(document.querySelectorAll("nav button"), el => el.textContent?.trim() === "例文一覧" ? el : null).find(Boolean); if (!btn) return { clicked: false }; btn.click(); return { clicked: true }; }');
   ensure(clickedExamples?.clicked, 'Failed to switch to 例文一覧 tab');
+  logStep('例文一覧のヘッディング表示を待機しています');
   const waitExamples = await client.callTool({ name: 'wait_for', arguments: { text: '例文一覧', timeout: 10000 } });
   ensure(!waitExamples.isError, '例文一覧の見出しが表示されませんでした');
   const exampleViewMode = await callEvaluate(client, '() => document.querySelector(".ex-list-container")?.getAttribute("data-view") || null');
@@ -256,8 +276,9 @@ const baseEnv = {
 async function main() {
   try {
     await setupBackend(baseEnv);
+    logStep('WordPack のシードデータを投入します');
     const wordPackId = await seedWordPack();
-    console.log(`Seeded WordPack: ${wordPackId}`);
+    logStep(`Seeded WordPack: ${wordPackId}`);
     await setupFrontend(baseEnv);
     await launchChrome(baseEnv);
     await runSmokeAssertions(wordPackId);
