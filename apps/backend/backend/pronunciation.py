@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import List, Tuple, Dict, Optional, Callable, Any
-from functools import lru_cache
 import threading
+from functools import lru_cache
+from typing import Any, Callable
 
 try:
     # g2p_en は ARPABET を返す
@@ -82,7 +82,7 @@ _VOWELS = {
 
 
 # 例外辞書（運用で拡張予定）。キーは小文字の見出し語、値は ARPABET 配列。
-_EXCEPTION_DICT: Dict[str, List[str]] = {
+_EXCEPTION_DICT: dict[str, list[str]] = {
     # 最小サンプル。必要に応じて追加・更新する。
     "the": ["DH", "AH0"],
     "of": ["AH1", "V"],
@@ -91,10 +91,10 @@ _EXCEPTION_DICT: Dict[str, List[str]] = {
 }
 
 # cmudict の辞書インスタンスは高コストのためキャッシュ
-_CMU_CACHE: Dict[str, List[List[str]]] | None = None
+_CMU_CACHE: dict[str, list[list[str]]] | None = None
 
 
-def _get_cmu_dict() -> Optional[Dict[str, List[List[str]]]]:
+def _get_cmu_dict() -> dict[str, list[list[str]]] | None:
     global _CMU_CACHE
     if cmudict is None:
         return None
@@ -108,8 +108,8 @@ def _get_cmu_dict() -> Optional[Dict[str, List[List[str]]]]:
 
 def _call_with_timeout(func: Callable[[], Any], timeout_ms: int) -> Any | None:
     """Run func with a timeout in ms. Return None on timeout or exception."""
-    result: Dict[str, Any] = {"value": None}
-    exc: Dict[str, BaseException | None] = {"err": None}
+    result: dict[str, Any] = {"value": None}
+    exc: dict[str, BaseException | None] = {"err": None}
 
     def target() -> None:
         try:
@@ -128,7 +128,7 @@ def _call_with_timeout(func: Callable[[], Any], timeout_ms: int) -> Any | None:
 _PRONUN_TIMEOUT_MS = 800  # g2p_en の安全タイムアウト（ミリ秒）
 
 
-def _strip_stress(phone: str) -> Tuple[str, int | None]:
+def _strip_stress(phone: str) -> tuple[str, int | None]:
     """Return base ARPABET phone and stress (0/1/2) if present."""
     if not phone:
         return phone, None
@@ -137,9 +137,9 @@ def _strip_stress(phone: str) -> Tuple[str, int | None]:
     return phone, None
 
 
-def _phones_to_ipa(phones: List[str]) -> Tuple[str, int, int | None]:
+def _phones_to_ipa(phones: list[str]) -> tuple[str, int, int | None]:
     """Convert ARPABET phones to IPA string, return (ipa, syllables, primary_stress_index)."""
-    ipa_parts: List[str] = []
+    ipa_parts: list[str] = []
     syllable_count = 0
     syllable_index = -1
     primary_stress_index: int | None = None
@@ -158,13 +158,15 @@ def _phones_to_ipa(phones: List[str]) -> Tuple[str, int, int | None]:
     # fallback when no vowel detected
     if syllable_count == 0:
         syllable_count = 1
-        primary_stress_index = 0 if primary_stress_index is None else primary_stress_index
+        primary_stress_index = (
+            0 if primary_stress_index is None else primary_stress_index
+        )
 
     return " ".join(ipa_parts), syllable_count, primary_stress_index
 
 
 @lru_cache(maxsize=4096)
-def _g2p_phones(word: str) -> List[str] | None:
+def _g2p_phones(word: str) -> list[str] | None:
     """Get ARPABET phones using exception dict, cmudict, then g2p-en (with timeout)."""
     if not word:
         return None
@@ -185,7 +187,8 @@ def _g2p_phones(word: str) -> List[str] | None:
     # Fallback to g2p_en with timeout
     if G2p is not None:
         try:
-            def _run() -> List[str] | None:
+
+            def _run() -> list[str] | None:
                 g2p = G2p()
                 seq = g2p(word)
                 phones = [t for t in seq if t and t[0].isalpha()]
@@ -207,13 +210,19 @@ def generate_pronunciation(lemma: str) -> Pronunciation:
     """
     word = lemma.strip()
     if not word:
-        return Pronunciation(ipa_GA=None, ipa_RP=None, syllables=None, stress_index=None, linking_notes=[])
+        return Pronunciation(
+            ipa_GA=None,
+            ipa_RP=None,
+            syllables=None,
+            stress_index=None,
+            linking_notes=[],
+        )
 
     phones = _g2p_phones(word)
     if phones:
         ipa_core, syllables, stress_index = _phones_to_ipa(phones)
         ipa_GA = f"/{ipa_core.replace(' ', '')}/" if ipa_core else None
-        notes: List[str] = []
+        notes: list[str] = []
         if word.lower().endswith("r"):
             notes.append("語末 r の連結に注意（rhotic）")
         return Pronunciation(
@@ -249,5 +258,3 @@ def generate_pronunciation(lemma: str) -> Pronunciation:
         stress_index=stress_index,
         linking_notes=notes,
     )
-
-

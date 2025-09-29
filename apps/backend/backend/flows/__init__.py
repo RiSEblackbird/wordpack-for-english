@@ -6,6 +6,7 @@ try:
 except Exception:
     try:
         import langgraph  # type: ignore
+
         StateGraph = langgraph.graph.StateGraph  # type: ignore[attr-defined]
     except Exception as exc:  # pragma: no cover - library required
         raise ImportError(
@@ -42,5 +43,3 @@ def create_state_graph() -> Any:
 
 
 __all__ = ["create_state_graph", "StateGraph"]
-
-

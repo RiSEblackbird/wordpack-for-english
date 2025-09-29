@@ -1,6 +1,8 @@
-from typing import Any, Dict, List, Optional
+from __future__ import annotations
+
 import json
 import re
+from typing import Any
 
 from . import create_state_graph
 
@@ -17,9 +19,9 @@ from ..models.word import (
     ExampleCategory,
 )
 from ..models.common import ConfidenceLevel, Citation
-from ..pronunciation import generate_pronunciation
-from ..logging import logger
 from ..config import settings
+from ..logging import logger
+from ..pronunciation import generate_pronunciation
 from ..sense_title import choose_sense_title
 
 
@@ -39,6 +41,7 @@ def _examples_common_notes_text() -> str:
         "  2) 解説：文の核（S/V/O/C）、修飾関係（手段/目的/時/理由など）、冠詞・可算/不可算の扱い等を日本語で簡潔に説明。\n"
         "- 『動詞+前置詞』のような表層的ラベルだけの説明は禁止。具体的に機能・役割まで述べる。\n"
     )
+
 
 def _examples_category_notes_text(category: ExampleCategory) -> str:
     """カテゴリ固有の Notes（対象カテゴリのみに適用）。"""
@@ -81,7 +84,13 @@ class WordPackFlow:
     可能な限り空（未設定）で返す。strict モードでは不正な生成結果はエラーを送出する。
     """
 
-    def __init__(self, chroma_client: Any | None = None, *, llm: Any | None = None, llm_info: Optional[dict[str, Any]] = None) -> None:
+    def __init__(
+        self,
+        chroma_client: Any | None = None,
+        *,
+        llm: Any | None = None,
+        llm_info: dict[str, Any] | None = None,
+    ) -> None:
         """ベクトルDB クライアントを受け取り、LangGraph を初期化。
 
         Parameters
@@ -99,10 +108,10 @@ class WordPackFlow:
     def _generate_pronunciation(self, lemma: str) -> Pronunciation:
         return generate_pronunciation(lemma)
 
-    def _retrieve(self, lemma: str) -> Dict[str, Any]:
+    def _retrieve(self, lemma: str) -> dict[str, Any]:
         """語の情報を取得。OpenAI LLM を使用してセクション別のJSONを生成・解析。"""
-        citations: List[Citation] = []
-        llm_data: Dict[str, Any] | None = None
+        citations: list[Citation] = []
+        llm_data: dict[str, Any] | None = None
 
         def _strip_code_fences(text: str) -> str:
             t = text.strip()
@@ -163,16 +172,16 @@ class WordPackFlow:
                     f"{lemma}\n\n"
                     "スキーマ（キーと型は完全一致させること）:\n"
                     "{\n"
-                    "  \"senses\": [ { \"id\": \"s1\", \"gloss_ja\": \"...\", \"definition_ja\": \"...\", \"nuances_ja\": \"...\", \"patterns\": [\"...\"], \"synonyms\": [\"...\"], \"antonyms\": [\"...\"], \"register\": \"...\", \"notes_ja\": \"...\", \"term_overview_ja\": \"...\", \"term_core_ja\": \"...\" } ],\n"
-                    "  \"sense_title\": \"10文字前後で語義全体の見出しになる短い日本語タイトル\",\n"
-                    "  \"collocations\": {\n"
-                    "    \"general\": { \"verb_object\": [\"...\"], \"adj_noun\": [\"...\"], \"prep_noun\": [\"...\"] },\n"
-                    "    \"academic\": { \"verb_object\": [\"...\"], \"adj_noun\": [\"...\"], \"prep_noun\": [\"...\"] }\n"
+                    '  "senses": [ { "id": "s1", "gloss_ja": "...", "definition_ja": "...", "nuances_ja": "...", "patterns": ["..."], "synonyms": ["..."], "antonyms": ["..."], "register": "...", "notes_ja": "...", "term_overview_ja": "...", "term_core_ja": "..." } ],\n'
+                    '  "sense_title": "10文字前後で語義全体の見出しになる短い日本語タイトル",\n'
+                    '  "collocations": {\n'
+                    '    "general": { "verb_object": ["..."], "adj_noun": ["..."], "prep_noun": ["..."] },\n'
+                    '    "academic": { "verb_object": ["..."], "adj_noun": ["..."], "prep_noun": ["..."] }\n'
                     "  },\n"
-                    "  \"contrast\": [ { \"with\": \"...\", \"diff_ja\": \"...\" } ],\n"
-                    "  \"etymology\": { \"note\": \"...\", \"confidence\": \"low|medium|high\" },\n"
-                    "  \"study_card\": \"1文の要点(日本語)\",\n"
-                    "  \"pronunciation\": { \"ipa_RP\": \"/.../\" }\n"
+                    '  "contrast": [ { "with": "...", "diff_ja": "..." } ],\n'
+                    '  "etymology": { "note": "...", "confidence": "low|medium|high" },\n'
+                    '  "study_card": "1文の要点(日本語)",\n'
+                    '  "pronunciation": { "ipa_RP": "/.../" }\n'
                     "}\n"
                     "注意事項:\n"
                     "- gloss_ja / definition_ja / nuances_ja / notes_ja は日本語。\n"
@@ -182,7 +191,11 @@ class WordPackFlow:
                 )
 
                 out = self.llm.complete(prompt)  # type: ignore[attr-defined]
-                logger.info("wordpack_llm_output_received", lemma=lemma, output_chars=len(out or ""))
+                logger.info(
+                    "wordpack_llm_output_received",
+                    lemma=lemma,
+                    output_chars=len(out or ""),
+                )
                 if isinstance(out, str) and out.strip():
                     raw = _strip_code_fences(out)
                     # 制御文字の未エスケープで失敗するケースを事前に回避
@@ -202,9 +215,16 @@ class WordPackFlow:
                         )
                     except json.JSONDecodeError:
                         logger.info("wordpack_llm_json_parse_failed", lemma=lemma)
-                        citations.append(Citation(text=out.strip(), meta={"source": "openai_llm", "word": lemma}))
+                        citations.append(
+                            Citation(
+                                text=out.strip(),
+                                meta={"source": "openai_llm", "word": lemma},
+                            )
+                        )
                         if settings.strict_mode:
-                            raise RuntimeError("Failed to parse LLM JSON in strict mode")
+                            raise RuntimeError(
+                                "Failed to parse LLM JSON in strict mode"
+                            )
         except Exception as exc:
             if settings.strict_mode:
                 # strict: LLM 呼び出し失敗/タイムアウトは即エラー
@@ -213,7 +233,8 @@ class WordPackFlow:
 
         # strict: LLM 出力が空/未解析ならエラー
         if settings.strict_mode and (
-            llm_data is None or (isinstance(llm_data, dict) and not llm_data.get("senses"))
+            llm_data is None
+            or (isinstance(llm_data, dict) and not llm_data.get("senses"))
         ):
             raise RuntimeError("LLM returned no usable data (strict mode)")
 
@@ -225,24 +246,30 @@ class WordPackFlow:
         *,
         pronunciation_enabled: bool = True,
         regenerate_scope: RegenerateScope | str = RegenerateScope.all,
-        citations: List[Citation] | None = None,
+        citations: list[Citation] | None = None,
     ) -> WordPack:
         """取得結果を整形し `WordPack` を構成。OpenAI LLM の情報を使用。"""
         logger.info("wordpack_synthesize_start", lemma=lemma)
         pronunciation = (
             self._generate_pronunciation(lemma)
             if pronunciation_enabled
-            else Pronunciation(ipa_GA=None, ipa_RP=None, syllables=None, stress_index=None, linking_notes=[])
+            else Pronunciation(
+                ipa_GA=None,
+                ipa_RP=None,
+                syllables=None,
+                stress_index=None,
+                linking_notes=[],
+            )
         )
-        
+
         # 初期値
-        senses: List[Sense] = []
+        senses: list[Sense] = []
         collocations = Collocations()
         examples = Examples()
         sense_title_raw = ""
         etymology = Etymology(note="", confidence=ConfidenceLevel.low)
         study_card = ""
-        
+
         # citations からは信頼度判断のみ。構造化は llm_data を優先
         confidence = ConfidenceLevel.low
         if citations:
@@ -258,44 +285,58 @@ class WordPackFlow:
         # 型: citations 引数はそのまま使用。
 
         # 既存引数に llm_data を追加できないため、暫定として self に一時格納された値を見る
-        llm_payload: Dict[str, Any] | None = getattr(self, "_last_llm_data", None)
+        llm_payload: dict[str, Any] | None = getattr(self, "_last_llm_data", None)
 
         if isinstance(llm_payload, dict):
             # senses
             try:
                 s_list = llm_payload.get("senses") or []
-                tmp_senses: List[Sense] = []
+                tmp_senses: list[Sense] = []
                 for idx, s in enumerate(s_list):
                     if not isinstance(s, dict):
                         continue
-                    gid = str(s.get("id") or f"s{idx+1}")
+                    gid = str(s.get("id") or f"s{idx + 1}")
                     gloss_ja = str(s.get("gloss_ja") or "").strip()
                     if not gloss_ja:
                         continue
-                    patterns = [str(p) for p in (s.get("patterns") or []) if str(p).strip()]
+                    patterns = [
+                        str(p) for p in (s.get("patterns") or []) if str(p).strip()
+                    ]
                     register = s.get("register")
                     definition_ja = str(s.get("definition_ja") or "").strip() or None
                     nuances_ja = str(s.get("nuances_ja") or "").strip() or None
-                    synonyms = [str(x) for x in (s.get("synonyms") or []) if str(x).strip()]
-                    antonyms = [str(x) for x in (s.get("antonyms") or []) if str(x).strip()]
+                    synonyms = [
+                        str(x) for x in (s.get("synonyms") or []) if str(x).strip()
+                    ]
+                    antonyms = [
+                        str(x) for x in (s.get("antonyms") or []) if str(x).strip()
+                    ]
                     notes_ja = str(s.get("notes_ja") or "").strip() or None
-                    tmp_senses.append(Sense(
-                        id=gid,
-                        gloss_ja=gloss_ja,
-                        definition_ja=definition_ja,
-                        nuances_ja=nuances_ja,
-                        patterns=patterns,
-                        synonyms=synonyms,
-                        antonyms=antonyms,
-                        register_=register,
-                        notes_ja=notes_ja,
-                        term_overview_ja=(str(s.get("term_overview_ja") or "").strip() or None),
-                        term_core_ja=(str(s.get("term_core_ja") or "").strip() or None),
-                    ))
+                    tmp_senses.append(
+                        Sense(
+                            id=gid,
+                            gloss_ja=gloss_ja,
+                            definition_ja=definition_ja,
+                            nuances_ja=nuances_ja,
+                            patterns=patterns,
+                            synonyms=synonyms,
+                            antonyms=antonyms,
+                            register_=register,
+                            notes_ja=notes_ja,
+                            term_overview_ja=(
+                                str(s.get("term_overview_ja") or "").strip() or None
+                            ),
+                            term_core_ja=(
+                                str(s.get("term_core_ja") or "").strip() or None
+                            ),
+                        )
+                    )
                 if tmp_senses:
                     senses = tmp_senses
                     confidence = ConfidenceLevel.high
-                logger.info("wordpack_senses_built", lemma=lemma, senses_count=len(senses))
+                logger.info(
+                    "wordpack_senses_built", lemma=lemma, senses_count=len(senses)
+                )
             except Exception:
                 logger.info("wordpack_senses_build_error", lemma=lemma)
                 pass
@@ -311,12 +352,26 @@ class WordPackFlow:
             # collocations
             try:
                 col = llm_payload.get("collocations") or {}
-                def _lists(src: Dict[str, Any]) -> CollocationLists:
+
+                def _lists(src: dict[str, Any]) -> CollocationLists:
                     return CollocationLists(
-                        verb_object=[str(x) for x in (src.get("verb_object") or []) if str(x).strip()],
-                        adj_noun=[str(x) for x in (src.get("adj_noun") or []) if str(x).strip()],
-                        prep_noun=[str(x) for x in (src.get("prep_noun") or []) if str(x).strip()],
+                        verb_object=[
+                            str(x)
+                            for x in (src.get("verb_object") or [])
+                            if str(x).strip()
+                        ],
+                        adj_noun=[
+                            str(x)
+                            for x in (src.get("adj_noun") or [])
+                            if str(x).strip()
+                        ],
+                        prep_noun=[
+                            str(x)
+                            for x in (src.get("prep_noun") or [])
+                            if str(x).strip()
+                        ],
                     )
+
                 collocations = Collocations(
                     general=_lists(col.get("general") or {}),
                     academic=_lists(col.get("academic") or {}),
@@ -325,9 +380,9 @@ class WordPackFlow:
                 pass
 
             # contrast
-            contrast_items: List[ContrastItem] = []
+            contrast_items: list[ContrastItem] = []
             try:
-                for it in (llm_payload.get("contrast") or []):
+                for it in llm_payload.get("contrast") or []:
                     if isinstance(it, dict):
                         w = str(it.get("with") or "").strip()
                         d = str(it.get("diff_ja") or "").strip()
@@ -365,7 +420,9 @@ class WordPackFlow:
                 )
             except Exception as exc:
                 # 統合フローのみを使用（旧ロジックのサルベージは廃止）
-                logger.info("wordpack_examples_build_error_unified", lemma=lemma, error=str(exc))
+                logger.info(
+                    "wordpack_examples_build_error_unified", lemma=lemma, error=str(exc)
+                )
                 examples = Examples()
 
             # etymology
@@ -417,14 +474,14 @@ class WordPackFlow:
             lemma=lemma,
             limit=20,
         )
-        
+
         pack = WordPack(
             lemma=lemma,
             sense_title=sense_title,
             pronunciation=pronunciation,
             senses=senses,
             collocations=collocations,
-            contrast=contrast_items if 'contrast_items' in locals() else [],
+            contrast=contrast_items if "contrast_items" in locals() else [],
             examples=examples,
             etymology=etymology,
             study_card=study_card,
@@ -461,7 +518,13 @@ class WordPackFlow:
             if len(pack.senses) == 0 and total_examples == 0:
                 # 例外クラスをローカル定義（ルータ側で詳細HTTPにマップ）
                 class WordPackGenerationError(RuntimeError):
-                    def __init__(self, message: str, *, reason_code: str, diagnostics: dict[str, object]):
+                    def __init__(
+                        self,
+                        message: str,
+                        *,
+                        reason_code: str,
+                        diagnostics: dict[str, object],
+                    ):
                         super().__init__(message)
                         self.reason_code = reason_code
                         self.diagnostics = diagnostics
@@ -483,7 +546,13 @@ class WordPackFlow:
                 )
         return pack
 
-    def run(self, lemma: str, *, pronunciation_enabled: bool = True, regenerate_scope: RegenerateScope | str = RegenerateScope.all) -> WordPack:
+    def run(
+        self,
+        lemma: str,
+        *,
+        pronunciation_enabled: bool = True,
+        regenerate_scope: RegenerateScope | str = RegenerateScope.all,
+    ) -> WordPack:
         """語を入力として `WordPack` を生成して返す（ダミー生成なし）。"""
         data = self._retrieve(lemma)
         # 後続の _synthesize で LLM 生成物を参照できるように一時保存
@@ -496,7 +565,9 @@ class WordPackFlow:
         )
 
     # --- Unified examples generation (initial/additional) ---
-    def _build_examples_prompt(self, lemma: str, category: ExampleCategory, count: int) -> str:
+    def _build_examples_prompt(
+        self, lemma: str, category: ExampleCategory, count: int
+    ) -> str:
         """添付プロンプト（正）をパーツ化し、例文のみを要求するプロンプトを構築する。
 
         - 本文の英語ヘッダと Notes/ガイドラインは原型を維持
@@ -510,7 +581,7 @@ class WordPackFlow:
             f"{lemma}\n\n"
             "スキーマ（キーと型は完全一致させること）:\n"
             "{\n"
-            "  \"examples\": [ { \"en\": \"...\", \"ja\": \"...\", \"grammar_ja\": \"...\" } ]\n"
+            '  "examples": [ { "en": "...", "ja": "...", "grammar_ja": "..." } ]\n'
             "}\n"
         )
 
@@ -544,6 +615,7 @@ class WordPackFlow:
     def _parse_examples_json(self, raw: str) -> list[dict[str, str]]:
         import json as _json
         import re as _re
+
         def _strip_code_fences(text: str) -> str:
             t = text.strip()
             t = _re.sub(r"^```(?:json)?\\s*", "", t, flags=_re.IGNORECASE)
@@ -552,7 +624,7 @@ class WordPackFlow:
             m1 = t.find("{")
             m2 = t.rfind("}")
             if m1 != -1 and m2 != -1 and m2 > m1:
-                t = t[m1:m2+1]
+                t = t[m1 : m2 + 1]
             return t.strip()
 
         def _sanitize_control_chars(text: str) -> str:
@@ -597,12 +669,18 @@ class WordPackFlow:
             return [x for x in obj if isinstance(x, dict)]
         if isinstance(obj, dict) and isinstance(obj.get("examples"), list):
             return [x for x in obj.get("examples") if isinstance(x, dict)]
-        raise ValueError("Invalid LLM JSON shape (expected array or {\"examples\": [...]})")
+        raise ValueError(
+            'Invalid LLM JSON shape (expected array or {"examples": [...]})'
+        )
 
-    def generate_examples_for_categories(self, lemma: str, plan: dict[ExampleCategory, int]) -> dict[ExampleCategory, list[Examples.ExampleItem]]:
+    def generate_examples_for_categories(
+        self, lemma: str, plan: dict[ExampleCategory, int]
+    ) -> dict[ExampleCategory, list[Examples.ExampleItem]]:
         """カテゴリごとの要求数に従って例文を生成する（LangGraph相当の逐次計画、フォールバック実装あり）。"""
         # 生成結果
-        results: dict[ExampleCategory, list[Examples.ExampleItem]] = {k: [] for k in plan.keys()}
+        results: dict[ExampleCategory, list[Examples.ExampleItem]] = {
+            k: [] for k in plan.keys()
+        }
 
         # LangGraph が利用可能なら軽量なノードを組み立て、失敗したら順次実行
         try:
@@ -620,9 +698,12 @@ class WordPackFlow:
                 cat, num = q.pop(0)
                 prompt = self._build_examples_prompt(lemma, cat, num)
                 out = self.llm.complete(prompt) if self.llm is not None else "{}"  # type: ignore[attr-defined]
-                parsed = self._parse_examples_json(out if isinstance(out, str) else "{}")
+                parsed = self._parse_examples_json(
+                    out if isinstance(out, str) else "{}"
+                )
+
                 # メタ付与
-                def _llm_meta_values() -> tuple[Optional[str], Optional[str]]:
+                def _llm_meta_values() -> tuple[str | None, str | None]:
                     try:
                         return (
                             str(self._llm_info.get("model") or "").strip() or None,
@@ -630,6 +711,7 @@ class WordPackFlow:
                         )
                     except Exception:
                         return (None, None)
+
                 m, p = _llm_meta_values()
                 items: list[Examples.ExampleItem] = []
                 for it in parsed[:num]:
@@ -638,7 +720,16 @@ class WordPackFlow:
                     if not en or not ja:
                         continue
                     grammar_ja = str(it.get("grammar_ja") or "").strip() or None
-                    items.append(Examples.ExampleItem(en=en, ja=ja, grammar_ja=grammar_ja, category=cat, llm_model=m, llm_params=p))
+                    items.append(
+                        Examples.ExampleItem(
+                            en=en,
+                            ja=ja,
+                            grammar_ja=grammar_ja,
+                            category=cat,
+                            llm_model=m,
+                            llm_params=p,
+                        )
+                    )
                 s.setdefault("outputs", []).append((cat, items))  # type: ignore[assignment]
                 return s
 
@@ -650,7 +741,11 @@ class WordPackFlow:
                 graph.add_edge("generate", "generate")  # type: ignore[attr-defined]
                 compiled = graph.compile()  # type: ignore[attr-defined]
                 out_state = compiled.invoke(state)  # type: ignore[attr-defined]
-                outs = out_state.get("outputs", []) if isinstance(out_state, dict) else state.get("outputs", [])
+                outs = (
+                    out_state.get("outputs", [])
+                    if isinstance(out_state, dict)
+                    else state.get("outputs", [])
+                )
             except Exception:
                 # グラフAPI不一致時は順次実行にフォールバック
                 outs = []
@@ -664,7 +759,9 @@ class WordPackFlow:
             for cat, num in plan.items():
                 prompt = self._build_examples_prompt(lemma, cat, num)
                 out = self.llm.complete(prompt) if self.llm is not None else "{}"  # type: ignore[attr-defined]
-                parsed = self._parse_examples_json(out if isinstance(out, str) else "{}")
+                parsed = self._parse_examples_json(
+                    out if isinstance(out, str) else "{}"
+                )
                 # メタ
                 model_name = str(self._llm_info.get("model") or "").strip() or None
                 params_str = str(self._llm_info.get("params") or "").strip() or None
@@ -675,7 +772,16 @@ class WordPackFlow:
                     if not en or not ja:
                         continue
                     grammar_ja = str(it.get("grammar_ja") or "").strip() or None
-                    items.append(Examples.ExampleItem(en=en, ja=ja, grammar_ja=grammar_ja, category=cat, llm_model=model_name, llm_params=params_str))
+                    items.append(
+                        Examples.ExampleItem(
+                            en=en,
+                            ja=ja,
+                            grammar_ja=grammar_ja,
+                            category=cat,
+                            llm_model=model_name,
+                            llm_params=params_str,
+                        )
+                    )
                 outs.append((cat, items))
 
         # 結果反映

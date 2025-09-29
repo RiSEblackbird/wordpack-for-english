@@ -35,6 +35,12 @@ async def access_log_and_metrics(
     request: Request,
     call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
+    """Measure request latency and emit access logs/metrics.
+
+    FastAPI の HTTP ミドルウェアとして、処理開始〜終了の遅延を計測し、
+    リクエストIDやUAなどのメタ情報と共に構造化ログとメトリクスへ記録する。
+    Langfuse トレースが有効な場合は入出力も添付する。
+    """
     start = time.time()
     path = request.url.path
     method = request.method
@@ -51,7 +57,12 @@ async def access_log_and_metrics(
     with request_trace(
         name=f"HTTP {method} {path}",
         user_id=request.headers.get("x-user-id"),
-        metadata={"request_id": request_id, "client_ip": client_ip, "user_agent": ua, "path": path},
+        metadata={
+            "request_id": request_id,
+            "client_ip": client_ip,
+            "user_agent": ua,
+            "path": path,
+        },
         path=path,
     ) as ctx:
         trace_obj = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
@@ -79,7 +90,9 @@ async def access_log_and_metrics(
             return response
         except Exception as exc:
             is_error = True
-            if (TimeoutException is not None and isinstance(exc, TimeoutException)) or isinstance(exc, asyncio.TimeoutError):
+            if (
+                TimeoutException is not None and isinstance(exc, TimeoutException)
+            ) or isinstance(exc, asyncio.TimeoutError):
                 is_timeout = True
             raise
         finally:
@@ -99,18 +112,28 @@ async def access_log_and_metrics(
 
 
 async def _on_shutdown() -> None:
+    """Ensure providers (Chroma, LLM clients) are gracefully terminated."""
     shutdown_providers()
 
 
 async def _on_startup_seed() -> None:
+    """Optionally seed Chroma collections at application startup."""
     try:
         if not settings.auto_seed_on_startup:
             return
         client = ChromaClientFactory().create_client()
         if client is None:
             return
-        wj = Path(settings.auto_seed_word_jsonl) if settings.auto_seed_word_jsonl else None
-        tj = Path(settings.auto_seed_terms_jsonl) if settings.auto_seed_terms_jsonl else None
+        wj = (
+            Path(settings.auto_seed_word_jsonl)
+            if settings.auto_seed_word_jsonl
+            else None
+        )
+        tj = (
+            Path(settings.auto_seed_terms_jsonl)
+            if settings.auto_seed_terms_jsonl
+            else None
+        )
         if (wj and wj.exists()) or (tj and tj.exists()):
             seed_from_jsonl(client, word_snippets_path=wj, domain_terms_path=tj)
             logger.info(
@@ -128,6 +151,7 @@ async def _on_startup_seed() -> None:
 
 
 def _maybe_add_timeout_middleware(app: FastAPI) -> None:
+    """Attach Starlette's timeout middleware when the dependency is available."""
     if TimeoutMiddleware is None:
         return
     http_timeout_sec = max(1, int((settings.llm_timeout_ms + 5000) / 1000))
@@ -135,6 +159,7 @@ def _maybe_add_timeout_middleware(app: FastAPI) -> None:
 
 
 def create_app() -> FastAPI:
+    """Create and configure the FastAPI application instance."""
     configure_logging()
     app = FastAPI(title="WordPack API", version="0.3.1")
 

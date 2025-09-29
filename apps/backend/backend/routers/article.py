@@ -2,15 +2,13 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any, List
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from ..config import settings
 from ..logging import logger
-from ..providers import get_llm_provider
-from ..store import store
-from ..models.word import WordPack
 from ..models.article import (
     ArticleImportRequest,
     ArticleDetailResponse,
@@ -18,6 +16,9 @@ from ..models.article import (
     ArticleListResponse,
     ArticleWordPackLink,
 )
+from ..models.word import WordPack
+from ..providers import get_llm_provider
+from ..store import store
 from ..observability import request_trace, span
 from ..flows.article_import import ArticleImportFlow
 from ..models.word import ExampleCategory
@@ -43,18 +44,106 @@ def _prompt_for_article_import(text: str) -> str:
 重要: 入力テキストを言い換えたり書き換えたりしない。
 返却形式: {"title_en", "body_ja", "notes_ja", "lemmas"} のキーだけを含む JSON。
 入力テキスト:
-""" + text
+"""
+        + text
     )
 
 
 # 英語の機能語など最低限の除外語（小文字）
 _STOP_LEMMAS: set[str] = {
-    "a","an","the","i","you","he","she","it","we","they","me","him","her","us","them",
-    "my","your","his","her","its","our","their","mine","yours","hers","ours","theirs",
-    "am","is","are","was","were","be","been","being","do","does","did","done","doing",
-    "have","has","had","having","will","would","shall","should","can","could","may","might","must",
-    "to","of","in","on","for","at","by","with","about","as","into","like","through","after","over","between","out","against","during","without","before","under","around","among",
-    "and","or","but","if","because","so","than","too","very","not","no","nor","also","then","there","here",
+    "a",
+    "an",
+    "the",
+    "i",
+    "you",
+    "he",
+    "she",
+    "it",
+    "we",
+    "they",
+    "me",
+    "him",
+    "her",
+    "us",
+    "them",
+    "my",
+    "your",
+    "his",
+    "her",
+    "its",
+    "our",
+    "their",
+    "mine",
+    "yours",
+    "hers",
+    "ours",
+    "theirs",
+    "am",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "do",
+    "does",
+    "did",
+    "done",
+    "doing",
+    "have",
+    "has",
+    "had",
+    "having",
+    "will",
+    "would",
+    "shall",
+    "should",
+    "can",
+    "could",
+    "may",
+    "might",
+    "must",
+    "to",
+    "of",
+    "in",
+    "on",
+    "for",
+    "at",
+    "by",
+    "with",
+    "about",
+    "as",
+    "into",
+    "like",
+    "through",
+    "after",
+    "over",
+    "between",
+    "out",
+    "against",
+    "during",
+    "without",
+    "before",
+    "under",
+    "around",
+    "among",
+    "and",
+    "or",
+    "but",
+    "if",
+    "because",
+    "so",
+    "than",
+    "too",
+    "very",
+    "not",
+    "no",
+    "nor",
+    "also",
+    "then",
+    "there",
+    "here",
 }
 
 
@@ -75,7 +164,7 @@ def _post_filter_lemmas(raw: list[str]) -> list[str]:
             continue
         # 単語: 英字/ハイフン/アポストロフィのみ許容
         token = s.strip()
-        if not all(ch.isalpha() or ch in {'-', '\''} for ch in token):
+        if not all(ch.isalpha() or ch in {"-", "'"} for ch in token):
             continue
         low = token.lower()
         if low in _STOP_LEMMAS:
@@ -91,32 +180,50 @@ def _post_filter_lemmas(raw: list[str]) -> list[str]:
     return uniq
 
 
-@router.post("/import", response_model=ArticleDetailResponse, response_model_exclude_none=True)
+@router.post(
+    "/import", response_model=ArticleDetailResponse, response_model_exclude_none=True
+)
 async def import_article(req: ArticleImportRequest) -> ArticleDetailResponse:
     flow = ArticleImportFlow()
     # ルータ層は薄く、Langfuse の親スパンを貼ってフローを呼び出す
     from ..observability import request_trace
-    with request_trace(name="ArticleImportFlow", metadata={"endpoint": "/api/article/import"}) as ctx:
+
+    with request_trace(
+        name="ArticleImportFlow", metadata={"endpoint": "/api/article/import"}
+    ) as ctx:
         tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
-        with span(trace=tr, name="article.flow.run", input={"text_chars": len(req.text or "")}) as _:
+        with span(
+            trace=tr, name="article.flow.run", input={"text_chars": len(req.text or "")}
+        ) as _:
             return flow.run(req)
 
 
 @router.get("/", response_model=ArticleListResponse)
-async def list_articles(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)) -> ArticleListResponse:
+async def list_articles(
+    limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)
+) -> ArticleListResponse:
     items_raw = store.list_articles(limit=limit, offset=offset)
-    items = [ArticleListItem(id=i[0], title_en=i[1], created_at=i[2], updated_at=i[3]) for i in items_raw]
+    items = [
+        ArticleListItem(id=i[0], title_en=i[1], created_at=i[2], updated_at=i[3])
+        for i in items_raw
+    ]
     total = store.count_articles()
     return ArticleListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 # Trailing-slashless alias to avoid 307 redirects in some environments
 @router.get("", response_model=ArticleListResponse, include_in_schema=False)
-async def list_articles_no_slash(limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)) -> ArticleListResponse:
+async def list_articles_no_slash(
+    limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)
+) -> ArticleListResponse:
     return await list_articles(limit=limit, offset=offset)
 
 
-@router.get("/{article_id}", response_model=ArticleDetailResponse, response_model_exclude_none=True)
+@router.get(
+    "/{article_id}",
+    response_model=ArticleDetailResponse,
+    response_model_exclude_none=True,
+)
 async def get_article(article_id: str) -> ArticleDetailResponse:
     result = store.get_article(article_id)
     if result is None:
@@ -138,11 +245,12 @@ async def get_article(article_id: str) -> ArticleDetailResponse:
     ) = result
     duration_value = (
         int(generation_duration_ms)
-        if isinstance(generation_duration_ms, (int, float)) and not isinstance(generation_duration_ms, bool)
+        if isinstance(generation_duration_ms, (int, float))
+        and not isinstance(generation_duration_ms, bool)
         else None
     )
     link_models: list[ArticleWordPackLink] = []
-    for (wp_id, lemma, status) in links:
+    for wp_id, lemma, status in links:
         is_empty = True
         try:
             got = store.get_word_pack(wp_id)
@@ -151,12 +259,19 @@ async def get_article(article_id: str) -> ArticleDetailResponse:
                 d = json.loads(data_json)
                 senses_empty = not d.get("senses")
                 ex = d.get("examples") or {}
-                examples_empty = all(not (ex.get(k) or []) for k in ["Dev","CS","LLM","Business","Common"])
+                examples_empty = all(
+                    not (ex.get(k) or [])
+                    for k in ["Dev", "CS", "LLM", "Business", "Common"]
+                )
                 study_empty = not bool((d.get("study_card") or "").strip())
                 is_empty = bool(senses_empty and examples_empty and study_empty)
         except Exception:
             is_empty = True
-        link_models.append(ArticleWordPackLink(word_pack_id=wp_id, lemma=lemma, status=status, is_empty=is_empty))
+        link_models.append(
+            ArticleWordPackLink(
+                word_pack_id=wp_id, lemma=lemma, status=status, is_empty=is_empty
+            )
+        )
     return ArticleDetailResponse(
         id=article_id,
         title_en=title_en,
@@ -192,7 +307,9 @@ class CategoryGenerateImportRequest(BaseModel):
 
 
 @router.post("/generate_and_import")
-async def generate_and_import_examples(req: CategoryGenerateImportRequest) -> dict[str, object]:
+async def generate_and_import_examples(
+    req: CategoryGenerateImportRequest,
+) -> dict[str, object]:
     """選択カテゴリに関連する語を1つ生成し、空のWordPackを作成、
     当該カテゴリの例文を2件生成して保存し、それぞれを文章インポートに渡して記事化する。
     """
@@ -202,11 +319,16 @@ async def generate_and_import_examples(req: CategoryGenerateImportRequest) -> di
         reasoning=getattr(req, "reasoning", None),
         text=getattr(req, "text", None),
     )
-    with request_trace(name="CategoryGenerateAndImportFlow", metadata={"endpoint": "/api/article/generate_and_import"}) as ctx:
+    with request_trace(
+        name="CategoryGenerateAndImportFlow",
+        metadata={"endpoint": "/api/article/generate_and_import"},
+    ) as ctx:
         tr = ctx.get("trace") if isinstance(ctx, dict) else None  # type: ignore[assignment]
-        with span(trace=tr, name="article.category_generate_and_import", input={"category": req.category.value}):
+        with span(
+            trace=tr,
+            name="article.category_generate_and_import",
+            input={"category": req.category.value},
+        ):
             # フローは同期実装のため、イベントループをブロックしないようスレッドにオフロード
             result = await anyio.to_thread.run_sync(partial(flow.run, req.category))
             return result
-
-

@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 import uuid
-from typing import Callable, Awaitable
+from typing import Awaitable, Callable
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -17,7 +17,9 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     - Adds `X-Request-ID` to the response headers
     """
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:  # type: ignore[override]
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:  # type: ignore[override]
         request_id = str(uuid.uuid4())
         request.state.request_id = request_id
         response = await call_next(request)
@@ -40,6 +42,7 @@ class _TokenBucket:
         self._lock = threading.Lock()
 
     def allow(self) -> tuple[bool, int]:
+        """Consume one token if available and return the remaining count."""
         now = time.time()
         with self._lock:
             elapsed = now - self.last_refill
@@ -78,13 +81,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._user_buckets: dict[str, _TokenBucket] = {}
         self._lock = threading.Lock()
 
-    def _get_bucket(self, mapping: dict[str, _TokenBucket], key: str, capacity: int) -> _TokenBucket:
+    def _get_bucket(
+        self, mapping: dict[str, _TokenBucket], key: str, capacity: int
+    ) -> _TokenBucket:
         with self._lock:
             if key not in mapping:
                 mapping[key] = _TokenBucket(capacity=capacity, refill_interval_sec=60.0)
             return mapping[key]
 
-    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:  # type: ignore[override]
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:  # type: ignore[override]
         # Identify caller
         client_ip = request.client.host if request.client else "unknown"
         user_id = request.headers.get(self._user_header) or ""
@@ -102,7 +109,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             )
 
         if user_id:
-            user_bucket = self._get_bucket(self._user_buckets, user_id, self._user_capacity)
+            user_bucket = self._get_bucket(
+                self._user_buckets, user_id, self._user_capacity
+            )
             ok_user, remaining_user = user_bucket.allow()
             if not ok_user:
                 return JSONResponse(
@@ -121,10 +130,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             response.headers.setdefault("X-RateLimit-Limit-Ip", str(self._ip_capacity))
             response.headers.setdefault("X-RateLimit-Remaining-Ip", str(remaining_ip))
             if user_id:
-                response.headers.setdefault("X-RateLimit-Limit-User", str(self._user_capacity))
-                response.headers.setdefault("X-RateLimit-Remaining-User", str(remaining_user))
+                response.headers.setdefault(
+                    "X-RateLimit-Limit-User", str(self._user_capacity)
+                )
+                response.headers.setdefault(
+                    "X-RateLimit-Remaining-User", str(remaining_user)
+                )
         except Exception:
             pass
         return response
-
-

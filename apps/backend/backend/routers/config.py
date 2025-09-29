@@ -17,5 +17,3 @@ def get_runtime_config() -> dict[str, object]:
         "request_timeout_ms": settings.llm_timeout_ms,
         "llm_model": settings.llm_model,
     }
-
-
