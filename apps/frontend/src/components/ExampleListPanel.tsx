@@ -1,7 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { useConfirmDialog } from '../ConfirmDialogContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
+import { useAbortableAsync, AbortError } from '../lib/hooks';
+import { loadSessionState, saveSessionState } from '../lib/storage';
+import { assignSetValues, retainSetValues, toggleSetValue } from '../lib/set';
 import { LoadingIndicator } from './LoadingIndicator';
 import { ListControls } from './ListControls';
 import { ExampleDetailModal, ExampleItemData } from './ExampleDetailModal';
@@ -19,6 +22,18 @@ interface ExampleListResponse {
   offset: number;
 }
 
+type PersistedState = {
+  sortKey: SortKey;
+  sortOrder: SortOrder;
+  searchMode: SearchMode;
+  searchInput: string;
+  appliedSearch: { mode: SearchMode; value: string } | null;
+  categoryFilter: ExampleItemData['category'] | 'all';
+  viewMode: ViewMode;
+  offset: number;
+  showAllTranslations: boolean;
+};
+
 const CATEGORY_OPTIONS: Array<{ value: ExampleItemData['category'] | 'all'; label: string }> = [
   { value: 'all', label: '-' },
   { value: 'Dev', label: 'Dev' },
@@ -28,63 +43,45 @@ const CATEGORY_OPTIONS: Array<{ value: ExampleItemData['category'] | 'all'; labe
   { value: 'Common', label: 'Common' },
 ];
 
+const STORAGE_KEY = 'examples.list.ui_state.v1';
+const LIST_LIMIT = 200;
+const DEFAULT_PERSISTED_STATE: PersistedState = {
+  sortKey: 'created_at',
+  sortOrder: 'desc',
+  searchMode: 'contains',
+  searchInput: '',
+  appliedSearch: null,
+  categoryFilter: 'all',
+  viewMode: 'card',
+  offset: 0,
+  showAllTranslations: false,
+};
+
 export const ExampleListPanel: React.FC = () => {
   const { settings } = useSettings();
-  const STORAGE_KEY = 'examples.list.ui_state.v1';
   const [items, setItems] = useState<ExampleItemData[]>([]);
   const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const [limit] = useState(200);
+  const persistedState = useMemo(() => loadSessionState<PersistedState>(STORAGE_KEY, DEFAULT_PERSISTED_STATE), []);
+  const [offset, setOffset] = useState(() => persistedState.offset);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>('created_at');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [searchMode, setSearchMode] = useState<SearchMode>('contains');
-  const [searchInput, setSearchInput] = useState('');
-  const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(null);
-  const [categoryFilter, setCategoryFilter] = useState<ExampleItemData['category'] | 'all'>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('card');
-  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
-  const [showAllTranslations, setShowAllTranslations] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>(persistedState.sortKey);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(persistedState.sortOrder);
+  const [searchMode, setSearchMode] = useState<SearchMode>(persistedState.searchMode);
+  const [searchInput, setSearchInput] = useState(persistedState.searchInput);
+  const [appliedSearch, setAppliedSearch] = useState(persistedState.appliedSearch);
+  const [categoryFilter, setCategoryFilter] = useState<ExampleItemData['category'] | 'all'>(persistedState.categoryFilter);
+  const [viewMode, setViewMode] = useState<ViewMode>(persistedState.viewMode);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(() => new Set());
+  const [showAllTranslations, setShowAllTranslations] = useState(persistedState.showAllTranslations);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<ExampleItemData | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const confirmDialog = useConfirmDialog();
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-
-  type PersistedState = {
-    sortKey: SortKey;
-    sortOrder: SortOrder;
-    searchMode: SearchMode;
-    searchInput: string;
-    appliedSearch: { mode: SearchMode; value: string } | null;
-    categoryFilter: ExampleItemData['category'] | 'all';
-    viewMode: ViewMode;
-    offset: number;
-    showAllTranslations: boolean;
-  };
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const { run: runAbortable } = useAbortableAsync();
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const s = JSON.parse(raw) as Partial<PersistedState>;
-      if (s.sortKey) setSortKey(s.sortKey);
-      if (s.sortOrder) setSortOrder(s.sortOrder);
-      if (s.searchMode) setSearchMode(s.searchMode);
-      if (typeof s.searchInput === 'string') setSearchInput(s.searchInput);
-      if (s.appliedSearch) setAppliedSearch(s.appliedSearch);
-      if (s.categoryFilter) setCategoryFilter(s.categoryFilter);
-      if (s.viewMode) setViewMode(s.viewMode);
-      if (typeof s.offset === 'number' && Number.isFinite(s.offset) && s.offset >= 0) setOffset(s.offset);
-      if (typeof s.showAllTranslations === 'boolean') setShowAllTranslations(s.showAllTranslations);
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const p: PersistedState = {
+    const stateToPersist: PersistedState = {
       sortKey,
       sortOrder,
       searchMode,
@@ -95,23 +92,23 @@ export const ExampleListPanel: React.FC = () => {
       offset,
       showAllTranslations,
     };
-    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch {}
+    saveSessionState(STORAGE_KEY, stateToPersist);
   }, [sortKey, sortOrder, searchMode, searchInput, appliedSearch, categoryFilter, viewMode, offset, showAllTranslations]);
 
-  const handleApplySearch = () => setAppliedSearch({ mode: searchMode, value: searchInput.trim() });
-  const handleToggleExpand = (id: number) => setExpandedIds((prev) => {
-    const next = new Set(prev);
-    if (next.has(id)) next.delete(id); else next.add(id);
-    return next;
-  });
+  const handleApplySearch = useCallback(
+    () => setAppliedSearch({ mode: searchMode, value: searchInput.trim() }),
+    [searchInput, searchMode],
+  );
 
-  const toggleAllTranslations = () => {
+  const handleToggleExpand = useCallback((id: number) => setExpandedIds((prev) => toggleSetValue(prev, id)), []);
+
+  const toggleAllTranslations = useCallback(() => {
     setShowAllTranslations((prev) => {
       const next = !prev;
       setExpandedIds(next ? new Set(items.map((it) => it.id)) : new Set());
       return next;
     });
-  };
+  }, [items]);
 
   useEffect(() => {
     if (showAllTranslations) {
@@ -137,105 +134,87 @@ export const ExampleListPanel: React.FC = () => {
     [],
   );
 
-  const toggleSelect = (id: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
+  const toggleSelect = useCallback((id: number) => {
+    setSelectedIds((prev) => toggleSetValue(prev, id));
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const allVisibleSelected = useMemo(
+    () => items.length > 0 && items.every((it) => selectedIds.has(it.id)),
+    [items, selectedIds],
+  );
+
+  const toggleVisibleSelection = useCallback(() => {
+    setSelectedIds((prev) => assignSetValues(prev, items.map((it) => it.id), !allVisibleSelected));
+  }, [allVisibleSelected, items]);
+
+  const buildQuery = useCallback(
+    (o: number) => {
+      const sp = new URLSearchParams();
+      sp.set('limit', String(LIST_LIMIT));
+      sp.set('offset', String(o));
+      sp.set('order_by', sortKey);
+      sp.set('order_dir', sortOrder);
+      if (appliedSearch && appliedSearch.value) {
+        sp.set('search', appliedSearch.value);
+        sp.set('search_mode', appliedSearch.mode);
       }
-      return next;
-    });
-  };
+      if (categoryFilter !== 'all') sp.set('category', categoryFilter);
+      return sp.toString();
+    },
+    [appliedSearch, categoryFilter, sortKey, sortOrder],
+  );
 
-  const clearSelection = () => setSelectedIds(new Set());
-
-  const allVisibleSelected = items.length > 0 && items.every((it) => selectedIds.has(it.id));
-
-  const toggleVisibleSelection = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allVisibleSelected) {
-        items.forEach((it) => next.delete(it.id));
-      } else {
-        items.forEach((it) => next.add(it.id));
+  // 大量のフィルタ変更が連続しても最後のリクエスト結果だけを採用するため、共通フックでキャンセル制御する。
+  const load = useCallback(
+    async (newOffset: number) => {
+      setLoading(true);
+      setMsg(null);
+      try {
+        const q = buildQuery(newOffset);
+        const res = await runAbortable((signal) =>
+          fetchJson<ExampleListResponse>(`${settings.apiBase}/word/examples?${q}`, { signal }),
+        );
+        setItems(
+          res.items.map((it) => ({
+            ...it,
+            checked_only_count: it.checked_only_count ?? 0,
+            learned_count: it.learned_count ?? 0,
+          })),
+        );
+        setTotal(res.total);
+        setOffset((prev) => (prev === newOffset ? prev : newOffset));
+      } catch (e) {
+        if (e instanceof AbortError) {
+          return;
+        }
+        const message = e instanceof ApiError ? e.message : '例文一覧の読み込みに失敗しました';
+        setMsg({ kind: 'alert', text: message });
+      } finally {
+        setLoading(false);
       }
-      return next;
-    });
-  };
-
-  const buildQuery = (o: number) => {
-    const sp = new URLSearchParams();
-    sp.set('limit', String(limit));
-    sp.set('offset', String(o));
-    sp.set('order_by', sortKey);
-    sp.set('order_dir', sortOrder);
-    if (appliedSearch && appliedSearch.value) {
-      sp.set('search', appliedSearch.value);
-      sp.set('search_mode', appliedSearch.mode);
-    }
-    if (categoryFilter !== 'all') sp.set('category', categoryFilter);
-    return sp.toString();
-  };
-
-  const load = async (newOffset: number = offset) => {
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setLoading(true);
-    setMsg(null);
-    try {
-      const q = buildQuery(newOffset);
-      const res = await fetchJson<ExampleListResponse>(`${settings.apiBase}/word/examples?${q}`, { signal: ctrl.signal });
-      setItems(
-        res.items.map((it) => ({
-          ...it,
-          checked_only_count: it.checked_only_count ?? 0,
-          learned_count: it.learned_count ?? 0,
-        })),
-      );
-      setTotal(res.total);
-      setOffset(newOffset);
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      const m = e instanceof ApiError ? e.message : '例文一覧の読み込みに失敗しました';
-      setMsg({ kind: 'alert', text: m });
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    [buildQuery, runAbortable, settings.apiBase],
+  );
 
   useEffect(() => {
     load(offset);
-    return () => abortRef.current?.abort();
-  }, [appliedSearch, sortKey, sortOrder, categoryFilter]);
+  }, [appliedSearch, categoryFilter, load, offset, sortKey, sortOrder]);
 
   useEffect(() => {
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
-      const visible = new Set(items.map((it) => it.id));
-      let changed = false;
-      const next = new Set<number>();
-      prev.forEach((id) => {
-        if (visible.has(id)) {
-          next.add(id);
-        } else {
-          changed = true;
-        }
-      });
-      if (!changed && next.size === prev.size) {
-        return prev;
-      }
-      return next;
+      const next = retainSetValues(prev, items.map((it) => it.id));
+      return next.size === prev.size ? prev : next;
     });
   }, [items]);
 
-  const hasNext = offset + limit < total;
+  const hasNext = offset + LIST_LIMIT < total;
   const hasPrev = offset > 0;
   const selectedCount = selectedIds.size;
 
-  const deleteSelectedExamples = async () => {
+  const deleteSelectedExamples = useCallback(async () => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
     const confirmed = await confirmDialog(`選択中の例文（${ids.length}件）`);
@@ -270,14 +249,19 @@ export const ExampleListPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [confirmDialog, load, offset, selectedIds, settings.apiBase]);
 
-  const sortOptions = useMemo(() => ([
-    { value: 'created_at', label: '作成日時(例文)' },
-    { value: 'pack_updated_at', label: '更新日時(WordPack)' },
-    { value: 'lemma', label: '単語名' },
-    { value: 'category', label: 'カテゴリ' },
-  ] as const), []);
+  const sortOptions = useMemo(
+    () => (
+      [
+        { value: 'created_at', label: '作成日時(例文)' },
+        { value: 'pack_updated_at', label: '更新日時(WordPack)' },
+        { value: 'lemma', label: '単語名' },
+        { value: 'category', label: 'カテゴリ' },
+      ] as const
+    ),
+    [],
+  );
 
   return (
     <section>
@@ -298,7 +282,7 @@ export const ExampleListPanel: React.FC = () => {
         .ex-actions .ex-tts-btn {
           font-size: 0.85em;
         }
-        .ex-list-item { display: flex; align-items: start; gap: 0.5rem; padding: 0.4rem; border-bottom: 1px solid #eee; cursor: pointer; }
+        .ex-list-item { display: flex; align-items: start; gap: 0.5rem; padding: 0.4rem; border-bottom: 1px solid #eee; cursor:pointer; }
         .ex-en { font-weight: 600; }
         .ex-ja { margin-top: 0.3rem; }
         /* view-specific text colors */
@@ -353,7 +337,11 @@ export const ExampleListPanel: React.FC = () => {
             <>
               <label htmlFor="ex-cat" style={{ marginLeft: '0.5rem' }}>カテゴリ:</label>
               <select id="ex-cat" className="wp-filter-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value as any)}>
-                {CATEGORY_OPTIONS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                {CATEGORY_OPTIONS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
               </select>
             </>
           )}
@@ -387,7 +375,10 @@ export const ExampleListPanel: React.FC = () => {
                     key={it.id}
                     className="ex-card"
                     data-testid="example-card"
-                    onClick={() => { setPreviewItem(it); setPreviewOpen(true); }}
+                    onClick={() => {
+                      setPreviewItem(it);
+                      setPreviewOpen(true);
+                    }}
                   >
                     <div className="ex-card-header">
                       <label className="ex-select-checkbox" onClick={(e) => e.stopPropagation()}>
@@ -398,13 +389,18 @@ export const ExampleListPanel: React.FC = () => {
                           aria-label={`例文 ${it.en} を選択`}
                         />
                       </label>
-                      <div className="ex-meta">{it.lemma} / {it.category}</div>
+                      <div className="ex-meta">
+                        {it.lemma} / {it.category}
+                      </div>
                     </div>
                     <h4 className="ex-en">{it.en}</h4>
                     <div className="ex-actions">
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); handleToggleExpand(it.id); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleExpand(it.id);
+                        }}
                         aria-pressed={showAllTranslations || expandedIds.has(it.id)}
                         disabled={showAllTranslations}
                       >
@@ -414,9 +410,7 @@ export const ExampleListPanel: React.FC = () => {
                         <TTSButton text={it.en} className="ex-tts-btn" />
                       </div>
                     </div>
-                    {(showAllTranslations || expandedIds.has(it.id)) && (
-                      <div className="ex-ja">{it.ja}</div>
-                    )}
+                    {(showAllTranslations || expandedIds.has(it.id)) && <div className="ex-ja">{it.ja}</div>}
                   </div>
                 ))}
               </div>
@@ -427,7 +421,10 @@ export const ExampleListPanel: React.FC = () => {
                     key={it.id}
                     className="ex-list-item"
                     data-testid="example-list-item"
-                    onClick={() => { setPreviewItem(it); setPreviewOpen(true); }}
+                    onClick={() => {
+                      setPreviewItem(it);
+                      setPreviewOpen(true);
+                    }}
                   >
                     <label className="ex-select-checkbox" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -438,15 +435,22 @@ export const ExampleListPanel: React.FC = () => {
                       />
                     </label>
                     <div style={{ flex: 1 }}>
-                      <div className="ex-meta" style={{ marginBottom: 4 }}>{it.lemma} / {it.category}</div>
+                      <div className="ex-meta" style={{ marginBottom: 4 }}>
+                        {it.lemma} / {it.category}
+                      </div>
                       <div className="ex-en">{it.en}</div>
                       <div className="ex-actions">
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); handleToggleExpand(it.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleExpand(it.id);
+                          }}
                           aria-pressed={showAllTranslations || expandedIds.has(it.id)}
                           disabled={showAllTranslations}
-                        >訳表示</button>
+                        >
+                          訳表示
+                        </button>
                         <div onClick={(e) => e.stopPropagation()}>
                           <TTSButton text={it.en} className="ex-tts-btn" />
                         </div>
@@ -460,9 +464,15 @@ export const ExampleListPanel: React.FC = () => {
 
             {(hasPrev || hasNext) && (
               <div className="wp-pagination">
-                <button onClick={() => load(offset - limit)} disabled={!hasPrev || loading}>前へ</button>
-                <span>{offset + 1}-{Math.min(offset + limit, total)} / {total}件</span>
-                <button onClick={() => load(offset + limit)} disabled={!hasNext || loading}>次へ</button>
+                <button onClick={() => load(offset - LIST_LIMIT)} disabled={!hasPrev || loading}>
+                  前へ
+                </button>
+                <span>
+                  {offset + 1}-{Math.min(offset + LIST_LIMIT, total)} / {total}件
+                </span>
+                <button onClick={() => load(offset + LIST_LIMIT)} disabled={!hasNext || loading}>
+                  次へ
+                </button>
               </div>
             )}
           </>
@@ -478,5 +488,3 @@ export const ExampleListPanel: React.FC = () => {
     </section>
   );
 };
-
-

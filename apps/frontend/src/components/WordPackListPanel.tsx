@@ -5,6 +5,9 @@ import { useConfirmDialog } from '../ConfirmDialogContext';
 import { useNotifications } from '../NotificationsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { regenerateWordPackRequest } from '../lib/wordpack';
+import { useAbortableAsync, AbortError } from '../lib/hooks';
+import { loadSessionState, saveSessionState } from '../lib/storage';
+import { assignSetValues, retainSetValues, toggleSetValue } from '../lib/set';
 import { Modal } from './Modal';
 import { ListControls } from './ListControls';
 import { WordPackPanel } from './WordPackPanel';
@@ -94,6 +97,18 @@ const STORAGE_KEY = 'wp.list.ui_state.v1';
 const PAGE_LIMIT = 200;
 const MIN_COLUMN_WIDTH = 320;
 
+const DEFAULT_PERSISTED_STATE: PersistedState = {
+  sortKey: 'updated_at',
+  sortOrder: 'desc',
+  viewMode: 'card',
+  generationFilter: 'all',
+  searchMode: 'contains',
+  searchInput: '',
+  appliedSearch: null,
+  offset: 0,
+  showAllSense: false,
+};
+
 const getFallbackColumnCount = (width: number): number => {
   if (width >= 900) return 2;
   return 1;
@@ -142,22 +157,26 @@ export const WordPackListPanel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const abortRef = useRef<AbortController | null>(null);
+  const persistedState = useMemo(() => loadSessionState<PersistedState>(STORAGE_KEY, DEFAULT_PERSISTED_STATE), []);
+  const [offset, setOffset] = useState(() => persistedState.offset);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewWordPackId, setPreviewWordPackId] = useState<string | null>(null);
   const modalFocusRef = useRef<HTMLElement>(null);
-  const [sortKey, setSortKey] = useState<SortKey>('updated_at');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const [viewMode, setViewMode] = useState<ViewMode>('card');
-  const [generationFilter, setGenerationFilter] = useState<GenerationFilter>('all');
-  const [searchMode, setSearchMode] = useState<SearchMode>('contains');
-  const [searchInput, setSearchInput] = useState('');
-  const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>(persistedState.sortKey);
+  const [sortOrder, setSortOrder] = useState<SortOrder>(persistedState.sortOrder);
+  const [viewMode, setViewMode] = useState<ViewMode>(persistedState.viewMode);
+  const [generationFilter, setGenerationFilter] = useState<GenerationFilter>(persistedState.generationFilter);
+  const [searchMode, setSearchMode] = useState<SearchMode>(persistedState.searchMode);
+  const [searchInput, setSearchInput] = useState(persistedState.searchInput);
+  const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(persistedState.appliedSearch);
   const [senseOpenIds, setSenseOpenIds] = useState<Set<string>>(() => new Set());
-  const [showAllSense, setShowAllSense] = useState(false);
+  const [showAllSense, setShowAllSense] = useState(persistedState.showAllSense);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(() => new Set());
+  const { run: runAbortable } = useAbortableAsync();
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
   // グリッドの可視幅に基づき列数を算出（最大2列）
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [columnCount, setColumnCount] = useState<number>(() =>
@@ -193,30 +212,8 @@ export const WordPackListPanel: React.FC = () => {
     };
   }, [viewMode]);
 
-  // --- UI状態の保存/復元（sessionStorage） ---
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const s = JSON.parse(raw) as Partial<PersistedState>;
-      if (s.sortKey) setSortKey(s.sortKey);
-      if (s.sortOrder) setSortOrder(s.sortOrder);
-      if (s.viewMode) setViewMode(s.viewMode);
-      if (s.generationFilter) setGenerationFilter(s.generationFilter);
-      if (s.searchMode) setSearchMode(s.searchMode);
-      if (typeof s.searchInput === 'string') setSearchInput(s.searchInput);
-      if (s.appliedSearch) setAppliedSearch(s.appliedSearch);
-      if (typeof s.offset === 'number' && Number.isFinite(s.offset) && s.offset >= 0) setOffset(s.offset);
-      if (typeof s.showAllSense === 'boolean') setShowAllSense(s.showAllSense);
-    } catch {
-      // ignore parse errors
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const p: PersistedState = {
+    const stateToPersist: PersistedState = {
       sortKey,
       sortOrder,
       viewMode,
@@ -227,37 +224,40 @@ export const WordPackListPanel: React.FC = () => {
       offset,
       showAllSense,
     };
-    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(p)); } catch {}
+    saveSessionState(STORAGE_KEY, stateToPersist);
   }, [sortKey, sortOrder, viewMode, generationFilter, searchMode, searchInput, appliedSearch, offset, showAllSense]);
 
-  const loadWordPacks = useCallback(async (newOffset: number = 0) => {
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setLoading(true);
-    setMsg(null);
+  // 一覧の取得は他のフィルタ操作と競合するため、AbortController を共通化して最新の結果のみを反映させる。
+  const loadWordPacks = useCallback(
+    async (newOffset: number = 0) => {
+      setLoading(true);
+      setMsg(null);
 
-    try {
-      const res = await fetchJson<WordPackListResponse>(`${apiBase}/word/packs?limit=${PAGE_LIMIT}&offset=${newOffset}`, {
-        signal: ctrl.signal,
-      });
-      setWordPacks(
-        res.items.map((item) => ({
-          ...item,
-          checked_only_count: item.checked_only_count ?? 0,
-          learned_count: item.learned_count ?? 0,
-        })),
-      );
-      setTotal(res.total);
-      setOffset(newOffset);
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      const m = e instanceof ApiError ? e.message : 'WordPack一覧の読み込みに失敗しました';
-      setMsg({ kind: 'alert', text: m });
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase]);
+      try {
+        const res = await runAbortable((signal) =>
+          fetchJson<WordPackListResponse>(`${apiBase}/word/packs?limit=${PAGE_LIMIT}&offset=${newOffset}`, {
+            signal,
+          }),
+        );
+        setWordPacks(
+          res.items.map((item) => ({
+            ...item,
+            checked_only_count: item.checked_only_count ?? 0,
+            learned_count: item.learned_count ?? 0,
+          })),
+        );
+        setTotal(res.total);
+        setOffset((prev) => (prev === newOffset ? prev : newOffset));
+      } catch (e) {
+        if (e instanceof AbortError) return;
+        const m = e instanceof ApiError ? e.message : 'WordPack一覧の読み込みに失敗しました';
+        setMsg({ kind: 'alert', text: m });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiBase, runAbortable],
+  );
 
   const applyStudyProgress = useCallback(
     (payload: { wordPackId: string; checked_only_count: number; learned_count: number }) => {
@@ -334,27 +334,17 @@ export const WordPackListPanel: React.FC = () => {
     const confirmed = await confirmDialog(targetLabel);
     if (!confirmed) return;
 
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
     setLoading(true);
     setMsg(null);
 
     try {
       await fetchJson(`${apiBase}/word/packs/${wordPack.id}`, {
         method: 'DELETE',
-        signal: ctrl.signal,
       });
       setMsg({ kind: 'status', text: 'WordPackを削除しました' });
       await loadWordPacks(offset);
-      setSelectedIds((prev) => {
-        if (!prev.has(wordPack.id)) return prev;
-        const next = new Set(prev);
-        next.delete(wordPack.id);
-        return next;
-      });
+      setSelectedIds((prev) => (prev.has(wordPack.id) ? toggleSetValue(prev, wordPack.id) : prev));
     } catch (e) {
-      if (ctrl.signal.aborted) return;
       const m = e instanceof ApiError ? e.message : 'WordPackの削除に失敗しました';
       setMsg({ kind: 'alert', text: m });
     } finally {
@@ -364,7 +354,6 @@ export const WordPackListPanel: React.FC = () => {
 
   useEffect(() => {
     loadWordPacks();
-    return () => abortRef.current?.abort();
   }, [loadWordPacks]);
 
   useEffect(() => {
@@ -393,36 +382,17 @@ export const WordPackListPanel: React.FC = () => {
 
   useEffect(() => {
     setSenseOpenIds((prev) => {
-      const validIds = new Set(wordPacks.map((wp) => wp.id));
-      let changed = false;
-      const next = new Set<string>();
-      prev.forEach((id) => {
-        if (validIds.has(id)) {
-          next.add(id);
-        } else {
-          changed = true;
-        }
-      });
-      if (!changed && next.size === prev.size) {
-        return prev;
-      }
-      return next;
+      if (prev.size === 0) return prev;
+      const next = retainSetValues(prev, wordPacks.map((wp) => wp.id));
+      return next.size === prev.size ? prev : next;
     });
   }, [wordPacks]);
 
   useEffect(() => {
     setSelectedIds((prev) => {
-      const validIds = new Set(wordPacks.map((wp) => wp.id));
-      const next = new Set<string>();
-      prev.forEach((id) => {
-        if (validIds.has(id)) {
-          next.add(id);
-        }
-      });
-      if (next.size === prev.size) {
-        return prev;
-      }
-      return next;
+      if (prev.size === 0) return prev;
+      const next = retainSetValues(prev, wordPacks.map((wp) => wp.id));
+      return next.size === prev.size ? prev : next;
     });
   }, [wordPacks]);
 
@@ -494,18 +464,8 @@ export const WordPackListPanel: React.FC = () => {
   const allVisibleSelected = sortedWordPacks.length > 0 && visibleSelectedCount === sortedWordPacks.length;
 
   const toggleVisibleSelection = useCallback(() => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      const ids = visibleWordPackIds;
-      const shouldClear = ids.length > 0 && ids.every((id) => next.has(id));
-      if (shouldClear) {
-        ids.forEach((id) => next.delete(id));
-      } else {
-        ids.forEach((id) => next.add(id));
-      }
-      return next;
-    });
-  }, [visibleWordPackIds]);
+    setSelectedIds((prev) => assignSetValues(prev, visibleWordPackIds, !allVisibleSelected));
+  }, [allVisibleSelected, visibleWordPackIds]);
 
   const deleteSelectedWordPacks = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -530,7 +490,7 @@ export const WordPackListPanel: React.FC = () => {
       }
       if (deleted > 0) {
         await loadWordPacks(offset);
-        setSelectedIds(new Set());
+        clearSelection();
       }
       if (failure) {
         const text = deleted > 0
@@ -545,7 +505,7 @@ export const WordPackListPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedIds, confirmDialog, apiBase, loadWordPacks, offset]);
+  }, [selectedIds, confirmDialog, apiBase, loadWordPacks, offset, clearSelection]);
 
   const handleApplySearch = useCallback(() => {
     setAppliedSearch({ mode: searchMode, value: searchInput.trim() });
@@ -564,15 +524,7 @@ export const WordPackListPanel: React.FC = () => {
   );
 
   const toggleSenseOpen = useCallback((id: string) => {
-    setSenseOpenIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+    setSenseOpenIds((prev) => toggleSetValue(prev, id));
   }, []);
 
   const toggleAllSense = useCallback(() => {
@@ -584,19 +536,7 @@ export const WordPackListPanel: React.FC = () => {
   }, [wordPacks]);
 
   const toggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  const clearSelection = useCallback(() => {
-    setSelectedIds(new Set());
+    setSelectedIds((prev) => toggleSetValue(prev, id));
   }, []);
 
   useEffect(() => {
