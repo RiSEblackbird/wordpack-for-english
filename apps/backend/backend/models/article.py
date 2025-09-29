@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
 from .word import ExampleCategory
 
 
@@ -12,13 +12,15 @@ class ArticleImportRequest(BaseModel):
     抽出語について既存の WordPack を関連付け、無ければ空の WordPack を新規作成する。
     """
 
-    text: str = Field(min_length=1, description="インポート対象の文章（日本語/英語いずれも可）")
+    text: str = Field(
+        min_length=1, description="インポート対象の文章（日本語/英語いずれも可）"
+    )
     # 任意のLLM指定（word endpoints と整合）
-    model: Optional[str] = Field(default=None)
-    temperature: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    reasoning: Optional[dict] = Field(default=None)
-    text_opts: Optional[dict] = Field(default=None)
-    generation_category: Optional[ExampleCategory] = Field(
+    model: str | None = Field(default=None)
+    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
+    reasoning: dict | None = Field(default=None)
+    text_opts: dict | None = Field(default=None)
+    generation_category: ExampleCategory | None = Field(
         default=None,
         description="文章生成時に使用した例文カテゴリ（任意）",
     )
@@ -27,6 +29,8 @@ class ArticleImportRequest(BaseModel):
 
 
 class ArticleWordPackLink(BaseModel):
+    """Linking metadata between an article and a WordPack."""
+
     word_pack_id: str
     lemma: str
     status: str = Field(description="existing|created")
@@ -34,27 +38,33 @@ class ArticleWordPackLink(BaseModel):
 
 
 class Article(BaseModel):
+    """Article domain model returned by the backend APIs."""
+
     title_en: str
     body_en: str
     body_ja: str
-    notes_ja: Optional[str] = None
+    notes_ja: str | None = None
     # LLM 情報（任意）
-    llm_model: Optional[str] = None
-    llm_params: Optional[str] = None
-    generation_category: Optional[ExampleCategory] = None
-    related_word_packs: List[ArticleWordPackLink] = Field(default_factory=list)
-    generation_started_at: Optional[str] = None
-    generation_completed_at: Optional[str] = None
-    generation_duration_ms: Optional[int] = None
+    llm_model: str | None = None
+    llm_params: str | None = None
+    generation_category: ExampleCategory | None = None
+    related_word_packs: list[ArticleWordPackLink] = Field(default_factory=list)
+    generation_started_at: str | None = None
+    generation_completed_at: str | None = None
+    generation_duration_ms: int | None = None
 
 
 class ArticleDetailResponse(Article):
+    """Full article payload including identifiers and timestamps."""
+
     id: str
     created_at: str
     updated_at: str
 
 
 class ArticleListItem(BaseModel):
+    """Lightweight representation for article list endpoints."""
+
     id: str
     title_en: str
     created_at: str
@@ -62,9 +72,7 @@ class ArticleListItem(BaseModel):
 
 
 class ArticleListResponse(BaseModel):
-    items: List[ArticleListItem]
+    items: list[ArticleListItem]
     total: int
     limit: int
     offset: int
-
-

@@ -9,8 +9,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, constr
 
-from backend.config import settings
-from backend.logging import logger
+from ..config import settings
+from ..logging import logger
 
 try:
     from openai import (  # type: ignore
@@ -23,7 +23,9 @@ try:
         RateLimitError,
     )
 except Exception:  # pragma: no cover - openai SDK が無い環境では初期化しない
-    APIConnectionError = APIError = APIStatusError = AuthenticationError = BadRequestError = RateLimitError = None  # type: ignore[assignment]
+    APIConnectionError = APIError = APIStatusError = AuthenticationError = (
+        BadRequestError
+    ) = RateLimitError = None  # type: ignore[assignment]
     OpenAI = None  # type: ignore[assignment]
 
 
@@ -33,6 +35,7 @@ _CLIENT_LOCK = threading.Lock()
 
 
 def _init_client() -> OpenAI | None:  # type: ignore[valid-type]
+    """Instantiate an OpenAI client when SDK and API key are available."""
     if OpenAI is None:  # pragma: no cover - SDK 未導入環境
         return None
     api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
@@ -42,6 +45,7 @@ def _init_client() -> OpenAI | None:  # type: ignore[valid-type]
 
 
 def _iter_audio_bytes(response: object) -> Iterator[bytes]:
+    """Iterate over MP3 bytes from OpenAI streaming responses."""
     if hasattr(response, "iter_bytes"):
         yield from response.iter_bytes()  # type: ignore[misc]
     else:  # pragma: no cover - 想定外フォーマット
@@ -89,7 +93,11 @@ def _map_openai_exception(exc: Exception) -> tuple[int, str, str]:
     if APIConnectionError is not None and isinstance(exc, APIConnectionError):
         return 502, "OpenAI connection error", "connection_error"
     if APIStatusError is not None and isinstance(exc, APIStatusError):
-        return exc.status_code or 502, "OpenAI returned an error response", "api_status_error"
+        return (
+            exc.status_code or 502,
+            "OpenAI returned an error response",
+            "api_status_error",
+        )
     if APIError is not None and isinstance(exc, APIError):
         return 502, "OpenAI API error", "api_error"
     return 500, "Text-to-speech failed", "unexpected_error"
@@ -97,6 +105,7 @@ def _map_openai_exception(exc: Exception) -> tuple[int, str, str]:
 
 @router.post("", response_class=StreamingResponse)
 def synth(req: TTSIn, request: Request) -> StreamingResponse:
+    """Synthesize speech using OpenAI TTS and stream MP3 audio to the client."""
     t0 = time.perf_counter()
     request_id = _loggable_request_id(request)
     text_chars = len(req.text)
@@ -122,7 +131,11 @@ def synth(req: TTSIn, request: Request) -> StreamingResponse:
     use_streaming_api = False
 
     try:
-        streaming_api = getattr(getattr(client_instance.audio, "speech", None), "with_streaming_response", None)
+        streaming_api = getattr(
+            getattr(client_instance.audio, "speech", None),
+            "with_streaming_response",
+            None,
+        )
         if streaming_api is not None and hasattr(streaming_api, "create"):
             use_streaming_api = True
             response_ctx = streaming_api.create(

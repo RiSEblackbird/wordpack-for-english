@@ -86,16 +86,26 @@ class Settings(BaseSettings):
         default=240,
         description="Per-user API requests per minute / ユーザ単位の毎分上限（X-User-Id）",
     )
-    sentry_dsn: str | None = Field(default=None, description="Sentry DSN (enable if set)")
+    sentry_dsn: str | None = Field(
+        default=None, description="Sentry DSN (enable if set)"
+    )
     # Langfuse 観測基盤
     langfuse_enabled: bool = Field(
         default=False,
         description="Enable Langfuse tracing/observability / Langfuse の有効化",
     )
-    langfuse_public_key: str | None = Field(default=None, description="Langfuse public key")
-    langfuse_secret_key: str | None = Field(default=None, description="Langfuse secret key")
-    langfuse_host: str | None = Field(default=None, description="Langfuse host (e.g. https://cloud.langfuse.com)")
-    langfuse_release: str | None = Field(default=None, description="Release/version tag for tracing")
+    langfuse_public_key: str | None = Field(
+        default=None, description="Langfuse public key"
+    )
+    langfuse_secret_key: str | None = Field(
+        default=None, description="Langfuse secret key"
+    )
+    langfuse_host: str | None = Field(
+        default=None, description="Langfuse host (e.g. https://cloud.langfuse.com)"
+    )
+    langfuse_release: str | None = Field(
+        default=None, description="Release/version tag for tracing"
+    )
     # Langfuse 除外パス（完全一致 or 接頭一致のワイルドカード*対応）
     langfuse_exclude_paths: list[str] = Field(
         default=["/healthz", "/health", "/metrics*"],

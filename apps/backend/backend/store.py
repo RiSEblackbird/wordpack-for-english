@@ -25,7 +25,9 @@ class AppSQLiteStore:
 
     # --- low-level helpers ---
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path, timeout=10.0, isolation_level=None, check_same_thread=False)
+        conn = sqlite3.connect(
+            self.db_path, timeout=10.0, isolation_level=None, check_same_thread=False
+        )
         conn.row_factory = sqlite3.Row
         with conn:  # autocommit on pragma
             conn.execute("pragma journal_mode=WAL;")
@@ -59,7 +61,6 @@ class AppSQLiteStore:
         with self._conn() as conn:
             with conn:
                 self._ensure_lemmas_table(conn)
-                self._migrate_word_packs_lemma_schema(conn)
                 self._ensure_word_packs_table(conn)
                 self._ensure_word_pack_examples_table(conn)
                 self._ensure_articles_table(conn)
@@ -97,8 +98,12 @@ class AppSQLiteStore:
             );
             """
         )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_lemma_id ON word_packs(lemma_id);")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_word_packs_created_at ON word_packs(created_at);")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_word_packs_lemma_id ON word_packs(lemma_id);"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_word_packs_created_at ON word_packs(created_at);"
+        )
 
     def _ensure_word_pack_examples_table(self, conn: sqlite3.Connection) -> None:
         conn.execute(
@@ -120,7 +125,9 @@ class AppSQLiteStore:
             );
             """
         )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_wpex_pack ON word_pack_examples(word_pack_id);")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_wpex_pack ON word_pack_examples(word_pack_id);"
+        )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_wpex_pack_cat_pos ON word_pack_examples(word_pack_id, category, position);"
         )
@@ -145,8 +152,12 @@ class AppSQLiteStore:
             );
             """
         )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at);")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title_en);")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_articles_created_at ON articles(created_at);"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_articles_title ON articles(title_en);"
+        )
 
     def _ensure_article_word_packs_table(self, conn: sqlite3.Connection) -> None:
         conn.execute(
@@ -163,134 +174,12 @@ class AppSQLiteStore:
             );
             """
         )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_article ON article_word_packs(article_id);")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_article_wps_lemma ON article_word_packs(lemma);")
-
-    def _migrate_word_packs_lemma_schema(self, conn: sqlite3.Connection) -> None:
-        cur = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='word_packs';"
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_article_wps_article ON article_word_packs(article_id);"
         )
-        if cur.fetchone() is None:
-            return
-
-        columns_cur = conn.execute("PRAGMA table_info(word_packs);")
-        columns = {row[1] for row in columns_cur.fetchall()}
-        if "lemma_id" in columns:
-            return
-
-        fk_state_row = conn.execute("PRAGMA foreign_keys;").fetchone()
-        fk_enabled = bool(fk_state_row[0]) if fk_state_row else False
-        if fk_enabled:
-            conn.execute("PRAGMA foreign_keys=OFF;")
-
-        try:
-            conn.execute("ALTER TABLE word_packs RENAME TO word_packs_legacy;")
-            conn.execute(
-                """
-                CREATE TABLE word_packs (
-                    id TEXT PRIMARY KEY,
-                    lemma_id TEXT NOT NULL,
-                    data TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    checked_only_count INTEGER NOT NULL DEFAULT 0,
-                    learned_count INTEGER NOT NULL DEFAULT 0,
-                    FOREIGN KEY(lemma_id) REFERENCES lemmas(id) ON DELETE CASCADE
-                );
-                """
-            )
-
-            legacy_rows = conn.execute(
-                """
-                SELECT
-                    id,
-                    lemma,
-                    sense_title,
-                    data,
-                    created_at,
-                    updated_at,
-                    COALESCE(checked_only_count, 0) AS checked_only_count,
-                    COALESCE(learned_count, 0) AS learned_count
-                FROM word_packs_legacy;
-                """
-            ).fetchall()
-
-            now_iso = datetime.now(UTC).isoformat()
-            lemma_entries: dict[str, dict[str, str]] = {}
-            for row in legacy_rows:
-                label = str(row["lemma"] or "").strip()
-                if not label:
-                    continue
-                normalized = label.lower()
-                sense_title = str(row["sense_title"] or "").strip()
-                created_at = str(row["created_at"] or now_iso)
-                entry = lemma_entries.get(normalized)
-                if entry is None:
-                    lemma_entries[normalized] = {
-                        "label": label,
-                        "sense_title": sense_title,
-                        "created_at": created_at,
-                    }
-                else:
-                    if sense_title and not entry["sense_title"]:
-                        entry["sense_title"] = sense_title
-                    if created_at and entry["created_at"]:
-                        if created_at < entry["created_at"]:
-                            entry["created_at"] = created_at
-
-            lemma_ids: dict[str, str] = {}
-            for normalized, entry in lemma_entries.items():
-                lemma_id = self._upsert_lemma(
-                    conn,
-                    label=entry["label"],
-                    sense_title=entry["sense_title"],
-                    llm_model=None,
-                    llm_params=None,
-                    now=entry["created_at"] or now_iso,
-                )
-                lemma_ids[normalized] = lemma_id
-
-            for row in legacy_rows:
-                label = str(row["lemma"] or "").strip()
-                normalized = label.lower()
-                lemma_id = lemma_ids.get(normalized)
-                if not lemma_id:
-                    fallback_label = label or str(row["id"])
-                    lemma_id = self._upsert_lemma(
-                        conn,
-                        label=fallback_label,
-                        sense_title=str(row["sense_title"] or ""),
-                        llm_model=None,
-                        llm_params=None,
-                        now=str(row["created_at"] or now_iso),
-                    )
-                    lemma_ids[fallback_label.lower()] = lemma_id
-
-                created_at = str(row["created_at"] or now_iso)
-                updated_at = str(row["updated_at"] or created_at)
-                checked_only = self._normalize_non_negative_int(row["checked_only_count"])
-                learned = self._normalize_non_negative_int(row["learned_count"])
-                conn.execute(
-                    """
-                    INSERT INTO word_packs(
-                        id, lemma_id, data, created_at, updated_at, checked_only_count, learned_count
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?);
-                    """,
-                    (
-                        row["id"],
-                        lemma_id,
-                        row["data"],
-                        created_at,
-                        updated_at,
-                        checked_only,
-                        learned,
-                    ),
-                )
-
-            conn.execute("DROP TABLE word_packs_legacy;")
-        finally:
-            if fk_enabled:
-                conn.execute("PRAGMA foreign_keys=ON;")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_article_wps_lemma ON article_word_packs(lemma);"
+        )
 
     def _split_examples_from_payload(
         self, data: str | Mapping[str, Any]
@@ -371,7 +260,13 @@ class AppSQLiteStore:
             for sense in senses_payload:
                 if not isinstance(sense, Mapping):
                     continue
-                for key in ("gloss_ja", "term_overview_ja", "term_core_ja", "definition_ja", "nuances_ja"):
+                for key in (
+                    "gloss_ja",
+                    "term_overview_ja",
+                    "term_core_ja",
+                    "definition_ja",
+                    "nuances_ja",
+                ):
                     try:
                         val = str(sense.get(key) or "").strip()
                     except Exception:
@@ -391,7 +286,11 @@ class AppSQLiteStore:
                 (checked_only_count, learned_count),
                 (lemma_llm_model, lemma_llm_params),
             )
-        serialized = json.dumps(parsed, ensure_ascii=False) if not isinstance(data, str) else data
+        serialized = (
+            json.dumps(parsed, ensure_ascii=False)
+            if not isinstance(data, str)
+            else data
+        )
         return (
             serialized,
             None,
@@ -403,7 +302,9 @@ class AppSQLiteStore:
 
     def _iter_example_rows(
         self, examples: Mapping[str, Any]
-    ) -> Iterable[tuple[str, int, str, str, str | None, str | None, str | None, int, int]]:
+    ) -> Iterable[
+        tuple[str, int, str, str, str | None, str | None, str | None, int, int]
+    ]:
         for category in EXAMPLE_CATEGORIES:
             arr = examples.get(category)
             if not isinstance(arr, Sequence):
@@ -436,7 +337,9 @@ class AppSQLiteStore:
                     learned_count,
                 )
 
-    def _load_examples_rows(self, conn: sqlite3.Connection, word_pack_id: str) -> Sequence[sqlite3.Row]:
+    def _load_examples_rows(
+        self, conn: sqlite3.Connection, word_pack_id: str
+    ) -> Sequence[sqlite3.Row]:
         cur = conn.execute(
             """
             SELECT
@@ -456,12 +359,16 @@ class AppSQLiteStore:
         )
         return cur.fetchall()
 
-    def _merge_core_with_examples(self, core_json: str, rows: Sequence[sqlite3.Row]) -> str:
+    def _merge_core_with_examples(
+        self, core_json: str, rows: Sequence[sqlite3.Row]
+    ) -> str:
         try:
             core = json.loads(core_json) if core_json else {}
         except Exception:
             core = {}
-        examples: dict[str, list[dict[str, Any]]] = {cat: [] for cat in EXAMPLE_CATEGORIES}
+        examples: dict[str, list[dict[str, Any]]] = {
+            cat: [] for cat in EXAMPLE_CATEGORIES
+        }
         for r in rows:
             cat = r["category"]
             item = {"en": r["en"], "ja": r["ja"]}
@@ -474,9 +381,7 @@ class AppSQLiteStore:
             item["checked_only_count"] = self._normalize_non_negative_int(
                 r["checked_only_count"]
             )
-            item["learned_count"] = self._normalize_non_negative_int(
-                r["learned_count"]
-            )
+            item["learned_count"] = self._normalize_non_negative_int(r["learned_count"])
             examples.setdefault(cat, []).append(item)
         # ensure categories exist even if absent in DB
         for cat in EXAMPLE_CATEGORIES:
@@ -519,7 +424,14 @@ class AppSQLiteStore:
                 INSERT INTO lemmas(id, label, sense_title, llm_model, llm_params, created_at)
                 VALUES (?, ?, ?, ?, ?, ?);
                 """,
-                (lemma_id, original_label, sense_title or "", llm_model, llm_params, now),
+                (
+                    lemma_id,
+                    original_label,
+                    sense_title or "",
+                    llm_model,
+                    llm_params,
+                    now,
+                ),
             )
             return lemma_id
 
@@ -615,7 +527,10 @@ class AppSQLiteStore:
                 )
 
                 if isinstance(examples, Mapping):
-                    conn.execute("DELETE FROM word_pack_examples WHERE word_pack_id = ?;", (word_pack_id,))
+                    conn.execute(
+                        "DELETE FROM word_pack_examples WHERE word_pack_id = ?;",
+                        (word_pack_id,),
+                    )
                     for (
                         cat,
                         pos,
@@ -678,7 +593,9 @@ class AppSQLiteStore:
             data_dict["checked_only_count"] = self._normalize_non_negative_int(
                 row["checked_only_count"]
             )
-            data_dict["learned_count"] = self._normalize_non_negative_int(row["learned_count"])
+            data_dict["learned_count"] = self._normalize_non_negative_int(
+                row["learned_count"]
+            )
             data_json_with_progress = json.dumps(data_dict, ensure_ascii=False)
             return (
                 row["lemma"],
@@ -687,7 +604,9 @@ class AppSQLiteStore:
                 row["updated_at"],
             )
 
-    def list_word_packs(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str, str]]:
+    def list_word_packs(
+        self, limit: int = 50, offset: int = 0
+    ) -> list[tuple[str, str, str, str, str]]:
         """WordPack一覧を取得する。戻り値: [(id, lemma, sense_title, created_at, updated_at), ...]"""
         with self._conn() as conn:
             cur = conn.execute(
@@ -701,7 +620,13 @@ class AppSQLiteStore:
                 (limit, offset),
             )
             return [
-                (row["id"], row["lemma"], row["sense_title"], row["created_at"], row["updated_at"])
+                (
+                    row["id"],
+                    row["lemma"],
+                    row["sense_title"],
+                    row["created_at"],
+                    row["updated_at"],
+                )
                 for row in cur.fetchall()
             ]
 
@@ -759,7 +684,9 @@ class AppSQLiteStore:
                     "Business": cnt_biz,
                     "Common": cnt_common,
                 }
-                checked_only = self._normalize_non_negative_int(row["checked_only_count"])
+                checked_only = self._normalize_non_negative_int(
+                    row["checked_only_count"]
+                )
                 learned = self._normalize_non_negative_int(row["learned_count"])
                 items.append(
                     (
@@ -780,7 +707,9 @@ class AppSQLiteStore:
         """WordPackを削除する。成功時True、存在しない場合False。"""
         with self._conn() as conn:
             with conn:
-                cur = conn.execute("DELETE FROM word_packs WHERE id = ?;", (word_pack_id,))
+                cur = conn.execute(
+                    "DELETE FROM word_packs WHERE id = ?;", (word_pack_id,)
+                )
                 return cur.rowcount > 0
 
     def update_word_pack_study_progress(
@@ -797,7 +726,9 @@ class AppSQLiteStore:
                 row = cur.fetchone()
                 if row is None:
                     return None
-                current_checked = self._normalize_non_negative_int(row["checked_only_count"])
+                current_checked = self._normalize_non_negative_int(
+                    row["checked_only_count"]
+                )
                 current_learned = self._normalize_non_negative_int(row["learned_count"])
                 next_checked = max(0, current_checked + int(checked_increment))
                 next_learned = max(0, current_learned + int(learned_increment))
@@ -826,7 +757,9 @@ class AppSQLiteStore:
                 row = cur.fetchone()
                 if row is None:
                     return None
-                current_checked = self._normalize_non_negative_int(row["checked_only_count"])
+                current_checked = self._normalize_non_negative_int(
+                    row["checked_only_count"]
+                )
                 current_learned = self._normalize_non_negative_int(row["learned_count"])
                 next_checked = max(0, current_checked + int(checked_increment))
                 next_learned = max(0, current_learned + int(learned_increment))
@@ -842,7 +775,9 @@ class AppSQLiteStore:
                 return str(row["word_pack_id"]), next_checked, next_learned
 
     # --- WordPack Examples operations (optimized) ---
-    def delete_example(self, word_pack_id: str, category: str, index: int) -> Optional[int]:
+    def delete_example(
+        self, word_pack_id: str, category: str, index: int
+    ) -> Optional[int]:
         """指定カテゴリ内の index の例文を削除し、残件数を返す。存在しなければ None。
 
         位置の整列（position の詰め）も行う。
@@ -867,7 +802,9 @@ class AppSQLiteStore:
                 target_id = int(row["id"])
 
                 # 削除
-                conn.execute("DELETE FROM word_pack_examples WHERE id = ?;", (target_id,))
+                conn.execute(
+                    "DELETE FROM word_pack_examples WHERE id = ?;", (target_id,)
+                )
 
                 # 位置の再採番（category 内で 0..N-1 に詰める）
                 cur2 = conn.execute(
@@ -889,7 +826,9 @@ class AppSQLiteStore:
                 remaining = len(ids)
                 return remaining
 
-    def delete_examples_by_ids(self, example_ids: Iterable[int]) -> tuple[int, list[int]]:
+    def delete_examples_by_ids(
+        self, example_ids: Iterable[int]
+    ) -> tuple[int, list[int]]:
         """例文ID一覧を受け取り、一括削除する。
 
         戻り値は (削除件数, 未削除ID一覧)。同一カテゴリの再採番も行う。
@@ -918,7 +857,9 @@ class AppSQLiteStore:
                     if row is None:
                         not_found.append(example_id)
                         continue
-                    conn.execute("DELETE FROM word_pack_examples WHERE id = ?;", (example_id,))
+                    conn.execute(
+                        "DELETE FROM word_pack_examples WHERE id = ?;", (example_id,)
+                    )
                     deleted += 1
                     touched.add((row["word_pack_id"], row["category"]))
 
@@ -1008,15 +949,11 @@ class AppSQLiteStore:
         updated_at_value = updated_at or now
         generation_started_at_override = generation_started_at or None
         generation_started_at_default = (
-            generation_started_at_override
-            or created_at_override
-            or now
+            generation_started_at_override or created_at_override or now
         )
         generation_completed_at_override = generation_completed_at or None
         generation_completed_at_default = (
-            generation_completed_at_override
-            or updated_at_value
-            or now
+            generation_completed_at_override or updated_at_value or now
         )
         generation_duration_value = (
             None if generation_duration_ms is None else int(generation_duration_ms)
@@ -1063,7 +1000,10 @@ class AppSQLiteStore:
                     ),
                 )
                 if related_word_packs is not None:
-                    conn.execute("DELETE FROM article_word_packs WHERE article_id = ?;", (article_id,))
+                    conn.execute(
+                        "DELETE FROM article_word_packs WHERE article_id = ?;",
+                        (article_id,),
+                    )
                     for wp_id, lemma, status in related_word_packs:
                         conn.execute(
                             """
@@ -1130,7 +1070,9 @@ class AppSQLiteStore:
                 """,
                 (article_id,),
             )
-            links = [(r["word_pack_id"], r["lemma"], r["status"]) for r in cur2.fetchall()]
+            links = [
+                (r["word_pack_id"], r["lemma"], r["status"]) for r in cur2.fetchall()
+            ]
             return (
                 row["title_en"],
                 row["body_en"],
@@ -1147,7 +1089,9 @@ class AppSQLiteStore:
                 links,
             )
 
-    def list_articles(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str]]:
+    def list_articles(
+        self, limit: int = 50, offset: int = 0
+    ) -> list[tuple[str, str, str, str]]:
         """記事一覧: [(id, title_en, created_at, updated_at)] を返す。"""
         with self._conn() as conn:
             cur = conn.execute(
@@ -1159,7 +1103,10 @@ class AppSQLiteStore:
                 """,
                 (limit, offset),
             )
-            return [(row["id"], row["title_en"], row["created_at"], row["updated_at"]) for row in cur.fetchall()]
+            return [
+                (row["id"], row["title_en"], row["created_at"], row["updated_at"])
+                for row in cur.fetchall()
+            ]
 
     def count_articles(self) -> int:
         """記事総件数を返す。"""
@@ -1175,7 +1122,9 @@ class AppSQLiteStore:
                 cur = conn.execute("DELETE FROM articles WHERE id = ?;", (article_id,))
                 return cur.rowcount > 0
 
-    def append_examples(self, word_pack_id: str, category: str, items: list[dict]) -> int:
+    def append_examples(
+        self, word_pack_id: str, category: str, items: list[dict]
+    ) -> int:
         """指定カテゴリに例文を末尾追記し、追加件数を返す。
 
         - `items`: {en, ja, grammar_ja?, llm_model?, llm_params?, checked_only_count?, learned_count?} の辞書配列
@@ -1205,9 +1154,13 @@ class AppSQLiteStore:
                     ja = str((item or {}).get("ja") or "").strip()
                     if not en or not ja:
                         continue
-                    grammar_ja = (str((item or {}).get("grammar_ja") or "").strip() or None)
-                    llm_model = (str((item or {}).get("llm_model") or "").strip() or None)
-                    llm_params = (str((item or {}).get("llm_params") or "").strip() or None)
+                    grammar_ja = (
+                        str((item or {}).get("grammar_ja") or "").strip() or None
+                    )
+                    llm_model = str((item or {}).get("llm_model") or "").strip() or None
+                    llm_params = (
+                        str((item or {}).get("llm_params") or "").strip() or None
+                    )
                     checked_only_count = self._normalize_non_negative_int(
                         (item or {}).get("checked_only_count")
                     )
@@ -1245,7 +1198,6 @@ class AppSQLiteStore:
 
                 return inserted
 
-
     def count_examples(
         self,
         *,
@@ -1271,7 +1223,9 @@ class AppSQLiteStore:
                 else:
                     where_clauses.append("LOWER(wpe.en) LIKE LOWER(?)")
                     params.append(f"%{q}%")
-            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            where_sql = (
+                ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            )
             cur = conn.execute(
                 f"""
                 SELECT COUNT(1) AS c
@@ -1284,7 +1238,6 @@ class AppSQLiteStore:
             row = cur.fetchone()
             return int(row["c"] or 0)
 
-
     def list_examples(
         self,
         *,
@@ -1295,7 +1248,9 @@ class AppSQLiteStore:
         search: str | None = None,
         search_mode: str = "contains",
         category: str | None = None,
-    ) -> list[tuple[int, str, str, str, str, str, str | None, str, str | None, int, int]]:
+    ) -> list[
+        tuple[int, str, str, str, str, str, str | None, str, str | None, int, int]
+    ]:
         """例文一覧（WordPack結合）を返す。
 
         戻り値: [(id, word_pack_id, lemma, category, en, ja, grammar_ja, created_at, word_pack_updated_at, checked_only, learned)]
@@ -1327,7 +1282,9 @@ class AppSQLiteStore:
                 else:
                     where_clauses.append("LOWER(wpe.en) LIKE LOWER(?)")
                     params.append(f"%{q}%")
-            where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            where_sql = (
+                ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+            )
 
             cur = conn.execute(
                 f"""
@@ -1352,7 +1309,11 @@ class AppSQLiteStore:
                 """,
                 tuple(params + [limit, offset]),
             )
-            items: list[tuple[int, str, str, str, str, str, str | None, str, str | None, int, int]] = []
+            items: list[
+                tuple[
+                    int, str, str, str, str, str, str | None, str, str | None, int, int
+                ]
+            ] = []
             for r in cur.fetchall():
                 items.append(
                     (
@@ -1371,7 +1332,6 @@ class AppSQLiteStore:
                 )
             return items
 
+
 # module-level singleton store (wired to settings)
 store = AppSQLiteStore(db_path=settings.wordpack_db_path)
-
-

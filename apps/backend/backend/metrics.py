@@ -8,6 +8,8 @@ from typing import Deque, Dict
 
 @dataclass
 class RequestStats:
+    """Per-path rolling statistics used by :class:`MetricsRegistry`."""
+
     latencies_ms: Deque[float]
     errors: int
     timeouts: int
@@ -25,10 +27,22 @@ class MetricsRegistry:
         self._window_size = window_size
         self._lock = threading.Lock()
         self._per_path: Dict[str, RequestStats] = defaultdict(
-            lambda: RequestStats(latencies_ms=deque(maxlen=self._window_size), errors=0, timeouts=0, total=0)
+            lambda: RequestStats(
+                latencies_ms=deque(maxlen=self._window_size),
+                errors=0,
+                timeouts=0,
+                total=0,
+            )
         )
 
-    def record(self, path: str, latency_ms: float, *, is_error: bool = False, is_timeout: bool = False) -> None:
+    def record(
+        self,
+        path: str,
+        latency_ms: float,
+        *,
+        is_error: bool = False,
+        is_timeout: bool = False,
+    ) -> None:
         with self._lock:
             stats = self._per_path[path]
             stats.latencies_ms.append(latency_ms)
@@ -42,7 +56,11 @@ class MetricsRegistry:
         with self._lock:
             result: Dict[str, Dict[str, float | int]] = {}
             for path, stats in self._per_path.items():
-                p95 = calculate_p95(list(stats.latencies_ms)) if stats.latencies_ms else 0.0
+                p95 = (
+                    calculate_p95(list(stats.latencies_ms))
+                    if stats.latencies_ms
+                    else 0.0
+                )
                 result[path] = {
                     "p95_ms": round(p95, 2),
                     "count": stats.total,
@@ -53,6 +71,7 @@ class MetricsRegistry:
 
 
 def calculate_p95(values: list[float]) -> float:
+    """Calculate the 95th percentile latency from a list of samples."""
     if not values:
         return 0.0
     sorted_vals = sorted(values)
@@ -61,5 +80,3 @@ def calculate_p95(values: list[float]) -> float:
 
 
 registry = MetricsRegistry()
-
-

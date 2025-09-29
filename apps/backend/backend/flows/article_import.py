@@ -1,32 +1,33 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TypedDict
-from datetime import datetime
 import json
 import uuid
+from datetime import datetime
+from typing import Any, Optional, TypedDict
+
+from fastapi import HTTPException
 
 from ..config import settings
+from ..flows.word_pack import WordPackFlow
 from ..logging import logger
-from ..providers import get_llm_provider
-from ..store import store
-from ..sense_title import choose_sense_title
-from ..models.word import WordPack
 from ..models.article import (
-    ArticleImportRequest,
     ArticleDetailResponse,
+    ArticleImportRequest,
     ArticleWordPackLink,
 )
-from . import create_state_graph, StateGraph
+from ..models.word import WordPack
 from ..observability import span
-from fastapi import HTTPException
-from ..flows.word_pack import WordPackFlow
+from ..providers import get_llm_provider
+from ..sense_title import choose_sense_title
+from ..store import store
+from . import StateGraph, create_state_graph
 
 
 class _ArticleState(TypedDict, total=False):
     original_text: str
     # 以下は段階的生成の出力を保持する
-    lemmas: List[str]
-    links: List[ArticleWordPackLink]
+    lemmas: list[str]
+    links: list[ArticleWordPackLink]
     article_id: str
     title_en: str
     body_en: str
@@ -50,42 +51,400 @@ class ArticleImportFlow:
     """
 
     _STOP_LEMMAS: set[str] = {
-        "a","an","the","i","you","he","she","it","we","they","me","him","her","us","them",
-        "my","your","his","her","its","our","their","mine","yours","hers","ours","theirs",
-        "am","is","are","was","were","be","been","being","do","does","did","done","doing",
-        "have","has","had","having","will","would","shall","should","can","could","may","might","must",
-        "to","of","in","on","for","at","by","with","about","as","into","like","through","after","over","between","out","against","during","without","before","under","around","among",
-        "and","or","but","if","because","so","than","too","very","not","no","nor","also","then","there","here",
+        "a",
+        "an",
+        "the",
+        "i",
+        "you",
+        "he",
+        "she",
+        "it",
+        "we",
+        "they",
+        "me",
+        "him",
+        "her",
+        "us",
+        "them",
+        "my",
+        "your",
+        "his",
+        "her",
+        "its",
+        "our",
+        "their",
+        "mine",
+        "yours",
+        "hers",
+        "ours",
+        "theirs",
+        "am",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "do",
+        "does",
+        "did",
+        "done",
+        "doing",
+        "have",
+        "has",
+        "had",
+        "having",
+        "will",
+        "would",
+        "shall",
+        "should",
+        "can",
+        "could",
+        "may",
+        "might",
+        "must",
+        "to",
+        "of",
+        "in",
+        "on",
+        "for",
+        "at",
+        "by",
+        "with",
+        "about",
+        "as",
+        "into",
+        "like",
+        "through",
+        "after",
+        "over",
+        "between",
+        "out",
+        "against",
+        "during",
+        "without",
+        "before",
+        "under",
+        "around",
+        "among",
+        "and",
+        "or",
+        "but",
+        "if",
+        "because",
+        "so",
+        "than",
+        "too",
+        "very",
+        "not",
+        "no",
+        "nor",
+        "also",
+        "then",
+        "there",
+        "here",
     }
 
     _BASIC_LEMMAS: set[str] = {
-        "about","above","across","action","actually","after","again","against","age","ago","air","all","almost",
-        "alone","along","already","always","american","among","another","answer","any","anyone","anything","area",
-        "around","ask","away","back","bad","base","because","become","before","begin","behind","believe","best",
-        "better","big","black","body","book","both","business","call","called","car","care","case","center",
-        "change","child","children","city","class","clear","close","cold","college","come","common","company",
-        "country","course","create","day","days","development","different","difficult","direction","door","down",
-        "early","education","enough","even","evening","event","ever","every","everyone","everything","example",
-        "experience","family","far","father","feel","felt","few","find","first","follow","food","form","friend",
-        "friends","front","full","game","general","get","girl","give","given","good","government","great","group",
-        "hand","hands","happen","happened","hard","head","health","hear","heard","help","high","history","home",
-        "house","idea","important","interest","interesting","issue","job","keep","kind","know","known","large",
-        "last","later","learn","least","leave","left","letter","life","like","line","little","local","long",
-        "look","lot","love","main","major","make","making","man","many","matter","mean","member","men","might",
-        "million","money","month","months","morning","most","mother","move","much","music","name","national",
-        "need","never","new","next","night","nothing","number","often","old","once","open","order","other",
-        "others","part","people","perhaps","place","plan","play","point","power","present","president","problem",
-        "public","question","quite","real","really","reason","receive","research","right","room","run","school",
-        "set","several","show","small","someone","something","sometimes","start","state","story","student","study",
-        "such","system","take","team","tell","term","thing","think","thought","though","together","today","told",
-        "toward","town","try","turn","understand","university","use","used","using","very","want","war","water",
-        "week","weeks","while","white","whole","why","woman","women","word","work","world","write","year","years",
+        "about",
+        "above",
+        "across",
+        "action",
+        "actually",
+        "after",
+        "again",
+        "against",
+        "age",
+        "ago",
+        "air",
+        "all",
+        "almost",
+        "alone",
+        "along",
+        "already",
+        "always",
+        "american",
+        "among",
+        "another",
+        "answer",
+        "any",
+        "anyone",
+        "anything",
+        "area",
+        "around",
+        "ask",
+        "away",
+        "back",
+        "bad",
+        "base",
+        "because",
+        "become",
+        "before",
+        "begin",
+        "behind",
+        "believe",
+        "best",
+        "better",
+        "big",
+        "black",
+        "body",
+        "book",
+        "both",
+        "business",
+        "call",
+        "called",
+        "car",
+        "care",
+        "case",
+        "center",
+        "change",
+        "child",
+        "children",
+        "city",
+        "class",
+        "clear",
+        "close",
+        "cold",
+        "college",
+        "come",
+        "common",
+        "company",
+        "country",
+        "course",
+        "create",
+        "day",
+        "days",
+        "development",
+        "different",
+        "difficult",
+        "direction",
+        "door",
+        "down",
+        "early",
+        "education",
+        "enough",
+        "even",
+        "evening",
+        "event",
+        "ever",
+        "every",
+        "everyone",
+        "everything",
+        "example",
+        "experience",
+        "family",
+        "far",
+        "father",
+        "feel",
+        "felt",
+        "few",
+        "find",
+        "first",
+        "follow",
+        "food",
+        "form",
+        "friend",
+        "friends",
+        "front",
+        "full",
+        "game",
+        "general",
+        "get",
+        "girl",
+        "give",
+        "given",
+        "good",
+        "government",
+        "great",
+        "group",
+        "hand",
+        "hands",
+        "happen",
+        "happened",
+        "hard",
+        "head",
+        "health",
+        "hear",
+        "heard",
+        "help",
+        "high",
+        "history",
+        "home",
+        "house",
+        "idea",
+        "important",
+        "interest",
+        "interesting",
+        "issue",
+        "job",
+        "keep",
+        "kind",
+        "know",
+        "known",
+        "large",
+        "last",
+        "later",
+        "learn",
+        "least",
+        "leave",
+        "left",
+        "letter",
+        "life",
+        "like",
+        "line",
+        "little",
+        "local",
+        "long",
+        "look",
+        "lot",
+        "love",
+        "main",
+        "major",
+        "make",
+        "making",
+        "man",
+        "many",
+        "matter",
+        "mean",
+        "member",
+        "men",
+        "might",
+        "million",
+        "money",
+        "month",
+        "months",
+        "morning",
+        "most",
+        "mother",
+        "move",
+        "much",
+        "music",
+        "name",
+        "national",
+        "need",
+        "never",
+        "new",
+        "next",
+        "night",
+        "nothing",
+        "number",
+        "often",
+        "old",
+        "once",
+        "open",
+        "order",
+        "other",
+        "others",
+        "part",
+        "people",
+        "perhaps",
+        "place",
+        "plan",
+        "play",
+        "point",
+        "power",
+        "present",
+        "president",
+        "problem",
+        "public",
+        "question",
+        "quite",
+        "real",
+        "really",
+        "reason",
+        "receive",
+        "research",
+        "right",
+        "room",
+        "run",
+        "school",
+        "set",
+        "several",
+        "show",
+        "small",
+        "someone",
+        "something",
+        "sometimes",
+        "start",
+        "state",
+        "story",
+        "student",
+        "study",
+        "such",
+        "system",
+        "take",
+        "team",
+        "tell",
+        "term",
+        "thing",
+        "think",
+        "thought",
+        "though",
+        "together",
+        "today",
+        "told",
+        "toward",
+        "town",
+        "try",
+        "turn",
+        "understand",
+        "university",
+        "use",
+        "used",
+        "using",
+        "very",
+        "want",
+        "war",
+        "water",
+        "week",
+        "weeks",
+        "while",
+        "white",
+        "whole",
+        "why",
+        "woman",
+        "women",
+        "word",
+        "work",
+        "world",
+        "write",
+        "year",
+        "years",
         "young",
         # 典型的な挨拶・日常語
-        "hello","hi","thanks","thank","please","okay","ok","bye","welcome","sorry","yeah","yep",
+        "hello",
+        "hi",
+        "thanks",
+        "thank",
+        "please",
+        "okay",
+        "ok",
+        "bye",
+        "welcome",
+        "sorry",
+        "yeah",
+        "yep",
         # 曜日・月
-        "monday","tuesday","wednesday","thursday","friday","saturday","sunday",
-        "january","february","march","april","may","june","july","august","september","october","november","december",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+        "january",
+        "february",
+        "march",
+        "april",
+        "may",
+        "june",
+        "july",
+        "august",
+        "september",
+        "october",
+        "november",
+        "december",
     }
 
     # ---- 役割別プロンプト（サブグラフ相当） ----
@@ -96,7 +455,9 @@ class ArticleImportFlow:
 - 簡潔なタイトルに必要な範囲を超えて言い換えない。
 - 引用符などを付けず、タイトル本文のみを出力する。
 入力:
-<INPUT_START>\n""" + text + """\n<INPUT_END>"""
+<INPUT_START>\n"""
+            + text
+            + """\n<INPUT_END>"""
         )
 
     def _prompt_translation(self, text: str) -> str:
@@ -107,7 +468,9 @@ class ArticleImportFlow:
 - 意味を完全かつ正確に保持する。
 出力は翻訳された日本語本文のみ（追加の解説は禁止）。
 入力:
-<INPUT_START>\n""" + text + """\n<INPUT_END>"""
+<INPUT_START>\n"""
+            + text
+            + """\n<INPUT_END>"""
         )
 
     def _prompt_explanation(self, text: str) -> str:
@@ -119,7 +482,9 @@ class ArticleImportFlow:
 大学教育を受けた学習者向けに、指導的で具体的な解説にする。
 出力は解説文のみとし、引用符などは付けない。
 入力:
-<INPUT_START>\n""" + text + """\n<INPUT_END>"""
+<INPUT_START>\n"""
+            + text
+            + """\n<INPUT_END>"""
         )
 
     def _prompt_lemmas(self, text: str) -> str:
@@ -133,7 +498,9 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
 目安は 5〜30 件。
 返却形式: 文字列の JSON 配列。例: ["supply chain", "mitigate", "trade-off"]。
 入力:
-<INPUT_START>\n""" + text + """\n<INPUT_END>"""
+<INPUT_START>\n"""
+            + text
+            + """\n<INPUT_END>"""
         )
 
     def _strip_code_fences(self, text: str) -> str:
@@ -156,7 +523,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
             t = t2.strip()
         return t
 
-    def _post_filter_lemmas(self, raw: List[str]) -> List[str]:
+    def _post_filter_lemmas(self, raw: list[str]) -> list[str]:
         uniq: list[str] = []
         seen: set[str] = set()
         for t in raw:
@@ -170,7 +537,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                     seen.add(key)
                 continue
             token = s.strip()
-            if not all(ch.isalpha() or ch in {'-', '\''} for ch in token):
+            if not all(ch.isalpha() or ch in {"-", "'"} for ch in token):
                 continue
             low = token.lower()
             if low in self._STOP_LEMMAS:
@@ -197,17 +564,18 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
             reasoning_override=getattr(req, "reasoning", None),
             text_override=getattr(req, "text_opts", None),
         )
+
         # UI/契約と整合する LLM パラメータ表示用の簡易連結
         def _fmt_llm_params() -> str | None:
             parts: list[str] = []
             try:
-                if getattr(req, 'temperature', None) is not None:
+                if getattr(req, "temperature", None) is not None:
                     parts.append(f"temperature={float(req.temperature):.2f}")
-                r = getattr(req, 'reasoning', None) or {}
-                if isinstance(r, dict) and r.get('effort'):
+                r = getattr(req, "reasoning", None) or {}
+                if isinstance(r, dict) and r.get("effort"):
                     parts.append(f"reasoning.effort={r.get('effort')}")
-                t = getattr(req, 'text_opts', None) or {}
-                if isinstance(t, dict) and t.get('verbosity'):
+                t = getattr(req, "text_opts", None) or {}
+                if isinstance(t, dict) and t.get("verbosity"):
                     parts.append(f"text.verbosity={t.get('verbosity')}")
             except Exception:
                 pass
@@ -245,6 +613,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
             saved_article_id: Optional[str] = None
             # 入力の要点を構造化ログ
             import hashlib as _hf  # local import
+
             preview = original_text[:120]
             payload = {
                 "text_chars": len(original_text),
@@ -252,7 +621,9 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
             }
             if original_text:
                 try:
-                    payload["text_sha256"] = _hf.sha256(original_text.encode("utf-8", errors="ignore")).hexdigest()
+                    payload["text_sha256"] = _hf.sha256(
+                        original_text.encode("utf-8", errors="ignore")
+                    ).hexdigest()
                 except Exception:
                     pass
             logger.info("article_import_start", **payload)
@@ -266,42 +637,69 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 payload = {"prompt_chars": len(pr), "prompt_preview": pr[:200]}
                 with span(trace=None, name="article.title.prompt", input=payload):
                     pass
-                with span(trace=None, name="article.title.llm", input={"prompt_chars": len(pr)}):
+                with span(
+                    trace=None,
+                    name="article.title.llm",
+                    input={"prompt_chars": len(pr)},
+                ):
                     out = llm.complete(pr)
                 t = str(out or "").strip()
                 t = self._strip_code_fences(t)
                 # 安全側: 空なら Untitled（UI互換）。ダミー生成ではなく保存時に明示化するだけ。
                 s["title_en"] = t or "Untitled"
-                logger.info("article_import_title_generated", title_len=len(s["title_en"]))
+                logger.info(
+                    "article_import_title_generated", title_len=len(s["title_en"])
+                )
                 return s
 
             def _generate_translation(s: _ArticleState) -> _ArticleState:
                 txt = original_text
                 pr = self._prompt_translation(txt)
-                with span(trace=None, name="article.translation.prompt", input={"prompt_chars": len(pr)}):
+                with span(
+                    trace=None,
+                    name="article.translation.prompt",
+                    input={"prompt_chars": len(pr)},
+                ):
                     pass
-                with span(trace=None, name="article.translation.llm", input={"prompt_chars": len(pr)}):
+                with span(
+                    trace=None,
+                    name="article.translation.llm",
+                    input={"prompt_chars": len(pr)},
+                ):
                     out = llm.complete(pr)
                 ja = str(out or "").strip()
                 ja = self._strip_code_fences(ja)
                 s["body_ja"] = ja
-                logger.info("article_import_translation_generated", body_ja_chars=len(ja))
+                logger.info(
+                    "article_import_translation_generated", body_ja_chars=len(ja)
+                )
                 return s
 
             def _generate_explanation(s: _ArticleState) -> _ArticleState:
                 txt = original_text
                 pr = self._prompt_explanation(txt)
-                with span(trace=None, name="article.explanation.prompt", input={"prompt_chars": len(pr)}):
+                with span(
+                    trace=None,
+                    name="article.explanation.prompt",
+                    input={"prompt_chars": len(pr)},
+                ):
                     pass
-                with span(trace=None, name="article.explanation.llm", input={"prompt_chars": len(pr)}):
+                with span(
+                    trace=None,
+                    name="article.explanation.llm",
+                    input={"prompt_chars": len(pr)},
+                ):
                     out = llm.complete(pr)
                 note = str(out or "").strip()
                 note = self._strip_code_fences(note)
                 s["notes_ja"] = note or None
-                logger.info("article_import_explanation_generated", notes_ja_chars=len(note or ""))
+                logger.info(
+                    "article_import_explanation_generated",
+                    notes_ja_chars=len(note or ""),
+                )
                 return s
 
-            def _parse_lemmas_json(raw: str) -> List[str]:
+            def _parse_lemmas_json(raw: str) -> list[str]:
                 try:
                     cleaned = self._strip_code_fences(str(raw))
                     data = json.loads(cleaned)
@@ -310,15 +708,25 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                     if isinstance(data, dict) and isinstance(data.get("lemmas"), list):
                         return [str(x) for x in data.get("lemmas", [])]
                 except Exception as exc:
-                    logger.info("article_import_lemmas_json_parse_failed", error=str(exc))
+                    logger.info(
+                        "article_import_lemmas_json_parse_failed", error=str(exc)
+                    )
                 return []
 
             def _generate_lemmas(s: _ArticleState) -> _ArticleState:
                 txt = original_text
                 pr = self._prompt_lemmas(txt)
-                with span(trace=None, name="article.lemmas.prompt", input={"prompt_chars": len(pr)}):
+                with span(
+                    trace=None,
+                    name="article.lemmas.prompt",
+                    input={"prompt_chars": len(pr)},
+                ):
                     pass
-                with span(trace=None, name="article.lemmas.llm", input={"prompt_chars": len(pr)}):
+                with span(
+                    trace=None,
+                    name="article.lemmas.llm",
+                    input={"prompt_chars": len(pr)},
+                ):
                     out = llm.complete(pr)
                 raw_list = _parse_lemmas_json(str(out or ""))
                 s["lemmas"] = raw_list
@@ -335,7 +743,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 s["lemmas"] = lemmas
                 logger.info(
                     "article_import_lemmas_filtered",
-                    input_count=len((raw_list if 'raw_list' in locals() else [])),
+                    input_count=len((raw_list if "raw_list" in locals() else [])),
                     output_count=len(lemmas),
                 )
                 return s
@@ -343,26 +751,57 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
             def _link_or_create_wordpacks(s: _ArticleState) -> _ArticleState:
                 lemmas = s.get("lemmas", [])
                 links: list[ArticleWordPackLink] = []
-                with span(trace=None, name="article.link_or_create_wordpacks", input={"lemma_count": len(lemmas)}):
+                with span(
+                    trace=None,
+                    name="article.link_or_create_wordpacks",
+                    input={"lemma_count": len(lemmas)},
+                ):
                     for lemma in lemmas:
                         wp_id = store.find_word_pack_id_by_lemma(lemma)
                         status = "existing"
                         if wp_id is None:
                             empty_word_pack = WordPack(
                                 lemma=lemma,
-                                sense_title=choose_sense_title(None, [], lemma=lemma, limit=20),
-                                pronunciation={"ipa_GA": None, "ipa_RP": None, "syllables": None, "stress_index": None, "linking_notes": []},
+                                sense_title=choose_sense_title(
+                                    None, [], lemma=lemma, limit=20
+                                ),
+                                pronunciation={
+                                    "ipa_GA": None,
+                                    "ipa_RP": None,
+                                    "syllables": None,
+                                    "stress_index": None,
+                                    "linking_notes": [],
+                                },
                                 senses=[],
-                                collocations={"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
+                                collocations={
+                                    "general": {
+                                        "verb_object": [],
+                                        "adj_noun": [],
+                                        "prep_noun": [],
+                                    },
+                                    "academic": {
+                                        "verb_object": [],
+                                        "adj_noun": [],
+                                        "prep_noun": [],
+                                    },
+                                },
                                 contrast=[],
-                                examples={"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []},
+                                examples={
+                                    "Dev": [],
+                                    "CS": [],
+                                    "LLM": [],
+                                    "Business": [],
+                                    "Common": [],
+                                },
                                 etymology={"note": "-", "confidence": "low"},
                                 study_card="",
                                 citations=[],
                                 confidence="low",
                             )
                             wp_id = f"wp:{lemma}:{uuid.uuid4().hex[:8]}"
-                            store.save_word_pack(wp_id, lemma, empty_word_pack.model_dump_json())
+                            store.save_word_pack(
+                                wp_id, lemma, empty_word_pack.model_dump_json()
+                            )
                             status = "created"
                         is_empty = True
                         try:
@@ -372,15 +811,34 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                                 d = json.loads(data_json)
                                 senses_empty = not d.get("senses")
                                 ex = d.get("examples") or {}
-                                examples_empty = all(not (ex.get(k) or []) for k in ["Dev","CS","LLM","Business","Common"])
-                                study_empty = not bool((d.get("study_card") or "").strip())
-                                is_empty = bool(senses_empty and examples_empty and study_empty)
+                                examples_empty = all(
+                                    not (ex.get(k) or [])
+                                    for k in ["Dev", "CS", "LLM", "Business", "Common"]
+                                )
+                                study_empty = not bool(
+                                    (d.get("study_card") or "").strip()
+                                )
+                                is_empty = bool(
+                                    senses_empty and examples_empty and study_empty
+                                )
                         except Exception:
                             is_empty = True
-                        links.append(ArticleWordPackLink(word_pack_id=wp_id, lemma=lemma, status=status, is_empty=is_empty))
+                        links.append(
+                            ArticleWordPackLink(
+                                word_pack_id=wp_id,
+                                lemma=lemma,
+                                status=status,
+                                is_empty=is_empty,
+                            )
+                        )
                 s["links"] = links
                 created = sum(1 for l in links if l.status == "created")
-                logger.info("article_import_link_or_create_done", total=len(links), created=created, existing=len(links) - created)
+                logger.info(
+                    "article_import_link_or_create_done",
+                    total=len(links),
+                    created=created,
+                    existing=len(links) - created,
+                )
                 return s
 
             def _save_article(s: _ArticleState) -> _ArticleState:
@@ -389,10 +847,26 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 body_ja = str(s.get("body_ja") or "").strip()
                 notes_ja = str(s.get("notes_ja") or "").strip() or None
                 # LangGraph の差分返却で state からキーが脱落しても閉包の選択値で補完する
-                llm_model = str((s.get("llm_model") or selected_llm_model or "")).strip() or None
-                llm_params = str((s.get("llm_params") or formatted_llm_params or "")).strip() or None
-                generation_category_local = str((s.get("generation_category") or generation_category or "")).strip() or None
-                started_at = str((s.get("generation_started_at") or generation_started_at or "")).strip() or None
+                llm_model = (
+                    str((s.get("llm_model") or selected_llm_model or "")).strip()
+                    or None
+                )
+                llm_params = (
+                    str((s.get("llm_params") or formatted_llm_params or "")).strip()
+                    or None
+                )
+                generation_category_local = (
+                    str(
+                        (s.get("generation_category") or generation_category or "")
+                    ).strip()
+                    or None
+                )
+                started_at = (
+                    str(
+                        (s.get("generation_started_at") or generation_started_at or "")
+                    ).strip()
+                    or None
+                )
                 completed_at = datetime.utcnow().isoformat()
                 s["generation_completed_at"] = completed_at
                 duration_ms = None
@@ -406,6 +880,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                             duration_ms = 0
                         else:
                             import math as _m
+
                             duration_ms = max(1, int(_m.ceil(raw_ms)))
                 except Exception:
                     duration_ms = None
@@ -426,7 +901,10 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                         llm_model=llm_model,
                         llm_params=llm_params,
                         generation_category=generation_category_local,
-                        related_word_packs=[(l.word_pack_id, l.lemma, l.status) for l in s.get("links", [])],
+                        related_word_packs=[
+                            (l.word_pack_id, l.lemma, l.status)
+                            for l in s.get("links", [])
+                        ],
                         created_at=started_at,
                         updated_at=completed_at,
                         generation_started_at=started_at,
@@ -455,8 +933,10 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                             or updated_at
                         )
                         if len(meta) >= 12:
-                            duration_ms_db = meta[11] if meta[11] is not None else duration_ms_db
-                        s["generation_category"] = (meta[6] or generation_category_local)
+                            duration_ms_db = (
+                                meta[11] if meta[11] is not None else duration_ms_db
+                            )
+                        s["generation_category"] = meta[6] or generation_category_local
                         # LLM メタも欠落時にフォールバック（UI の未記録を避ける）
                         try:
                             if not (meta[4] or None):
@@ -483,13 +963,18 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                         needs_resave = False
                         # 1) duration: if 0/None but timestamps exist, recompute with ceil to >=1ms
                         fixed_duration: int | None = duration_ms_db
-                        if (fixed_duration is None or fixed_duration == 0) and started_at_db and completed_at_db:
+                        if (
+                            (fixed_duration is None or fixed_duration == 0)
+                            and started_at_db
+                            and completed_at_db
+                        ):
                             try:
                                 _st = datetime.fromisoformat(started_at_db)
                                 _ed = datetime.fromisoformat(completed_at_db)
                                 raw = (_ed - _st).total_seconds() * 1000.0
                                 if raw > 0:
                                     import math as _m2
+
                                     fixed_duration = max(1, int(_m2.ceil(raw)))
                                 else:
                                     fixed_duration = 0
@@ -503,7 +988,9 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                         if not fixed_params:
                             fixed_params = str(llm_params or "")
                         # Decide resave
-                        if (duration_ms_db is None or duration_ms_db == 0) and (fixed_duration is not None and fixed_duration > 0):
+                        if (duration_ms_db is None or duration_ms_db == 0) and (
+                            fixed_duration is not None and fixed_duration > 0
+                        ):
                             needs_resave = True
                         if (not (meta and meta[4])) and fixed_model:
                             needs_resave = True
@@ -518,30 +1005,36 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                                 notes_ja=notes_ja,
                                 llm_model=(fixed_model or None),
                                 llm_params=(fixed_params or None),
-                                generation_category=s.get("generation_category") or generation_category_local,
-                                related_word_packs=[(l.word_pack_id, l.lemma, l.status) for l in s.get("links", [])],
+                                generation_category=s.get("generation_category")
+                                or generation_category_local,
+                                related_word_packs=[
+                                    (l.word_pack_id, l.lemma, l.status)
+                                    for l in s.get("links", [])
+                                ],
                                 created_at=started_at_db,
                                 updated_at=completed_at_db,
                                 generation_started_at=started_at_db,
                                 generation_completed_at=completed_at_db,
                                 generation_duration_ms=fixed_duration,
                             )
-                            s["llm_model"] = (fixed_model or None)
-                            s["llm_params"] = (fixed_params or None)
+                            s["llm_model"] = fixed_model or None
+                            s["llm_params"] = fixed_params or None
                             if fixed_duration is not None:
                                 s["generation_duration_ms"] = fixed_duration
                     except Exception:
                         # リペアは最終結果に影響しない（読み込みは既に成功している）
                         pass
-                s.update({
-                    "article_id": article_id,
-                    "title_en": title_en,
-                    "body_en": body_en,
-                    "body_ja": body_ja,
-                    "notes_ja": notes_ja,
-                    "created_at": created_at,
-                    "updated_at": updated_at,
-                })
+                s.update(
+                    {
+                        "article_id": article_id,
+                        "title_en": title_en,
+                        "body_en": body_en,
+                        "body_ja": body_ja,
+                        "notes_ja": notes_ja,
+                        "created_at": created_at,
+                        "updated_at": updated_at,
+                    }
+                )
                 logger.info(
                     "article_import_saved",
                     article_id=article_id,
@@ -591,7 +1084,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 s = _link_or_create_wordpacks(s)
                 # LLM 情報を state に反映
                 try:
-                    s["llm_model"] = getattr(req, 'model', None) or settings.llm_model
+                    s["llm_model"] = getattr(req, "model", None) or settings.llm_model
                     s["llm_params"] = _fmt_llm_params()
                     s["generation_category"] = generation_category
                     if "generation_started_at" not in s:
@@ -610,7 +1103,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
             s = _link_or_create_wordpacks(s)  # type: ignore[name-defined]
             # LLM 情報を state に反映
             try:
-                s["llm_model"] = getattr(req, 'model', None) or settings.llm_model
+                s["llm_model"] = getattr(req, "model", None) or settings.llm_model
                 s["llm_params"] = _fmt_llm_params()
                 s["generation_category"] = generation_category
                 if "generation_started_at" not in s:
@@ -653,7 +1146,8 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 links,
             ) = got
             link_models: list[ArticleWordPackLink] = [
-                ArticleWordPackLink(word_pack_id=wp, lemma=lm, status=st, is_empty=True) for (wp, lm, st) in links
+                ArticleWordPackLink(word_pack_id=wp, lemma=lm, status=st, is_empty=True)
+                for (wp, lm, st) in links
             ]
             # is_empty はUI用の推定のため簡易再判定
             try:
@@ -666,9 +1160,14 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                             d = json.loads(data_json)
                             senses_empty = not d.get("senses")
                             ex = d.get("examples") or {}
-                            examples_empty = all(not (ex.get(k) or []) for k in ["Dev","CS","LLM","Business","Common"]) 
+                            examples_empty = all(
+                                not (ex.get(k) or [])
+                                for k in ["Dev", "CS", "LLM", "Business", "Common"]
+                            )
                             study_empty = not bool((d.get("study_card") or "").strip())
-                            is_empty = bool(senses_empty and examples_empty and study_empty)
+                            is_empty = bool(
+                                senses_empty and examples_empty and study_empty
+                            )
                     except Exception:
                         is_empty = True
                     link_models[i].is_empty = is_empty
@@ -692,7 +1191,8 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 generation_completed_at=(generation_completed_at_db or None),
                 generation_duration_ms=(
                     int(generation_duration_ms_db)
-                    if isinstance(generation_duration_ms_db, (int, float)) and not isinstance(generation_duration_ms_db, bool)
+                    if isinstance(generation_duration_ms_db, (int, float))
+                    and not isinstance(generation_duration_ms_db, bool)
                     else None
                 ),
             )
@@ -704,6 +1204,9 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 detail={
                     "message": "Exception while reloading article after save",
                     "reason_code": "ARTICLE_DB_RELOAD_ERROR",
-                    "diagnostics": {"error": str(exc), "article_id": str(s.get("article_id") or "")},
+                    "diagnostics": {
+                        "error": str(exc),
+                        "article_id": str(s.get("article_id") or ""),
+                    },
                 },
             )

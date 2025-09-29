@@ -1,20 +1,20 @@
 from __future__ import annotations
 
-from typing import Any, List, Optional, Tuple
 import json
 import uuid
+from typing import Any, Optional
 
 from fastapi import HTTPException
 
-from ..providers import get_llm_provider
-from ..logging import logger
-from ..store import store
-from ..sense_title import choose_sense_title
-from ..models.word import WordPack, ExampleCategory
-from ..flows.word_pack import WordPackFlow
 from ..flows.article_import import ArticleImportFlow
+from ..flows.word_pack import WordPackFlow
+from ..logging import logger
 from ..models.article import ArticleImportRequest
+from ..models.word import ExampleCategory, WordPack
 from ..observability import span
+from ..providers import get_llm_provider
+from ..sense_title import choose_sense_title
+from ..store import store
 
 
 class CategoryGenerateAndImportFlow:
@@ -25,7 +25,14 @@ class CategoryGenerateAndImportFlow:
     - Uses existing flows for examples and article import to keep contracts consistent.
     """
 
-    def __init__(self, *, model: Optional[str] = None, temperature: Optional[float] = None, reasoning: Optional[dict] = None, text: Optional[dict] = None) -> None:
+    def __init__(
+        self,
+        *,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        reasoning: Optional[dict] = None,
+        text: Optional[dict] = None,
+    ) -> None:
         self._llm = get_llm_provider(
             model_override=model,
             temperature_override=temperature,
@@ -45,13 +52,15 @@ class CategoryGenerateAndImportFlow:
             "text_opts": text,
         }
 
-    def _prompt_lemma(self, category: ExampleCategory, attempted: List[str], avoid_existing: List[str]) -> str:
+    def _prompt_lemma(
+        self, category: ExampleCategory, attempted: list[str], avoid_existing: list[str]
+    ) -> str:
         attempted_list = ", ".join(attempted) if attempted else "(none)"
         existing_list = ", ".join(avoid_existing[:30]) if avoid_existing else "(none)"
         return (
             "あなたは例文生成のためにカテゴリに密接に関連する英語の lemma を選定する。\n"
             f"対象カテゴリ: {category.value}。\n"
-            "出力は {\"lemma\": \"...\"} というキーを1つだけ持つ JSON オブジェクト1件に限定し、説明文を書かないこと。\n"
+            '出力は {"lemma": "..."} というキーを1つだけ持つ JSON オブジェクト1件に限定し、説明文を書かないこと。\n'
             "指示:\n"
             "- lemma は対象カテゴリ（Dev, CS, LLM, Business, Common）の専門領域に強く関連させる。\n"
             "- 試行ごとに主流語とニッチな専門語をバランスよく含め、繰り返しの偏りを避ける。\n"
@@ -64,12 +73,12 @@ class CategoryGenerateAndImportFlow:
             "出力は必ず JSON のみ。"
         )
 
-    def _existing_lemmas_sample(self, limit: int = 50) -> List[str]:
+    def _existing_lemmas_sample(self, limit: int = 50) -> list[str]:
         try:
             items = store.list_word_packs(limit=limit, offset=0)
         except Exception:
             return []
-        out: List[str] = []
+        out: list[str] = []
         for _id, lemma, _sense_title, _c, _u in items:
             try:
                 out.append(str(lemma).strip().lower())
@@ -77,21 +86,33 @@ class CategoryGenerateAndImportFlow:
                 continue
         # unique preserving order
         seen: set[str] = set()
-        uniq: List[str] = []
+        uniq: list[str] = []
         for w in out:
             if w and w not in seen:
                 seen.add(w)
                 uniq.append(w)
         return uniq
 
-    def _fallback_candidates(self, category: ExampleCategory) -> List[str]:
-        base: List[str] = [
+    def _fallback_candidates(self, category: ExampleCategory) -> list[str]:
+        base: list[str] = [
             # generic, but not function words; safe ascii
-            "memoization", "serialization", "throughput", "latency", "idempotency",
-            "refactor", "concurrency", "race condition", "transaction", "consistency",
-            "sharding", "load testing", "rate limiting", "retry policy", "circuit breaker",
+            "memoization",
+            "serialization",
+            "throughput",
+            "latency",
+            "idempotency",
+            "refactor",
+            "concurrency",
+            "race condition",
+            "transaction",
+            "consistency",
+            "sharding",
+            "load testing",
+            "rate limiting",
+            "retry policy",
+            "circuit breaker",
         ]
-        by_cat: dict[str, List[str]] = {
+        by_cat: dict[str, list[str]] = {
             "Dev": base + ["feature flag", "observability", "telemetry"],
             "CS": base + ["graph traversal", "hash table", "binary search"],
             "LLM": base + ["tokenization", "prompt engineering", "hallucination"],
@@ -101,17 +122,29 @@ class CategoryGenerateAndImportFlow:
         return by_cat.get(category.value, base)
 
     def _choose_new_lemma(self, category: ExampleCategory, max_retries: int = 5) -> str:
-        attempted: List[str] = []
+        attempted: list[str] = []
         avoid_existing = self._existing_lemmas_sample(limit=60)
         for _ in range(max_retries):
             prompt = self._prompt_lemma(category, attempted, avoid_existing)
             # 観測: プロンプトと LLM 呼び出し
             try:
-                with span(trace=None, name="category.pick_lemma.prompt", input={"prompt_chars": len(prompt), "category": category.value, "attempted": len(attempted)}):
+                with span(
+                    trace=None,
+                    name="category.pick_lemma.prompt",
+                    input={
+                        "prompt_chars": len(prompt),
+                        "category": category.value,
+                        "attempted": len(attempted),
+                    },
+                ):
                     pass
             except Exception:
                 pass
-            with span(trace=None, name="category.pick_lemma.llm", input={"prompt_chars": len(prompt)}):
+            with span(
+                trace=None,
+                name="category.pick_lemma.llm",
+                input={"prompt_chars": len(prompt)},
+            ):
                 out = self._llm.complete(prompt)
             try:
                 data = json.loads((out or "").strip().strip("`"))
@@ -139,26 +172,42 @@ class CategoryGenerateAndImportFlow:
             if not lc or lc in attempted:
                 continue
             if store.find_word_pack_id_by_lemma(lc) is None:
-                logger.info("category_pick_lemma_fallback", category=category.value, lemma=lc)
+                logger.info(
+                    "category_pick_lemma_fallback", category=category.value, lemma=lc
+                )
                 return lc
         # still no choice
-        raise HTTPException(status_code=409, detail={
-            "message": "No unique lemma could be chosen after retries",
-            "reason_code": "LEMMA_DUPLICATE_OR_INVALID",
-            "attempted": attempted,
-        })
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "No unique lemma could be chosen after retries",
+                "reason_code": "LEMMA_DUPLICATE_OR_INVALID",
+                "attempted": attempted,
+            },
+        )
 
     def _ensure_empty_wordpack(self, lemma: str) -> str:
-        with span(trace=None, name="category.ensure_wordpack.lookup", input={"lemma": lemma}):
+        with span(
+            trace=None, name="category.ensure_wordpack.lookup", input={"lemma": lemma}
+        ):
             existing = store.find_word_pack_id_by_lemma(lemma)
         if existing is not None:
             return existing
         empty_word_pack = WordPack(
             lemma=lemma,
             sense_title=choose_sense_title(None, [], lemma=lemma, limit=20),
-            pronunciation={"ipa_GA": None, "ipa_RP": None, "syllables": None, "stress_index": None, "linking_notes": []},
+            pronunciation={
+                "ipa_GA": None,
+                "ipa_RP": None,
+                "syllables": None,
+                "stress_index": None,
+                "linking_notes": [],
+            },
             senses=[],
-            collocations={"general": {"verb_object": [], "adj_noun": [], "prep_noun": []}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}},
+            collocations={
+                "general": {"verb_object": [], "adj_noun": [], "prep_noun": []},
+                "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []},
+            },
             contrast=[],
             examples={"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []},
             etymology={"note": "-", "confidence": "low"},
@@ -167,42 +216,70 @@ class CategoryGenerateAndImportFlow:
             confidence="low",
         )
         wp_id = f"wp:{lemma}:{uuid.uuid4().hex[:8]}"
-        with span(trace=None, name="category.ensure_wordpack.create", input={"lemma": lemma}):
+        with span(
+            trace=None, name="category.ensure_wordpack.create", input={"lemma": lemma}
+        ):
             store.save_word_pack(wp_id, lemma, empty_word_pack.model_dump_json())
         return wp_id
 
-    def _generate_two_examples(self, lemma: str, category: ExampleCategory) -> List[dict]:
+    def _generate_two_examples(
+        self, lemma: str, category: ExampleCategory
+    ) -> list[dict]:
         flow = WordPackFlow(chroma_client=None, llm=self._llm, llm_info=self._llm_info)
         plan = {category: 2}
-        with span(trace=None, name="category.generate_examples", input={"lemma": lemma, "category": category.value, "count": 2}):
+        with span(
+            trace=None,
+            name="category.generate_examples",
+            input={"lemma": lemma, "category": category.value, "count": 2},
+        ):
             gen = flow.generate_examples_for_categories(lemma, plan)
         items_model = gen.get(category, [])
-        items: List[dict] = []
+        items: list[dict] = []
         for it in items_model:
-            items.append({
-                "en": it.en,
-                "ja": it.ja,
-                "grammar_ja": it.grammar_ja,
-                "llm_model": it.llm_model,
-                "llm_params": it.llm_params,
-            })
+            items.append(
+                {
+                    "en": it.en,
+                    "ja": it.ja,
+                    "grammar_ja": it.grammar_ja,
+                    "llm_model": it.llm_model,
+                    "llm_params": it.llm_params,
+                }
+            )
         if len(items) < 2:
-            raise HTTPException(status_code=502, detail="LLM returned insufficient examples")
+            raise HTTPException(
+                status_code=502, detail="LLM returned insufficient examples"
+            )
         return items[:2]
 
     def run(self, category: ExampleCategory) -> dict:
         lemma = self._choose_new_lemma(category)
         wp_id = self._ensure_empty_wordpack(lemma)
         items = self._generate_two_examples(lemma, category)
-        with span(trace=None, name="category.save_examples", input={"word_pack_id": wp_id, "category": category.value, "count": len(items)}):
+        with span(
+            trace=None,
+            name="category.save_examples",
+            input={
+                "word_pack_id": wp_id,
+                "category": category.value,
+                "count": len(items),
+            },
+        ):
             store.append_examples(wp_id, category.value, items)
 
         # Import each example as an article
-        article_ids: List[str] = []
+        article_ids: list[str] = []
         art_flow = ArticleImportFlow()
         for ex in items:
             try:
-                with span(trace=None, name="category.import_article", input={"lemma": lemma, "category": category.value, "text_chars": len(str(ex.get("en") or ""))}):
+                with span(
+                    trace=None,
+                    name="category.import_article",
+                    input={
+                        "lemma": lemma,
+                        "category": category.value,
+                        "text_chars": len(str(ex.get("en") or "")),
+                    },
+                ):
                     # ArticleImportFlow に LLM パラメータを引き継ぐ
                     req_payload = ArticleImportRequest(
                         text=str(ex.get("en") or ""),
@@ -216,7 +293,11 @@ class CategoryGenerateAndImportFlow:
                 article_ids.append(res.id)
             except Exception:
                 # Skip failed imports but continue
-                logger.info("category_example_import_failed", lemma=lemma, category=category.value)
+                logger.info(
+                    "category_example_import_failed",
+                    lemma=lemma,
+                    category=category.value,
+                )
         return {
             "lemma": lemma,
             "word_pack_id": wp_id,
@@ -224,5 +305,3 @@ class CategoryGenerateAndImportFlow:
             "generated_examples": len(items),
             "article_ids": article_ids,
         }
-
-

@@ -1,34 +1,35 @@
-from fastapi import APIRouter, HTTPException, Query
 import json
 import uuid
-import anyio  # オフロード用
 from datetime import datetime
 from functools import partial
+from typing import Any, Optional
 
+import anyio  # オフロード用
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
+
+from ..config import settings
 from ..flows.word_pack import WordPackFlow
 from ..providers import get_llm_provider
-from ..config import settings
+from ..logging import logger
 from ..models.word import (
-    WordPackRequest,
-    WordPackCreateRequest,
     WordPack,
-    WordPackListResponse,
-    WordPackListItem,
-    WordPackRegenerateRequest,
     ExampleCategory,
-    ExampleListResponse,
     ExampleListItem,
+    ExampleListResponse,
     ExamplesBulkDeleteRequest,
     ExamplesBulkDeleteResponse,
+    WordPackCreateRequest,
+    WordPackListItem,
+    WordPackListResponse,
+    WordPackRegenerateRequest,
+    WordPackRequest,
     StudyProgressRequest,
     WordPackStudyProgressResponse,
     ExampleStudyProgressResponse,
 )
 from ..store import store
 from ..sense_title import choose_sense_title
-from ..logging import logger
-from pydantic import BaseModel, Field
-from typing import Optional, Any
 
 router = APIRouter(tags=["word"])
 
@@ -40,9 +41,14 @@ async def lookup_word() -> dict[str, object]:
     strict_mode の場合は未実装として 501 を返す。テスト互換のため非 strict では固定応答。
     """
     from ..config import settings
+
     if settings.strict_mode:
-        raise HTTPException(status_code=501, detail="Not Implemented: /api/word in strict mode")
+        raise HTTPException(
+            status_code=501, detail="Not Implemented: /api/word in strict mode"
+        )
     return {"definition": None, "examples": []}
+
+
 @router.post(
     "/packs",
     response_model=dict,
@@ -75,11 +81,14 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
             out: str = llm.complete(prompt)  # type: ignore[attr-defined]
         except Exception as exc:  # LLM 呼出し失敗
             if settings.strict_mode:
-                raise HTTPException(status_code=502, detail={
-                    "message": "LLM failed to generate sense_title (strict mode)",
-                    "reason_code": "LLM_FAILURE",
-                    "diagnostics": {"lemma": lemma, "error": str(exc)[:200]},
-                }) from exc
+                raise HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "LLM failed to generate sense_title (strict mode)",
+                        "reason_code": "LLM_FAILURE",
+                        "diagnostics": {"lemma": lemma, "error": str(exc)[:200]},
+                    },
+                ) from exc
             out = ""
         cand = (out or "").strip().splitlines()[0] if isinstance(out, str) else ""
         # 余分な引用符や記号を簡易除去
@@ -96,7 +105,9 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
     # スキーマ準拠の空WordPackを構築
     empty_word_pack = WordPack(
         lemma=lemma,
-        sense_title=(generated_title or choose_sense_title(None, [], lemma=lemma, limit=20)),
+        sense_title=(
+            generated_title or choose_sense_title(None, [], lemma=lemma, limit=20)
+        ),
         pronunciation={
             "ipa_GA": None,
             "ipa_RP": None,
@@ -123,7 +134,6 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
     return {"id": word_pack_id}
 
 
-
 @router.post(
     "/pack",
     response_model=WordPack,
@@ -143,28 +153,30 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     chroma_client = None
     # リクエストでモデル/パラメータが指定されていればオーバーライド
     llm = get_llm_provider(
-        model_override=getattr(req, 'model', None),
-        temperature_override=getattr(req, 'temperature', None),
-        reasoning_override=getattr(req, 'reasoning', None),
-        text_override=getattr(req, 'text', None),
+        model_override=getattr(req, "model", None),
+        temperature_override=getattr(req, "temperature", None),
+        reasoning_override=getattr(req, "reasoning", None),
+        text_override=getattr(req, "text", None),
     )
+
     # 例文の LLM メタ付与用に、モデル名とパラメータ文字列を組み立て
     def _format_llm_params_for_request() -> str | None:
         try:
             parts: list[str] = []
-            if getattr(req, 'temperature', None) is not None:
+            if getattr(req, "temperature", None) is not None:
                 parts.append(f"temperature={float(req.temperature):.2f}")
-            r = getattr(req, 'reasoning', None) or {}
-            if isinstance(r, dict) and r.get('effort'):
+            r = getattr(req, "reasoning", None) or {}
+            if isinstance(r, dict) and r.get("effort"):
                 parts.append(f"reasoning.effort={r.get('effort')}")
-            t = getattr(req, 'text', None) or {}
-            if isinstance(t, dict) and t.get('verbosity'):
+            t = getattr(req, "text", None) or {}
+            if isinstance(t, dict) and t.get("verbosity"):
                 parts.append(f"text.verbosity={t.get('verbosity')}")
             return ";".join(parts) if parts else None
         except Exception:
             return None
+
     llm_info = {
-        "model": getattr(req, 'model', None) or settings.llm_model,
+        "model": getattr(req, "model", None) or settings.llm_model,
         "params": _format_llm_params_for_request(),
     }
     flow = WordPackFlow(chroma_client=chroma_client, llm=llm, llm_info=llm_info)
@@ -185,19 +197,19 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
                 regenerate_scope=req.regenerate_scope,
             )
         )
-        
+
         # 生成に使用した LLM 情報を WordPack に反映（常に最新で上書き）
         try:
-            setattr(word_pack, 'llm_model', llm_info.get('model'))
-            setattr(word_pack, 'llm_params', llm_info.get('params'))
+            setattr(word_pack, "llm_model", llm_info.get("model"))
+            setattr(word_pack, "llm_params", llm_info.get("params"))
         except Exception:
             pass
-        
+
         # WordPackをデータベースに保存
         word_pack_id = f"wp:{req.lemma}:{uuid.uuid4().hex[:8]}"
         word_pack_data = word_pack.model_dump_json()
         store.save_word_pack(word_pack_id, req.lemma, word_pack_data)
-        
+
         logger.info(
             "wordpack_generate_response",
             lemma=word_pack.lemma,
@@ -246,7 +258,11 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
                         "hint": "少し待って再試行。モデル/アカウントのレート制限を確認。リトライ上限を増やす。",
                     },
                 ) from exc
-            if "reason_code=AUTH" in msg or "invalid api key" in low or "unauthorized" in low:
+            if (
+                "reason_code=AUTH" in msg
+                or "invalid api key" in low
+                or "unauthorized" in low
+            ):
                 raise HTTPException(
                     status_code=401,
                     detail={
@@ -344,7 +360,9 @@ async def update_word_pack_study_progress(
     learned_increment = 0
     if req.kind == "learned":
         learned_increment = 1
-    result = store.update_word_pack_study_progress(word_pack_id, checked_increment, learned_increment)
+    result = store.update_word_pack_study_progress(
+        word_pack_id, checked_increment, learned_increment
+    )
     if result is None:
         raise HTTPException(status_code=404, detail="WordPack not found")
     checked_only_count, learned_count = result
@@ -366,7 +384,7 @@ async def get_word_pack(word_pack_id: str) -> WordPack:
     result = store.get_word_pack(word_pack_id)
     if result is None:
         raise HTTPException(status_code=404, detail="WordPack not found")
-    
+
     lemma, data, created_at, updated_at = result
     try:
         word_pack_dict = json.loads(data)
@@ -383,44 +401,45 @@ async def get_word_pack(word_pack_id: str) -> WordPack:
     response_description="既存のWordPackを再生成して返します",
 )
 async def regenerate_word_pack(
-    word_pack_id: str, 
-    req: WordPackRegenerateRequest
+    word_pack_id: str, req: WordPackRegenerateRequest
 ) -> WordPack:
     """既存のWordPackを再生成する。"""
     # 既存のWordPackを取得してlemmaを取得
     result = store.get_word_pack(word_pack_id)
     if result is None:
         raise HTTPException(status_code=404, detail="WordPack not found")
-    
+
     lemma, _, _, _ = result
-    
+
     # 近傍検索クライアントは使用しない
     chroma_client = None
-    
+
     # リクエストでモデル/パラメータが指定されていればオーバーライド
     llm = get_llm_provider(
-        model_override=getattr(req, 'model', None),
-        temperature_override=getattr(req, 'temperature', None),
-        reasoning_override=getattr(req, 'reasoning', None),
-        text_override=getattr(req, 'text', None),
+        model_override=getattr(req, "model", None),
+        temperature_override=getattr(req, "temperature", None),
+        reasoning_override=getattr(req, "reasoning", None),
+        text_override=getattr(req, "text", None),
     )
+
     # 例文の LLM メタ付与用に、モデル名とパラメータ文字列を組み立て
     def _format_llm_params_for_request() -> str | None:
         try:
             parts: list[str] = []
-            if getattr(req, 'temperature', None) is not None:
+            if getattr(req, "temperature", None) is not None:
                 parts.append(f"temperature={float(req.temperature):.2f}")
-            r = getattr(req, 'reasoning', None) or {}
-            if isinstance(r, dict) and r.get('effort'):
+            r = getattr(req, "reasoning", None) or {}
+            if isinstance(r, dict) and r.get("effort"):
                 parts.append(f"reasoning.effort={r.get('effort')}")
-            t = getattr(req, 'text', None) or {}
-            if isinstance(t, dict) and t.get('verbosity'):
+            t = getattr(req, "text", None) or {}
+            if isinstance(t, dict) and t.get("verbosity"):
                 parts.append(f"text.verbosity={t.get('verbosity')}")
             return ";".join(parts) if parts else None
         except Exception:
             return None
+
     llm_info = {
-        "model": getattr(req, 'model', None) or settings.llm_model,
+        "model": getattr(req, "model", None) or settings.llm_model,
         "params": _format_llm_params_for_request(),
     }
     flow = WordPackFlow(chroma_client=chroma_client, llm=llm, llm_info=llm_info)
@@ -433,18 +452,18 @@ async def regenerate_word_pack(
                 regenerate_scope=req.regenerate_scope,
             )
         )
-        
+
         # 生成に使用した LLM 情報を反映（常に最新で上書き）
         try:
-            setattr(word_pack, 'llm_model', llm_info.get('model'))
-            setattr(word_pack, 'llm_params', llm_info.get('params'))
+            setattr(word_pack, "llm_model", llm_info.get("model"))
+            setattr(word_pack, "llm_params", llm_info.get("params"))
         except Exception:
             pass
-        
+
         # 再生成されたWordPackをデータベースに保存（既存のIDで上書き）
         word_pack_data = word_pack.model_dump_json()
         store.save_word_pack(word_pack_id, lemma, word_pack_data)
-        
+
         return word_pack
     except RuntimeError as exc:
         msg = str(exc)
@@ -485,9 +504,8 @@ async def delete_word_pack(word_pack_id: str) -> dict[str, str]:
     success = store.delete_word_pack(word_pack_id)
     if not success:
         raise HTTPException(status_code=404, detail="WordPack not found")
-    
-    return {"message": "WordPack deleted successfully"}
 
+    return {"message": "WordPack deleted successfully"}
 
 
 @router.delete(
@@ -526,6 +544,7 @@ async def delete_example_from_word_pack(
 
 class ExamplesGenerateRequest(BaseModel):
     """例文追加生成のための任意パラメータ。"""
+
     model: Optional[str] = Field(default=None, description="LLMモデル名の上書き")
     temperature: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     reasoning: Optional[dict] = Field(default=None)
@@ -552,32 +571,33 @@ async def generate_examples_for_word_pack(
 
     req = req or ExamplesGenerateRequest()
     llm = get_llm_provider(
-        model_override=getattr(req, 'model', None),
-        temperature_override=getattr(req, 'temperature', None),
-        reasoning_override=getattr(req, 'reasoning', None),
-        text_override=getattr(req, 'text', None),
+        model_override=getattr(req, "model", None),
+        temperature_override=getattr(req, "temperature", None),
+        reasoning_override=getattr(req, "reasoning", None),
+        text_override=getattr(req, "text", None),
     )
 
     # 統合フロー（LangGraph駆動）でカテゴリ別の例文を生成して即保存
     # 失敗した場合のみ、後続の従来プロンプト経路にフォールバック
     try:
+
         def _fmt_llm_params_here() -> str | None:
             try:
                 parts: list[str] = []
-                if getattr(req, 'temperature', None) is not None:
+                if getattr(req, "temperature", None) is not None:
                     parts.append(f"temperature={float(req.temperature):.2f}")
-                r = getattr(req, 'reasoning', None) or {}
-                if isinstance(r, dict) and r.get('effort'):
+                r = getattr(req, "reasoning", None) or {}
+                if isinstance(r, dict) and r.get("effort"):
                     parts.append(f"reasoning.effort={r.get('effort')}")
-                t = getattr(req, 'text', None) or {}
-                if isinstance(t, dict) and t.get('verbosity'):
+                t = getattr(req, "text", None) or {}
+                if isinstance(t, dict) and t.get("verbosity"):
                     parts.append(f"text.verbosity={t.get('verbosity')}")
                 return ";".join(parts) if parts else None
             except Exception:
                 return None
 
         llm_info = {
-            "model": getattr(req, 'model', None) or settings.llm_model,
+            "model": getattr(req, "model", None) or settings.llm_model,
             "params": _fmt_llm_params_here(),
         }
         flow = WordPackFlow(chroma_client=None, llm=llm, llm_info=llm_info)
@@ -586,15 +606,19 @@ async def generate_examples_for_word_pack(
         items_model = gen.get(category, [])
         items: list[dict[str, object]] = []
         for it in items_model:
-            items.append({
-                "en": it.en,
-                "ja": it.ja,
-                "grammar_ja": it.grammar_ja,
-                "llm_model": it.llm_model,
-                "llm_params": it.llm_params,
-            })
+            items.append(
+                {
+                    "en": it.en,
+                    "ja": it.ja,
+                    "grammar_ja": it.grammar_ja,
+                    "llm_model": it.llm_model,
+                    "llm_params": it.llm_params,
+                }
+            )
         if not items:
-            raise HTTPException(status_code=502, detail="LLM returned no usable examples")
+            raise HTTPException(
+                status_code=502, detail="LLM returned no usable examples"
+            )
         added = store.append_examples(word_pack_id, category.value, items)
         return {
             "message": "Examples generated and appended",
@@ -614,11 +638,17 @@ async def generate_examples_for_word_pack(
 async def list_examples(
     limit: int = Query(default=50, ge=1, le=200, description="取得件数上限"),
     offset: int = Query(default=0, ge=0, description="オフセット"),
-    order_by: str = Query(default="created_at", description="created_at|pack_updated_at|lemma|category"),
+    order_by: str = Query(
+        default="created_at", description="created_at|pack_updated_at|lemma|category"
+    ),
     order_dir: str = Query(default="desc", description="asc|desc"),
-    search: Optional[str] = Query(default=None, description="英文に対する検索文字列（部分一致等）"),
+    search: Optional[str] = Query(
+        default=None, description="英文に対する検索文字列（部分一致等）"
+    ),
     search_mode: str = Query(default="contains", description="prefix|suffix|contains"),
-    category: Optional[ExampleCategory] = Query(default=None, description="カテゴリで絞り込み"),
+    category: Optional[ExampleCategory] = Query(
+        default=None, description="カテゴリで絞り込み"
+    ),
 ) -> ExampleListResponse:
     """`word_pack_examples` を元に横断的な例文一覧を返す。"""
     # 取得
@@ -674,7 +704,9 @@ async def list_examples(
     response_model=ExamplesBulkDeleteResponse,
     summary="例文をID指定で一括削除",
 )
-async def bulk_delete_examples(req: ExamplesBulkDeleteRequest) -> ExamplesBulkDeleteResponse:
+async def bulk_delete_examples(
+    req: ExamplesBulkDeleteRequest,
+) -> ExamplesBulkDeleteResponse:
     """例文IDのリストを受け取り、一括で削除する。"""
 
     deleted, not_found = store.delete_examples_by_ids(req.ids)
@@ -696,7 +728,9 @@ async def update_example_study_progress(
     learned_increment = 0
     if req.kind == "learned":
         learned_increment = 1
-    result = store.update_example_study_progress(example_id, checked_increment, learned_increment)
+    result = store.update_example_study_progress(
+        example_id, checked_increment, learned_increment
+    )
     if result is None:
         raise HTTPException(status_code=404, detail="Example not found")
     word_pack_id, checked_only_count, learned_count = result
@@ -711,8 +745,12 @@ async def update_example_study_progress(
 class LemmaLookupResponse(BaseModel):
     found: bool = Field(..., description="lemma がDBに存在するか")
     id: Optional[str] = Field(default=None, description="WordPack ID（存在時）")
-    lemma: Optional[str] = Field(default=None, description="保存されている lemma（正規化反映後）")
-    sense_title: Optional[str] = Field(default=None, description="語義タイトル（存在時）")
+    lemma: Optional[str] = Field(
+        default=None, description="保存されている lemma（正規化反映後）"
+    )
+    sense_title: Optional[str] = Field(
+        default=None, description="語義タイトル（存在時）"
+    )
 
 
 @router.get(
@@ -730,4 +768,6 @@ async def lookup_by_lemma(lemma: str) -> LemmaLookupResponse:
     if result is None:
         return LemmaLookupResponse(found=False)
     wp_id, saved_lemma, sense_title = result
-    return LemmaLookupResponse(found=True, id=wp_id, lemma=saved_lemma, sense_title=sense_title)
+    return LemmaLookupResponse(
+        found=True, id=wp_id, lemma=saved_lemma, sense_title=sense_title
+    )

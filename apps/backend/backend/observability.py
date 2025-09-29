@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Optional, ContextManager
-from contextlib import contextmanager
 import time
+from contextlib import contextmanager
+from typing import Any, ContextManager
 
 from .config import settings
 from .logging import logger
@@ -26,11 +26,19 @@ def is_langfuse_enabled() -> bool:
         return False
     if Langfuse is None:
         if settings.strict_mode:
-            raise RuntimeError("langfuse package is required when LANGFUSE_ENABLED=true (strict mode)")
+            raise RuntimeError(
+                "langfuse package is required when LANGFUSE_ENABLED=true (strict mode)"
+            )
         return False
-    if not (settings.langfuse_public_key and settings.langfuse_secret_key and settings.langfuse_host):
+    if not (
+        settings.langfuse_public_key
+        and settings.langfuse_secret_key
+        and settings.langfuse_host
+    ):
         if settings.strict_mode:
-            raise RuntimeError("LANGFUSE_PUBLIC_KEY/SECRET_KEY/HOST are required when LANGFUSE_ENABLED=true (strict mode)")
+            raise RuntimeError(
+                "LANGFUSE_PUBLIC_KEY/SECRET_KEY/HOST are required when LANGFUSE_ENABLED=true (strict mode)"
+            )
         return False
     return True
 
@@ -57,7 +65,13 @@ def get_langfuse() -> Any | None:
 
 
 @contextmanager
-def request_trace(*, name: str, user_id: Optional[str] = None, metadata: Optional[dict[str, Any]] = None, path: Optional[str] = None) -> ContextManager[dict[str, Any]]:
+def request_trace(
+    *,
+    name: str,
+    user_id: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    path: str | None = None,
+) -> ContextManager[dict[str, Any]]:
     # 一部のルート（例: /healthz）は観測対象から除外してノイズを減らす
     try:
         exclude = getattr(settings, "langfuse_exclude_paths", [])
@@ -83,9 +97,15 @@ def request_trace(*, name: str, user_id: Optional[str] = None, metadata: Optiona
     lf = get_langfuse()
     start = time.time()
     # --- v3: context manager でスパンを開始し、その内側で処理を実行する ---
-    if lf is not None and (hasattr(lf, "start_as_current_span") or hasattr(lf, "start_span")):
+    if lf is not None and (
+        hasattr(lf, "start_as_current_span") or hasattr(lf, "start_span")
+    ):
         try:
-            cm = lf.start_as_current_span(name=name) if hasattr(lf, "start_as_current_span") else lf.start_span(name=name)  # type: ignore[assignment]
+            cm = (
+                lf.start_as_current_span(name=name)
+                if hasattr(lf, "start_as_current_span")
+                else lf.start_span(name=name)
+            )  # type: ignore[assignment]
         except Exception as exc:  # pragma: no cover
             logger.warning("langfuse_trace_create_failed", error=repr(exc))
             cm = None
@@ -133,7 +153,10 @@ def request_trace(*, name: str, user_id: Optional[str] = None, metadata: Optiona
                     metadata=metadata or {},
                 )
             else:
-                logger.warning("langfuse_trace_api_missing", error="no trace/create_trace on client")
+                logger.warning(
+                    "langfuse_trace_api_missing",
+                    error="no trace/create_trace on client",
+                )
         except Exception as exc:  # pragma: no cover
             logger.warning("langfuse_trace_create_failed", error=repr(exc))
     ctx = {"trace": trace}
@@ -142,7 +165,9 @@ def request_trace(*, name: str, user_id: Optional[str] = None, metadata: Optiona
     except Exception as exc:
         if trace is not None:
             try:
-                trace.update(input=None, output=None, metadata={"error": str(exc)[:500]})
+                trace.update(
+                    input=None, output=None, metadata={"error": str(exc)[:500]}
+                )
                 trace.end()
             except Exception:
                 pass
@@ -158,13 +183,25 @@ def request_trace(*, name: str, user_id: Optional[str] = None, metadata: Optiona
 
 
 @contextmanager
-def span(*, trace: Any | None, name: str, input: Optional[Any] = None, metadata: Optional[dict[str, Any]] = None) -> ContextManager[Any | None]:
+def span(
+    *,
+    trace: Any | None,
+    name: str,
+    input: Any | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> ContextManager[Any | None]:
     lf = get_langfuse()
     start = time.time()
     # v3: 親スパン（request_trace 内）直下に current span を開始
-    if lf is not None and (hasattr(lf, "start_as_current_span") or hasattr(lf, "start_span")):
+    if lf is not None and (
+        hasattr(lf, "start_as_current_span") or hasattr(lf, "start_span")
+    ):
         try:
-            cm = lf.start_as_current_span(name=name) if hasattr(lf, "start_as_current_span") else lf.start_span(name=name)  # type: ignore[assignment]
+            cm = (
+                lf.start_as_current_span(name=name)
+                if hasattr(lf, "start_as_current_span")
+                else lf.start_span(name=name)
+            )  # type: ignore[assignment]
         except Exception as exc:  # pragma: no cover
             logger.warning("langfuse_span_create_failed", error=repr(exc))
             cm = None
@@ -228,7 +265,9 @@ def span(*, trace: Any | None, name: str, input: Optional[Any] = None, metadata:
     except Exception as exc:
         if s is not None:
             try:
-                s.update(output=None, metadata={(metadata or {}) | {"error": str(exc)[:500]}})
+                s.update(
+                    output=None, metadata={(metadata or {}) | {"error": str(exc)[:500]}}
+                )
                 s.end()
             except Exception:
                 pass
@@ -241,5 +280,3 @@ def span(*, trace: Any | None, name: str, input: Optional[Any] = None, metadata:
                 s.end()
             except Exception:
                 pass
-
-

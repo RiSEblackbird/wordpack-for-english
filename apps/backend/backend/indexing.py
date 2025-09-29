@@ -3,15 +3,16 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, List, Dict, Iterable
+from typing import Any, Iterable
 
-from .providers import ChromaClientFactory, COL_WORD_SNIPPETS, COL_DOMAIN_TERMS
-from .config import settings
+from .providers import ChromaClientFactory, COL_DOMAIN_TERMS, COL_WORD_SNIPPETS
 
 
-def _ensure_docs(col: Any, ids: List[str], docs: List[str], metadatas: List[Dict[str, Any]]) -> None:
+def _ensure_docs(
+    col: Any, ids: list[str], docs: list[str], metadatas: list[dict[str, Any]]
+) -> None:
     # ローカル重複除去（入力内の重複ID/空文字列を除く）
-    filtered: list[tuple[str, str, Dict[str, Any]]] = []
+    filtered: list[tuple[str, str, dict[str, Any]]] = []
     seen: set[str] = set()
     for i, d, m in zip(ids, docs, metadatas):
         if not i or not isinstance(i, str):
@@ -100,14 +101,19 @@ def _load_jsonl(path: Path) -> Iterable[dict[str, Any]]:
                 continue
 
 
-def seed_from_jsonl(client: Any, *, word_snippets_path: Path | None = None, domain_terms_path: Path | None = None) -> None:
+def seed_from_jsonl(
+    client: Any,
+    *,
+    word_snippets_path: Path | None = None,
+    domain_terms_path: Path | None = None,
+) -> None:
     total_ws = 0
     total_dt = 0
     if word_snippets_path and word_snippets_path.exists():
         col = client.get_or_create_collection(name=COL_WORD_SNIPPETS)
-        ids: List[str] = []
-        docs: List[str] = []
-        metas: List[Dict[str, Any]] = []
+        ids: list[str] = []
+        docs: list[str] = []
+        metas: list[dict[str, Any]] = []
         for i, row in enumerate(_load_jsonl(word_snippets_path), start=1):
             ids.append(row.get("id") or f"ws_{i}")
             docs.append(row.get("text") or "")
@@ -134,9 +140,15 @@ def seed_from_jsonl(client: Any, *, word_snippets_path: Path | None = None, doma
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Seed ChromaDB collections")
-    parser.add_argument("--persist", default=None, help="Chroma persist directory (overrides settings)")
-    parser.add_argument("--word-jsonl", default=None, help="Path to word_snippets JSONL")
-    parser.add_argument("--terms-jsonl", default=None, help="Path to domain_terms JSONL")
+    parser.add_argument(
+        "--persist", default=None, help="Chroma persist directory (overrides settings)"
+    )
+    parser.add_argument(
+        "--word-jsonl", default=None, help="Path to word_snippets JSONL"
+    )
+    parser.add_argument(
+        "--terms-jsonl", default=None, help="Path to domain_terms JSONL"
+    )
     args = parser.parse_args()
 
     persist_dir = args.persist or ".chroma"
@@ -160,5 +172,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
