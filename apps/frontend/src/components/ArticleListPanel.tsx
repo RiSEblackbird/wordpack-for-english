@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatDateJst } from '../lib/date';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
@@ -8,6 +8,8 @@ import { useNotifications } from '../NotificationsContext';
 import { regenerateWordPackRequest } from '../lib/wordpack';
 import { Modal } from './Modal';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
+import { useAbortableAsync, AbortError } from '../lib/hooks';
+import { assignSetValues, retainSetValues, toggleSetValue } from '../lib/set';
 
 interface ArticleListItem {
   id: string;
@@ -25,6 +27,8 @@ interface ArticleListResponse {
 
 type ArticleDetailResponse = ArticleDetailData;
 
+const LIST_LIMIT = 20;
+
 export const ArticleListPanel: React.FC = () => {
   const { settings } = useSettings();
   const { setModalOpen } = useModal();
@@ -34,74 +38,62 @@ export const ArticleListPanel: React.FC = () => {
   const [items, setItems] = useState<ArticleListItem[]>([]);
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [offset, setOffset] = useState(0);
-  const [limit] = useState(20);
   const [total, setTotal] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [preview, setPreview] = useState<ArticleDetailResponse | null>(null);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const abortRef = useRef<AbortController | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const { run: runAbortable } = useAbortableAsync();
 
-  const load = async (newOffset = 0) => {
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setLoading(true);
-    setMsg(null);
-    try {
-      const res = await fetchJson<ArticleListResponse>(`${settings.apiBase}/article?limit=${limit}&offset=${newOffset}`, { signal: ctrl.signal });
-      setItems(res.items);
-      setTotal(res.total);
-      setOffset(newOffset);
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      const m = e instanceof ApiError ? e.message : '文章一覧の読み込みに失敗しました';
-      setMsg({ kind: 'alert', text: m });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // 一覧の取得は useAbortableAsync で逐次キャンセルし、古いリクエストの結果が後勝ちしないようにする。
+  const load = useCallback(
+    async (newOffset = 0) => {
+      setLoading(true);
+      setMsg(null);
+      try {
+        const res = await runAbortable((signal) =>
+          fetchJson<ArticleListResponse>(
+            `${settings.apiBase}/article?limit=${LIST_LIMIT}&offset=${newOffset}`,
+            { signal },
+          ),
+        );
+        setItems(res.items);
+        setTotal(res.total);
+        setOffset((prev) => (prev === newOffset ? prev : newOffset));
+      } catch (e) {
+        if (e instanceof AbortError) {
+          return;
+        }
+        const m = e instanceof ApiError ? e.message : '文章一覧の読み込みに失敗しました';
+        setMsg({ kind: 'alert', text: m });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [runAbortable, settings.apiBase],
+  );
 
   useEffect(() => {
     setSelectedIds((prev) => {
-      const valid = new Set(items.map((it) => it.id));
-      const next = new Set<string>();
-      prev.forEach((id) => {
-        if (valid.has(id)) next.add(id);
-      });
-      if (next.size === prev.size) {
-        return prev;
-      }
-      return next;
+      if (prev.size === 0) return prev;
+      const next = retainSetValues(prev, items.map((it) => it.id));
+      return next.size === prev.size ? prev : next;
     });
   }, [items]);
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => toggleSetValue(prev, id));
+  }, []);
 
-  const clearSelection = () => setSelectedIds(new Set());
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
-  const allVisibleSelected = items.length > 0 && items.every((it) => selectedIds.has(it.id));
+  const allVisibleSelected = useMemo(
+    () => items.length > 0 && items.every((it) => selectedIds.has(it.id)),
+    [items, selectedIds],
+  );
 
-  const toggleVisibleSelection = () => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (allVisibleSelected) {
-        items.forEach((it) => next.delete(it.id));
-      } else {
-        items.forEach((it) => next.add(it.id));
-      }
-      return next;
-    });
-  };
+  const toggleVisibleSelection = useCallback(() => {
+    setSelectedIds((prev) => assignSetValues(prev, items.map((it) => it.id), !allVisibleSelected));
+  }, [allVisibleSelected, items]);
 
   const open = async (id: string) => {
     setLoading(true);
@@ -128,12 +120,7 @@ export const ArticleListPanel: React.FC = () => {
     try {
       await fetchJson(`${settings.apiBase}/article/${item.id}`, { method: 'DELETE' });
       await load(offset);
-      setSelectedIds((prev) => {
-        if (!prev.has(item.id)) return prev;
-        const next = new Set(prev);
-        next.delete(item.id);
-        return next;
-      });
+      setSelectedIds((prev) => (prev.has(item.id) ? toggleSetValue(prev, item.id) : prev));
       setMsg({ kind: 'status', text: '削除しました' });
     } catch (e) {
       const m = e instanceof ApiError ? e.message : '削除に失敗しました';
@@ -209,21 +196,25 @@ export const ArticleListPanel: React.FC = () => {
     }
   };
 
-  useEffect(() => { load(); return () => abortRef.current?.abort(); }, []);
+  useEffect(() => {
+    load(0);
+  }, [load]);
   // インポート完了などで記事が更新されたら、現在のオフセットで再読込
   useEffect(() => {
-    const onUpdated = () => { load(offset); };
+    const onUpdated = () => {
+      load(offset);
+    };
     try { window.addEventListener('article:updated', onUpdated as EventListener); } catch {}
     return () => {
       try { window.removeEventListener('article:updated', onUpdated as EventListener); } catch {}
     };
-  }, [offset]);
+  }, [load, offset]);
 
-  const hasNext = offset + limit < total;
+  const hasNext = offset + LIST_LIMIT < total;
   const hasPrev = offset > 0;
   const selectedCount = selectedIds.size;
 
-  const deleteSelectedArticles = async () => {
+  const deleteSelectedArticles = useCallback(async () => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
     const confirmed = await confirmDialog(`選択中の文章（${ids.length}件）`);
@@ -245,7 +236,7 @@ export const ArticleListPanel: React.FC = () => {
       }
       if (deleted > 0) {
         await load(offset);
-        setSelectedIds(new Set());
+        clearSelection();
       }
       if (failure) {
         const text = deleted > 0
@@ -260,7 +251,7 @@ export const ArticleListPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [clearSelection, confirmDialog, load, offset, selectedIds, settings.apiBase]);
 
   return (
     <section>
@@ -317,9 +308,9 @@ export const ArticleListPanel: React.FC = () => {
       </div>
       {(hasPrev || hasNext) && (
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
-          <button onClick={() => load(offset - limit)} disabled={!hasPrev || loading}>前へ</button>
-          <span>{offset + 1}-{Math.min(offset + limit, total)} / {total}件</span>
-          <button onClick={() => load(offset + limit)} disabled={!hasNext || loading}>次へ</button>
+          <button onClick={() => load(offset - LIST_LIMIT)} disabled={!hasPrev || loading}>前へ</button>
+          <span>{offset + 1}-{Math.min(offset + LIST_LIMIT, total)} / {total}件</span>
+          <button onClick={() => load(offset + LIST_LIMIT)} disabled={!hasNext || loading}>次へ</button>
         </div>
       )}
 
