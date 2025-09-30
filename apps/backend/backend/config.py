@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -125,6 +127,11 @@ class Settings(BaseSettings):
     strict_mode: bool = Field(
         default=True,
         description="Fail fast on missing/invalid configuration (disable only for tests)",
+    )
+
+    user_role: Literal["admin", "viewer"] = Field(
+        default="admin",
+        description="Current user role / 現在のユーザーロール (admin|viewer)",
     )
 
     # Pydantic v2 settings config

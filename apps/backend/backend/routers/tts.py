@@ -11,6 +11,7 @@ from pydantic import BaseModel, constr
 
 from ..config import settings
 from ..logging import logger
+from ..permissions import ensure_ai_access
 
 try:
     from openai import (  # type: ignore
@@ -106,6 +107,7 @@ def _map_openai_exception(exc: Exception) -> tuple[int, str, str]:
 @router.post("", response_class=StreamingResponse)
 def synth(req: TTSIn, request: Request) -> StreamingResponse:
     """Synthesize speech using OpenAI TTS and stream MP3 audio to the client."""
+    ensure_ai_access()
     t0 = time.perf_counter()
     request_id = _loggable_request_id(request)
     text_chars = len(req.text)
