@@ -47,6 +47,7 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ className 
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [clientId, setClientId] = useState<string | null>(null);
+  const [metaLoading, setMetaLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -60,10 +61,12 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({ className 
           throw new Error('Google client id missing');
         }
         setClientId(meta.client_id);
+        setMetaLoading(false);
       } catch (err) {
         if (!mounted) return;
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
+        setMetaLoading(false);
       }
     })();
     return () => {

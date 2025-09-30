@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import datetime as dt
-from typing import Any, Dict, Optional
+from dataclasses import asdict, dataclass
 
 from itsdangerous import BadSignature, URLSafeSerializer
 
 from .config import settings
 
 
-class SessionData(Dict[str, Any]):
+UTC = dt.timezone.utc
+
+
+@dataclass(frozen=True)
+class SessionData:
     email: str
-    name: str | None
-    picture: str | None
-    expires_at: dt.datetime
+    name: str | None = None
+    picture: str | None = None
+    expires_at: dt.datetime = dt.datetime.now(UTC)
 
 
 class SessionManager:
@@ -22,11 +26,11 @@ class SessionManager:
         self._serializer = URLSafeSerializer(secret, salt=salt)
 
     def encode(self, payload: SessionData) -> str:
-        data = dict(payload)
-        data["expires_at"] = payload["expires_at"].isoformat()
+        data = asdict(payload)
+        data["expires_at"] = payload.expires_at.isoformat()
         return self._serializer.dumps(data)
 
-    def decode(self, token: str) -> Optional[SessionData]:
+    def decode(self, token: str) -> SessionData | None:
         if not token:
             return None
         try:
@@ -40,11 +44,26 @@ class SessionManager:
             exp = dt.datetime.fromisoformat(expires_at)
         except ValueError:
             return None
-        if dt.datetime.utcnow() > exp:
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=UTC)
+        if dt.datetime.now(UTC) > exp:
             return None
-        data["expires_at"] = exp
-        return SessionData(data)
+        email_raw = data.get("email")
+        if not isinstance(email_raw, str) or not email_raw:
+            return None
+        return SessionData(
+            email=email_raw.lower(),
+            name=data.get("name"),
+            picture=data.get("picture"),
+            expires_at=exp,
+        )
 
 
-session_manager = SessionManager(settings.session_secret or "development-secret")
+session_secret = settings.session_secret
+if not session_secret:
+    if settings.strict_mode:
+        raise ValueError("SESSION_SECRET must be set in strict mode")
+    session_secret = "development-secret"
+
+session_manager = SessionManager(session_secret)
 

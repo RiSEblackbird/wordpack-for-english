@@ -1,14 +1,17 @@
 from fastapi import APIRouter, Depends
 
 from ..config import settings
-from ..permissions import UserRole, resolve_user_role
+from ..permissions import UserRole, ensure_authenticated, resolve_user_role
 
 
 router = APIRouter()
 
 
 @router.get("/config")
-def get_runtime_config(user_role: UserRole = Depends(resolve_user_role)) -> dict[str, object]:
+def get_runtime_config(
+    _: str = Depends(ensure_authenticated),
+    user_role: UserRole = Depends(resolve_user_role),
+) -> dict[str, object]:
     """Expose runtime config needed by the frontend.
 
     フロントエンドが同期すべき実行時設定を返す。現状は

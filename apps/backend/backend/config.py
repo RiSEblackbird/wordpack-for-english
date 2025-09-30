@@ -235,6 +235,17 @@ class Settings(BaseSettings):
     def _validate_domain_allowlist(cls, value: object) -> list[str]:
         return Settings._parse_domain_list(value)
 
+    @model_validator(mode="after")
+    def _validate_auth_settings(self) -> "Settings":
+        if self.strict_mode:
+            if not (self.session_secret and self.session_secret.strip()):
+                raise ValueError("SESSION_SECRET must be set when STRICT_MODE=true")
+            if not (self.google_oauth_client_id and self.google_oauth_client_id.strip()):
+                raise ValueError("GOOGLE_OAUTH_CLIENT_ID must be set when STRICT_MODE=true")
+        if self.session_cookie_same_site == "none" and not self.session_cookie_secure:
+            raise ValueError("SESSION_COOKIE_SECURE must be true when SESSION_COOKIE_SAME_SITE=none")
+        return self
+
     # Pydantic v2 settings config
     # - env_file: .env を読み込む
     # - extra: .env に存在する未使用キー（例: api_key/allowed_origins など）を無視

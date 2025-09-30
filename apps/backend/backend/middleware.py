@@ -9,6 +9,9 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
+from .config import settings
+from .session import session_manager
+
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
     """Assign a request ID to each incoming request and expose it in headers.
@@ -138,4 +141,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 )
         except Exception:
             pass
+        return response
+
+
+class SessionMiddleware(BaseHTTPMiddleware):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:  # type: ignore[override]
+        cookie_name = getattr(request.app.state, "session_cookie_name", settings.session_cookie_name)
+        raw_cookie = request.cookies.get(cookie_name)
+        session = session_manager.decode(raw_cookie) if raw_cookie else None
+        request.state.session_user = session
+        response = await call_next(request)
         return response

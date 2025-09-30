@@ -13,6 +13,10 @@ export interface Settings {
   textVerbosity?: 'low' | 'medium' | 'high';
   theme: 'light' | 'dark';
   userRole: 'admin' | 'viewer';
+  isAuthenticated: boolean;
+  sessionEmail?: string;
+  sessionName?: string;
+  sessionPicture?: string;
 }
 
 interface SettingsValue {
@@ -52,6 +56,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       textVerbosity: 'medium',
       theme: savedTheme === 'light' ? 'light' : 'dark',
       userRole: 'viewer',
+      isAuthenticated: false,
     };
   });
   const [status, setStatus] = useState<SettingsStatus>('loading');

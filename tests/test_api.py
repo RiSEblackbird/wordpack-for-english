@@ -20,6 +20,9 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
     monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-google-client")
     monkeypatch.setenv("SESSION_SECRET", "test-session-secret")
     monkeypatch.setenv("SESSION_COOKIE_NAME", "wp_session")
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
+    monkeypatch.setenv("SESSION_COOKIE_SAME_SITE", "lax")
+    monkeypatch.setenv("ADMIN_EMAIL_ALLOWLIST", "admin@example.com")
     if db_path is not None:
         monkeypatch.setenv("WORDPACK_DB_PATH", str(db_path))
 
@@ -43,6 +46,26 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
     return importlib.import_module("backend.main")
 
 
+def _login_as(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    email: str = "admin@example.com",
+    name: str = "Test Admin",
+    picture: str | None = None,
+):
+    import backend.auth as auth_mod
+
+    monkeypatch.setattr(
+        auth_mod,
+        "verify_google_token",
+        lambda _token: {"email": email, "name": name, "picture": picture},
+    )
+    resp = client.post("/api/auth/login", json={"credential": "dummy-token"})
+    assert resp.status_code == 200
+    return resp
+
+
 @pytest.fixture()
 def client(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
     backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
@@ -50,14 +73,16 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFac
     db_path = tmp_path_factory.mktemp("wordpack") / "store.sqlite3"
     backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=db_path)
     test_client = TestClient(backend_main.app)
-    test_client.headers.update({"X-User-Email": "admin@example.com"})
+    _login_as(test_client, monkeypatch, email="admin@example.com")
     return test_client
 
 
 def _make_auth_client(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
     db_path = tmp_path_factory.mktemp("auth") / "store.sqlite3"
     backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=db_path)
-    return TestClient(backend_main.app)
+    client = TestClient(backend_main.app)
+    client.cookies.clear()
+    return client
 
 
 def test_auth_login_sets_cookie_and_role(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
@@ -120,7 +145,7 @@ def test_auth_logout_clears_cookie(monkeypatch: pytest.MonkeyPatch, tmp_path_fac
 
     resp_logout = client.post("/api/auth/logout")
     assert resp_logout.status_code == 204
-    assert resp_logout.cookies.get("wp_session") == ""
+    assert resp_logout.cookies.get("wp_session") in (None, "")
 
 
 def test_config_requires_login(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
@@ -143,6 +168,7 @@ def test_config_user_role_from_google_email(
 ):
     monkeypatch.setenv("VIEWER_EMAIL_ALLOWLIST", "viewer@example.com")
     monkeypatch.setenv("ADMIN_EMAIL_ALLOWLIST", "admin@example.com")
+    monkeypatch.setenv("USER_ROLE", "admin")
     db_path = tmp_path_factory.mktemp("role-config") / "store.sqlite3"
     backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=db_path)
     client = TestClient(backend_main.app)

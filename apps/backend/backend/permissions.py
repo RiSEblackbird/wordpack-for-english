@@ -5,6 +5,11 @@ from typing import Literal, Optional
 from fastapi import Depends, HTTPException, Request
 
 from .config import settings
+def ensure_authenticated(request: Request) -> str:
+    email = get_request_user_email(request)
+    if email:
+        return email
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 UserRole = Literal["admin", "viewer"]
 
@@ -28,10 +33,10 @@ def get_request_user_email(request: Request) -> Optional[str]:
     """Extract the authenticated user email from the session or headers."""
 
     session_user = getattr(request.state, "session_user", None)
-    if isinstance(session_user, dict):
-        email = _extract_email(session_user.get("email"))
-        if email:
-            return email
+    email_attr = getattr(session_user, "email", None)
+    email = _extract_email(email_attr) if email_attr else None
+    if email:
+        return email
 
     preferred = request.headers.get(settings.user_email_header)
     email = _extract_email(preferred)

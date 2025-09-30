@@ -100,8 +100,18 @@ const AppShell: React.FC = () => {
   const hasSidebarOpened = useRef(false);
   const { settings } = useSettings();
 
-  if (!settings.isAuthenticated || settings.userRole === 'viewer') {
+  if (!settings.isAuthenticated) {
     return <UnauthorizedScreen />;
+  }
+
+  if (settings.userRole === 'viewer') {
+    return (
+      <div style={{ padding: '3rem', maxWidth: '520px', margin: '6rem auto', lineHeight: 1.6 }}>
+        <h1>権限が不足しています</h1>
+        <p>AI 生成機能は管理者ロールでのみ利用できます。別のアカウントでログインしてください。</p>
+        <GoogleLoginButton />
+      </div>
+    );
   }
 
   useEffect(() => {
