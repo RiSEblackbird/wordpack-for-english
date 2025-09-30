@@ -4,7 +4,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..config import settings
@@ -182,10 +182,12 @@ def _post_filter_lemmas(raw: list[str]) -> list[str]:
 
 
 @router.post(
-    "/import", response_model=ArticleDetailResponse, response_model_exclude_none=True
+    "/import",
+    response_model=ArticleDetailResponse,
+    response_model_exclude_none=True,
+    dependencies=[Depends(ensure_ai_access)],
 )
 async def import_article(req: ArticleImportRequest) -> ArticleDetailResponse:
-    ensure_ai_access()
     flow = ArticleImportFlow()
     # ルータ層は薄く、Langfuse の親スパンを貼ってフローを呼び出す
     from ..observability import request_trace
@@ -308,14 +310,13 @@ class CategoryGenerateImportRequest(BaseModel):
     text: dict | None = None
 
 
-@router.post("/generate_and_import")
+@router.post("/generate_and_import", dependencies=[Depends(ensure_ai_access)])
 async def generate_and_import_examples(
     req: CategoryGenerateImportRequest,
 ) -> dict[str, object]:
     """選択カテゴリに関連する語を1つ生成し、空のWordPackを作成、
     当該カテゴリの例文を2件生成して保存し、それぞれを文章インポートに渡して記事化する。
     """
-    ensure_ai_access()
     flow = CategoryGenerateAndImportFlow(
         model=getattr(req, "model", None),
         temperature=getattr(req, "temperature", None),

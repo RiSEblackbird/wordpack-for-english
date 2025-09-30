@@ -5,7 +5,7 @@ from functools import partial
 from typing import Any, Optional
 
 import anyio  # オフロード用
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ..config import settings
@@ -55,6 +55,7 @@ async def lookup_word() -> dict[str, object]:
     response_model=dict,
     summary="空のWordPackを作成して保存",
     response_description="作成されたWordPackのIDを返します",
+    dependencies=[Depends(ensure_ai_access)],
 )
 async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
     """空のWordPackを作成・保存する（sense_title は短い日本語をLLMで生成）。
@@ -63,7 +64,6 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
     - sense_title は日本語の短い見出しを優先（LLM）。失敗時のフォールバックは choose_sense_title。
     - 保存ID（wp:{lemma}:{短縮uuid}）を返す
     """
-    ensure_ai_access()
     lemma = req.lemma.strip()
     if not lemma:
         raise HTTPException(status_code=400, detail="lemma is required")
@@ -142,6 +142,7 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
     response_model_exclude_none=True,
     summary="WordPack を生成",
     response_description="生成された WordPack を返します",
+    dependencies=[Depends(ensure_ai_access)],
 )
 async def generate_word_pack(req: WordPackRequest) -> WordPack:
     """Generate a new word pack using LangGraph flow.
@@ -151,7 +152,6 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     情報は空値で返す。
     生成されたWordPackは自動的にデータベースに保存される。
     """
-    ensure_ai_access()
     # 近傍検索クライアントは使用しない
     chroma_client = None
     # リクエストでモデル/パラメータが指定されていればオーバーライド
@@ -402,12 +402,12 @@ async def get_word_pack(word_pack_id: str) -> WordPack:
     response_model_exclude_none=True,
     summary="WordPackを再生成",
     response_description="既存のWordPackを再生成して返します",
+    dependencies=[Depends(ensure_ai_access)],
 )
 async def regenerate_word_pack(
     word_pack_id: str, req: WordPackRegenerateRequest
 ) -> WordPack:
     """既存のWordPackを再生成する。"""
-    ensure_ai_access()
     # 既存のWordPackを取得してlemmaを取得
     result = store.get_word_pack(word_pack_id)
     if result is None:
@@ -558,6 +558,7 @@ class ExamplesGenerateRequest(BaseModel):
 @router.post(
     "/packs/{word_pack_id}/examples/{category}/generate",
     summary="カテゴリ別の例文を2件追加生成して保存",
+    dependencies=[Depends(ensure_ai_access)],
 )
 async def generate_examples_for_word_pack(
     word_pack_id: str,
@@ -568,7 +569,6 @@ async def generate_examples_for_word_pack(
 
     既存の例文データはプロンプトに含めず、入力トークンを削減する。
     """
-    ensure_ai_access()
     result = store.get_word_pack(word_pack_id)
     if result is None:
         raise HTTPException(status_code=404, detail="WordPack not found")

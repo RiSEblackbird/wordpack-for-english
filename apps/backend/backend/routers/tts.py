@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Iterator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, constr
 
@@ -104,10 +104,9 @@ def _map_openai_exception(exc: Exception) -> tuple[int, str, str]:
     return 500, "Text-to-speech failed", "unexpected_error"
 
 
-@router.post("", response_class=StreamingResponse)
+@router.post("", response_class=StreamingResponse, dependencies=[Depends(ensure_ai_access)])
 def synth(req: TTSIn, request: Request) -> StreamingResponse:
     """Synthesize speech using OpenAI TTS and stream MP3 audio to the client."""
-    ensure_ai_access()
     t0 = time.perf_counter()
     request_id = _loggable_request_id(request)
     text_chars = len(req.text)

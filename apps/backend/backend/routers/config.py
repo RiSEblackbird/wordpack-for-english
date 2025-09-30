@@ -1,12 +1,14 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
 from ..config import settings
+from ..permissions import UserRole, resolve_user_role
 
 
 router = APIRouter()
 
 
 @router.get("/config")
-def get_runtime_config() -> dict[str, object]:
+def get_runtime_config(user_role: UserRole = Depends(resolve_user_role)) -> dict[str, object]:
     """Expose runtime config needed by the frontend.
 
     フロントエンドが同期すべき実行時設定を返す。現状は
@@ -16,5 +18,5 @@ def get_runtime_config() -> dict[str, object]:
     return {
         "request_timeout_ms": settings.llm_timeout_ms,
         "llm_model": settings.llm_model,
-        "user_role": settings.user_role,
+        "user_role": user_role,
     }

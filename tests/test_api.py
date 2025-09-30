@@ -55,6 +55,43 @@ def test_health(client):
     assert resp.json() == {"status": "ok"}
 
 
+def test_config_user_role_from_google_email(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+):
+    monkeypatch.setenv("VIEWER_EMAIL_ALLOWLIST", "viewer@example.com")
+    monkeypatch.setenv("ADMIN_EMAIL_ALLOWLIST", "admin@example.com")
+    db_path = tmp_path_factory.mktemp("role-config") / "store.sqlite3"
+    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=db_path)
+    client = TestClient(backend_main.app)
+
+    resp_viewer = client.get(
+        "/api/config", headers={"X-User-Email": "viewer@example.com"}
+    )
+    assert resp_viewer.status_code == 200
+    assert resp_viewer.json().get("user_role") == "viewer"
+
+    resp_admin = client.get(
+        "/api/config", headers={"X-User-Email": "admin@example.com"}
+    )
+    assert resp_admin.status_code == 200
+    assert resp_admin.json().get("user_role") == "admin"
+
+    resp_google = client.get(
+        "/api/config",
+        headers={
+            "X-Goog-Authenticated-User-Email": "accounts.google.com:viewer@example.com"
+        },
+    )
+    assert resp_google.status_code == 200
+    assert resp_google.json().get("user_role") == "viewer"
+
+    resp_default = client.get(
+        "/api/config", headers={"X-User-Email": "other@example.com"}
+    )
+    assert resp_default.status_code == 200
+    assert resp_default.json().get("user_role") == "admin"
+
+
 def test_word_pack(client):
     resp = client.post("/api/word/pack", json={"lemma": "converge"})
     assert resp.status_code == 200
