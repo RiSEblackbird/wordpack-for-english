@@ -25,7 +25,13 @@ def _extract_email(raw: str | None) -> Optional[str]:
 
 
 def get_request_user_email(request: Request) -> Optional[str]:
-    """Extract the authenticated user email from headers (Google login aware)."""
+    """Extract the authenticated user email from the session or headers."""
+
+    session_user = getattr(request.state, "session_user", None)
+    if isinstance(session_user, dict):
+        email = _extract_email(session_user.get("email"))
+        if email:
+            return email
 
     preferred = request.headers.get(settings.user_email_header)
     email = _extract_email(preferred)

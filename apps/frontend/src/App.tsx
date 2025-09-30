@@ -6,13 +6,58 @@ import { WordPackListPanel } from './components/WordPackListPanel';
 import { ExampleListPanel } from './components/ExampleListPanel';
 import { ArticleImportPanel } from './components/ArticleImportPanel';
 import { ArticleListPanel } from './components/ArticleListPanel';
-import { SettingsProvider } from './SettingsContext';
+import { SettingsProvider, useSettings } from './SettingsContext';
 import { ModalProvider } from './ModalContext';
 import { ConfirmDialogProvider } from './ConfirmDialogContext';
 import { NotificationsProvider } from './NotificationsContext';
 import { NotificationsOverlay } from './components/NotificationsOverlay';
-import { useSettings } from './SettingsContext';
 import { SIDEBAR_PORTAL_CONTAINER_ID } from './components/SidebarPortal';
+import { GoogleLoginButton } from './components/GoogleLoginButton';
+
+const UnauthorizedScreen: React.FC = () => (
+  <div
+    style={{
+      minHeight: '100vh',
+      display: 'grid',
+      placeItems: 'center',
+      background: 'linear-gradient(145deg, #0f172a, #1e293b)',
+      color: '#f8fafc',
+      padding: '2rem',
+    }}
+  >
+    <div
+      style={{
+        width: 'min(480px, 100%)',
+        background: 'rgba(15, 23, 42, 0.72)',
+        boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.9)',
+        borderRadius: '1.5rem',
+        padding: '2.5rem',
+        border: '1px solid rgba(148, 163, 184, 0.24)',
+        backdropFilter: 'blur(14px)',
+        display: 'grid',
+        gap: '1.5rem',
+      }}
+    >
+      <div style={{ display: 'grid', gap: '0.75rem' }}>
+        <h1 style={{ margin: 0, fontSize: '2rem', fontWeight: 700 }}>WordPack へログイン</h1>
+        <p style={{ margin: 0, lineHeight: 1.6, color: 'rgba(226, 232, 240, 0.86)' }}>
+          Google アカウントでサインインしてすべての学習機能を利用してください。
+        </p>
+      </div>
+      <GoogleLoginButton />
+      <p
+        style={{
+          margin: 0,
+          fontSize: '0.85rem',
+          color: 'rgba(148, 163, 184, 0.85)',
+          lineHeight: 1.5,
+        }}
+      >
+        学校・企業アカウントをご利用の場合は、Google 認証後に自動的に権限が反映されます。
+      </p>
+    </div>
+  </div>
+);
 
 type Tab = 'wordpack' | 'article' | 'examples' | 'settings';
 
@@ -45,7 +90,7 @@ const HamburgerIcon: React.FC = () => (
   </svg>
 );
 
-export const App: React.FC = () => {
+const AppShell: React.FC = () => {
   const [tab, setTab] = useState<Tab>('wordpack');
   const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
   const focusRef = useRef<HTMLElement>(null);
@@ -53,6 +98,11 @@ export const App: React.FC = () => {
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
+  const { settings } = useSettings();
+
+  if (!settings.isAuthenticated || settings.userRole === 'viewer') {
+    return <UnauthorizedScreen />;
+  }
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -87,18 +137,17 @@ export const App: React.FC = () => {
   };
 
   return (
-    <SettingsProvider>
-      <ModalProvider>
-        <ConfirmDialogProvider>
-          <NotificationsProvider>
-            <div
-              className={`app-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
-              style={{
-                ['--main-max-width' as any]: `${MAIN_MAX_WIDTH}px`,
-              }}
-            >
-              <ThemeApplier />
-              <style>{`
+    <ModalProvider>
+      <ConfirmDialogProvider>
+        <NotificationsProvider>
+          <div
+            className={`app-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
+            style={{
+              ['--main-max-width' as any]: `${MAIN_MAX_WIDTH}px`,
+            }}
+          >
+            <ThemeApplier />
+            <style>{`
           /* テーマ変数 */
           body.theme-light {
             --color-bg: #ffffff;
@@ -282,121 +331,124 @@ export const App: React.FC = () => {
             outline-offset: 2px;
           }
         `}</style>
-              <div className="app-layout">
-                <aside
-                  id={SIDEBAR_ID}
-                  className="sidebar"
-                  aria-label="アプリ内共通メニュー"
-                  aria-hidden={isSidebarOpen ? 'false' : 'true'}
-                  style={{ width: isSidebarOpen ? `${SIDEBAR_WIDTH}px` : '0px' }}
-                >
-                  <div className="sidebar-content">
-                    <nav className="sidebar-nav" aria-label="主要メニュー">
-                      {NAV_ITEMS.map((item) => (
-                        <button
-                          key={item.key}
-                          type="button"
-                          className="sidebar-nav-button"
-                          aria-pressed={tab === item.key}
-                          aria-current={tab === item.key ? 'page' : undefined}
-                          onClick={() => handleSelectTab(item.key)}
-                          tabIndex={isSidebarOpen ? 0 : -1}
-                          ref={item.key === NAV_ITEMS[0].key ? firstSidebarItemRef : undefined}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </nav>
-                    <div
-                      id={SIDEBAR_PORTAL_CONTAINER_ID}
-                      className="sidebar-controls"
-                      role="region"
-                      aria-label="ページ固有の操作"
-                    />
-                  </div>
-                </aside>
-                <div className="main-column">
-                  <div className="main-inner">
-                    <header>
-                      <div className="header-bar">
-                        <button
-                          ref={sidebarToggleRef}
-                          type="button"
-                          className="hamburger-button hamburger-toggle"
-                          aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
-                          aria-expanded={isSidebarOpen ? 'true' : 'false'}
-                          aria-controls={SIDEBAR_ID}
-                          onClick={toggleSidebar}
-                        >
-                          <HamburgerIcon />
-                        </button>
-                        <h1>WordPack</h1>
-                        <a
-                          href="https://github.com/RiSEblackbird/wordpack-for-english"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          aria-label="GitHubリポジトリを開く"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            color: 'var(--color-text)',
-                            textDecoration: 'none',
-                            transition: 'opacity 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.7')}
-                          onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-                        >
-                        <svg
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
-                        </svg>
-                        </a>
-                      </div>
-                    </header>
-                    <main>
-                      {tab === 'wordpack' && (
-                        <>
-                        <WordPackPanel
-                          focusRef={focusRef}
-                          selectedWordPackId={selectedWordPackId}
-                          onWordPackGenerated={(wordPackId) => setSelectedWordPackId(wordPackId)}
-                        />
-                        <hr />
-                        <section aria-label="保存済みWordPack一覧 セクション">
-                          <WordPackListPanel />
-                        </section>
-                      </>
-                      )}
-                      {tab === 'settings' && <SettingsPanel focusRef={focusRef} />}
-                      {tab === 'article' && (
-                        <>
-                        <ArticleImportPanel />
-                        <hr />
-                        <ArticleListPanel />
-                      </>
-                      )}
-                      {tab === 'examples' && (
-                        <>
-                        <ExampleListPanel />
-                      </>
-                      )}
-                    </main>
-                    <footer style={{ padding: '0.5rem', marginTop: '10rem' }}>
-                      <small>WordPack 英語学習</small>
-                    </footer>
-                  </div>
+            <div className="app-layout">
+              <aside
+                id={SIDEBAR_ID}
+                className="sidebar"
+                aria-label="アプリ内共通メニュー"
+                aria-hidden={isSidebarOpen ? 'false' : 'true'}
+                style={{ width: isSidebarOpen ? `${SIDEBAR_WIDTH}px` : '0px' }}
+              >
+                <div className="sidebar-content">
+                  <nav className="sidebar-nav" aria-label="主要メニュー">
+                    {NAV_ITEMS.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className="sidebar-nav-button"
+                        aria-pressed={tab === item.key}
+                        aria-current={tab === item.key ? 'page' : undefined}
+                        onClick={() => handleSelectTab(item.key)}
+                        tabIndex={isSidebarOpen ? 0 : -1}
+                        ref={item.key === NAV_ITEMS[0].key ? firstSidebarItemRef : undefined}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </nav>
+                  <div
+                    id={SIDEBAR_PORTAL_CONTAINER_ID}
+                    className="sidebar-controls"
+                    role="region"
+                    aria-label="ページ固有の操作"
+                  />
+                </div>
+              </aside>
+              <div className="main-column">
+                <div className="main-inner">
+                  <header>
+                    <div className="header-bar">
+                      <button
+                        ref={sidebarToggleRef}
+                        type="button"
+                        className="hamburger-button hamburger-toggle"
+                        aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
+                        aria-expanded={isSidebarOpen ? 'true' : 'false'}
+                        aria-controls={SIDEBAR_ID}
+                        onClick={toggleSidebar}
+                      >
+                        <HamburgerIcon />
+                      </button>
+                      <h1>WordPack</h1>
+                      <a
+                        href="https://github.com/RiSEblackbird/wordpack-for-english"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label="GitHubリポジトリを開く"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          color: 'var(--color-text)',
+                          textDecoration: 'none',
+                          transition: 'opacity 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.7')}
+                        onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                      >
+                      <svg
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                      </svg>
+                      </a>
+                    </div>
+                  </header>
+                  <main>
+                    {tab === 'wordpack' && (
+                      <>
+                      <WordPackPanel
+                        focusRef={focusRef}
+                        selectedWordPackId={selectedWordPackId}
+                        onWordPackGenerated={(wordPackId) => setSelectedWordPackId(wordPackId)}
+                      />
+                      <hr />
+                      <section aria-label="保存済みWordPack一覧 セクション">
+                        <WordPackListPanel />
+                      </section>
+                    </>
+                    )}
+                    {tab === 'settings' && <SettingsPanel focusRef={focusRef} />}
+                    {tab === 'article' && (
+                      <>
+                      <ArticleImportPanel />
+                      <hr />
+                      <ArticleListPanel />
+                    </>
+                    )}
+                    {tab === 'examples' && <ExampleListPanel />}
+                  </main>
+                  <footer style={{ padding: '0.5rem', marginTop: '10rem' }}>
+                    <small>WordPack 英語学習</small>
+                  </footer>
                 </div>
               </div>
-              <NotificationsOverlay />
             </div>
-          </NotificationsProvider>
-        </ConfirmDialogProvider>
-      </ModalProvider>
+            <NotificationsOverlay />
+          </div>
+        </NotificationsProvider>
+      </ConfirmDialogProvider>
+    </ModalProvider>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <SettingsProvider>
+      <AppShell />
     </SettingsProvider>
   );
 };

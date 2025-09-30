@@ -51,7 +51,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       reasoningEffort: 'minimal',
       textVerbosity: 'medium',
       theme: savedTheme === 'light' ? 'light' : 'dark',
-      userRole: 'admin',
+      userRole: 'viewer',
     };
   });
   const [status, setStatus] = useState<SettingsStatus>('loading');

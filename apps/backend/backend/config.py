@@ -1,7 +1,7 @@
 import json
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -144,8 +144,32 @@ class Settings(BaseSettings):
     )
 
     user_role: Literal["admin", "viewer"] = Field(
-        default="admin",
+        default="viewer",
         description="Default user role when no allowlist matches / デフォルトのユーザーロール (admin|viewer)",
+    )
+    google_oauth_client_id: str | None = Field(
+        default=None,
+        description="Google OAuth client ID for Sign-In / Googleログイン用クライアントID",
+    )
+    session_secret: str = Field(
+        default="",
+        description="Secret string for signing session cookies / セッションクッキー署名用シークレット",
+    )
+    session_cookie_name: str = Field(
+        default="wp_session",
+        description="Session cookie name / セッションクッキー名",
+    )
+    session_cookie_max_age_sec: int = Field(
+        default=60 * 60 * 24 * 14,
+        description="Session cookie max-age in seconds / セッションクッキー有効期間(秒)",
+    )
+    session_cookie_secure: bool = Field(
+        default=False,
+        description="Set Secure flag on session cookie / セッションクッキーにSecure属性を付与するか",
+    )
+    session_cookie_same_site: Literal["lax", "strict", "none"] = Field(
+        default="lax",
+        description="SameSite attribute for session cookie / セッションクッキーのSameSite属性",
     )
     user_email_header: str = Field(
         default="X-User-Email",

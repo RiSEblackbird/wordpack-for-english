@@ -17,6 +17,9 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
         sys.path.insert(0, str(backend_root))
 
     monkeypatch.setenv("STRICT_MODE", "true" if strict else "false")
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_ID", "test-google-client")
+    monkeypatch.setenv("SESSION_SECRET", "test-session-secret")
+    monkeypatch.setenv("SESSION_COOKIE_NAME", "wp_session")
     if db_path is not None:
         monkeypatch.setenv("WORDPACK_DB_PATH", str(db_path))
 
@@ -46,7 +49,87 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFac
     sys.path.insert(0, str(backend_root))
     db_path = tmp_path_factory.mktemp("wordpack") / "store.sqlite3"
     backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=db_path)
+    test_client = TestClient(backend_main.app)
+    test_client.headers.update({"X-User-Email": "admin@example.com"})
+    return test_client
+
+
+def _make_auth_client(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
+    db_path = tmp_path_factory.mktemp("auth") / "store.sqlite3"
+    backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=db_path)
     return TestClient(backend_main.app)
+
+
+def test_auth_login_sets_cookie_and_role(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
+    client = _make_auth_client(monkeypatch, tmp_path_factory)
+
+    import backend.auth as auth_mod
+
+    def _fake_verify(token: str):
+        assert token == "valid-token"
+        return {
+            "email": "tester@example.com",
+            "name": "Tester",
+            "picture": "https://example.com/avatar.png",
+        }
+
+    monkeypatch.setattr(auth_mod, "verify_google_token", _fake_verify)
+
+    resp = client.post("/api/auth/login", json={"credential": "valid-token"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["email"] == "tester@example.com"
+    assert body["role"] == "viewer"
+    cookie = resp.cookies.get("wp_session")
+    assert cookie and len(cookie) > 10
+
+    # subsequent authenticated request should expose user role in /api/config
+    resp_config = client.get("/api/config")
+    assert resp_config.status_code == 200
+    assert resp_config.json().get("user_role") == "viewer"
+
+
+def test_auth_login_rejects_invalid_token(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
+    client = _make_auth_client(monkeypatch, tmp_path_factory)
+
+    import backend.auth as auth_mod
+
+    def _fake_verify(_token: str):
+        raise ValueError("invalid token")
+
+    monkeypatch.setattr(auth_mod, "verify_google_token", _fake_verify)
+
+    resp = client.post("/api/auth/login", json={"credential": "bad"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"] == "Invalid credential"
+
+
+def test_auth_logout_clears_cookie(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
+    client = _make_auth_client(monkeypatch, tmp_path_factory)
+
+    import backend.auth as auth_mod
+
+    monkeypatch.setattr(
+        auth_mod,
+        "verify_google_token",
+        lambda _token: {"email": "tester@example.com", "name": "Tester"},
+    )
+
+    resp_login = client.post("/api/auth/login", json={"credential": "valid"})
+    assert resp_login.status_code == 200
+
+    resp_logout = client.post("/api/auth/logout")
+    assert resp_logout.status_code == 204
+    assert resp_logout.cookies.get("wp_session") == ""
+
+
+def test_config_requires_login(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
+    client = _make_auth_client(monkeypatch, tmp_path_factory)
+
+    resp = client.get("/api/config")
+    assert resp.status_code == 401
+    body = resp.json()
+    assert body["detail"] == "Authentication required"
 
 
 def test_health(client):
