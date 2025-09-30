@@ -149,6 +149,7 @@ export const WordPackListPanel: React.FC = () => {
     reasoningEffort,
     textVerbosity,
     model,
+    userRole,
   } = settings;
   const { setModalOpen } = useModal();
   const confirmDialog = useConfirmDialog();
@@ -174,6 +175,11 @@ export const WordPackListPanel: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(() => new Set());
   const { run: runAbortable } = useAbortableAsync();
+  const aiFeaturesDisabled = userRole === 'viewer';
+  const aiUnavailableMessage = '閲覧ユーザーはAI生成機能を利用できません';
+  const aiDisabledStyle: React.CSSProperties | undefined = aiFeaturesDisabled
+    ? { opacity: 0.5, cursor: 'not-allowed' }
+    : undefined;
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
   }, []);
@@ -274,6 +280,10 @@ export const WordPackListPanel: React.FC = () => {
   );
 
   const generateWordPack = useCallback(async (wordPack: WordPackListItem) => {
+    if (aiFeaturesDisabled) {
+      setMsg({ kind: 'alert', text: aiUnavailableMessage });
+      return;
+    }
     const id = wordPack.id;
     const lemmaLabel = (wordPack.lemma ?? '').trim() || 'WordPack';
     setGeneratingIds((prev) => {
@@ -327,6 +337,7 @@ export const WordPackListPanel: React.FC = () => {
     textVerbosity,
     reasoningEffort,
     updateNotification,
+    aiFeaturesDisabled,
   ]);
 
   const deleteWordPack = useCallback(async (wordPack: WordPackListItem) => {
@@ -636,6 +647,20 @@ export const WordPackListPanel: React.FC = () => {
             更新
           </button>
         </div>
+        {aiFeaturesDisabled && (
+          <p
+            style={{
+              margin: '0 0 0.75rem',
+              padding: '0.5rem',
+              borderRadius: 6,
+              background: 'var(--color-neutral-surface)',
+              color: 'var(--color-muted)',
+              fontSize: '0.9em',
+            }}
+          >
+            閲覧ユーザーは生成系操作が無効化されています
+          </p>
+        )}
 
         <div className="wp-view-toggle" role="group" aria-label="表示モード">
           <button
@@ -775,7 +800,9 @@ export const WordPackListPanel: React.FC = () => {
                                 e.stopPropagation();
                                 generateWordPack(wp);
                               }}
-                              disabled={loading || generatingIds.has(wp.id)}
+                              disabled={loading || generatingIds.has(wp.id) || aiFeaturesDisabled}
+                              title={aiFeaturesDisabled ? aiUnavailableMessage : undefined}
+                              style={aiDisabledStyle}
                             >生成</button>
                           )}
                           <button
@@ -905,7 +932,9 @@ export const WordPackListPanel: React.FC = () => {
                             e.stopPropagation();
                             generateWordPack(wp);
                           }}
-                          disabled={loading || generatingIds.has(wp.id)}
+                          disabled={loading || generatingIds.has(wp.id) || aiFeaturesDisabled}
+                          title={aiFeaturesDisabled ? aiUnavailableMessage : undefined}
+                          style={aiDisabledStyle}
                         >生成</button>
                       )}
                       <TTSButton text={wp.lemma} className="wp-index-tts-btn" />

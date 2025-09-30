@@ -12,6 +12,7 @@ export interface Settings {
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   textVerbosity?: 'low' | 'medium' | 'high';
   theme: 'light' | 'dark';
+  userRole: 'admin' | 'viewer';
 }
 
 interface SettingsValue {
@@ -50,6 +51,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       reasoningEffort: 'minimal',
       textVerbosity: 'medium',
       theme: savedTheme === 'light' ? 'light' : 'dark',
+      userRole: 'admin',
     };
   });
   const [status, setStatus] = useState<SettingsStatus>('loading');
@@ -74,7 +76,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           const hint = bodyText ? ` body=${bodyText}` : '';
           throw new Error(`Failed to load /api/config: ${res.status}${hint}`);
         }
-        const json = (await res.json()) as { request_timeout_ms?: number; llm_model?: string };
+        const json = (await res.json()) as { request_timeout_ms?: number; llm_model?: string; user_role?: string };
         const ms = json.request_timeout_ms;
         if (!aborted && typeof ms === 'number' && Number.isFinite(ms)) {
           setSettings((prev) => ({ ...prev, requestTimeoutMs: ms }));
@@ -82,6 +84,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         const m = (json as any).llm_model;
         if (!aborted && typeof m === 'string' && m) {
           setSettings((prev) => ({ ...prev, model: prev.model || m }));
+        }
+        const role = (json as any).user_role;
+        if (!aborted && (role === 'admin' || role === 'viewer')) {
+          setSettings((prev) => ({ ...prev, userRole: role }));
         }
         if (!aborted) {
           setStatus('ready');
