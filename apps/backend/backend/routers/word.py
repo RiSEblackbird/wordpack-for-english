@@ -12,6 +12,7 @@ from ..config import settings
 from ..flows.word_pack import WordPackFlow
 from ..providers import get_llm_provider
 from ..logging import logger
+from ..permissions import ensure_ai_access
 from ..models.word import (
     WordPack,
     ExampleCategory,
@@ -62,6 +63,7 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
     - sense_title は日本語の短い見出しを優先（LLM）。失敗時のフォールバックは choose_sense_title。
     - 保存ID（wp:{lemma}:{短縮uuid}）を返す
     """
+    ensure_ai_access()
     lemma = req.lemma.strip()
     if not lemma:
         raise HTTPException(status_code=400, detail="lemma is required")
@@ -149,6 +151,7 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     情報は空値で返す。
     生成されたWordPackは自動的にデータベースに保存される。
     """
+    ensure_ai_access()
     # 近傍検索クライアントは使用しない
     chroma_client = None
     # リクエストでモデル/パラメータが指定されていればオーバーライド
@@ -404,6 +407,7 @@ async def regenerate_word_pack(
     word_pack_id: str, req: WordPackRegenerateRequest
 ) -> WordPack:
     """既存のWordPackを再生成する。"""
+    ensure_ai_access()
     # 既存のWordPackを取得してlemmaを取得
     result = store.get_word_pack(word_pack_id)
     if result is None:
@@ -564,6 +568,7 @@ async def generate_examples_for_word_pack(
 
     既存の例文データはプロンプトに含めず、入力トークンを削減する。
     """
+    ensure_ai_access()
     result = store.get_word_pack(word_pack_id)
     if result is None:
         raise HTTPException(status_code=404, detail="WordPack not found")

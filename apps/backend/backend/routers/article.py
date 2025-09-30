@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from ..flows.category_generate_import import CategoryGenerateAndImportFlow
 import anyio
 from functools import partial
+from ..permissions import ensure_ai_access
 
 
 router = APIRouter(tags=["article"])
@@ -184,6 +185,7 @@ def _post_filter_lemmas(raw: list[str]) -> list[str]:
     "/import", response_model=ArticleDetailResponse, response_model_exclude_none=True
 )
 async def import_article(req: ArticleImportRequest) -> ArticleDetailResponse:
+    ensure_ai_access()
     flow = ArticleImportFlow()
     # ルータ層は薄く、Langfuse の親スパンを貼ってフローを呼び出す
     from ..observability import request_trace
@@ -313,6 +315,7 @@ async def generate_and_import_examples(
     """選択カテゴリに関連する語を1つ生成し、空のWordPackを作成、
     当該カテゴリの例文を2件生成して保存し、それぞれを文章インポートに渡して記事化する。
     """
+    ensure_ai_access()
     flow = CategoryGenerateAndImportFlow(
         model=getattr(req, "model", None),
         temperature=getattr(req, "temperature", None),

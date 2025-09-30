@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { useConfirmDialog } from '../ConfirmDialogContext';
@@ -36,6 +36,11 @@ export const ArticleImportPanel: React.FC = () => {
   const abortRef = useRef<AbortController | null>(null);
 
   const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
+  const aiFeaturesDisabled = settings.userRole === 'viewer';
+  const aiUnavailableMessage = '閲覧ユーザーはAI生成機能を利用できません';
+  const aiDisabledStyle: CSSProperties | undefined = aiFeaturesDisabled
+    ? { opacity: 0.5, cursor: 'not-allowed' }
+    : undefined;
 
   const showAdvancedModelOptions = useMemo(() => {
     const lower = (model || '').toLowerCase();
@@ -48,6 +53,10 @@ export const ArticleImportPanel: React.FC = () => {
   };
 
   const importArticle = async () => {
+    if (aiFeaturesDisabled) {
+      setMsg({ kind: 'alert', text: aiUnavailableMessage });
+      return;
+    }
     const selectedModel = model;
     const selectedCategory = category;
     abortRef.current?.abort();
@@ -96,6 +105,10 @@ export const ArticleImportPanel: React.FC = () => {
   };
 
   const regenerateWordPack = async (wordPackId: string) => {
+    if (aiFeaturesDisabled) {
+      setMsg({ kind: 'alert', text: aiUnavailableMessage });
+      return;
+    }
     if (!article) return;
     const lemma = (() => {
       try { return article.related_word_packs.find((l) => l.word_pack_id === wordPackId)?.lemma || 'WordPack'; } catch { return 'WordPack'; }
@@ -165,6 +178,20 @@ export const ArticleImportPanel: React.FC = () => {
       <SidebarPortal>
         <section className="sidebar-section" aria-label="文章インポート">
           <h2>文章インポート</h2>
+          {aiFeaturesDisabled && (
+            <p
+              style={{
+                margin: '0.5rem 0',
+                padding: '0.5rem',
+                borderRadius: 6,
+                background: 'var(--color-neutral-surface)',
+                color: 'var(--color-muted)',
+                fontSize: '0.85em',
+              }}
+            >
+              閲覧ユーザーはAI生成機能を利用できません
+            </p>
+          )}
           <div className="sidebar-field">
             <label htmlFor="article-import-text">文章</label>
             <textarea
@@ -177,7 +204,13 @@ export const ArticleImportPanel: React.FC = () => {
             />
           </div>
           <div className="sidebar-actions">
-            <button type="button" onClick={importArticle} disabled={loading || !text.trim()}>
+            <button
+              type="button"
+              onClick={importArticle}
+              disabled={loading || !text.trim() || aiFeaturesDisabled}
+              style={aiDisabledStyle}
+              title={aiFeaturesDisabled ? aiUnavailableMessage : undefined}
+            >
               インポート
             </button>
             <div className="sidebar-field">
@@ -198,6 +231,10 @@ export const ArticleImportPanel: React.FC = () => {
             <button
               type="button"
               onClick={async () => {
+                if (aiFeaturesDisabled) {
+                  setMsg({ kind: 'alert', text: aiUnavailableMessage });
+                  return;
+                }
                 const selectedCategory = category;
                 const selectedModel = model;
                 setMsg(null);
@@ -229,7 +266,9 @@ export const ArticleImportPanel: React.FC = () => {
                   setGenRunning((n) => Math.max(0, n - 1));
                 }
               }}
-              disabled={loading}
+              disabled={loading || aiFeaturesDisabled}
+              style={aiDisabledStyle}
+              title={aiFeaturesDisabled ? aiUnavailableMessage : undefined}
             >
               生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
             </button>
