@@ -104,6 +104,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     temperature,
     reasoningEffort,
     textVerbosity,
+    userRole,
   } = settings;
   const [lemma, setLemma] = useState('');
   const [data, setData] = useState<WordPack | null>(null);
@@ -118,6 +119,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   // 直近のAIメタ（一覧メタ or 例文メタから推定表示）
   const [aiMeta, setAiMeta] = useState<{ model?: string | null; params?: string | null } | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const aiFeaturesDisabled = userRole === 'viewer';
+  const aiUnavailableMessage = '閲覧ユーザーはAI生成機能を利用できません';
+  const aiDisabledStyle: React.CSSProperties | undefined = aiFeaturesDisabled
+    ? { opacity: 0.5, cursor: 'not-allowed' }
+    : undefined;
   const mountedRef = useRef(true);
   const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
   const [progressUpdating, setProgressUpdating] = useState(false);
@@ -481,6 +487,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   }, [lemmaExplorer, exampleCategories]);
 
   const generate = async () => {
+    if (aiFeaturesDisabled) {
+      setMsg({ kind: 'alert', text: aiUnavailableMessage });
+      return;
+    }
     // 直前のフォアグラウンド処理は中断するが、生成処理自体はバックグラウンド継続を許可する
     // （タブ移動/アンマウントしても通知を完了に更新できるように、abortRef には紐付けない）
     abortRef.current?.abort();
@@ -532,6 +542,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   };
 
   const createEmpty = async () => {
+    if (aiFeaturesDisabled) {
+      setMsg({ kind: 'alert', text: aiUnavailableMessage });
+      return;
+    }
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -648,6 +662,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   );
 
   const regenerateWordPack = async (wordPackId: string) => {
+    if (aiFeaturesDisabled) {
+      setMsg({ kind: 'alert', text: aiUnavailableMessage });
+      return;
+    }
     // 再生成はバックグラウンド継続を許可するため、モーダル閉鎖/アンマウントで中断しない
     const ctrl = new AbortController();
     setLoading(true);
@@ -783,6 +801,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   };
 
   const generateExamples = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common') => {
+    if (aiFeaturesDisabled) {
+      setMsg({ kind: 'alert', text: aiUnavailableMessage });
+      return;
+    }
     if (!currentWordPackId) return;
     // 例文追加生成はバックグラウンド取得を許可し、モーダル閉鎖でも継続させるため
     // abortRef には紐付けずローカルで管理する
@@ -1003,8 +1025,13 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               <button
                 type="button"
                 onClick={() => regenerateWordPack(currentWordPackId)}
-                disabled={loading}
-                style={{ marginLeft: 'auto', backgroundColor: 'var(--color-neutral-surface)' }}
+                disabled={loading || aiFeaturesDisabled}
+                style={{
+                  marginLeft: 'auto',
+                  backgroundColor: 'var(--color-neutral-surface)',
+                  ...(aiDisabledStyle || {}),
+                }}
+                title={aiFeaturesDisabled ? aiUnavailableMessage : undefined}
               >
                 再生成
               </button>
@@ -1136,10 +1163,24 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 <span>{k} ({data!.examples?.[k]?.length || 0}件)</span>
                 <button
                   onClick={() => generateExamples(k)}
-                  disabled={!currentWordPackId || loading}
+                  disabled={!currentWordPackId || loading || aiFeaturesDisabled}
                   aria-label={`generate-examples-${k}`}
-                  title={!currentWordPackId ? '保存済みWordPackのみ追加生成が可能です' : undefined}
-                  style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                  title={
+                    aiFeaturesDisabled
+                      ? aiUnavailableMessage
+                      : !currentWordPackId
+                        ? '保存済みWordPackのみ追加生成が可能です'
+                        : undefined
+                  }
+                  style={{
+                    fontSize: '0.85em',
+                    color: '#1565c0',
+                    border: '1px solid #1565c0',
+                    background: 'white',
+                    padding: '0.1rem 0.4rem',
+                    borderRadius: 4,
+                    ...(aiDisabledStyle || {}),
+                  }}
                 >
                   追加生成（2件）
                 </button>
@@ -1457,6 +1498,21 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         <SidebarPortal>
           <section className="sidebar-section" aria-label="WordPackの生成">
             <h2>WordPack生成</h2>
+            {aiFeaturesDisabled && (
+              <p
+                className="sidebar-note"
+                style={{
+                  margin: '0.5rem 0',
+                  padding: '0.5rem',
+                  borderRadius: 6,
+                  background: 'var(--color-neutral-surface)',
+                  color: 'var(--color-muted)',
+                  fontSize: '0.85em',
+                }}
+              >
+                閲覧ユーザーはAI生成機能を利用できません
+              </p>
+            )}
             <div className="sidebar-field">
               <label htmlFor="wordpack-lemma-input">見出し語</label>
               <input
@@ -1469,14 +1525,21 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               />
             </div>
             <div className="sidebar-actions">
-              <button type="button" onClick={generate} disabled={!lemma.trim() || loading}>
+              <button
+                type="button"
+                onClick={generate}
+                disabled={!lemma.trim() || loading || aiFeaturesDisabled}
+                style={aiDisabledStyle}
+                title={aiFeaturesDisabled ? aiUnavailableMessage : undefined}
+              >
                 生成
               </button>
               <button
                 type="button"
                 onClick={createEmpty}
-                disabled={!lemma.trim() || loading}
-                title="内容の生成を行わず、空のWordPackのみ保存"
+                disabled={!lemma.trim() || loading || aiFeaturesDisabled}
+                style={aiDisabledStyle}
+                title={aiFeaturesDisabled ? aiUnavailableMessage : '内容の生成を行わず、空のWordPackのみ保存'}
               >
                 WordPackのみ作成
               </button>
