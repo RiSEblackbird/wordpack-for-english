@@ -35,7 +35,7 @@ beforeAll(() => {
     const url = typeof input === 'string' ? input : (input as URL).toString();
     if (url.endsWith('/api/config') && (!init || (init && (!init.method || init.method === 'GET')))) {
       return new Response(
-        JSON.stringify({ request_timeout_ms: 60000 }),
+        JSON.stringify({ request_timeout_ms: 60000, user_role: 'viewer' }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }

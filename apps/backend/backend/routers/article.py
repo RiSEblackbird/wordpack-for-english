@@ -4,7 +4,7 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from ..config import settings
@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from ..flows.category_generate_import import CategoryGenerateAndImportFlow
 import anyio
 from functools import partial
+from ..permissions import ensure_ai_access
 
 
 router = APIRouter(tags=["article"])
@@ -181,7 +182,10 @@ def _post_filter_lemmas(raw: list[str]) -> list[str]:
 
 
 @router.post(
-    "/import", response_model=ArticleDetailResponse, response_model_exclude_none=True
+    "/import",
+    response_model=ArticleDetailResponse,
+    response_model_exclude_none=True,
+    dependencies=[Depends(ensure_ai_access)],
 )
 async def import_article(req: ArticleImportRequest) -> ArticleDetailResponse:
     flow = ArticleImportFlow()
@@ -306,7 +310,7 @@ class CategoryGenerateImportRequest(BaseModel):
     text: dict | None = None
 
 
-@router.post("/generate_and_import")
+@router.post("/generate_and_import", dependencies=[Depends(ensure_ai_access)])
 async def generate_and_import_examples(
     req: CategoryGenerateImportRequest,
 ) -> dict[str, object]:

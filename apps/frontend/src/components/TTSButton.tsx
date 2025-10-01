@@ -11,9 +11,11 @@ type Props = {
 export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
   const [loading, setLoading] = useState(false);
   let contextApiBase: string | undefined;
+  let contextUserRole: 'admin' | 'viewer' = 'admin';
   try {
     const { settings } = useSettings();
     contextApiBase = settings.apiBase;
+    contextUserRole = settings.userRole;
   } catch (err) {
     contextApiBase = undefined;
   }
@@ -23,8 +25,15 @@ export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
     return `${normalized}/tts`;
   }, [contextApiBase]);
 
+  const aiDisabled = contextUserRole === 'viewer';
+  const buttonDisabled = aiDisabled || loading || !text?.trim();
+  const combinedStyle = {
+    ...style,
+    ...(aiDisabled ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
+  } satisfies CSSProperties;
+
   const speak = async () => {
-    if (loading) return;
+    if (aiDisabled || loading) return;
     const trimmed = text?.trim();
     if (!trimmed) return;
     if (typeof window === 'undefined' || typeof Audio === 'undefined') {
@@ -64,10 +73,11 @@ export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
     <button
       type="button"
       onClick={speak}
-      disabled={loading || !text?.trim()}
+      disabled={buttonDisabled}
       className={className}
       data-testid="speak-btn"
-      style={style}
+      style={combinedStyle}
+      title={aiDisabled ? '閲覧ユーザーは音声機能を利用できません' : undefined}
     >
       {loading ? '読み上げ中…' : '音声'}
     </button>

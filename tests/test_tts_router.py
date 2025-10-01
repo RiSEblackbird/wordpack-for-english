@@ -78,6 +78,28 @@ def test_tts_synth_unconfigured(monkeypatch) -> None:
         tts.client = original_client  # type: ignore[assignment]
 
 
+def test_tts_forbidden_for_viewer(monkeypatch) -> None:
+    original_client = tts.client
+    dummy_response = _DummyResponse([b"ok"])
+    tts.client = _DummyClient(lambda **_: dummy_response)  # type: ignore[assignment]
+    monkeypatch.setattr(tts.settings, "viewer_email_allowlist", ["viewer@example.com"])
+    monkeypatch.setattr(tts.settings, "viewer_email_domain_allowlist", [])
+    monkeypatch.setattr(tts.settings, "admin_email_allowlist", [])
+    monkeypatch.setattr(tts.settings, "admin_email_domain_allowlist", [])
+    try:
+        app = create_app()
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/tts",
+                json={"text": "Hi", "voice": "alloy"},
+                headers={"X-User-Email": "viewer@example.com"},
+            )
+        assert response.status_code == 403
+        assert response.json()["detail"] == "AI features are disabled for viewer role"
+    finally:
+        tts.client = original_client  # type: ignore[assignment]
+
+
 def test_init_client_reads_settings(monkeypatch) -> None:
     class _SpyClient:
         def __init__(self, api_key: str) -> None:
@@ -92,7 +114,7 @@ def test_init_client_reads_settings(monkeypatch) -> None:
     assert client.api_key == "from-settings"
 
 
-def test_tts_authentication_error(monkeypatch, caplog) -> None:
+def test_tts_authentication_error(monkeypatch, caplog, capsys) -> None:
     if AuthenticationError is None:  # pragma: no cover - openai 未導入環境
         return
 
@@ -111,6 +133,7 @@ def test_tts_authentication_error(monkeypatch, caplog) -> None:
                 response = client.post("/api/tts", json={"text": "Hello", "voice": "alloy"})
         assert response.status_code == 502
         assert response.json()["detail"] == "OpenAI authentication failed"
-        assert any("tts_request_failed" in record.getMessage() for record in caplog.records)
+        err_output = capsys.readouterr().err
+        assert "tts_request_failed" in err_output
     finally:
         tts.client = original_client  # type: ignore[assignment]

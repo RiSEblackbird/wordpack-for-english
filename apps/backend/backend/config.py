@@ -1,8 +1,24 @@
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import json
+from typing import Literal
+
+from pydantic import Field, field_validator, model_validator
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
+from pydantic_settings.sources import EnvSettingsSource
 
 
 DEFAULT_DB_PATH = ".data/wordpack.sqlite3"
+
+
+class _LenientEnvSettingsSource(EnvSettingsSource):
+    def decode_complex_value(self, field_name, field, value):
+        try:
+            return super().decode_complex_value(field_name, field, value)
+        except json.JSONDecodeError:
+            return value
 
 
 class Settings(BaseSettings):
@@ -127,6 +143,109 @@ class Settings(BaseSettings):
         description="Fail fast on missing/invalid configuration (disable only for tests)",
     )
 
+    user_role: Literal["admin", "viewer"] = Field(
+        default="viewer",
+        description="Default user role when no allowlist matches / デフォルトのユーザーロール (admin|viewer)",
+    )
+    google_oauth_client_id: str | None = Field(
+        default=None,
+        description="Google OAuth client ID for Sign-In / Googleログイン用クライアントID",
+    )
+    session_secret: str = Field(
+        default="",
+        description="Secret string for signing session cookies / セッションクッキー署名用シークレット",
+    )
+    session_cookie_name: str = Field(
+        default="wp_session",
+        description="Session cookie name / セッションクッキー名",
+    )
+    session_cookie_max_age_sec: int = Field(
+        default=60 * 60 * 24 * 14,
+        description="Session cookie max-age in seconds / セッションクッキー有効期間(秒)",
+    )
+    session_cookie_secure: bool = Field(
+        default=False,
+        description="Set Secure flag on session cookie / セッションクッキーにSecure属性を付与するか",
+    )
+    session_cookie_same_site: Literal["lax", "strict", "none"] = Field(
+        default="lax",
+        description="SameSite attribute for session cookie / セッションクッキーのSameSite属性",
+    )
+    user_email_header: str = Field(
+        default="X-User-Email",
+        description="Header containing authenticated user email / 認証済みユーザーのメールアドレスを含むヘッダ名",
+    )
+    google_iap_user_header: str = Field(
+        default="X-Goog-Authenticated-User-Email",
+        description="Google IAP が付与するユーザー識別ヘッダ (accounts.google.com:email)",
+    )
+    admin_email_allowlist: list[str] = Field(
+        default_factory=list,
+        description="Always treat these emails as admin / これらのメールは常に管理者扱い",
+    )
+    admin_email_domain_allowlist: list[str] = Field(
+        default_factory=list,
+        description="Domains treated as admin / 管理者扱いとするメールドメイン",
+    )
+    viewer_email_allowlist: list[str] = Field(
+        default_factory=list,
+        description="Always treat these emails as viewer / 閲覧専用として扱うメールアドレス",
+    )
+    viewer_email_domain_allowlist: list[str] = Field(
+        default_factory=list,
+        description="Domains treated as viewer / 閲覧専用として扱うメールドメイン",
+    )
+
+    @staticmethod
+    def _parse_str_list(value: object) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return []
+            candidates = [part.strip() for part in text.replace("\n", ",").split(",")]
+        elif isinstance(value, (list, tuple, set)):
+            candidates = [str(part).strip() for part in value]
+        else:
+            return []
+        return [item.lower() for item in candidates if item]
+
+    @staticmethod
+    def _parse_domain_list(value: object) -> list[str]:
+        items = Settings._parse_str_list(value)
+        normalized: list[str] = []
+        for item in items:
+            domain = item.lstrip("@")
+            if domain:
+                normalized.append(domain)
+        return normalized
+
+    @field_validator("admin_email_allowlist", "viewer_email_allowlist", mode="before")
+    @classmethod
+    def _validate_email_allowlist(cls, value: object) -> list[str]:
+        return Settings._parse_str_list(value)
+
+    @field_validator(
+        "admin_email_domain_allowlist",
+        "viewer_email_domain_allowlist",
+        mode="before",
+    )
+    @classmethod
+    def _validate_domain_allowlist(cls, value: object) -> list[str]:
+        return Settings._parse_domain_list(value)
+
+    @model_validator(mode="after")
+    def _validate_auth_settings(self) -> "Settings":
+        if self.strict_mode:
+            if not (self.session_secret and self.session_secret.strip()):
+                raise ValueError("SESSION_SECRET must be set when STRICT_MODE=true")
+            if not (self.google_oauth_client_id and self.google_oauth_client_id.strip()):
+                raise ValueError("GOOGLE_OAUTH_CLIENT_ID must be set when STRICT_MODE=true")
+        if self.session_cookie_same_site == "none" and not self.session_cookie_secure:
+            raise ValueError("SESSION_COOKIE_SECURE must be true when SESSION_COOKIE_SAME_SITE=none")
+        return self
+
     # Pydantic v2 settings config
     # - env_file: .env を読み込む
     # - extra: .env に存在する未使用キー（例: api_key/allowed_origins など）を無視
@@ -136,6 +255,28 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        if isinstance(env_settings, EnvSettingsSource):
+            env_settings = _LenientEnvSettingsSource(
+                settings_cls=settings_cls,
+                case_sensitive=env_settings.case_sensitive,
+                env_prefix=env_settings.env_prefix,
+                env_nested_delimiter=env_settings.env_nested_delimiter,
+                env_nested_max_split=env_settings.env_nested_max_split,
+                env_ignore_empty=env_settings.env_ignore_empty,
+                env_parse_none_str=env_settings.env_parse_none_str,
+                env_parse_enums=env_settings.env_parse_enums,
+            )
+        return init_settings, env_settings, dotenv_settings, file_secret_settings
 
 
 settings = Settings()

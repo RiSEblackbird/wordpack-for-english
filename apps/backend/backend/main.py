@@ -23,10 +23,11 @@ from .config import settings
 from .indexing import seed_domain_terms, seed_from_jsonl, seed_word_snippets
 from .logging import configure_logging, logger
 from .metrics import registry
-from .middleware import RateLimitMiddleware, RequestIDMiddleware
+from .middleware import RateLimitMiddleware, RequestIDMiddleware, SessionMiddleware
 from .observability import request_trace
 from .providers import ChromaClientFactory, shutdown_providers
 from .routers import article as article_router
+from . import auth
 from .routers import config as cfg
 from .routers import health, tts, word
 
@@ -171,8 +172,13 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.state.session_cookie_name = settings.session_cookie_name
+    app.state.session_cookie_secure = settings.session_cookie_secure
+    app.state.session_cookie_same_site = settings.session_cookie_same_site
+
     _maybe_add_timeout_middleware(app)
     app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(SessionMiddleware)
     app.add_middleware(
         RateLimitMiddleware,
         ip_capacity_per_minute=settings.rate_limit_per_min_ip,
@@ -183,6 +189,7 @@ def create_app() -> FastAPI:
 
     app.include_router(word.router, prefix="/api/word")
     app.include_router(article_router.router, prefix="/api/article")
+    app.include_router(auth.router)
     app.include_router(health.router)
     app.include_router(cfg.router, prefix="/api")
     app.include_router(tts.router)

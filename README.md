@@ -21,6 +21,11 @@
 - 画面左上のハンバーガーボタンで共通サイドバーを開閉し、左側からスライド表示されるメニュー経由で主要タブ（WordPack / 文章インポート / 例文一覧 / 設定）へ移動可能。メニュー項目を選択してもサイドバーは開いたままで、開いている間はサイドバーが左端に固定されます。十分な横幅がある場合はメイン画面の配置を保ったまま余白内でサイドバーが表示され、スペースが足りない場合のみメイン画面が残り幅に収まるよう自動でスライドします
 - WordPack プレビューの例文中ハイライト（lemma）にマウスオーバー0.5秒で `sense_title` ツールチップ表示。対応する lemma が見つからない場合は、最小サイズのポップオーバーに「〇〇 の WordPack を生成」ボタンだけが表示されます。ボタンを押すか、該当の単語（lemma-token）をクリックすると即座に生成が始まり、完了後に「WordPack概要」ウインドウが自動で開きます
 
+### ユーザーロールと Google ログイン
+- ログインは Google アカウントで行い、リバースプロキシや IAP が挿入するメールアドレスヘッダを利用してロールを判定します。
+- `.env` の `USER_ROLE` はロール判定の既定値（`admin`/`viewer`）です。`VIEWER_EMAIL_ALLOWLIST` / `VIEWER_EMAIL_DOMAIN_ALLOWLIST` に閲覧専用ユーザーを、`ADMIN_EMAIL_ALLOWLIST` / `ADMIN_EMAIL_DOMAIN_ALLOWLIST` に管理ユーザーを列挙すると、Google ログイン時にメールアドレス単位でロールが上書きされます。
+- 閲覧専用ロールでは WordPack 生成・例文生成・記事インポート・音声合成など API キーを要する操作が自動的に 403 で拒否され、フロントエンドでも該当ボタンがグレーアウトされます。
+
 ## クイックスタート
 
 ### 前提
@@ -44,6 +49,17 @@ npm install
 cp env.example .env
 # .env に OPENAI_API_KEY を設定
 ```
+
+主要な環境変数（抜粋）:
+
+| 変数名 | 説明 |
+| --- | --- |
+| `STRICT_MODE` | `true` の場合、必須設定の欠落を起動時に検出してエラーにします。 |
+| `SESSION_SECRET` | `STRICT_MODE=true` で必須。セッションクッキー署名用の32バイト以上のランダム秘密鍵。 |
+| `GOOGLE_OAUTH_CLIENT_ID` | `STRICT_MODE=true` で必須。Google OAuth サインイン用クライアントID。Google Cloud Console で取得します。 |
+| `USER_ROLE` | ヘッダで判定できない場合に適用する既定ロール (`admin` / `viewer`)。 |
+
+詳細は `docs/環境変数の意味.md` を参照してください。
 
 ### 起動
 ```bash

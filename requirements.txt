@@ -11,6 +11,10 @@ cmudict
 g2p_en
 openai>=1.0.0
 sentry-sdk
+# 認証 (Google OAuth2 ID Token 検証)
+google-auth
+# セッション署名
+itsdangerous
 # 短期復旧: 既存の観測コードは v2 系 API（trace/span）に合わせているため固定
 # v3 対応へ移行
 langfuse>=3.1,<4
