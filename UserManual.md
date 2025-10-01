@@ -196,6 +196,7 @@
   - `.env` に `OPENAI_API_KEY`
   - テスト/CI はモックのため不要
   - 本番は `STRICT_MODE=true` 推奨（開発では `false` 可）
+  - `STRICT_MODE=true` の場合は `SESSION_SECRET` と `GOOGLE_OAUTH_CLIENT_ID` を必ず設定してください（欠落するとバックエンドが起動しません）
 - 途中切れ対策に `LLM_MAX_TOKENS` を 1200–1800（推奨1500）
 
 ### B-1-2. Chrome DevTools MCP による UI 自動テスト体制

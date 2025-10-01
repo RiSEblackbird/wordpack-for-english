@@ -50,6 +50,17 @@ cp env.example .env
 # .env に OPENAI_API_KEY を設定
 ```
 
+主要な環境変数（抜粋）:
+
+| 変数名 | 説明 |
+| --- | --- |
+| `STRICT_MODE` | `true` の場合、必須設定の欠落を起動時に検出してエラーにします。 |
+| `SESSION_SECRET` | `STRICT_MODE=true` で必須。セッションクッキー署名用の32バイト以上のランダム秘密鍵。 |
+| `GOOGLE_OAUTH_CLIENT_ID` | `STRICT_MODE=true` で必須。Google OAuth サインイン用クライアントID。Google Cloud Console で取得します。 |
+| `USER_ROLE` | ヘッダで判定できない場合に適用する既定ロール (`admin` / `viewer`)。 |
+
+詳細は `docs/環境変数の意味.md` を参照してください。
+
 ### 起動
 ```bash
 # Backend（リポジトリルートで）
