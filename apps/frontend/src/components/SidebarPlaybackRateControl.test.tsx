@@ -2,9 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import { SettingsPanel } from './SettingsPanel';
+import { SidebarPlaybackRateControl } from './SidebarPlaybackRateControl';
 import type { Settings } from '../SettingsContext';
-import type { RefObject } from 'react';
 
 const setSettingsMock = vi.fn();
 let currentSettings: Settings;
@@ -13,7 +12,7 @@ vi.mock('../SettingsContext', () => ({
   useSettings: () => ({ settings: currentSettings, setSettings: setSettingsMock }),
 }));
 
-describe('SettingsPanel', () => {
+describe('SidebarPlaybackRateControl', () => {
   beforeEach(() => {
     currentSettings = {
       apiBase: '/api',
@@ -31,14 +30,21 @@ describe('SettingsPanel', () => {
     setSettingsMock.mockReset();
   });
 
-  it('toggle pronunciation setting from checkbox', async () => {
-    const focusRef = { current: null } as RefObject<HTMLElement>;
-    render(<SettingsPanel focusRef={focusRef} />);
-
+  it('updates playback rate when sidebar is open', async () => {
+    render(<SidebarPlaybackRateControl isSidebarOpen />);
+    const select = screen.getByLabelText('音声再生スピード');
     const user = userEvent.setup();
-    const checkbox = screen.getByLabelText('発音を有効化');
-    await user.click(checkbox);
+    await user.selectOptions(select, '1.25');
 
-    expect(setSettingsMock).toHaveBeenCalledWith({ ...currentSettings, pronunciationEnabled: false });
+    expect(setSettingsMock).toHaveBeenCalledTimes(1);
+    const updater = setSettingsMock.mock.calls[0][0] as (prev: Settings) => Settings;
+    const next = updater(currentSettings);
+    expect(next.ttsPlaybackRate).toBe(1.25);
+  });
+
+  it('disables select when sidebar is closed', () => {
+    render(<SidebarPlaybackRateControl isSidebarOpen={false} />);
+    const select = screen.getByLabelText('音声再生スピード');
+    expect(select).toBeDisabled();
   });
 });
