@@ -12,6 +12,7 @@ export interface Settings {
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   textVerbosity?: 'low' | 'medium' | 'high';
   theme: 'light' | 'dark';
+  ttsPlaybackRate: number;
 }
 
 interface SettingsValue {
@@ -38,6 +39,20 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const savedModel = (() => {
       try { return localStorage.getItem('wp.model') || undefined; } catch { return undefined; }
     })();
+    const savedTtsPlaybackRate = (() => {
+      try {
+        const raw = localStorage.getItem('wp.ttsPlaybackRate');
+        if (!raw) return undefined;
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      } catch {
+        return undefined;
+      }
+    })();
+    const normalizedTtsPlaybackRate = (() => {
+      if (!savedTtsPlaybackRate) return 1;
+      return Math.min(2, Math.max(0.5, savedTtsPlaybackRate));
+    })();
     return {
       apiBase: '/api',
       pronunciationEnabled: true,
@@ -50,6 +65,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       reasoningEffort: 'minimal',
       textVerbosity: 'medium',
       theme: savedTheme === 'light' ? 'light' : 'dark',
+      ttsPlaybackRate: normalizedTtsPlaybackRate,
     };
   });
   const [status, setStatus] = useState<SettingsStatus>('loading');
@@ -132,6 +148,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try { localStorage.setItem('wp.model', settings.model); } catch { /* ignore */ }
     }
   }, [settings.model]);
+  // 音声再生スピードの永続化
+  useEffect(() => {
+    try { localStorage.setItem('wp.ttsPlaybackRate', String(settings.ttsPlaybackRate)); } catch { /* ignore */ }
+  }, [settings.ttsPlaybackRate]);
   return (
     <SettingsContext.Provider value={{ settings, setSettings }}>
       {status === 'ready' ? (

@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { TTSButton } from './TTSButton';
+import * as SettingsContext from '../SettingsContext';
 
 describe('TTSButton', () => {
   const originalFetch = global.fetch;
@@ -24,14 +25,21 @@ describe('TTSButton', () => {
     window.alert = originalAlert;
   });
 
-  it('fetches audio and plays it', async () => {
+  it('fetches audio, plays it, and keeps default playback speed when context is missing', async () => {
     const playMock = vi.fn().mockResolvedValue(undefined);
-    const audioInstances: Array<{ onended: (() => void) | null }> = [];
+    const audioInstances: Array<{ onended: (() => void) | null; onerror: (() => void) | null; playbackRate: number }> = [];
     const audioCtor = vi.fn().mockImplementation(() => {
-      const instance = {
+      const instance: any = {
         play: playMock,
         onended: null as (() => void) | null,
         onerror: null as (() => void) | null,
+        get playbackRate() {
+          return this._rate ?? 1;
+        },
+        set playbackRate(value: number) {
+          this._rate = value;
+        },
+        _rate: 1,
       };
       audioInstances.push(instance);
       return instance;
@@ -45,12 +53,18 @@ describe('TTSButton', () => {
     render(<TTSButton text="Hello" />);
     const user = userEvent.setup();
     const button = screen.getByRole('button', { name: '音声' });
-    await user.click(button);
+    await act(async () => {
+      await user.click(button);
+    });
 
     expect(fetchMock).toHaveBeenCalledWith('/api/tts', expect.objectContaining({ method: 'POST' }));
     await waitFor(() => expect(playMock).toHaveBeenCalled());
     expect(URL.createObjectURL).toHaveBeenCalled();
-    audioInstances[0].onended?.();
+    await waitFor(() => expect(screen.getByRole('button', { name: '音声' })).toBeEnabled());
+    expect(audioInstances[0].playbackRate).toBeCloseTo(1);
+    act(() => {
+      audioInstances[0].onended?.();
+    });
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
   });
 
@@ -70,5 +84,60 @@ describe('TTSButton', () => {
 
     await waitFor(() => expect(alertMock).toHaveBeenCalledWith('音声の取得に失敗しました'));
     expect(consoleMock).toHaveBeenCalled();
+  });
+
+  it('applies playback rate from settings context when available', async () => {
+    const playMock = vi.fn().mockResolvedValue(undefined);
+    const audioInstances: Array<{ playbackRate: number; onended: (() => void) | null; onerror: (() => void) | null }> = [];
+    const audioCtor = vi.fn().mockImplementation(() => {
+      const instance: any = {
+        play: playMock,
+        onended: null as (() => void) | null,
+        onerror: null as (() => void) | null,
+        get playbackRate() {
+          return this._rate ?? 1;
+        },
+        set playbackRate(value: number) {
+          this._rate = value;
+        },
+        _rate: 1,
+      };
+      audioInstances.push(instance);
+      return instance;
+    });
+    (global as any).Audio = audioCtor;
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:mock-url');
+    URL.revokeObjectURL = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(new Response('audio-data', { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const settingsSpy = vi.spyOn(SettingsContext, 'useSettings').mockReturnValue({
+      settings: {
+        apiBase: '/api',
+        pronunciationEnabled: true,
+        regenerateScope: 'all',
+        autoAdvanceAfterGrade: false,
+        requestTimeoutMs: 360000,
+        model: 'gpt-5-mini',
+        temperature: 0.6,
+        reasoningEffort: 'minimal',
+        textVerbosity: 'medium',
+        theme: 'dark',
+        ttsPlaybackRate: 1.75,
+      },
+      setSettings: vi.fn(),
+    });
+
+    render(<TTSButton text="Speed check" />);
+    const user = userEvent.setup();
+    const button = screen.getByRole('button', { name: '音声' });
+    await act(async () => {
+      await user.click(button);
+    });
+
+    expect(settingsSpy).toHaveBeenCalled();
+    await waitFor(() => expect(playMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: '音声' })).toBeEnabled());
+    expect(audioInstances[0].playbackRate).toBeCloseTo(1.75);
   });
 });

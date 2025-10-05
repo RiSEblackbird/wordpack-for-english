@@ -7,6 +7,7 @@ interface Props {
 
 export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
   const { settings, setSettings } = useSettings();
+  const playbackRateOptions = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   return (
     <section>
       <div>
@@ -21,6 +22,29 @@ export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
             <option value="light">ライトカラー</option>
           </select>
         </label>
+      </div>
+      <div>
+        <label>
+          音声再生スピード
+          <select
+            value={String(settings.ttsPlaybackRate)}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+              const parsed = Number(e.target.value);
+              const clamped = Number.isFinite(parsed) ? Math.min(2, Math.max(0.5, parsed)) : 1;
+              setSettings({ ...settings, ttsPlaybackRate: clamped });
+            }}
+            aria-describedby="tts-playback-help"
+          >
+            {playbackRateOptions.map((rate) => (
+              <option key={rate} value={String(rate)}>
+                {`${rate.toFixed(2).replace(/\.00$/, '')}倍速`}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div id="tts-playback-help">
+          <small>0.5倍〜2.0倍の範囲を0.25刻みで選択できます。</small>
+        </div>
       </div>
       <div>
         <label>
