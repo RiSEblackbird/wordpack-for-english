@@ -13,6 +13,7 @@ import { NotificationsProvider } from './NotificationsContext';
 import { NotificationsOverlay } from './components/NotificationsOverlay';
 import { useSettings } from './SettingsContext';
 import { SIDEBAR_PORTAL_CONTAINER_ID } from './components/SidebarPortal';
+import { SidebarPlaybackRateControl } from './components/SidebarPlaybackRateControl';
 
 type Tab = 'wordpack' | 'article' | 'examples' | 'settings';
 
@@ -307,6 +308,8 @@ export const App: React.FC = () => {
                         </button>
                       ))}
                     </nav>
+                    {/* サイドバーに常時配置する音声スピード制御。UIの探索性を高めるため設定タブから移設。 */}
+                    <SidebarPlaybackRateControl isSidebarOpen={isSidebarOpen} />
                     <div
                       id={SIDEBAR_PORTAL_CONTAINER_ID}
                       className="sidebar-controls"

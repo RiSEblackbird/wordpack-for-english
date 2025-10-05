@@ -16,6 +16,7 @@ vi.mock('../SettingsContext', () => {
     reasoningEffort: 'minimal' as const,
     textVerbosity: 'medium' as const,
     theme: 'dark' as const,
+    ttsPlaybackRate: 1,
   };
   return {
     useSettings: () => ({ settings, setSettings: () => {} }),

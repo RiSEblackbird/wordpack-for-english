@@ -11,9 +11,13 @@ type Props = {
 export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
   const [loading, setLoading] = useState(false);
   let contextApiBase: string | undefined;
+  let contextPlaybackRate = 1;
   try {
     const { settings } = useSettings();
     contextApiBase = settings.apiBase;
+    if (typeof settings.ttsPlaybackRate === 'number' && Number.isFinite(settings.ttsPlaybackRate)) {
+      contextPlaybackRate = Math.min(2, Math.max(0.5, settings.ttsPlaybackRate));
+    }
   } catch (err) {
     contextApiBase = undefined;
   }
@@ -43,6 +47,8 @@ export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
+      // UIで指定された再生速度をAudioインスタンスに反映させ、速度設定の即時性を担保する。
+      audio.playbackRate = contextPlaybackRate;
       audio.onended = () => {
         URL.revokeObjectURL(url);
       };
