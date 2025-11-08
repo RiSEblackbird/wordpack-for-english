@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from http import HTTPStatus
+
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token
+from pydantic import BaseModel, Field
+
+from ..auth import issue_session_token
+from ..config import settings
+from ..logging import logger
+from ..store import store
+
+router = APIRouter(tags=["auth"])
+_google_request = google_requests.Request()
+
+
+class GoogleAuthRequest(BaseModel):
+    """Payload containing a Google-issued ID token from the frontend."""
+
+    id_token: str = Field(..., description="Google ID token generated on the client")
+
+
+class GoogleAuthResponse(BaseModel):
+    """Response carrying the persisted user profile."""
+
+    user: dict[str, str]
+
+
+@router.post("/api/auth/google", response_model=GoogleAuthResponse)
+async def authenticate_with_google(payload: GoogleAuthRequest, request: Request) -> JSONResponse:
+    """Verify Google ID token, persist the user, and issue a signed session cookie."""
+
+    if not settings.google_client_id:
+        logger.error(
+            "google_auth_failed",
+            user_id=None,
+            reason="missing_client_id",
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Google authentication is not configured",
+        )
+    if not settings.session_secret_key:
+        logger.error(
+            "google_auth_failed",
+            user_id=None,
+            reason="missing_session_secret",
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Session secret key is not configured",
+        )
+
+    try:
+        id_info = id_token.verify_oauth2_token(
+            payload.id_token,
+            _google_request,
+            settings.google_client_id,
+        )
+    except ValueError as exc:
+        logger.warning(
+            "google_auth_failed",
+            user_id=None,
+            reason="invalid_token",
+        )
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Invalid ID token") from exc
+
+    google_sub = id_info.get("sub")
+    email = id_info.get("email")
+    display_name = id_info.get("name") or id_info.get("email")
+    hosted_domain = id_info.get("hd") or id_info.get("hostedDomain")
+
+    if not google_sub or not email or not display_name:
+        logger.warning(
+            "google_auth_failed",
+            user_id=google_sub,
+            reason="missing_claims",
+        )
+        raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="ID token is missing required claims")
+
+    allowed_hd = (settings.google_allowed_hd or "").strip()
+    if allowed_hd and hosted_domain != allowed_hd:
+        logger.warning(
+            "google_auth_denied",
+            user_id=google_sub,
+            reason="domain_mismatch",
+        )
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Google account domain is not allowed")
+
+    user = store.record_user_login(
+        google_sub=google_sub,
+        email=email,
+        display_name=display_name,
+        login_at=datetime.now(UTC),
+    )
+    session_token = issue_session_token(google_sub)
+
+    response = JSONResponse(status_code=HTTPStatus.OK, content={"user": user})
+    response.set_cookie(
+        key=settings.session_cookie_name or "wp_session",
+        value=session_token,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+        max_age=_session_cookie_max_age(),
+    )
+    request.state.user = user
+    request.state.user_id = google_sub
+    logger.info(
+        "google_auth_succeeded",
+        user_id=google_sub,
+        reason="authenticated",
+        email=email,
+    )
+    return response
+
+
+def _session_cookie_max_age() -> int:
+    """Resolve the cookie lifetime from configuration."""
+
+    try:
+        return max(60, int(settings.session_max_age_seconds))
+    except (TypeError, ValueError):  # pragma: no cover - defensive fallback
+        return 60 * 60 * 24 * 14

@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import Response
 
@@ -19,6 +19,7 @@ try:
 except Exception:  # pragma: no cover - 互換目的のフォールバック
     TimeoutException = None  # type: ignore[assignment]
 
+from .auth import get_current_user
 from .config import settings
 from .indexing import seed_domain_terms, seed_from_jsonl, seed_word_snippets
 from .logging import configure_logging, logger
@@ -27,6 +28,7 @@ from .middleware import RateLimitMiddleware, RequestIDMiddleware
 from .observability import request_trace
 from .providers import ChromaClientFactory, shutdown_providers
 from .routers import article as article_router
+from .routers import auth as auth_router
 from .routers import config as cfg
 from .routers import health, tts, word
 
@@ -181,11 +183,17 @@ def create_app() -> FastAPI:
 
     app.middleware("http")(access_log_and_metrics)
 
-    app.include_router(word.router, prefix="/api/word")
-    app.include_router(article_router.router, prefix="/api/article")
+    protected_dependency = [Depends(get_current_user)]
+    app.include_router(auth_router.router)
+    app.include_router(word.router, prefix="/api/word", dependencies=protected_dependency)
+    app.include_router(
+        article_router.router,
+        prefix="/api/article",
+        dependencies=protected_dependency,
+    )
     app.include_router(health.router)
     app.include_router(cfg.router, prefix="/api")
-    app.include_router(tts.router)
+    app.include_router(tts.router, dependencies=protected_dependency)
 
     app.add_event_handler("shutdown", _on_shutdown)
     app.add_event_handler("startup", _on_startup_seed)

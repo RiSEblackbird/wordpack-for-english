@@ -60,11 +60,29 @@ class AppSQLiteStore:
     def _init_db(self) -> None:
         with self._conn() as conn:
             with conn:
+                self._ensure_users_table(conn)
                 self._ensure_lemmas_table(conn)
                 self._ensure_word_packs_table(conn)
                 self._ensure_word_pack_examples_table(conn)
                 self._ensure_articles_table(conn)
                 self._ensure_article_word_packs_table(conn)
+
+    def _ensure_users_table(self, conn: sqlite3.Connection) -> None:
+        """Create the users table to persist Google sign-in profiles."""
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                google_sub TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                last_login_at TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_users_email_ci ON users(lower(email));"
+        )
 
     def _ensure_lemmas_table(self, conn: sqlite3.Connection) -> None:
         conn.execute(
@@ -180,6 +198,68 @@ class AppSQLiteStore:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_article_wps_lemma ON article_word_packs(lemma);"
         )
+
+    def record_user_login(
+        self,
+        *,
+        google_sub: str,
+        email: str,
+        display_name: str,
+        login_at: datetime | None = None,
+    ) -> dict[str, str]:
+        """Upsert the latest login information for a Google-authenticated user."""
+
+        login_time = (login_at or datetime.now(UTC)).replace(microsecond=0)
+        with self._conn() as conn:
+            with conn:
+                conn.execute(
+                    """
+                    INSERT INTO users (google_sub, email, display_name, last_login_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(google_sub) DO UPDATE SET
+                        email = excluded.email,
+                        display_name = excluded.display_name,
+                        last_login_at = excluded.last_login_at;
+                    """,
+                    (
+                        google_sub,
+                        email,
+                        display_name,
+                        login_time.isoformat(),
+                    ),
+                )
+        user = self.get_user_by_google_sub(google_sub)
+        if user is None:  # pragma: no cover - defensive fallback
+            raise RuntimeError("failed to persist user login")
+        return user
+
+    def get_user_by_google_sub(self, google_sub: str) -> dict[str, str] | None:
+        """Fetch a persisted user profile by its Google subject identifier."""
+
+        with self._conn() as conn:
+            cur = conn.execute(
+                "SELECT google_sub, email, display_name, last_login_at FROM users WHERE google_sub = ?;",
+                (google_sub,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return {
+            "google_sub": str(row["google_sub"]),
+            "email": str(row["email"]),
+            "display_name": str(row["display_name"]),
+            "last_login_at": str(row["last_login_at"]),
+        }
+
+    def delete_user(self, google_sub: str) -> None:
+        """Remove a user profile when access must be revoked."""
+
+        with self._conn() as conn:
+            with conn:
+                conn.execute(
+                    "DELETE FROM users WHERE google_sub = ?;",
+                    (google_sub,),
+                )
 
     def _split_examples_from_payload(
         self, data: str | Mapping[str, Any]

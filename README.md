@@ -43,6 +43,12 @@ npm install
 ```bash
 cp env.example .env
 # .env に OPENAI_API_KEY を設定
+# Google ログインを利用する場合は以下も設定（ドメイン制限は任意）
+# GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com
+# GOOGLE_ALLOWED_HD=example.com
+# SESSION_SECRET_KEY=change-me-to-random-value
+# SESSION_COOKIE_NAME=wp_session
+# SESSION_COOKIE_SECURE=false  # ローカルHTTPでCookieを試す場合のみ
 ```
 
 ### 起動
