@@ -28,7 +28,7 @@ Codex (MCP クライアント)
 |------|------|
 | Node.js | 22.12.0 以上 |
 | npm | 最新安定版 |
-| Chrome | 安定版またはそれ以上 |
+| Chrome/Chromium | 安定版 Chrome を優先し、取得できない場合はスクリプトが OSS Chromium を自動でダウンロード |
 | Codex CLI | [公式ドキュメント](https://github.com/openai/codex/blob/main/docs/advanced.md#model-context-protocol-mcp) を参照してセットアップ |
 
 > **メモ:** Docker コンテナ内で UI テストを実施する場合は、Chrome の sandbox を無効化するか、`--isolated` オプションで一時プロファイルを利用します。
@@ -62,35 +62,33 @@ npm run preview -- --host 127.0.0.1 --port 5173
 
 WordPack リポジトリには、Chrome DevTools MCP と Headless Chrome を使って UI スモークテストを自動実行するランナー `tests/ui/mcp-smoke/run-smoke.mjs` を用意しています。Node.js 22.12 以上と Chrome 安定版を前提に、以下の手順で実行します。
 
-1. **Chrome のインストール**（未導入の場合）
-
-   ```bash
-   sudo apt-get update
-   sudo apt-get install -y google-chrome-stable
-   ```
-
-   別ディストリビューションを利用している場合は、`CHROME_EXECUTABLE=/path/to/chrome` を設定して Chrome バイナリのパスを指定してください。
-
-2. **Node.js 22 系の利用**（`chrome-devtools-mcp` が Node 22 以降必須のため）
+1. **Node.js 22 系の利用**（`chrome-devtools-mcp` が Node 22 以降必須のため）
 
    ```bash
    # 例: .local/node-22 に展開した Node 22 を利用する場合
    export PATH="${PWD}/.local/node-22/bin:$PATH"
    ```
 
-3. **スモークテストの実行**
+2. **スモークテストの実行**
+
+   依存パッケージを導入したうえで、以下のいずれかのコマンドを利用できます。
 
    ```bash
+   # リポジトリルートで実行するユーティリティスクリプト
+   npm run smoke
+
+   # 既存の Node エントリポイントを直接起動する場合
    node tests/ui/mcp-smoke/run-smoke.mjs
    ```
 
    - スクリプトは以下を自動で行います。
      - `STRICT_MODE=false` のバックエンド (FastAPI) を起動し、SQLite データベースを `Seeded WordPack` 1 件で初期化。
      - Vite 開発サーバーを `http://127.0.0.1:5173` で起動し、Chrome プロキシターゲットを自動設定。
-     - `google-chrome-stable --headless` を `--remote-debugging-port=9222` で起動し、`chrome-devtools-mcp` へ接続。
+     - `google-chrome-stable` の自動取得を試み、失敗時には OSS Chromium をダウンロードして `--remote-debugging-port=9222` でヘッドレス起動後 `chrome-devtools-mcp` へ接続。
      - WordPack 一覧・設定タブ・例文一覧タブを MCP ツールで巡回し、主要 UI が表示されることを検証。
    - 実行中は `[backend]`, `[frontend]`, `[chrome]` の各プレフィックスでログが出力され、成功すると `✅ UI smoke test completed successfully` が表示されます。
    - 失敗した場合は詳細なスタックトレースとともにプロセスが停止し、終了時にバックエンド・フロントエンド・Chrome を自動的にクリーンアップします。
+   - Chrome が見つからない場合は `tests/ui/mcp-smoke/.cache/` に安定版 Chrome のダウンロードを試み、403 などで拒否された場合には OSS Chromium を自動取得します。どちらも入手できない環境では従来通り `CHROME_EXECUTABLE` で明示的にパスを指定してください。アクセス制限によりダウンロードが失敗した際はローカル実行のみスキップし、CI 環境では失敗として扱われるため、必要に応じてプロキシ例外設定を更新してください。
 
 > **メモ:** CI や別環境で実行する場合、`CHROME_EXECUTABLE`、`OPENAI_API_KEY` 等の環境変数を必要に応じて上書きしてください。スクリプトは Node.js 22 の `npm` を優先的に利用するため、PATH に Node22 の `bin/` を先頭追加しておくと安全です。
 

@@ -42,6 +42,8 @@ __pycache__/
 # App runtime data
 .data/
 
+.cache/
+
 *.sqlite3
 
 # Vector DB (Chroma) persistence - do not commit generated index data

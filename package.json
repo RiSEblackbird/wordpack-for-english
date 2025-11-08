@@ -1,0 +1,9 @@
+{
+  "name": "wordpack-monorepo-tools",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "smoke": "npm run smoke --prefix tests/ui/mcp-smoke"
+  }
+}
