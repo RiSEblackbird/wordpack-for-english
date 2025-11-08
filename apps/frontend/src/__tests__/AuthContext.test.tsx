@@ -1,12 +1,19 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 import { vi } from 'vitest';
-import { AuthProvider } from '../AuthContext';
+import { AuthProvider, useAuth } from '../AuthContext';
+
+const googleProviderMock = vi.fn(({ children }: { children: React.ReactNode }) => <>{children}</>);
 
 vi.mock('@react-oauth/google', () => ({
-  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => googleProviderMock({ children }),
 }));
+
+const MissingFlagProbe: React.FC = () => {
+  const { missingClientId } = useAuth();
+  return <span data-testid="client-flag">{missingClientId ? 'missing' : 'ok'}</span>;
+};
 
 describe('AuthProvider logging behaviour', () => {
   // 新規参画者向けメモ: 認証バイパス有効時のログレベル切り替えを固定するための回帰テスト。
@@ -16,6 +23,7 @@ describe('AuthProvider logging behaviour', () => {
   beforeEach(() => {
     fetchMock = vi.fn();
     (globalThis as unknown as { fetch: typeof fetch }).fetch = fetchMock;
+    googleProviderMock.mockClear();
   });
 
   afterEach(() => {
@@ -29,6 +37,24 @@ describe('AuthProvider logging behaviour', () => {
       </AuthProvider>,
     );
   };
+
+  it('provides missingClientId flag and skips Google provider when client ID is empty', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(
+      <AuthProvider clientId=" ">
+        <MissingFlagProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByTestId('client-flag')).toHaveTextContent('missing');
+    expect(googleProviderMock).not.toHaveBeenCalled();
+  });
 
   it('prefers console.warn when bypass mode supplies a development credential', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
