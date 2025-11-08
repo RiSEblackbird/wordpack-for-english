@@ -171,6 +171,7 @@ async function setupBackend(env) {
     OPENAI_API_KEY: env.OPENAI_API_KEY || 'test-key',
     WORDPACK_DB_PATH: sqlitePath,
     LANGFUSE_ENABLED: 'false',
+    DISABLE_SESSION_AUTH: 'true',
   };
   spawnWithLogs('backend', 'python', ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8000', '--log-level', 'warning'], {
     cwd: repoRoot,

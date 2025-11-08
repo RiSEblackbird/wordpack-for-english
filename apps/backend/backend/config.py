@@ -151,6 +151,14 @@ class Settings(BaseSettings):
         description="Fail fast on missing/invalid configuration (disable only for tests)",
     )
 
+    disable_session_auth: bool = Field(
+        default=False,
+        description=(
+            "Disable session cookie authentication (development/testing only) / "
+            "セッションクッキー認証を無効化する（開発・テスト用途のみ）"
+        ),
+    )
+
     # Pydantic v2 settings config
     # - env_file: .env を読み込む
     # - extra: .env に存在する未使用キー（例: api_key/allowed_origins など）を無視
