@@ -5,18 +5,51 @@ import { vi } from 'vitest';
 import { App } from './App';
 import { AuthProvider } from './AuthContext';
 import { AUTO_RETRY_INTERVAL_MS } from './SettingsContext';
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 
-const useGoogleLoginMock = vi.fn(
-  (options: { onSuccess?: (res: { id_token?: string }) => void; onError?: () => void }) => () => {
-    options?.onSuccess?.({ id_token: 'test-id-token' });
+type GoogleLoginHandlerSet = {
+  onSuccess: (res: { credential?: string }) => void;
+  onError?: () => void;
+};
+
+type GoogleLoginClickImplementation = (handlers: GoogleLoginHandlerSet) => void;
+
+const defaultGoogleClick: GoogleLoginClickImplementation = ({ onSuccess }) => {
+  onSuccess({ credential: 'test-id-token' });
+};
+
+const googleLoginController = {
+  impl: defaultGoogleClick,
+  setImplementation(next: GoogleLoginClickImplementation) {
+    this.impl = next;
   },
-);
+  reset() {
+    this.impl = defaultGoogleClick;
+  },
+};
 
-vi.mock('@react-oauth/google', () => ({
-  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  useGoogleLogin: (options: { onSuccess?: (res: { id_token?: string }) => void; onError?: () => void }) =>
-    useGoogleLoginMock(options),
-}));
+vi.mock('@react-oauth/google', () => {
+  const GoogleOAuthProvider = ({ children }: { children: ReactNode }) => <>{children}</>;
+  const GoogleLogin = ({
+    onSuccess,
+    onError,
+    containerProps,
+  }: {
+    onSuccess: (res: { credential?: string }) => void;
+    onError?: () => void;
+    containerProps?: ComponentPropsWithoutRef<'div'>;
+  }) => (
+    <div {...containerProps}>
+      <div
+        role="button"
+        aria-label="Mock Google Sign In"
+        data-testid="mock-google-signin-button"
+        onClick={() => googleLoginController.impl({ onSuccess, onError })}
+      />
+    </div>
+  );
+  return { GoogleOAuthProvider, GoogleLogin };
+});
 
 const resolveUrl = (input: RequestInfo | URL): string => {
   if (typeof input === 'string') return input;
@@ -84,7 +117,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   fetchMock = vi.fn() as vi.MockedFunction<typeof fetch>;
   (globalThis as any).fetch = fetchMock;
-  useGoogleLoginMock.mockClear();
+  googleLoginController.reset();
   try {
     localStorage.clear();
   } catch {
@@ -128,7 +161,7 @@ describe('App navigation', () => {
     expect(
       screen.getByText('開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'),
     ).toBeInTheDocument();
-    expect(useGoogleLoginMock).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('google-login-bridge')).toBeNull();
   });
 
   it('shows the login screen when /api/config responds with 401', async () => {
@@ -166,6 +199,57 @@ describe('App navigation', () => {
     await completeLogin(fetchMock, user);
 
     expect(await screen.findByRole('heading', { name: 'WordPack' })).toBeInTheDocument();
+    const authCall = fetchMock.mock.calls.find(([input]) =>
+      resolveUrl(input).endsWith('/api/auth/google'),
+    );
+    expect(authCall).toBeDefined();
+    const [, init] = authCall!;
+    expect(init?.method).toBe('POST');
+    expect(init?.credentials).toBe('include');
+    expect(init?.headers).toMatchObject({ 'Content-Type': 'application/json' });
+    expect(init?.body).toBe(JSON.stringify({ id_token: 'test-id-token' }));
+  });
+
+  it('shows an inline error when Google returns no credential', async () => {
+    setupFetchForAuthenticatedFlow(fetchMock);
+    googleLoginController.setImplementation(({ onSuccess }) => {
+      onSuccess({});
+    });
+    renderWithProviders();
+
+    const user = userEvent.setup();
+    const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
+    await act(async () => {
+      await user.click(loginButton);
+    });
+
+    expect(
+      await screen.findByText('ID トークンを取得できませんでした。ブラウザを更新して再試行してください。'),
+    ).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(([input]) => resolveUrl(input).endsWith('/api/auth/google')),
+    ).toBe(false);
+  });
+
+  it('surfaces the default error message when Google signals a failure', async () => {
+    setupFetchForAuthenticatedFlow(fetchMock);
+    googleLoginController.setImplementation(({ onError }) => {
+      onError?.();
+    });
+    renderWithProviders();
+
+    const user = userEvent.setup();
+    const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
+    await act(async () => {
+      await user.click(loginButton);
+    });
+
+    expect(
+      await screen.findByText('Google サインインでエラーが発生しました。時間を置いて再試行してください。'),
+    ).toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(([input]) => resolveUrl(input).endsWith('/api/auth/google')),
+    ).toBe(false);
   });
 
   it('shows retry option when /api/config fetch fails', async () => {

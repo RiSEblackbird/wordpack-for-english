@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useGoogleLogin } from '@react-oauth/google';
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { flushSync } from 'react-dom';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WordPackPanel } from './components/WordPackPanel';
@@ -434,6 +434,12 @@ const ThemeApplier: React.FC = () => {
 const LoginScreen: React.FC = () => {
   const { signIn, isAuthenticating, error, clearError, missingClientId, authBypassActive } = useAuth();
   const [localError, setLocalError] = useState<string | null>(null);
+  /**
+   * GoogleLogin コンポーネントが描画するコンテナを保持する。
+   * 背面で Google 純正ボタンを不可視状態でレンダリングし、
+   * 既存のカスタムボタンから `.click()` を委譲するための橋渡し役。
+   */
+  const googleButtonBridgeRef = useRef<HTMLDivElement | null>(null);
   const loginStyles = `
         .login-shell {
           min-height: 100vh;
@@ -452,6 +458,7 @@ const LoginScreen: React.FC = () => {
           box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
           display: grid;
           gap: 1.25rem;
+          position: relative;
         }
         .login-title {
           margin: 0;
@@ -551,6 +558,15 @@ const LoginScreen: React.FC = () => {
           color: var(--color-muted);
           font-size: 0.9rem;
         }
+        .google-login-proxy {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 0;
+          height: 0;
+          overflow: hidden;
+          pointer-events: none;
+        }
         .login-progress {
           display: flex;
           justify-content: center;
@@ -586,26 +602,27 @@ const LoginScreen: React.FC = () => {
     );
   }
 
-  const googleLogin = useGoogleLogin({
-    flow: 'implicit',
-    scope: 'openid email profile',
-    onSuccess: async (tokenResponse) => {
-      const idToken = tokenResponse.id_token;
-      if (!idToken) {
-        setLocalError('ID トークンを取得できませんでした。ブラウザを更新して再試行してください。');
-        return;
-      }
-      try {
-        await signIn(idToken);
-        setLocalError(null);
-      } catch (err) {
-        console.warn('Sign-in request rejected', err);
-      }
-    },
-    onError: () => {
-      setLocalError('Google サインインでエラーが発生しました。時間を置いて再試行してください。');
-    },
-  });
+  const handleCredentialSuccess = async (credentialResponse: CredentialResponse) => {
+    /**
+     * Google Identity Services から返却された ID トークンを取り出し、
+     * バックエンドへ引き渡してセッションを確立する。
+     */
+    const idToken = credentialResponse.credential;
+    if (!idToken) {
+      setLocalError('ID トークンを取得できませんでした。ブラウザを更新して再試行してください。');
+      return;
+    }
+    try {
+      await signIn(idToken);
+      setLocalError(null);
+    } catch (err) {
+      console.warn('Sign-in request rejected', err);
+    }
+  };
+
+  const handleCredentialError = () => {
+    setLocalError('Google サインインでエラーが発生しました。時間を置いて再試行してください。');
+  };
 
   /**
    * ログインボタン押下時に Google のポップアップを開く。
@@ -614,8 +631,16 @@ const LoginScreen: React.FC = () => {
   const handleLoginClick = () => {
     clearError();
     setLocalError(null);
+    const container = googleButtonBridgeRef.current?.querySelector(
+      '[data-google-login-container]'
+    );
+    const googleButton = container?.querySelector<HTMLElement>('[role="button"]');
+    if (!googleButton) {
+      setLocalError('Google サインインの初期化が完了していません。数秒待ってから再試行してください。');
+      return;
+    }
     try {
-      googleLogin();
+      googleButton.click();
     } catch (err) {
       console.error('Failed to start Google login flow', err);
       setLocalError('Google サインインを開始できませんでした。ブラウザのポップアップ設定を確認してください。');
@@ -659,6 +684,18 @@ const LoginScreen: React.FC = () => {
           <span className="login-button__label">Googleでログイン</span>
         </button>
         <p className="login-note">成功するとブラウザにセッションクッキーを保存します。</p>
+        <div className="google-login-proxy" ref={googleButtonBridgeRef} aria-hidden="true">
+          <GoogleLogin
+            onSuccess={handleCredentialSuccess}
+            onError={handleCredentialError}
+            useOneTap={false}
+            containerProps={{
+              'data-google-login-container': 'bridge',
+              'data-testid': 'google-login-bridge',
+              style: { display: 'inline-flex' },
+            }}
+          />
+        </div>
         {isAuthenticating ? (
           <div className="login-progress">
             <LoadingIndicator label="認証処理中" subtext="Google の応答を検証しています" />
