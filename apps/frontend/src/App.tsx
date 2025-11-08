@@ -490,26 +490,61 @@ const LoginScreen: React.FC = () => {
         }
         .login-button {
           appearance: none;
-          border: none;
           border-radius: 999px;
-          padding: 0.85rem 1.5rem;
+          padding: 0.85rem 1.6rem;
           font-size: 1rem;
           font-weight: 600;
-          background: var(--color-accent);
+          background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), var(--color-accent, #2563eb));
           color: #ffffff;
           cursor: pointer;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 0.5rem;
-          transition: transform 0.15s ease, filter 0.2s ease;
+          gap: 0.75rem;
+          border: 1px solid rgba(15, 23, 42, 0.18);
+          box-shadow: 0 14px 30px -18px rgba(37, 99, 235, 0.9);
+          transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
         }
         .login-button:hover {
-          filter: brightness(1.05);
+          filter: brightness(1.08);
+          box-shadow: 0 16px 34px -18px rgba(37, 99, 235, 0.95);
+        }
+        .login-button:focus-visible {
+          outline: 3px solid rgba(96, 165, 250, 0.8);
+          outline-offset: 3px;
         }
         .login-button:disabled {
           cursor: not-allowed;
-          opacity: 0.7;
+          opacity: 0.78;
+          box-shadow: none;
+        }
+        body.theme-dark .login-button {
+          background: linear-gradient(135deg, rgba(96, 165, 250, 0.95), var(--color-accent, #60a5fa));
+          border-color: rgba(148, 163, 184, 0.45);
+          box-shadow: 0 16px 36px -20px rgba(59, 130, 246, 0.75);
+        }
+        body.theme-dark .login-button:hover {
+          box-shadow: 0 18px 40px -20px rgba(56, 189, 248, 0.8);
+        }
+        .login-button__icon {
+          display: inline-flex;
+          width: 2rem;
+          height: 2rem;
+          border-radius: 50%;
+          align-items: center;
+          justify-content: center;
+          background: #ffffff;
+          box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+        }
+        body.theme-dark .login-button__icon {
+          background: #ffffff;
+          box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.32);
+        }
+        .login-button__label {
+          display: inline-flex;
+          align-items: center;
+          font-weight: 700;
+          letter-spacing: 0.01em;
         }
         .login-note {
           margin: 0;
@@ -600,13 +635,28 @@ const LoginScreen: React.FC = () => {
             {combinedError}
           </div>
         ) : null}
+        {/* Googleのブランドカラーを示すアイコンを表示して、ボタンを視認しやすくする */}
         <button
           type="button"
           className="login-button"
           onClick={handleLoginClick}
           disabled={isAuthenticating}
         >
-          Googleでログイン
+          <span className="login-button__icon" aria-hidden="true">
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 20 20"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path d="M18.64 10.2045C18.64 9.56636 18.5827 8.95272 18.4764 8.36363H10V11.8454H14.92C14.7082 12.9704 14.0927 13.9236 13.1395 14.5636V16.9545H15.9564C17.6582 15.3636 18.64 12.9909 18.64 10.2045Z" fill="#4285F4" />
+              <path d="M10 19C12.43 19 14.4673 18.1945 15.9564 16.9545L13.1395 14.5636C12.3286 15.1064 11.2714 15.4318 10 15.4318C7.65547 15.4318 5.67184 13.8236 4.96475 11.6982H2.04285V14.1728C3.52284 17.1818 6.52284 19 10 19Z" fill="#34A853" />
+              <path d="M4.96474 11.6982C4.78474 11.1554 4.68293 10.5727 4.68293 9.97726C4.68293 9.38182 4.78474 8.79999 4.96474 8.25726V5.78272H2.04284C1.47556 6.90908 1.14284 8.20453 1.14284 9.57725C1.14284 10.95 1.47556 12.2454 2.04284 13.3718L4.96474 11.6982Z" fill="#FBBC05" />
+              <path d="M10 4.56818C11.3854 4.56818 12.6218 5.04545 13.5882 5.95909L16.0264 3.52091C14.4645 2.04545 12.4273 1.13636 10 1.13636C6.52284 1.13636 3.52284 2.95455 2.04285 5.78273L4.96475 8.25727C5.67184 6.13182 7.65547 4.56818 10 4.56818Z" fill="#EA4335" />
+            </svg>
+          </span>
+          <span className="login-button__label">Googleでログイン</span>
         </button>
         <p className="login-note">成功するとブラウザにセッションクッキーを保存します。</p>
         {isAuthenticating ? (
