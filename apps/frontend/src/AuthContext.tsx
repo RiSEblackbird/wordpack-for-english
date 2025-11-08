@@ -22,6 +22,7 @@ interface AuthContextValue {
   signIn: (idToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
+  authBypassActive: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -29,6 +30,12 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const STORAGE_KEY = 'wordpack.auth.v1';
 
 const SESSION_COOKIE_NAME = import.meta.env.VITE_SESSION_COOKIE_NAME || 'wp_session';
+
+const AUTH_BYPASS_USER: AuthenticatedUser = {
+  google_sub: 'dev-bypass',
+  email: 'dev@wordpack.local',
+  display_name: 'WordPack Dev User',
+};
 
 /**
  * ローカルストレージから最後に成功した認証情報を読み取る。
@@ -67,6 +74,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   const [token, setToken] = useState<string | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authBypassActive, setAuthBypassActive] = useState(false);
   const clientIdRef = useRef(clientId);
 
   useEffect(() => {
@@ -91,6 +99,40 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       persistAuth(null);
     }
   }, [user, token]);
+
+  useEffect(() => {
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/config', { method: 'GET' });
+        if (!res.ok) return;
+        const json = (await res
+          .json()
+          .catch(() => null)) as { session_auth_disabled?: boolean } | null;
+        if (aborted) return;
+        if (json?.session_auth_disabled) {
+          setAuthBypassActive(true);
+          setUser((prev) =>
+            prev ?? AUTH_BYPASS_USER,
+          );
+          setToken((prev) => prev ?? 'development-bypass');
+        }
+      } catch (err) {
+        console.warn('Failed to detect authentication bypass flag from /api/config', err);
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authBypassActive || user) {
+      return;
+    }
+    setUser(AUTH_BYPASS_USER);
+    setToken('development-bypass');
+  }, [authBypassActive, user]);
 
   /**
    * Google から取得した ID トークンをバックエンドへ送信し、セッションを確立する。
@@ -164,15 +206,19 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
 
   const clearError = useCallback(() => setError(null), []);
 
-  const value = useMemo<AuthContextValue>(() => ({
-    user,
-    token,
-    isAuthenticating,
-    error,
-    signIn,
-    signOut,
-    clearError,
-  }), [user, token, isAuthenticating, error, signIn, signOut, clearError]);
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      token,
+      isAuthenticating,
+      error,
+      signIn,
+      signOut,
+      clearError,
+      authBypassActive,
+    }),
+    [user, token, isAuthenticating, error, signIn, signOut, clearError, authBypassActive],
+  );
 
   return (
     <GoogleOAuthProvider clientId={clientIdRef.current}>

@@ -22,6 +22,7 @@ vi.mock('../AuthContext', () => ({
     token: 'token',
     error: null,
     clearError: vi.fn(),
+    authBypassActive: false,
   }),
 }));
 
