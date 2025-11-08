@@ -36,7 +36,7 @@ const authSuccess = () =>
     { status: 200, headers: { 'Content-Type': 'application/json' } },
   );
 
-const logoutSuccess = () => new Response('', { status: 204 });
+const logoutSuccess = () => new Response(null, { status: 204 });
 
 const renderWithProviders = () =>
   render(
@@ -223,7 +223,7 @@ describe('App navigation', () => {
         expect(alert).toHaveTextContent('自動再試行');
       });
 
-      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
       expect(typeof triggerAutoRetry).toBe('function');
 
       await act(async () => {

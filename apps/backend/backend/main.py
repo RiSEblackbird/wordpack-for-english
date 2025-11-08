@@ -183,7 +183,14 @@ def create_app() -> FastAPI:
 
     app.middleware("http")(access_log_and_metrics)
 
-    protected_dependency = [Depends(get_current_user)]
+    if settings.disable_session_auth:
+        logger.warning(
+            "session_auth_disabled",
+            reason="config_flag",
+        )
+        protected_dependency: list[Any] = []
+    else:
+        protected_dependency = [Depends(get_current_user)]
     app.include_router(auth_router.router)
     app.include_router(word.router, prefix="/api/word", dependencies=protected_dependency)
     app.include_router(
