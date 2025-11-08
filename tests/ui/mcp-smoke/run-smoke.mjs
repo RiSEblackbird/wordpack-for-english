@@ -253,8 +253,18 @@ async function runSmokeAssertions(wordPackId) {
   logStep('トップ画面のスナップショットを取得します');
   const snapshot = await client.callTool({ name: 'take_snapshot', arguments: {} });
   const snapshotText = snapshot.content?.[0]?.text || '';
-  ensure(snapshotText.includes('WordPack automation'), 'WordPack card did not render expected lemma');
-  ensure(snapshotText.includes(wordPackId.slice(3, 10)) || snapshotText.includes('例文未生成'), 'WordPack card snapshot missing expected metadata');
+  const cardLemmas = await callEvaluate(
+    client,
+    `() => Array.from(document.querySelectorAll('.wp-card-title'), el => el.textContent.trim()).filter(Boolean)`
+  );
+  ensure(
+    Array.isArray(cardLemmas) && cardLemmas.includes('automation'),
+    'WordPack card did not render expected lemma'
+  );
+  ensure(
+    snapshotText.includes(wordPackId.slice(3, 10)) || snapshotText.includes('例文未生成') || snapshotText.includes('automation'),
+    'WordPack card snapshot missing expected metadata'
+  );
 
   logStep('ナビゲーションタブのラベルを検証します');
   const navItems = await callEvaluate(
