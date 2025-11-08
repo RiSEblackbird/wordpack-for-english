@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { once } from 'node:events';
+import { constants as fsConstants } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -16,13 +17,28 @@ const backendDir = path.join(repoRoot, 'apps', 'backend');
 const frontendDir = path.join(repoRoot, 'apps', 'frontend');
 const dataDir = path.join(repoRoot, '.data');
 const sqlitePath = path.join(dataDir, 'ui-smoke.sqlite3');
-const chromeExecutable = process.env.CHROME_EXECUTABLE || '/usr/bin/google-chrome-stable';
+// Chrome 実行ファイル解決時に参照する候補パス。
+// 新規参加者が落とし穴にハマりやすい「Chrome 未インストール環境」でも
+// 自動ダウンロードへフォールバックできるよう、既知の主要ディストリビューション
+// で利用されるパスを網羅しています。
+const chromeExecutableCandidates = [
+  process.env.CHROME_EXECUTABLE,
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/chromium',
+  '/snap/bin/chromium',
+];
 const nodeBinDir = path.dirname(process.execPath);
 const npmBin = path.join(nodeBinDir, 'npm');
 const packageDir = __dirname;
+// CI では Chrome が必須だが、開発者ローカルではネットワーク制限で取得できないケースが多いため
+// スキップ可否を制御するフラグとして CI 判定を保持しておく。
+const isCI = process.env.CI === 'true';
 
 const processes = [];
 let chromeUserDataDir;
+let resolvedChromeExecutable;
 let client;
 let transport;
 
@@ -101,6 +117,69 @@ function ensure(cond, message) {
   if (!cond) {
     throw new Error(message);
   }
+}
+
+async function isExecutable(filePath) {
+  if (!filePath) return false;
+  try {
+    await fs.access(filePath, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Headless Chrome の実行ファイルを特定する。
+// 既存バイナリを優先し、見つからない場合は Puppeteer のダウンローダーで
+// 安定版 Chromium を取得する。MCP の UI テストが依存する重要な前処理なので、
+// 実行フローの冒頭で一度だけ呼び出してキャッシュする設計としています。
+async function resolveChromeExecutable() {
+  if (resolvedChromeExecutable) {
+    return resolvedChromeExecutable;
+  }
+
+  for (const candidate of chromeExecutableCandidates) {
+    if (await isExecutable(candidate)) {
+      resolvedChromeExecutable = candidate;
+      return resolvedChromeExecutable;
+    }
+  }
+
+  logStep('Chrome 実行ファイルが見つからなかったため、Puppeteer のブラウザダウンローダーを利用します');
+  const { install, computeExecutablePath, detectBrowserPlatform, resolveBuildId, Browser } = await import('@puppeteer/browsers');
+  const browserPlatform = detectBrowserPlatform();
+  ensure(browserPlatform, '現在のプラットフォームでは Chromium を自動取得できません');
+  const cacheDir = path.join(repoRoot, '.cache', 'chromium');
+  await fs.mkdir(cacheDir, { recursive: true });
+  let buildId;
+  try {
+    buildId = await resolveBuildId(Browser.CHROME, browserPlatform, 'stable');
+  } catch (error) {
+    throw new Error('Chrome 安定版のビルド情報を取得できませんでした。ネットワークポリシーを確認してください。', { cause: error });
+  }
+  const executablePath = computeExecutablePath({
+    browser: Browser.CHROME,
+    cacheDir,
+    buildId,
+    browserPlatform,
+  });
+
+  if (!(await isExecutable(executablePath))) {
+    try {
+      await install({
+        browser: Browser.CHROME,
+        cacheDir,
+        buildId,
+        browserPlatform,
+      });
+    } catch (error) {
+      throw new Error('Chromium の自動ダウンロードに失敗しました。社内プロキシ設定または CHROME_EXECUTABLE を確認してください。', { cause: error });
+    }
+  }
+
+  ensure(await isExecutable(executablePath), `自動取得した Chrome 実行ファイルを検出できませんでした: ${executablePath}`);
+  resolvedChromeExecutable = executablePath;
+  return resolvedChromeExecutable;
 }
 
 async function waitForSelector(clientInstance, selector, { timeoutMs = 10000 } = {}) {
@@ -205,11 +284,7 @@ async function setupFrontend(env) {
 }
 
 async function launchChrome(env) {
-  try {
-    await fs.access(chromeExecutable);
-  } catch {
-    throw new Error(`Chrome executable not found at ${chromeExecutable}. Set CHROME_EXECUTABLE env var to override.`);
-  }
+  const chromeExecutable = await resolveChromeExecutable();
   logStep(`Headless Chrome を起動します (executable: ${chromeExecutable})`);
   chromeUserDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'wordpack-chrome-'));
   const args = [
@@ -496,6 +571,20 @@ const baseEnv = {
 
 async function main() {
   try {
+    try {
+      await resolveChromeExecutable();
+    } catch (error) {
+      if (isCI) {
+        throw error;
+      }
+      console.warn('⚠️ Chrome の自動準備に失敗したため UI スモークテストをスキップします。');
+      console.warn(error instanceof Error ? error.message : String(error));
+      if (error instanceof Error && error.cause) {
+        console.warn('  ↳ 原因:', error.cause instanceof Error ? error.cause.message : String(error.cause));
+      }
+      logStep('Chrome が利用できない環境のため、UI スモークテストは未実施として終了します');
+      return;
+    }
     await setupBackend(baseEnv);
     logStep('WordPack のシードデータを投入します');
     const wordPackId = await seedWordPack();
