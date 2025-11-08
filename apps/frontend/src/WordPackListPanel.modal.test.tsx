@@ -1,16 +1,41 @@
 import { render, screen, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { App } from './App';
 import { vi } from 'vitest';
+import { AuthProvider } from './AuthContext';
+import { App } from './App';
 
 describe('WordPackListPanel modal preview', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    (globalThis as any).fetch = vi.fn();
     try {
       sessionStorage.clear();
     } catch {}
+    try {
+      localStorage.setItem(
+        'wordpack.auth.v1',
+        JSON.stringify({
+          user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
+          token: 'token',
+        }),
+      );
+    } catch {}
   });
+
+  afterEach(() => {
+    try {
+      localStorage.removeItem('wordpack.auth.v1');
+    } catch {}
+  });
+
+  function renderWithAuth() {
+    return render(
+      <AuthProvider clientId="test-client">
+        <App />
+      </AuthProvider>,
+    );
+  }
 
   function setupFetchMocks() {
     const mock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: any) => {
@@ -166,7 +191,7 @@ describe('WordPackListPanel modal preview', () => {
 
   it('カードをクリックするとモーダルでWordPack内容を表示する（WordPackタブ統合後）', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 
@@ -219,7 +244,7 @@ describe('WordPackListPanel modal preview', () => {
 
   it('カードに学習記録バッジを表示し、イベントでリアルタイム更新される', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 
@@ -252,7 +277,7 @@ describe('WordPackListPanel modal preview', () => {
 
   it('カード/リスト表示ともにWordPack語彙の読み上げボタンが表示される', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 
@@ -284,7 +309,7 @@ describe('WordPackListPanel modal preview', () => {
 
   it('語義ボタンで語義タイトルを確認できる（カード/リスト）', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 
@@ -335,7 +360,7 @@ describe('WordPackListPanel modal preview', () => {
 
   it('語義一括表示トグルで全語義タイトルを同時表示・非表示できる', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 
@@ -379,7 +404,7 @@ describe('WordPackListPanel modal preview', () => {
 
   it('ソート機能が正しく動作する', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 
@@ -429,7 +454,7 @@ describe('WordPackListPanel modal preview', () => {
 
   it('表示絞り込み（生成済/未生成/-）が正しく動作する', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 
@@ -466,7 +491,7 @@ describe('WordPackListPanel modal preview', () => {
 
   it('例文未生成のWordPackに生成ボタンが表示され、押下で生成APIを呼び出す', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 
@@ -498,7 +523,7 @@ describe('WordPackListPanel modal preview', () => {
 
   it('検索機能（前方/後方/部分一致と適用操作）が正しく動作する', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 

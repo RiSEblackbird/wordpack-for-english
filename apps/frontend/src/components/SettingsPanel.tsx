@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSettings } from '../SettingsContext';
+import { useAuth } from '../AuthContext';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -7,6 +8,19 @@ interface Props {
 
 export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
   const { settings, setSettings } = useSettings();
+  const { signOut, isAuthenticating } = useAuth();
+
+  /**
+   * ユーザーが手動でセッションを破棄できるようにする。
+   * 副作用: サーバーへログアウト通知を送り、保持中の認証情報を消去する。
+   */
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (err) {
+      console.warn('manual sign-out failed', err);
+    }
+  };
   return (
     <section>
       <div>
@@ -77,8 +91,11 @@ export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
           <small>0.6–0.8（文体の多様性）、語数厳密なら 0.3–0.5</small>
         </div>
       </div>
-      
-      
+      <div>
+        <button type="button" onClick={handleSignOut} disabled={isAuthenticating}>
+          ログアウト（Google セッションを終了）
+        </button>
+      </div>
     </section>
   );
 };

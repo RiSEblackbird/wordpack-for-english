@@ -1,15 +1,37 @@
 import { render, screen, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { App } from './App';
 import { vi } from 'vitest';
+import { AuthProvider } from './AuthContext';
+import { App } from './App';
 
 describe('ExampleListPanel pagination offset behavior', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    (globalThis as any).fetch = vi.fn();
     // sessionStorage を汚染しないようにクリア
     try { sessionStorage.clear(); } catch {}
+    try {
+      localStorage.setItem(
+        'wordpack.auth.v1',
+        JSON.stringify({
+          user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
+          token: 'token',
+        }),
+      );
+    } catch {}
   });
+
+  afterEach(() => {
+    try { localStorage.removeItem('wordpack.auth.v1'); } catch {}
+  });
+
+  const renderWithAuth = () =>
+    render(
+      <AuthProvider clientId="test-client">
+        <App />
+      </AuthProvider>,
+    );
 
   const openTab = async (user: ReturnType<typeof userEvent.setup>, label: string) => {
     const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
@@ -65,7 +87,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
 
   it('uses requested offset for Next/Prev and shows correct range', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 
@@ -112,7 +134,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
 
   it('訳一括表示トグルで全訳文の開閉を一括操作できる', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 
@@ -227,7 +249,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
       return new Response('not found', { status: 404 });
     });
 
-    render(<App />);
+    renderWithAuth();
     const user = userEvent.setup();
 
     await openTab(user, '例文一覧');

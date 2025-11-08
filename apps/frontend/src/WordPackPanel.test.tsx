@@ -1,14 +1,39 @@
 import { render, screen, act, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { App } from './App';
 import { vi } from 'vitest';
+import { AuthProvider } from './AuthContext';
+import { App } from './App';
 
 describe('WordPackPanel E2E (mocked fetch)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
+    (globalThis as any).fetch = vi.fn();
+    try {
+      localStorage.setItem(
+        'wordpack.auth.v1',
+        JSON.stringify({
+          user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
+          token: 'token',
+        }),
+      );
+    } catch {}
   });
+
+  afterEach(() => {
+    try {
+      localStorage.removeItem('wordpack.auth.v1');
+    } catch {}
+  });
+
+  function renderWithAuth() {
+    return render(
+      <AuthProvider clientId="test-client">
+        <App />
+      </AuthProvider>,
+    );
+  }
 
   function setupFetchMocks() {
     const generated = new Set<string>();
@@ -135,7 +160,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
   it('generates WordPack and shows examples', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
@@ -205,7 +230,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
   it('creates empty WordPack via the new button and shows it', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
@@ -235,7 +260,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
   it('warms lemma cache on hover and opens/minimizes/restores the lemma window', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
@@ -294,7 +319,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
   it('shows 未生成 tooltip for unknown lemma token and notifies when generating', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
@@ -353,7 +378,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
   it('generates unknown lemma when token is clicked directly', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     const toggle = await screen.findByRole('button', { name: 'メニューを開く' });

@@ -7,10 +7,22 @@ import type { Settings } from '../SettingsContext';
 import type { RefObject } from 'react';
 
 const setSettingsMock = vi.fn();
+const signOutMock = vi.fn();
 let currentSettings: Settings;
 
 vi.mock('../SettingsContext', () => ({
   useSettings: () => ({ settings: currentSettings, setSettings: setSettingsMock }),
+}));
+
+vi.mock('../AuthContext', () => ({
+  useAuth: () => ({
+    signOut: signOutMock,
+    isAuthenticating: false,
+    user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
+    token: 'token',
+    error: null,
+    clearError: vi.fn(),
+  }),
 }));
 
 describe('SettingsPanel', () => {
@@ -29,6 +41,7 @@ describe('SettingsPanel', () => {
       ttsPlaybackRate: 1,
     };
     setSettingsMock.mockReset();
+    signOutMock.mockReset();
   });
 
   it('toggle pronunciation setting from checkbox', async () => {
@@ -40,5 +53,16 @@ describe('SettingsPanel', () => {
     await user.click(checkbox);
 
     expect(setSettingsMock).toHaveBeenCalledWith({ ...currentSettings, pronunciationEnabled: false });
+  });
+
+  it('calls signOut when logout button is pressed', async () => {
+    const focusRef = { current: null } as RefObject<HTMLElement>;
+    render(<SettingsPanel focusRef={focusRef} />);
+
+    const user = userEvent.setup();
+    const logoutButton = screen.getByRole('button', { name: 'ログアウト（Google セッションを終了）' });
+    await user.click(logoutButton);
+
+    expect(signOutMock).toHaveBeenCalledTimes(1);
   });
 });
