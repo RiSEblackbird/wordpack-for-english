@@ -39,6 +39,14 @@ cd apps/frontend
 npm install
 ```
 
+### Google OAuth クライアントの準備
+1. [Google Cloud Console](https://console.cloud.google.com/) にアクセスし、対象プロジェクトを作成または選択します。
+2. 左側メニューの「API とサービス」→「OAuth 同意画面」でユーザータイプを選択し、アプリ名・サポートメールなどを登録して公開ステータスまで設定します。
+3. 「API とサービス」→「認証情報」から「認証情報を作成」→「OAuth クライアント ID」を選び、アプリケーションの種類に「ウェブアプリケーション」を指定します。
+4. 「承認済みの JavaScript 生成元」には `http://127.0.0.1:5173` と `http://localhost:5173` を追加します（HTTPS 環境を用意済みなら該当 URL も追加）。
+5. 「承認済みのリダイレクト URI」には `http://127.0.0.1:5173` と `http://localhost:5173` を追加します。Google Identity Services のポップアップ版を使うため、同一オリジンを登録しておくとローカル開発でのログインが安定します。
+6. 生成されたクライアント ID を控え、JSON シークレットをダウンロードする場合は `google-oauth-client-secret.json` などの名称で保管してください（`.gitignore` によって Git 管理外になります）。
+
 ### 環境変数
 ```bash
 cp env.example .env
@@ -60,6 +68,8 @@ echo "VITE_GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com" >> .env
 ```
 
 `VITE_GOOGLE_CLIENT_ID` はバックエンドの `GOOGLE_CLIENT_ID` と一致している必要があります。Google Console で発行した OAuth 2.0 Web クライアント ID を指定してください。
+
+バックエンド・フロントエンドのどちらも起動前に `.env` と `apps/frontend/.env` を用意し、`GOOGLE_CLIENT_ID`（必要に応じて `GOOGLE_ALLOWED_HD`）、`SESSION_SECRET_KEY`、`VITE_GOOGLE_CLIENT_ID` を設定しておくと、初回起動から Google ログインが有効になります。
 
 ### 起動
 ```bash
@@ -83,6 +93,7 @@ docker compose up --build
 - 「Googleでログイン」ボタンを押下するとポップアップが開き、承認後に `/api/auth/google` へ ID トークンを送信してセッション Cookie を取得します。
 - 画面右上の「設定」タブにある「ログアウト（Google セッションを終了）」ボタンから明示的にサインアウトできます。ログアウト時は `/api/auth/logout` へ通知した上でセッション Cookie を削除し、再びサインイン画面へ戻ります。
 - 既存のセッション Cookie が有効な状態でリロードした場合は、ローカルに保存されたユーザー情報を使って自動的に復元されます（Cookie が無効化されている場合は再ログインが必要です）。
+- ログイン中は「設定」タブの上部にメールアドレスと表示名が表示されます。別アカウントに切り替えたい場合は一度ログアウトし、再度「Googleでログイン」ボタンから希望するアカウントを選択してください。
 
 ## テスト
 - Backend（Python）
