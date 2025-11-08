@@ -7,8 +7,12 @@ WORKDIR /app
 COPY apps/frontend/package*.json ./
 RUN npm ci || npm install
 
+# Copy entrypoint script that installs missing dependencies on container start.
+COPY apps/frontend/docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
+
 EXPOSE 5173
 
-CMD ["npm", "run", "dev"]
-
+ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
 
