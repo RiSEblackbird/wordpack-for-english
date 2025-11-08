@@ -87,6 +87,7 @@ docker compose up --build
 ```
 - Backend: http://127.0.0.1:8000
 - Frontend: http://127.0.0.1:5173
+- `apps/frontend/docker-entrypoint.sh` が起動時に依存を確認し、`node_modules/@react-oauth/google` が不足している場合は自動で `npm install` を実行します。このため、新しいフロントエンド依存を追加してもコンテナの再ビルドは不要です。
 
 ### 認証フロー
 - フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。
