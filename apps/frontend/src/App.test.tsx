@@ -5,50 +5,91 @@ import { vi } from 'vitest';
 import { App } from './App';
 import { AuthProvider } from './AuthContext';
 import { AUTO_RETRY_INTERVAL_MS } from './SettingsContext';
-import type { ComponentPropsWithoutRef, ReactNode } from 'react';
+import type {
+  NonOAuthError,
+  TokenResponse,
+  UseGoogleLoginOptionsImplicitFlow,
+} from '@react-oauth/google';
+import type { ReactNode } from 'react';
+
+type TokenResponseWithIdToken = TokenResponse & { id_token?: string };
+type TokenResponseOverrides = Partial<TokenResponseWithIdToken>;
+type OAuthErrorResponse = Pick<TokenResponse, 'error' | 'error_description' | 'error_uri'>;
+type OAuthErrorOverrides = Partial<OAuthErrorResponse>;
 
 type GoogleLoginHandlerSet = {
-  onSuccess: (res: { credential?: string }) => void;
-  onError?: () => void;
+  onSuccess?: (overrides?: TokenResponseOverrides) => void;
+  onError?: (overrides?: OAuthErrorOverrides) => void;
+  onNonOAuthError?: (error?: NonOAuthError) => void;
 };
 
 type GoogleLoginClickImplementation = (handlers: GoogleLoginHandlerSet) => void;
 
-const defaultGoogleClick: GoogleLoginClickImplementation = ({ onSuccess }) => {
-  onSuccess({ credential: 'test-id-token' });
-};
+const {
+  createTokenResponse,
+  createOAuthErrorResponse,
+  googleLoginController,
+  useGoogleLoginMock,
+} = vi.hoisted(() => {
+  const createTokenResponse = (overrides: TokenResponseOverrides = {}): TokenResponseWithIdToken => ({
+    access_token: 'mock-access-token',
+    expires_in: 3600,
+    prompt: 'consent',
+    scope: 'openid email profile',
+    token_type: 'Bearer',
+    ...overrides,
+  });
 
-const googleLoginController = {
-  impl: defaultGoogleClick,
-  setImplementation(next: GoogleLoginClickImplementation) {
-    this.impl = next;
-  },
-  reset() {
-    this.impl = defaultGoogleClick;
-  },
-};
+  const createOAuthErrorResponse = (overrides: OAuthErrorOverrides = {}): OAuthErrorResponse => ({
+    error: 'access_denied',
+    error_description: 'Mock OAuth error',
+    error_uri: 'about:blank',
+    ...overrides,
+  });
+
+  const defaultGoogleLogin: GoogleLoginClickImplementation = ({ onSuccess }) => {
+    onSuccess?.();
+  };
+
+  const controller = {
+    impl: defaultGoogleLogin as GoogleLoginClickImplementation,
+    setImplementation(next: GoogleLoginClickImplementation) {
+      this.impl = next;
+    },
+    reset() {
+      this.impl = defaultGoogleLogin;
+    },
+  };
+
+  const useGoogleLoginMock = vi.fn((options: UseGoogleLoginOptionsImplicitFlow) => {
+    return () => {
+      controller.impl({
+        onSuccess: (overrides) => {
+          const response = createTokenResponse(overrides);
+          options.onSuccess?.(response);
+        },
+        onError: (overrides) => {
+          const error = createOAuthErrorResponse(overrides);
+          options.onError?.(error);
+        },
+        onNonOAuthError: (error) => {
+          options.onNonOAuthError?.(error ?? { type: 'unknown' });
+        },
+      });
+    };
+  });
+
+  return {
+    createTokenResponse,
+    createOAuthErrorResponse,
+    googleLoginController: controller,
+    useGoogleLoginMock,
+  };
+});
 
 vi.mock('@react-oauth/google', () => {
   const GoogleOAuthProvider = ({ children }: { children: ReactNode }) => <>{children}</>;
-  const GoogleLogin = ({
-    onSuccess,
-    onError,
-    containerProps,
-  }: {
-    onSuccess: (res: { credential?: string }) => void;
-    onError?: () => void;
-    containerProps?: ComponentPropsWithoutRef<'div'>;
-  }) => (
-    <div {...containerProps}>
-      <div
-        role="button"
-        aria-label="Mock Google Sign In"
-        data-testid="mock-google-signin-button"
-        onClick={() => googleLoginController.impl({ onSuccess, onError })}
-      />
-    </div>
-  );
-  return { GoogleOAuthProvider, GoogleLogin };
+  return { GoogleOAuthProvider, useGoogleLogin: useGoogleLoginMock };
 });
 
 const resolveUrl = (input: RequestInfo | URL): string => {
@@ -104,6 +145,9 @@ const completeLogin = async (
   if (!fetchMock.mock.calls.length) {
     setupFetchForAuthenticatedFlow(fetchMock);
   }
+  googleLoginController.setImplementation(({ onSuccess }) => {
+    onSuccess?.({ id_token: 'test-id-token' });
+  });
   const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
   await act(async () => {
     await user.click(loginButton);
@@ -115,6 +159,7 @@ let fetchMock: vi.MockedFunction<typeof fetch>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useGoogleLoginMock.mockClear();
   fetchMock = vi.fn() as vi.MockedFunction<typeof fetch>;
   (globalThis as any).fetch = fetchMock;
   googleLoginController.reset();
@@ -161,7 +206,6 @@ describe('App navigation', () => {
     expect(
       screen.getByText('開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'),
     ).toBeInTheDocument();
-    expect(screen.queryByTestId('google-login-bridge')).toBeNull();
   });
 
   it('shows the login screen when /api/config responds with 401', async () => {
@@ -210,11 +254,8 @@ describe('App navigation', () => {
     expect(init?.body).toBe(JSON.stringify({ id_token: 'test-id-token' }));
   });
 
-  it('shows an inline error when Google returns no credential', async () => {
+  it('shows an inline error when Google returns a token response without an ID token', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
-    googleLoginController.setImplementation(({ onSuccess }) => {
-      onSuccess({});
-    });
     renderWithProviders();
 
     const user = userEvent.setup();
@@ -234,7 +275,7 @@ describe('App navigation', () => {
   it('surfaces the default error message when Google signals a failure', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     googleLoginController.setImplementation(({ onError }) => {
-      onError?.();
+      onError?.({ error: 'invalid_grant' });
     });
     renderWithProviders();
 
