@@ -80,7 +80,13 @@ WordPack リポジトリには、Chrome DevTools MCP と Headless Chrome を使�
 
 3. **スモークテストの実行**
 
+   依存パッケージを導入したうえで、以下のいずれかのコマンドを利用できます。
+
    ```bash
+   # リポジトリルートで実行するユーティリティスクリプト
+   npm run smoke
+
+   # 既存の Node エントリポイントを直接起動する場合
    node tests/ui/mcp-smoke/run-smoke.mjs
    ```
 
