@@ -9,17 +9,23 @@ export interface AuthenticatedUser {
   [key: string]: unknown;
 }
 
+/**
+ * Google Identity Services が返す CredentialResponse.credential（ID トークン）を示す型エイリアス。
+ * 文字列そのものだが、呼び出し側が用途を見失わないよう意味付けを明示する。
+ */
+export type GoogleIdToken = string;
+
 interface StoredAuthPayload {
   user: AuthenticatedUser;
-  token: string;
+  token: GoogleIdToken;
 }
 
 interface AuthContextValue {
   user: AuthenticatedUser | null;
-  token: string | null;
+  token: GoogleIdToken | null;
   isAuthenticating: boolean;
   error: string | null;
-  signIn: (idToken: string) => Promise<void>;
+  signIn: (idToken: GoogleIdToken) => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
   authBypassActive: boolean;
@@ -72,7 +78,7 @@ function persistAuth(payload: StoredAuthPayload | null): void {
 
 export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNode }> = ({ clientId, children }) => {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<GoogleIdToken | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authBypassActive, setAuthBypassActive] = useState(false);
@@ -164,7 +170,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
    * Google から取得した ID トークンをバックエンドへ送信し、セッションを確立する。
    * 副作用: セッション Cookie 設定、ユーザー状態の更新、エラー時は状態クリア。
    */
-  const signIn = useCallback(async (idToken: string) => {
+  const signIn = useCallback(async (idToken: GoogleIdToken) => {
     setIsAuthenticating(true);
     setError(null);
     try {
