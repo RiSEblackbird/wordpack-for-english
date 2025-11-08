@@ -5,6 +5,8 @@ pydantic-settings
 pytest
 httpx
 pytest-cov
+google-auth
+itsdangerous
 langgraph
 chromadb
 cmudict

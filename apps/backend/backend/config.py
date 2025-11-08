@@ -18,6 +18,30 @@ class Settings(BaseSettings):
         default="development",
         description="Runtime environment / 実行環境",
     )
+    google_client_id: str = Field(
+        default="",
+        description="Google OAuth client ID / Googleサインイン用クライアントID",
+    )
+    google_allowed_hd: str | None = Field(
+        default=None,
+        description="Optional allowed Google Workspace domain / 許可するGoogle Workspaceドメイン",
+    )
+    session_secret_key: str = Field(
+        default="",
+        description="Secret key for signing session cookies / セッションクッキー署名用シークレット",
+    )
+    session_cookie_name: str = Field(
+        default="wp_session",
+        description="Session cookie name / セッションクッキー名",
+    )
+    session_cookie_secure: bool = Field(
+        default=True,
+        description="Whether to mark session cookie as Secure / セッションクッキーにSecure属性を付与するか",
+    )
+    session_max_age_seconds: int = Field(
+        default=60 * 60 * 24 * 14,
+        description="Session lifetime in seconds / セッションの寿命（秒）",
+    )
     llm_provider: str = Field(
         default="openai",
         description="LLM service provider / 利用するLLMプロバイダ",
