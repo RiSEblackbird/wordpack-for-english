@@ -1,14 +1,39 @@
 import { render, screen, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { App } from './App';
 import { vi } from 'vitest';
+import { AuthProvider } from './AuthContext';
+import { App } from './App';
 
 describe('WordPackListPanel card actions layout (two rows)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    (globalThis as any).fetch = vi.fn();
     try { sessionStorage.clear(); } catch {}
+    try {
+      localStorage.setItem(
+        'wordpack.auth.v1',
+        JSON.stringify({
+          user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
+          token: 'token',
+        }),
+      );
+    } catch {}
   });
+
+  afterEach(() => {
+    try {
+      localStorage.removeItem('wordpack.auth.v1');
+    } catch {}
+  });
+
+  function renderWithAuth() {
+    return render(
+      <AuthProvider clientId="test-client">
+        <App />
+      </AuthProvider>,
+    );
+  }
 
   function setupFetchMocks() {
     const mock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: any) => {
@@ -61,7 +86,7 @@ describe('WordPackListPanel card actions layout (two rows)', () => {
 
   it('カード右上の操作が2行: 上段=音声/削除, 下段=生成/語義(右寄せ)', async () => {
     setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 

@@ -1,14 +1,39 @@
 import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { App } from './App';
 import { vi } from 'vitest';
+import { AuthProvider } from './AuthContext';
+import { App } from './App';
 
 describe('WordPackListPanel bulk delete', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    (globalThis as any).fetch = vi.fn();
     try { sessionStorage.clear(); } catch {}
+    try {
+      localStorage.setItem(
+        'wordpack.auth.v1',
+        JSON.stringify({
+          user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
+          token: 'token',
+        }),
+      );
+    } catch {}
   });
+
+  afterEach(() => {
+    try {
+      localStorage.removeItem('wordpack.auth.v1');
+    } catch {}
+  });
+
+  function renderWithAuth() {
+    return render(
+      <AuthProvider clientId="test-client">
+        <App />
+      </AuthProvider>,
+    );
+  }
 
   function setupFetchMocks() {
     let listCall = 0;
@@ -91,7 +116,7 @@ describe('WordPackListPanel bulk delete', () => {
 
   it('allows selecting multiple WordPacks and deleting them together', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
 

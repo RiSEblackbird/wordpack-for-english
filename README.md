@@ -51,6 +51,16 @@ cp env.example .env
 # SESSION_COOKIE_SECURE=false  # ローカルHTTPでCookieを試す場合のみ
 ```
 
+フロントエンド側でも同じクライアントIDを参照できるように、`apps/frontend/.env` を作成して Vite の環境変数を指定してください。
+
+```bash
+cd apps/frontend
+cp .env.example .env  # 無い場合は自作でOK
+echo "VITE_GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com" >> .env
+```
+
+`VITE_GOOGLE_CLIENT_ID` はバックエンドの `GOOGLE_CLIENT_ID` と一致している必要があります。Google Console で発行した OAuth 2.0 Web クライアント ID を指定してください。
+
 ### 起動
 ```bash
 # Backend（リポジトリルートで）
@@ -67,6 +77,12 @@ docker compose up --build
 ```
 - Backend: http://127.0.0.1:8000
 - Frontend: http://127.0.0.1:5173
+
+### 認証フロー
+- フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。
+- 「Googleでログイン」ボタンを押下するとポップアップが開き、承認後に `/api/auth/google` へ ID トークンを送信してセッション Cookie を取得します。
+- 画面右上の「設定」タブにある「ログアウト（Google セッションを終了）」ボタンから明示的にサインアウトできます。ログアウト時は `/api/auth/logout` へ通知した上でセッション Cookie を削除し、再びサインイン画面へ戻ります。
+- 既存のセッション Cookie が有効な状態でリロードした場合は、ローカルに保存されたユーザー情報を使って自動的に復元されます（Cookie が無効化されている場合は再ログインが必要です）。
 
 ## テスト
 - Backend（Python）

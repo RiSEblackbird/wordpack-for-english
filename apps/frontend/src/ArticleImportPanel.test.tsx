@@ -1,13 +1,35 @@
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { App } from './App';
 import { vi } from 'vitest';
+import { AuthProvider } from './AuthContext';
+import { App } from './App';
 
 describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    (globalThis as any).fetch = vi.fn();
+    try {
+      localStorage.setItem(
+        'wordpack.auth.v1',
+        JSON.stringify({
+          user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
+          token: 'token',
+        }),
+      );
+    } catch {}
   });
+
+  afterEach(() => {
+    try { localStorage.removeItem('wordpack.auth.v1'); } catch {}
+  });
+
+  const renderWithAuth = () =>
+    render(
+      <AuthProvider clientId="test-client">
+        <App />
+      </AuthProvider>,
+    );
 
   function setupFetchMocks() {
     const mock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -70,7 +92,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
 
   it('sends model/temperature for sampling model on import', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     await openTab(user, '文章インポート');
@@ -97,7 +119,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
 
   it('sends reasoning/text_opts for gpt-5-mini on import, and reasoning/text on generate_and_import', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     await openTab(user, '文章インポート');
@@ -134,7 +156,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
 
   it('sends selected generation_category in /api/article/import payload', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     await openTab(user, '文章インポート');
@@ -159,7 +181,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
 
   it('sends reasoning params for gpt-5-nano on both import and generate_and_import', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     await openTab(user, '文章インポート');
@@ -194,7 +216,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
 
   it('sends the selected category when generating and importing examples', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     await openTab(user, '文章インポート');
@@ -218,7 +240,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
 
   it('uses selected model for regenerate from import result modal (reasoning model)', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     await openTab(user, '文章インポート');
@@ -246,7 +268,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
 
   it('uses selected model for regenerate from import result modal (sampling model)', async () => {
     const fetchMock = setupFetchMocks();
-    render(<App />);
+    renderWithAuth();
 
     const user = userEvent.setup();
     await openTab(user, '文章インポート');
