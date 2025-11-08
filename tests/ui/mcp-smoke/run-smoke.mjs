@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { once } from 'node:events';
+import { constants as fsConstants } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -16,13 +17,28 @@ const backendDir = path.join(repoRoot, 'apps', 'backend');
 const frontendDir = path.join(repoRoot, 'apps', 'frontend');
 const dataDir = path.join(repoRoot, '.data');
 const sqlitePath = path.join(dataDir, 'ui-smoke.sqlite3');
-const chromeExecutable = process.env.CHROME_EXECUTABLE || '/usr/bin/google-chrome-stable';
+// Chrome 実行ファイル解決時に参照する候補パス。
+// 新規参加者が落とし穴にハマりやすい「Chrome 未インストール環境」でも
+// 自動ダウンロードへフォールバックできるよう、既知の主要ディストリビューション
+// で利用されるパスを網羅しています。
+const chromeExecutableCandidates = [
+  process.env.CHROME_EXECUTABLE,
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium-browser',
+  '/usr/bin/chromium',
+  '/snap/bin/chromium',
+];
 const nodeBinDir = path.dirname(process.execPath);
 const npmBin = path.join(nodeBinDir, 'npm');
 const packageDir = __dirname;
+// CI では Chrome が必須だが、開発者ローカルではネットワーク制限で取得できないケースが多いため
+// スキップ可否を制御するフラグとして CI 判定を保持しておく。
+const isCI = process.env.CI === 'true';
 
 const processes = [];
 let chromeUserDataDir;
+let resolvedChromeExecutable;
 let client;
 let transport;
 
@@ -101,6 +117,100 @@ function ensure(cond, message) {
   if (!cond) {
     throw new Error(message);
   }
+}
+
+async function isExecutable(filePath) {
+  if (!filePath) return false;
+  try {
+    await fs.access(filePath, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Headless Chrome の実行ファイルを特定する。
+// 既存バイナリを優先し、見つからない場合は Puppeteer のダウンローダーで
+// 安定版 Chromium を取得する。MCP の UI テストが依存する重要な前処理なので、
+// 実行フローの冒頭で一度だけ呼び出してキャッシュする設計としています。
+async function resolveChromeExecutable() {
+  if (resolvedChromeExecutable) {
+    return resolvedChromeExecutable;
+  }
+
+  for (const candidate of chromeExecutableCandidates) {
+    if (await isExecutable(candidate)) {
+      resolvedChromeExecutable = candidate;
+      return resolvedChromeExecutable;
+    }
+  }
+
+  logStep('Chrome 実行ファイルが見つからなかったため、Puppeteer のブラウザダウンローダーを利用します');
+  const { install, computeExecutablePath, detectBrowserPlatform, resolveBuildId, Browser } = await import('@puppeteer/browsers');
+  const browserPlatform = detectBrowserPlatform();
+  ensure(browserPlatform, '現在のプラットフォームでは Chromium を自動取得できません');
+  const cacheDir = path.join(repoRoot, '.cache', 'chromium');
+  await fs.mkdir(cacheDir, { recursive: true });
+
+  // Chrome 安定版は企業プロキシ越しで 403 を返す事例が多いため、
+  // 失敗時には OSS Chromium へのフォールバックも順番に試す。
+  const downloadStrategies = [
+    {
+      label: 'Chrome 安定版',
+      browser: Browser.CHROME,
+      resolveBuildIdFn: () => resolveBuildId(Browser.CHROME, browserPlatform, 'stable'),
+      installErrorMessage:
+        'Chrome 安定版を自動取得できませんでした。ネットワークポリシーまたは CHROME_EXECUTABLE を確認してください。',
+    },
+    {
+      label: 'Chromium 最新版',
+      browser: Browser.CHROMIUM,
+      resolveBuildIdFn: () => resolveBuildId(Browser.CHROMIUM, browserPlatform, 'latest'),
+      installErrorMessage:
+        'Chromium 最新版を自動取得できませんでした。社内プロキシ設定または CHROME_EXECUTABLE を確認してください。',
+    },
+  ];
+
+  let lastError;
+  for (const strategy of downloadStrategies) {
+    try {
+      const buildId = await strategy.resolveBuildIdFn();
+      const executablePath = computeExecutablePath({
+        browser: strategy.browser,
+        cacheDir,
+        buildId,
+        browserPlatform,
+      });
+
+      if (!(await isExecutable(executablePath))) {
+        try {
+          await install({
+            browser: strategy.browser,
+            cacheDir,
+            buildId,
+            browserPlatform,
+          });
+        } catch (error) {
+          throw new Error(strategy.installErrorMessage, { cause: error });
+        }
+      }
+
+      ensure(await isExecutable(executablePath), `自動取得した ${strategy.label} の実行ファイルを検出できませんでした: ${executablePath}`);
+      logStep(`${strategy.label} の準備に成功しました (${executablePath})`);
+      resolvedChromeExecutable = executablePath;
+      return resolvedChromeExecutable;
+    } catch (error) {
+      lastError = error;
+      console.warn(`⚠️ ${strategy.label} の取得に失敗しました:`, error instanceof Error ? error.message : String(error));
+      if (error instanceof Error && error.cause) {
+        console.warn('  ↳ 原因:', error.cause instanceof Error ? error.cause.message : String(error.cause));
+      }
+    }
+  }
+
+  throw new Error('Chrome/Chromium の自動準備に失敗しました。CHROME_EXECUTABLE で既存バイナリを指定してください。', {
+    cause: lastError,
+  });
 }
 
 async function waitForSelector(clientInstance, selector, { timeoutMs = 10000 } = {}) {
@@ -205,11 +315,7 @@ async function setupFrontend(env) {
 }
 
 async function launchChrome(env) {
-  try {
-    await fs.access(chromeExecutable);
-  } catch {
-    throw new Error(`Chrome executable not found at ${chromeExecutable}. Set CHROME_EXECUTABLE env var to override.`);
-  }
+  const chromeExecutable = await resolveChromeExecutable();
   logStep(`Headless Chrome を起動します (executable: ${chromeExecutable})`);
   chromeUserDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'wordpack-chrome-'));
   const args = [
@@ -221,13 +327,38 @@ async function launchChrome(env) {
     '--remote-debugging-port=9222',
     `--user-data-dir=${chromeUserDataDir}`,
   ];
-  spawnWithLogs('chrome', chromeExecutable, args, {
+  const chromeProcess = spawnWithLogs('chrome', chromeExecutable, args, {
     env,
   });
-  await waitForHttp('http://127.0.0.1:9222/json/version', {
-    timeoutMs: 20000,
-    validate: (res) => Promise.resolve(res.ok),
+  let exitInfo;
+  const exitPromise = once(chromeProcess, 'exit').then(([code, signal]) => {
+    exitInfo = { code, signal };
+    return exitInfo;
   });
+
+  try {
+    await Promise.race([
+      waitForHttp('http://127.0.0.1:9222/json/version', {
+        timeoutMs: 20000,
+        validate: (res) => Promise.resolve(res.ok),
+      }),
+      exitPromise.then((info) => {
+        const exitError = new Error(
+          `Headless Chrome が DevTools エンドポイント公開前に終了しました (code=${info.code ?? 'null'}, signal=${info.signal ?? 'null'})`
+        );
+        exitError.chromeExitCode = info.code;
+        exitError.chromeSignal = info.signal;
+        throw exitError;
+      }),
+    ]);
+  } catch (error) {
+    if (exitInfo && error instanceof Error && typeof error.chromeExitCode === 'undefined') {
+      error.chromeExitCode = exitInfo.code;
+      error.chromeSignal = exitInfo.signal;
+    }
+    throw error;
+  }
+
   await delay(500);
   logStep('Chrome DevTools のリモートデバッグエンドポイントに接続できました');
 }
@@ -496,12 +627,42 @@ const baseEnv = {
 
 async function main() {
   try {
+    try {
+      await resolveChromeExecutable();
+    } catch (error) {
+      if (isCI) {
+        throw error;
+      }
+      console.warn('⚠️ Chrome の自動準備に失敗したため UI スモークテストをスキップします。');
+      console.warn(error instanceof Error ? error.message : String(error));
+      if (error instanceof Error && error.cause) {
+        console.warn('  ↳ 原因:', error.cause instanceof Error ? error.cause.message : String(error.cause));
+      }
+      logStep('Chrome が利用できない環境のため、UI スモークテストは未実施として終了します');
+      return;
+    }
     await setupBackend(baseEnv);
     logStep('WordPack のシードデータを投入します');
     const wordPackId = await seedWordPack();
     logStep(`Seeded WordPack: ${wordPackId}`);
     await setupFrontend(baseEnv);
-    await launchChrome(baseEnv);
+    try {
+      await launchChrome(baseEnv);
+    } catch (error) {
+      const chromeExitCode = typeof error?.chromeExitCode === 'number' ? error.chromeExitCode : undefined;
+      if (!isCI && chromeExitCode === 127) {
+        // Docker イメージなどに GTK 系共有ライブラリが含まれていない場合、Chromium が即時終了してしまう。
+        // CI では依存を整備済みだが、ローカル環境では再現が難しいため、警告ログを出したうえでスキップ扱いとする。
+        console.warn('⚠️ Headless Chrome の起動に必要な共有ライブラリが見つからないため UI スモークテストをスキップします。');
+        if (error instanceof Error) {
+          console.warn(error.message);
+        }
+        console.warn('  ↳ 対処例: libatk / libx11-xcb などの GTK 系ライブラリを追加インストールするか、CHROME_EXECUTABLE で既存ブラウザを指定してください。');
+        logStep('Chrome の依存ライブラリ不足により UI スモークテストは未実施です');
+        return;
+      }
+      throw error;
+    }
     await runSmokeAssertions(wordPackId);
   } catch (err) {
     console.error('❌ UI smoke test failed:', err instanceof Error ? err.stack || err.message : err);

@@ -75,14 +75,28 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authBypassActive, setAuthBypassActive] = useState(false);
+  /**
+   * /api/config の初期ロードが完了したかを記録する。
+   * 新参メンバー向けに補足すると、このフラグが true になるまでは
+   * Google クライアント ID の警告ログを抑制し、誤検知による混乱を避ける。
+   */
+  const [authConfigResolved, setAuthConfigResolved] = useState(false);
   const clientIdRef = useRef(clientId);
 
   useEffect(() => {
     clientIdRef.current = clientId;
-    if (!clientId) {
-      console.error('VITE_GOOGLE_CLIENT_ID is not set; Google login will not work.');
+    if (!authConfigResolved || clientId) {
+      return;
     }
-  }, [clientId]);
+    const message = 'VITE_GOOGLE_CLIENT_ID is not set; Google login will not work.';
+    if (authBypassActive) {
+      console.warn(
+        `${message} Authentication bypass is active; continuing with development fallback.`,
+      );
+      return;
+    }
+    console.error(message);
+  }, [clientId, authConfigResolved, authBypassActive]);
 
   useEffect(() => {
     const stored = readStoredAuth();
@@ -119,6 +133,10 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
         }
       } catch (err) {
         console.warn('Failed to detect authentication bypass flag from /api/config', err);
+      } finally {
+        if (!aborted) {
+          setAuthConfigResolved(true);
+        }
       }
     })();
     return () => {
@@ -130,6 +148,11 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     if (!authBypassActive || user) {
       return;
     }
+    /**
+     * バイパスフラグ有効時にユーザー情報を初期化する。
+     * 新規参画者向け補足: 認証をスキップする開発専用ルートを確実に起動するため、
+     * ここでモックユーザーとトークンを注入する。
+     */
     setUser(AUTH_BYPASS_USER);
     setToken('development-bypass');
   }, [authBypassActive, user]);
