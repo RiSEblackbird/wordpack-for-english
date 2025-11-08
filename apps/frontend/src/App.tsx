@@ -432,8 +432,124 @@ const ThemeApplier: React.FC = () => {
  * 副作用: ボタンクリックで Google の認証ポップアップを開き、ID トークンを送信する。
  */
 const LoginScreen: React.FC = () => {
-  const { signIn, isAuthenticating, error, clearError } = useAuth();
+  const { signIn, isAuthenticating, error, clearError, missingClientId, authBypassActive } = useAuth();
   const [localError, setLocalError] = useState<string | null>(null);
+  const loginStyles = `
+        .login-shell {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2rem;
+          background: var(--color-bg);
+          color: var(--color-text);
+        }
+        .login-card {
+          width: min(100%, 420px);
+          background: var(--color-surface);
+          padding: 2.5rem 2rem;
+          border-radius: 16px;
+          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+          display: grid;
+          gap: 1.25rem;
+        }
+        .login-title {
+          margin: 0;
+          font-size: 1.75rem;
+        }
+        .login-subtitle {
+          margin: 0;
+          font-size: 1.1rem;
+          font-weight: 700;
+        }
+        .login-description {
+          margin: 0;
+          color: var(--color-subtle);
+          line-height: 1.6;
+        }
+        .login-guide-list {
+          padding-left: 1.25rem;
+          margin: 0;
+          display: grid;
+          gap: 0.75rem;
+        }
+        .login-guide-hint {
+          margin: 0;
+          padding: 0.75rem 1rem;
+          border-radius: 8px;
+          background: rgba(37, 99, 235, 0.12);
+          color: var(--color-text);
+          line-height: 1.5;
+        }
+        .login-error {
+          padding: 0.75rem 1rem;
+          border-radius: 8px;
+          background: rgba(220, 38, 38, 0.12);
+          color: #b91c1c;
+          font-weight: 600;
+        }
+        .login-button {
+          appearance: none;
+          border: none;
+          border-radius: 999px;
+          padding: 0.85rem 1.5rem;
+          font-size: 1rem;
+          font-weight: 600;
+          background: var(--color-accent);
+          color: #ffffff;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          transition: transform 0.15s ease, filter 0.2s ease;
+        }
+        .login-button:hover {
+          filter: brightness(1.05);
+        }
+        .login-button:disabled {
+          cursor: not-allowed;
+          opacity: 0.7;
+        }
+        .login-note {
+          margin: 0;
+          color: var(--color-muted);
+          font-size: 0.9rem;
+        }
+        .login-progress {
+          display: flex;
+          justify-content: center;
+        }
+      `;
+
+  if (missingClientId) {
+    /**
+     * クライアント ID が未設定の場合は Google の SDK を初期化できない。
+     * この分岐ではトラブルシューティング手順を案内し、新規メンバーの迷子を防ぐ。
+     */
+    return (
+      <div className="login-shell">
+        <style>{loginStyles}</style>
+        <section className="login-card" role="alert" aria-live="polite">
+          <h1 className="login-title">Google ログインの設定が必要です</h1>
+          <p className="login-description">
+            VITE_GOOGLE_CLIENT_ID が未設定のため Google のサインインを開始できません。README.md の「Google OAuth クライアントの準備」節を参照し、以下の手順で環境を整えてください。
+          </p>
+          <h2 className="login-subtitle">設定手順</h2>
+          <ol className="login-guide-list">
+            <li>`apps/frontend/.env` に VITE_GOOGLE_CLIENT_ID=（Google Cloud Console で発行したクライアント ID）を記載する。</li>
+            <li>`apps/backend/.env` や `.env` も同じクライアント ID を設定し、バックエンドと整合させる。</li>
+            <li>設定後にフロントエンド開発サーバーを再起動し、ブラウザのキャッシュを削除して再読み込みする。</li>
+          </ol>
+          <p className="login-guide-hint">
+            {authBypassActive
+              ? '開発用の認証バイパスが有効なため、このままでもダミーアカウントで利用可能です。正式な OAuth を確認したい場合のみ上記手順を実施してください。'
+              : '開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'}
+          </p>
+        </section>
+      </div>
+    );
+  }
 
   const googleLogin = useGoogleLogin({
     flow: 'implicit',
@@ -475,74 +591,7 @@ const LoginScreen: React.FC = () => {
 
   return (
     <div className="login-shell">
-      <style>{`
-        .login-shell {
-          min-height: 100vh;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 2rem;
-          background: var(--color-bg);
-          color: var(--color-text);
-        }
-        .login-card {
-          width: min(100%, 420px);
-          background: var(--color-surface);
-          padding: 2.5rem 2rem;
-          border-radius: 16px;
-          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
-          display: grid;
-          gap: 1.25rem;
-        }
-        .login-title {
-          margin: 0;
-          font-size: 1.75rem;
-        }
-        .login-description {
-          margin: 0;
-          color: var(--color-subtle);
-          line-height: 1.6;
-        }
-        .login-error {
-          padding: 0.75rem 1rem;
-          border-radius: 8px;
-          background: rgba(220, 38, 38, 0.12);
-          color: #b91c1c;
-          font-weight: 600;
-        }
-        .login-button {
-          appearance: none;
-          border: none;
-          border-radius: 999px;
-          padding: 0.85rem 1.5rem;
-          font-size: 1rem;
-          font-weight: 600;
-          background: var(--color-accent);
-          color: #ffffff;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-          transition: transform 0.15s ease, filter 0.2s ease;
-        }
-        .login-button:hover {
-          filter: brightness(1.05);
-        }
-        .login-button:disabled {
-          cursor: not-allowed;
-          opacity: 0.7;
-        }
-        .login-note {
-          margin: 0;
-          color: var(--color-muted);
-          font-size: 0.9rem;
-        }
-        .login-progress {
-          display: flex;
-          justify-content: center;
-        }
-      `}</style>
+      <style>{loginStyles}</style>
       <section className="login-card" role="dialog" aria-labelledby="login-title" aria-live="polite">
         <h1 id="login-title" className="login-title">WordPack にサインイン</h1>
         <p className="login-description">Google アカウントでログインして学習データと設定を同期します。</p>

@@ -6,13 +6,16 @@ import { App } from './App';
 import { AuthProvider } from './AuthContext';
 import { AUTO_RETRY_INTERVAL_MS } from './SettingsContext';
 
+const useGoogleLoginMock = vi.fn(
+  (options: { onSuccess?: (res: { id_token?: string }) => void; onError?: () => void }) => () => {
+    options?.onSuccess?.({ id_token: 'test-id-token' });
+  },
+);
+
 vi.mock('@react-oauth/google', () => ({
   GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  useGoogleLogin: (options: { onSuccess?: (res: { id_token?: string }) => void; onError?: () => void }) => {
-    return () => {
-      options?.onSuccess?.({ id_token: 'test-id-token' });
-    };
-  },
+  useGoogleLogin: (options: { onSuccess?: (res: { id_token?: string }) => void; onError?: () => void }) =>
+    useGoogleLoginMock(options),
 }));
 
 const resolveUrl = (input: RequestInfo | URL): string => {
@@ -38,9 +41,9 @@ const authSuccess = () =>
 
 const logoutSuccess = () => new Response(null, { status: 204 });
 
-const renderWithProviders = () =>
+const renderWithProviders = (clientId = 'test-client') =>
   render(
-    <AuthProvider clientId="test-client">
+    <AuthProvider clientId={clientId}>
       <App />
     </AuthProvider>,
   );
@@ -81,6 +84,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   fetchMock = vi.fn() as vi.MockedFunction<typeof fetch>;
   (globalThis as any).fetch = fetchMock;
+  useGoogleLoginMock.mockClear();
   try {
     localStorage.clear();
   } catch {
@@ -102,6 +106,29 @@ describe('App navigation', () => {
 
     expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Googleでログイン' })).toBeInTheDocument();
+  });
+
+  it('renders configuration guidance when the Google client ID is missing', async () => {
+    fetchMock.mockImplementation((input) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(configSuccess());
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    renderWithProviders('');
+
+    expect(
+      await screen.findByRole('heading', { name: 'Google ログインの設定が必要です' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/VITE_GOOGLE_CLIENT_ID が未設定のため Google のサインインを開始できません/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'),
+    ).toBeInTheDocument();
+    expect(useGoogleLoginMock).not.toHaveBeenCalled();
   });
 
   it('shows the login screen when /api/config responds with 401', async () => {

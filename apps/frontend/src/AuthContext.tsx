@@ -23,6 +23,7 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
   clearError: () => void;
   authBypassActive: boolean;
+  missingClientId: boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -81,11 +82,13 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
    * Google クライアント ID の警告ログを抑制し、誤検知による混乱を避ける。
    */
   const [authConfigResolved, setAuthConfigResolved] = useState(false);
-  const clientIdRef = useRef(clientId);
+  const normalizedClientId = useMemo(() => clientId.trim(), [clientId]);
+  const clientIdRef = useRef(normalizedClientId);
+  const missingClientId = normalizedClientId.length === 0;
 
   useEffect(() => {
-    clientIdRef.current = clientId;
-    if (!authConfigResolved || clientId) {
+    clientIdRef.current = normalizedClientId;
+    if (!authConfigResolved || normalizedClientId) {
       return;
     }
     const message = 'VITE_GOOGLE_CLIENT_ID is not set; Google login will not work.';
@@ -96,7 +99,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       return;
     }
     console.error(message);
-  }, [clientId, authConfigResolved, authBypassActive]);
+  }, [normalizedClientId, authConfigResolved, authBypassActive]);
 
   useEffect(() => {
     const stored = readStoredAuth();
@@ -239,15 +242,32 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       signOut,
       clearError,
       authBypassActive,
+      missingClientId,
     }),
-    [user, token, isAuthenticating, error, signIn, signOut, clearError, authBypassActive],
+    [
+      user,
+      token,
+      isAuthenticating,
+      error,
+      signIn,
+      signOut,
+      clearError,
+      authBypassActive,
+      missingClientId,
+    ],
   );
 
-  return (
-    <GoogleOAuthProvider clientId={clientIdRef.current}>
-      <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-    </GoogleOAuthProvider>
-  );
+  const contextNode = <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+
+  if (missingClientId) {
+    /**
+     * Google OAuth プロバイダーはクライアント ID が空のままでは初期化に失敗する。
+     * 新規メンバーが遭遇しても認証 UI 自体は動作させたいので、ここでラップを省略する。
+     */
+    return contextNode;
+  }
+
+  return <GoogleOAuthProvider clientId={clientIdRef.current}>{contextNode}</GoogleOAuthProvider>;
 };
 
 export const useAuth = (): AuthContextValue => {
