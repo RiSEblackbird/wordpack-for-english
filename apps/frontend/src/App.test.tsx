@@ -104,6 +104,33 @@ describe('App navigation', () => {
     expect(screen.getByRole('button', { name: 'Googleでログイン' })).toBeInTheDocument();
   });
 
+  it('shows the login screen when /api/config responds with 401', async () => {
+    const setTimeoutSpy = vi.spyOn(window, 'setTimeout');
+    fetchMock.mockImplementation((input) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(new Response('', { status: 401 }));
+      }
+      if (url.endsWith('/api/auth/logout')) {
+        return Promise.resolve(logoutSuccess());
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    try {
+      renderWithProviders();
+
+      expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Googleでログイン' })).toBeInTheDocument();
+      // 401 ではログイン画面を即時に表示し、エラー用の自動リトライタイマーを開始しない。
+      expect(
+        setTimeoutSpy.mock.calls.some(([, timeout]) => timeout === AUTO_RETRY_INTERVAL_MS),
+      ).toBe(false);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
+
   it('transitions to the main interface after a successful login', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     renderWithProviders();

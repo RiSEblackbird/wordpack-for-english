@@ -1,4 +1,5 @@
 import React, { useCallback, useContext, useEffect, useState } from 'react';
+import { useAuth } from './AuthContext';
 
 export interface Settings {
   apiBase: string;
@@ -32,6 +33,7 @@ interface SettingsErrorInfo {
 export const AUTO_RETRY_INTERVAL_MS = 5000;
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, signOut } = useAuth();
   const [settings, setSettings] = useState<Settings>(() => {
     const savedTheme = (() => {
       try { return localStorage.getItem('wp.theme') || undefined; } catch { return undefined; }
@@ -85,6 +87,23 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     (async () => {
       try {
         const res = await fetch('/api/config', { method: 'GET' });
+        if (res.status === 401) {
+          // 401 は「未認証またはセッション切れ」を示し、ログイン画面へ遷移させるために
+          // 設定同期エラーと扱わない。ここで ready 状態へ戻すことで、SettingsProvider
+          // の子要素（AuthContext 配下）がログイン UI を即時に描画できる。
+          if (!aborted) {
+            setStatus('ready');
+            setErrorInfo(null);
+            if (user) {
+              // 既存ユーザーがいる場合はクライアント側の認証情報を破棄して匿名状態へ戻す。
+              signOut().catch((err) => {
+                // eslint-disable-next-line no-console
+                console.warn('[Settings] signOut failed after 401 from /api/config', err);
+              });
+            }
+          }
+          return;
+        }
         if (!res.ok) {
           const bodyText = await res.text().catch(() => '');
           const hint = bodyText ? ` body=${bodyText}` : '';
@@ -116,7 +135,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => {
       aborted = true;
     };
-  }, [reloadToken]);
+  }, [reloadToken, signOut, user]);
 
   useEffect(() => {
     if (status !== 'error') {
