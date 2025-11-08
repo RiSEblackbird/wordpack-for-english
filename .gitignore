@@ -18,6 +18,11 @@ bin-release/
 # information for Eclipse / Flash Builder.
 
 .env
+google-oauth-client-secret.json
+client_secret_*.json
+*.pem
+*.p12
+*.pfx
 __pycache__/
 *.pyc
 # Node

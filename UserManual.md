@@ -180,6 +180,7 @@
   ```bash
   # Backend（リポジトリルートで）
   # .env に OPENAI_API_KEY を設定
+  # Google ログインを使う場合は GOOGLE_CLIENT_ID / SESSION_SECRET_KEY も設定
   python -m uvicorn backend.main:app --reload --app-dir apps/backend
 
   # Frontend
@@ -187,10 +188,22 @@
   npm run dev
   ```
 - ヒント（APIキー/出力）:
-  - `.env` に `OPENAI_API_KEY`
+  - `.env` に `OPENAI_API_KEY` と `GOOGLE_CLIENT_ID`、必要であれば `GOOGLE_ALLOWED_HD`
+  - `.env` の `SESSION_SECRET_KEY` は十分な長さの乱数を設定
   - テスト/CI はモックのため不要
   - 本番は `STRICT_MODE=true` 推奨（開発では `false` 可）
 - 途中切れ対策に `LLM_MAX_TOKENS` を 1200–1800（推奨1500）
+
+### B-1-1. Google OAuth クライアントの作成手順
+1. [Google Cloud Console](https://console.cloud.google.com/) を開き、対象プロジェクトを作成または選択します。
+2. 左メニューの「API とサービス」→「OAuth 同意画面」を開き、ユーザータイプを選択したうえでアプリ名・サポートメール・承認済みドメイン（必要に応じて）などを登録して公開ステータスにします。
+3. 「API とサービス」→「認証情報」で「認証情報を作成」→「OAuth クライアント ID」を選択し、アプリケーションの種類を「ウェブアプリケーション」に設定します。
+4. 「承認済みの JavaScript 生成元」にローカル開発で利用する `http://127.0.0.1:5173` と `http://localhost:5173` を追加します。HTTPS のカスタムドメインを使う場合は同様に追加します。
+5. 「承認済みのリダイレクト URI」にも `http://127.0.0.1:5173` と `http://localhost:5173` を登録します。Google Identity Services のポップアップを利用するため、オリジンを合わせておくと認証が安定します。
+6. 発行されたクライアント ID を控え、JSON シークレットをダウンロードする場合は `google-oauth-client-secret.json` などの名前で安全な場所に保管してください（リポジトリ直下では `.gitignore` により除外されます）。
+7. `.env` に `GOOGLE_CLIENT_ID=<取得したクライアントID>`、必要なら `GOOGLE_ALLOWED_HD=<許可ドメイン>` を記入し、`SESSION_SECRET_KEY=<十分な長さの乱数>` を設定します。フロントエンド側では `apps/frontend/.env` に `VITE_GOOGLE_CLIENT_ID=<同じクライアントID>` を指定してください。
+
+> **メモ:** `.env` や `apps/frontend/.env` を作成したら、バックエンド/フロントエンドを起動する前に必ず環境変数を設定してください。起動後に追加した場合は、それぞれのプロセスを再起動して読み直す必要があります。
 
 ### B-1-2. Chrome DevTools MCP による UI 自動テスト体制
 - GitHub Actions の CI では `UI smoke test (Chrome DevTools MCP)` ジョブが自動で走り、主要な UI 動線を Chrome DevTools MCP 経由で検証します。
