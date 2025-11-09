@@ -5,51 +5,27 @@ import { vi } from 'vitest';
 import { App } from './App';
 import { AuthProvider } from './AuthContext';
 import { AUTO_RETRY_INTERVAL_MS } from './SettingsContext';
-import type {
-  NonOAuthError,
-  TokenResponse,
-  UseGoogleLoginOptionsImplicitFlow,
-} from '@react-oauth/google';
-import type { ReactNode } from 'react';
+import type { FC, ReactNode } from 'react';
 
-type TokenResponseWithIdToken = TokenResponse & { id_token?: string };
-type TokenResponseOverrides = Partial<TokenResponseWithIdToken>;
-type OAuthErrorResponse = Pick<TokenResponse, 'error' | 'error_description' | 'error_uri'>;
-type OAuthErrorOverrides = Partial<OAuthErrorResponse>;
+interface MockCredentialResponse {
+  credential?: string | null;
+  clientId?: string | null;
+  select_by?: string | null;
+}
 
 type GoogleLoginHandlerSet = {
-  onSuccess?: (overrides?: TokenResponseOverrides) => void;
-  onError?: (overrides?: OAuthErrorOverrides) => void;
-  onNonOAuthError?: (error?: NonOAuthError) => void;
+  onSuccess?: (response?: MockCredentialResponse) => void;
+  onError?: () => void;
 };
 
 type GoogleLoginClickImplementation = (handlers: GoogleLoginHandlerSet) => void;
 
 const {
-  createTokenResponse,
-  createOAuthErrorResponse,
   googleLoginController,
-  useGoogleLoginMock,
+  GoogleLoginMock,
 } = vi.hoisted(() => {
-  const createTokenResponse = (overrides: TokenResponseOverrides = {}): TokenResponseWithIdToken => ({
-    access_token: 'mock-access-token',
-    expires_in: 3600,
-    prompt: 'consent',
-    scope: 'openid email profile',
-    token_type: 'Bearer',
-    id_token: 'mock-id-token',
-    ...overrides,
-  });
-
-  const createOAuthErrorResponse = (overrides: OAuthErrorOverrides = {}): OAuthErrorResponse => ({
-    error: 'access_denied',
-    error_description: 'Mock OAuth error',
-    error_uri: 'about:blank',
-    ...overrides,
-  });
-
   const defaultGoogleLogin: GoogleLoginClickImplementation = ({ onSuccess }) => {
-    onSuccess?.();
+    onSuccess?.({ credential: 'mock-id-token', clientId: 'test-client', select_by: 'user' });
   };
 
   const controller = {
@@ -62,35 +38,27 @@ const {
     },
   };
 
-  const useGoogleLoginMock = vi.fn((options: UseGoogleLoginOptionsImplicitFlow) => {
-    return () => {
-      controller.impl({
-        onSuccess: (overrides) => {
-          const response = createTokenResponse(overrides);
-          options.onSuccess?.(response);
-        },
-        onError: (overrides) => {
-          const error = createOAuthErrorResponse(overrides);
-          options.onError?.(error);
-        },
-        onNonOAuthError: (error) => {
-          options.onNonOAuthError?.(error ?? { type: 'unknown' });
-        },
-      });
-    };
-  });
+  const GoogleLoginMock: FC<{
+    onSuccess?: (response: MockCredentialResponse) => void;
+    onError?: () => void;
+  }> = ({ onSuccess, onError }) => (
+    <button
+      type="button"
+      onClick={() => controller.impl({ onSuccess, onError })}
+    >
+      Googleでログイン
+    </button>
+  );
 
   return {
-    createTokenResponse,
-    createOAuthErrorResponse,
     googleLoginController: controller,
-    useGoogleLoginMock,
+    GoogleLoginMock,
   };
 });
 
 vi.mock('@react-oauth/google', () => {
   const GoogleOAuthProvider = ({ children }: { children: ReactNode }) => <>{children}</>;
-  return { GoogleOAuthProvider, useGoogleLogin: useGoogleLoginMock };
+  return { GoogleOAuthProvider, GoogleLogin: GoogleLoginMock };
 });
 
 const resolveUrl = (input: RequestInfo | URL): string => {
@@ -146,7 +114,7 @@ const completeLogin = async (
   if (!fetchMock.mock.calls.length) {
     setupFetchForAuthenticatedFlow(fetchMock);
   }
-  const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
+  const loginButton = await screen.findByRole('button', { name: /Google.?でログイン/ });
   await act(async () => {
     await user.click(loginButton);
   });
@@ -157,7 +125,6 @@ let fetchMock: vi.MockedFunction<typeof fetch>;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useGoogleLoginMock.mockClear();
   fetchMock = vi.fn() as vi.MockedFunction<typeof fetch>;
   (globalThis as any).fetch = fetchMock;
   googleLoginController.reset();
@@ -169,31 +136,6 @@ beforeEach(() => {
 });
 
 describe('App navigation', () => {
-  it('initializes Google login to always request an ID token', async () => {
-    fetchMock.mockImplementation((input) => {
-      const url = resolveUrl(input);
-      if (url.endsWith('/api/config')) {
-        return Promise.resolve(configSuccess());
-      }
-      return Promise.resolve(new Response('{}', { status: 200 }));
-    });
-
-    renderWithProviders();
-
-    await screen.findByRole('heading', { name: 'WordPack にサインイン' });
-
-    expect(useGoogleLoginMock).toHaveBeenCalled();
-    const loginOptions = useGoogleLoginMock.mock.calls[0]?.[0];
-    expect(loginOptions).toMatchObject({
-      flow: 'implicit',
-      scope: 'openid email profile',
-      responseType: 'id_token token',
-      prompt: 'select_account',
-    });
-    // GIS の成功レスポンスを模したモックにも ID トークンが含まれていることを固定化する。
-    expect(createTokenResponse().id_token).toBe('mock-id-token');
-  });
-
   it('shows login card when user has not authenticated yet', async () => {
     fetchMock.mockImplementation((input) => {
       const url = resolveUrl(input);
@@ -206,7 +148,7 @@ describe('App navigation', () => {
     renderWithProviders();
 
     expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Googleでログイン' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Google.?でログイン/ })).toBeInTheDocument();
   });
 
   it('renders configuration guidance when the Google client ID is missing', async () => {
@@ -248,7 +190,7 @@ describe('App navigation', () => {
       renderWithProviders();
 
       expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Googleでログイン' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Google.?でログイン/ })).toBeInTheDocument();
       // 401 ではログイン画面を即時に表示し、エラー用の自動リトライタイマーを開始しない。
       expect(
         setTimeoutSpy.mock.calls.some(([, timeout]) => timeout === AUTO_RETRY_INTERVAL_MS),
@@ -282,11 +224,11 @@ describe('App navigation', () => {
     renderWithProviders();
 
     googleLoginController.setImplementation(({ onSuccess }) => {
-      onSuccess?.({ id_token: undefined });
+      onSuccess?.({ credential: undefined, clientId: 'test-client', select_by: 'user' });
     });
 
     const user = userEvent.setup();
-    const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
+    const loginButton = await screen.findByRole('button', { name: /Google.?でログイン/ });
     await act(async () => {
       await user.click(loginButton);
     });
@@ -318,11 +260,11 @@ describe('App navigation', () => {
     renderWithProviders();
 
     googleLoginController.setImplementation(({ onSuccess }) => {
-      onSuccess?.({ id_token: undefined });
+      onSuccess?.({ credential: undefined, clientId: 'test-client', select_by: 'user' });
     });
 
     const user = userEvent.setup();
-    const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
+    const loginButton = await screen.findByRole('button', { name: /Google.?でログイン/ });
     await act(async () => {
       await user.click(loginButton);
     });
@@ -340,8 +282,8 @@ describe('App navigation', () => {
       googleClientId: 'test-client',
       errorCategory: 'missing_id_token',
     });
-    expect(body.tokenResponse).toBeDefined();
-    expect(body.tokenResponse.access_token).not.toBe('mock-access-token');
+    expect(body.tokenResponse).toMatchObject({ clientId: 'test-client', select_by: 'user' });
+    expect(body.tokenResponse).not.toHaveProperty('credential');
 
     expect(
       await screen.findByText('ID トークンを取得できませんでした。ブラウザを更新して再試行してください。'),
@@ -351,12 +293,12 @@ describe('App navigation', () => {
   it('surfaces the default error message when Google signals a failure', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     googleLoginController.setImplementation(({ onError }) => {
-      onError?.({ error: 'invalid_grant' });
+      onError?.();
     });
     renderWithProviders();
 
     const user = userEvent.setup();
-    const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
+    const loginButton = await screen.findByRole('button', { name: /Google.?でログイン/ });
     await act(async () => {
       await user.click(loginButton);
     });
