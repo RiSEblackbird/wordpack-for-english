@@ -2,7 +2,7 @@ import json
 import uuid
 from datetime import datetime
 from functools import partial
-from typing import Any, Optional
+from typing import Any, Callable, Mapping, Optional
 
 import anyio  # オフロード用
 from fastapi import APIRouter, HTTPException, Query
@@ -33,6 +33,203 @@ from ..sense_title import choose_sense_title
 
 router = APIRouter(tags=["word"])
 
+
+def _get_override_value(source: object, key: str) -> Any:
+    """Pydantic モデル/辞書の双方から値を取り出す内部ユーティリティ。"""
+
+    if hasattr(source, key):
+        return getattr(source, key)
+    if isinstance(source, Mapping):
+        return source.get(key)
+    return None
+
+
+def build_llm_info(overrides: object) -> dict[str, Any]:
+    """LLM の使用モデル名と主要パラメータを抽出する。"""
+
+    # なぜ: LLM オプションを追加するたびに各エンドポイントへ重複修正が波及するのを防ぐため、
+    #       build_llm_info でメタ情報の組み立てを一元化している。将来オプションが増えたら
+    #       ここを調整すればよい。
+    model = _get_override_value(overrides, "model") or settings.llm_model
+    params: str | None = None
+    try:
+        parts: list[str] = []
+        temperature = _get_override_value(overrides, "temperature")
+        if temperature is not None:
+            parts.append(f"temperature={float(temperature):.2f}")
+        reasoning = _get_override_value(overrides, "reasoning") or {}
+        if isinstance(reasoning, Mapping):
+            effort = reasoning.get("effort")
+            if effort:
+                parts.append(f"reasoning.effort={effort}")
+        text_opts = _get_override_value(overrides, "text") or {}
+        if isinstance(text_opts, Mapping):
+            verbosity = text_opts.get("verbosity")
+            if verbosity:
+                parts.append(f"text.verbosity={verbosity}")
+        params = ";".join(parts) if parts else None
+    except Exception:
+        params = None
+    return {"model": model, "params": params}
+
+
+def _resolve_http_exception(
+    mapping: Mapping[str, Callable[..., HTTPException]] | None,
+    key: str,
+    **kwargs: Any,
+) -> HTTPException | None:
+    """カスタム HTTPException を生成する。失敗時は None を返す。"""
+
+    if not mapping:
+        return None
+    handler = mapping.get(key)
+    if handler is None:
+        return None
+    try:
+        return handler(**kwargs)
+    except HTTPException as exc:
+        return exc
+    except Exception as exc:  # 生成処理自体が失敗してもログだけ残し既定処理へ委譲
+        logger.warning(
+            "wordpack_error_mapping_failed",
+            key=key,
+            error=str(exc),
+        )
+        return None
+
+
+def _handle_flow_runtime_error(
+    exc: RuntimeError,
+    *,
+    lemma: str,
+    http_error_mapping: Mapping[str, Callable[..., HTTPException]] | None,
+) -> None:
+    """Flow 実行失敗を HTTPException にマップする。"""
+
+    msg = str(exc)
+    low = msg.lower()
+    if "failed to parse llm json" in low and settings.strict_mode:
+        custom_exc = _resolve_http_exception(http_error_mapping, "llm_json_parse", lemma=lemma)
+        if custom_exc:
+            raise custom_exc from exc
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "LLM output JSON parse failed (strict mode)",
+                "reason_code": "LLM_JSON_PARSE",
+                "diagnostics": {"lemma": lemma},
+                "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
+            },
+        ) from exc
+
+    if "reason_code=" in msg:
+        if "reason_code=TIMEOUT" in msg:
+            raise HTTPException(
+                status_code=504,
+                detail={
+                    "message": "LLM request timed out",
+                    "reason_code": "TIMEOUT",
+                    "hint": "LLM_TIMEOUT_MS を増やす（例: 90000）、HTTP全体のタイムアウトは +5秒。リトライも検討。",
+                },
+            ) from exc
+        if "reason_code=RATE_LIMIT" in msg:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "message": "LLM provider rate limited",
+                    "reason_code": "RATE_LIMIT",
+                    "hint": "少し待って再試行。モデル/アカウントのレート制限を確認。リトライ上限を増やす。",
+                },
+            ) from exc
+        if (
+            "reason_code=AUTH" in msg
+            or "invalid api key" in low
+            or "unauthorized" in low
+        ):
+            raise HTTPException(
+                status_code=401,
+                detail={
+                    "message": "LLM provider authentication failed",
+                    "reason_code": "AUTH",
+                    "hint": "OPENAI_API_KEY を確認（有効/権限/課金）。コンテナ環境変数に反映されているか確認。",
+                },
+            ) from exc
+        if "reason_code=PARAM_UNSUPPORTED" in msg:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "LLM parameter not supported by model",
+                    "reason_code": "PARAM_UNSUPPORTED",
+                    "hint": "モデルの仕様変更により 'max_tokens' 非対応の可能性。最新SDK/パラメータを使用してください。",
+                },
+            ) from exc
+
+    reason_code = getattr(exc, "reason_code", None)
+    diagnostics = getattr(exc, "diagnostics", None)
+    if reason_code == "EMPTY_CONTENT":
+        custom_exc = _resolve_http_exception(
+            http_error_mapping,
+            "empty_content",
+            lemma=lemma,
+            diagnostics=diagnostics or {},
+        )
+        if custom_exc:
+            raise custom_exc from exc
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "WordPack generation returned empty content (no senses/examples)",
+                "reason_code": reason_code,
+                "diagnostics": diagnostics or {},
+                "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
+            },
+        ) from exc
+
+
+async def run_wordpack_flow(
+    *,
+    lemma: str,
+    req_opts: object,
+    scope: Any,
+    http_error_mapping: Mapping[str, Callable[..., HTTPException]] | None = None,
+) -> tuple[WordPack, dict[str, Any]]:
+    """WordPackFlow を構築して実行し、生成結果と LLM メタを返す。"""
+
+    # なぜ: Flow 実行・例外分類・LLM メタ設定を単一関数にまとめておくことで、
+    #       将来の流用時に1箇所の修正で全エンドポイントへ反映できるようにする。
+    llm = get_llm_provider(
+        model_override=_get_override_value(req_opts, "model"),
+        temperature_override=_get_override_value(req_opts, "temperature"),
+        reasoning_override=_get_override_value(req_opts, "reasoning"),
+        text_override=_get_override_value(req_opts, "text"),
+    )
+    llm_info = build_llm_info(req_opts)
+    flow = WordPackFlow(chroma_client=None, llm=llm, llm_info=llm_info)
+    try:
+        word_pack = await anyio.to_thread.run_sync(
+            partial(
+                flow.run,
+                lemma,
+                pronunciation_enabled=_get_override_value(req_opts, "pronunciation_enabled")
+                if _get_override_value(req_opts, "pronunciation_enabled") is not None
+                else True,
+                regenerate_scope=scope,
+            )
+        )
+    except RuntimeError as exc:
+        _handle_flow_runtime_error(
+            exc,
+            lemma=lemma,
+            http_error_mapping=http_error_mapping,
+        )
+        raise
+
+    try:
+        setattr(word_pack, "llm_model", llm_info.get("model"))
+        setattr(word_pack, "llm_params", llm_info.get("params"))
+    except Exception:
+        pass
+    return word_pack, llm_info
 
 @router.get("/")
 async def lookup_word() -> dict[str, object]:
@@ -149,37 +346,6 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
     情報は空値で返す。
     生成されたWordPackは自動的にデータベースに保存される。
     """
-    # 近傍検索クライアントは使用しない
-    chroma_client = None
-    # リクエストでモデル/パラメータが指定されていればオーバーライド
-    llm = get_llm_provider(
-        model_override=getattr(req, "model", None),
-        temperature_override=getattr(req, "temperature", None),
-        reasoning_override=getattr(req, "reasoning", None),
-        text_override=getattr(req, "text", None),
-    )
-
-    # 例文の LLM メタ付与用に、モデル名とパラメータ文字列を組み立て
-    def _format_llm_params_for_request() -> str | None:
-        try:
-            parts: list[str] = []
-            if getattr(req, "temperature", None) is not None:
-                parts.append(f"temperature={float(req.temperature):.2f}")
-            r = getattr(req, "reasoning", None) or {}
-            if isinstance(r, dict) and r.get("effort"):
-                parts.append(f"reasoning.effort={r.get('effort')}")
-            t = getattr(req, "text", None) or {}
-            if isinstance(t, dict) and t.get("verbosity"):
-                parts.append(f"text.verbosity={t.get('verbosity')}")
-            return ";".join(parts) if parts else None
-        except Exception:
-            return None
-
-    llm_info = {
-        "model": getattr(req, "model", None) or settings.llm_model,
-        "params": _format_llm_params_for_request(),
-    }
-    flow = WordPackFlow(chroma_client=chroma_client, llm=llm, llm_info=llm_info)
     try:
         logger.info(
             "wordpack_generate_request",
@@ -187,23 +353,31 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
             pronunciation_enabled=req.pronunciation_enabled,
             regenerate_scope=str(req.regenerate_scope),
         )
-        # 同期実装のフローをスレッドプールにオフロードし、イベントループのブロッキングを防ぐ
-        # anyio.to_thread.run_sync はキーワード引数を転送しないため partial で包む
-        word_pack = await anyio.to_thread.run_sync(
-            partial(
-                flow.run,
-                req.lemma,
-                pronunciation_enabled=req.pronunciation_enabled,
-                regenerate_scope=req.regenerate_scope,
-            )
+        word_pack, _ = await run_wordpack_flow(
+            lemma=req.lemma,
+            req_opts=req,
+            scope=req.regenerate_scope,
+            http_error_mapping={
+                "llm_json_parse": lambda *, lemma, **__: HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "LLM output JSON parse failed (strict mode)",
+                        "reason_code": "LLM_JSON_PARSE",
+                        "diagnostics": {"lemma": lemma},
+                        "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
+                    },
+                ),
+                "empty_content": lambda *, lemma, diagnostics, **__: HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "WordPack generation returned empty content (no senses/examples)",
+                        "reason_code": "EMPTY_CONTENT",
+                        "diagnostics": diagnostics or {},
+                        "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
+                    },
+                ),
+            },
         )
-
-        # 生成に使用した LLM 情報を WordPack に反映（常に最新で上書き）
-        try:
-            setattr(word_pack, "llm_model", llm_info.get("model"))
-            setattr(word_pack, "llm_params", llm_info.get("params"))
-        except Exception:
-            pass
 
         # WordPackをデータベースに保存
         word_pack_id = f"wp:{req.lemma}:{uuid.uuid4().hex[:8]}"
@@ -224,76 +398,8 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
             has_definition_any=any(bool(s.definition_ja) for s in word_pack.senses),
         )
         return word_pack
-    except RuntimeError as exc:
-        msg = str(exc)
-        # strict モードでの LLM JSON パース失敗を 502 に明示マップ
-        low = msg.lower()
-        if "failed to parse llm json" in low and settings.strict_mode:
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "message": "LLM output JSON parse failed (strict mode)",
-                    "reason_code": "LLM_JSON_PARSE",
-                    "diagnostics": {"lemma": req.lemma},
-                    "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
-                },
-            ) from exc
-        # LLM 系のエラー分類（providers で付与）
-        if "reason_code=" in msg:
-            if "reason_code=TIMEOUT" in msg:
-                raise HTTPException(
-                    status_code=504,
-                    detail={
-                        "message": "LLM request timed out",
-                        "reason_code": "TIMEOUT",
-                        "hint": "LLM_TIMEOUT_MS を増やす（例: 90000）、HTTP全体のタイムアウトは +5秒。リトライも検討。",
-                    },
-                ) from exc
-            if "reason_code=RATE_LIMIT" in msg:
-                raise HTTPException(
-                    status_code=429,
-                    detail={
-                        "message": "LLM provider rate limited",
-                        "reason_code": "RATE_LIMIT",
-                        "hint": "少し待って再試行。モデル/アカウントのレート制限を確認。リトライ上限を増やす。",
-                    },
-                ) from exc
-            if (
-                "reason_code=AUTH" in msg
-                or "invalid api key" in low
-                or "unauthorized" in low
-            ):
-                raise HTTPException(
-                    status_code=401,
-                    detail={
-                        "message": "LLM provider authentication failed",
-                        "reason_code": "AUTH",
-                        "hint": "OPENAI_API_KEY を確認（有効/権限/課金）。コンテナ環境変数に反映されているか確認。",
-                    },
-                ) from exc
-            if "reason_code=PARAM_UNSUPPORTED" in msg:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "message": "LLM parameter not supported by model",
-                        "reason_code": "PARAM_UNSUPPORTED",
-                        "hint": "モデルの仕様変更により 'max_tokens' 非対応の可能性。最新SDK/パラメータを使用してください。",
-                    },
-                ) from exc
-        # Flow での空データ検出（厳格）を詳細に変換
-        reason_code = getattr(exc, "reason_code", None)
-        diagnostics = getattr(exc, "diagnostics", None)
-        if reason_code == "EMPTY_CONTENT":
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "message": "WordPack generation returned empty content (no senses/examples)",
-                    "reason_code": reason_code,
-                    "diagnostics": diagnostics or {},
-                    "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
-                },
-            ) from exc
-        # それ以外は既定のハンドリングへ委譲
+    except RuntimeError:
+        # run_wordpack_flow 内で HTTPException へ変換済み。それ以外は上位へ委譲。
         raise
 
 
@@ -416,86 +522,40 @@ async def regenerate_word_pack(
 
     lemma, _, _, _ = result
 
-    # 近傍検索クライアントは使用しない
-    chroma_client = None
-
-    # リクエストでモデル/パラメータが指定されていればオーバーライド
-    llm = get_llm_provider(
-        model_override=getattr(req, "model", None),
-        temperature_override=getattr(req, "temperature", None),
-        reasoning_override=getattr(req, "reasoning", None),
-        text_override=getattr(req, "text", None),
-    )
-
-    # 例文の LLM メタ付与用に、モデル名とパラメータ文字列を組み立て
-    def _format_llm_params_for_request() -> str | None:
-        try:
-            parts: list[str] = []
-            if getattr(req, "temperature", None) is not None:
-                parts.append(f"temperature={float(req.temperature):.2f}")
-            r = getattr(req, "reasoning", None) or {}
-            if isinstance(r, dict) and r.get("effort"):
-                parts.append(f"reasoning.effort={r.get('effort')}")
-            t = getattr(req, "text", None) or {}
-            if isinstance(t, dict) and t.get("verbosity"):
-                parts.append(f"text.verbosity={t.get('verbosity')}")
-            return ";".join(parts) if parts else None
-        except Exception:
-            return None
-
-    llm_info = {
-        "model": getattr(req, "model", None) or settings.llm_model,
-        "params": _format_llm_params_for_request(),
-    }
-    flow = WordPackFlow(chroma_client=chroma_client, llm=llm, llm_info=llm_info)
     try:
-        word_pack = await anyio.to_thread.run_sync(
-            partial(
-                flow.run,
-                lemma,
-                pronunciation_enabled=req.pronunciation_enabled,
-                regenerate_scope=req.regenerate_scope,
-            )
+        word_pack, _ = await run_wordpack_flow(
+            lemma=lemma,
+            req_opts=req,
+            scope=req.regenerate_scope,
+            http_error_mapping={
+                "llm_json_parse": lambda *, lemma, **__: HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "LLM output JSON parse failed (strict mode)",
+                        "reason_code": "LLM_JSON_PARSE",
+                        "diagnostics": {"lemma": lemma},
+                        "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
+                    },
+                ),
+                "empty_content": lambda *, lemma, diagnostics, **__: HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "WordPack regeneration returned empty content (no senses/examples)",
+                        "reason_code": "EMPTY_CONTENT",
+                        "diagnostics": diagnostics or {},
+                        "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
+                    },
+                ),
+            },
         )
-
-        # 生成に使用した LLM 情報を反映（常に最新で上書き）
-        try:
-            setattr(word_pack, "llm_model", llm_info.get("model"))
-            setattr(word_pack, "llm_params", llm_info.get("params"))
-        except Exception:
-            pass
 
         # 再生成されたWordPackをデータベースに保存（既存のIDで上書き）
         word_pack_data = word_pack.model_dump_json()
         store.save_word_pack(word_pack_id, lemma, word_pack_data)
 
         return word_pack
-    except RuntimeError as exc:
-        msg = str(exc)
-        # strict モードでの LLM JSON パース失敗を 502 に明示マップ
-        low = msg.lower()
-        if "failed to parse llm json" in low and settings.strict_mode:
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "message": "LLM output JSON parse failed (strict mode)",
-                    "reason_code": "LLM_JSON_PARSE",
-                    "diagnostics": {"lemma": lemma},
-                    "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
-                },
-            ) from exc
-        reason_code = getattr(exc, "reason_code", None)
-        diagnostics = getattr(exc, "diagnostics", None)
-        if reason_code == "EMPTY_CONTENT":
-            raise HTTPException(
-                status_code=502,
-                detail={
-                    "message": "WordPack regeneration returned empty content (no senses/examples)",
-                    "reason_code": reason_code,
-                    "diagnostics": diagnostics or {},
-                    "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
-                },
-            ) from exc
+    except RuntimeError:
+        # run_wordpack_flow 内で HTTPException へ変換済み。それ以外は既定処理へ委譲。
         raise
 
 
@@ -576,35 +636,16 @@ async def generate_examples_for_word_pack(
 
     req = req or ExamplesGenerateRequest()
     llm = get_llm_provider(
-        model_override=getattr(req, "model", None),
-        temperature_override=getattr(req, "temperature", None),
-        reasoning_override=getattr(req, "reasoning", None),
-        text_override=getattr(req, "text", None),
+        model_override=_get_override_value(req, "model"),
+        temperature_override=_get_override_value(req, "temperature"),
+        reasoning_override=_get_override_value(req, "reasoning"),
+        text_override=_get_override_value(req, "text"),
     )
 
     # 統合フロー（LangGraph駆動）でカテゴリ別の例文を生成して即保存
     # 失敗した場合のみ、後続の従来プロンプト経路にフォールバック
     try:
-
-        def _fmt_llm_params_here() -> str | None:
-            try:
-                parts: list[str] = []
-                if getattr(req, "temperature", None) is not None:
-                    parts.append(f"temperature={float(req.temperature):.2f}")
-                r = getattr(req, "reasoning", None) or {}
-                if isinstance(r, dict) and r.get("effort"):
-                    parts.append(f"reasoning.effort={r.get('effort')}")
-                t = getattr(req, "text", None) or {}
-                if isinstance(t, dict) and t.get("verbosity"):
-                    parts.append(f"text.verbosity={t.get('verbosity')}")
-                return ";".join(parts) if parts else None
-            except Exception:
-                return None
-
-        llm_info = {
-            "model": getattr(req, "model", None) or settings.llm_model,
-            "params": _fmt_llm_params_here(),
-        }
+        llm_info = build_llm_info(req)
         flow = WordPackFlow(chroma_client=None, llm=llm, llm_info=llm_info)
         plan = {category: 2}
         gen = flow.generate_examples_for_categories(lemma, plan)
@@ -631,7 +672,31 @@ async def generate_examples_for_word_pack(
             "category": category.value,
             "items": items,
         }
-    except HTTPException:
+    except RuntimeError as exc:
+        _handle_flow_runtime_error(
+            exc,
+            lemma=lemma,
+            http_error_mapping={
+                "llm_json_parse": lambda *, lemma, **__: HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "LLM output JSON parse failed (strict mode)",
+                        "reason_code": "LLM_JSON_PARSE",
+                        "diagnostics": {"lemma": lemma, "category": category.value},
+                        "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
+                    },
+                ),
+                "empty_content": lambda *, lemma, diagnostics, **__: HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "Example generation returned empty content",
+                        "reason_code": "EMPTY_CONTENT",
+                        "diagnostics": diagnostics or {"lemma": lemma, "category": category.value},
+                        "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
+                    },
+                ),
+            },
+        )
         raise
 
 
