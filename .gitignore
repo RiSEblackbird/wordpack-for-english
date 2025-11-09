@@ -44,6 +44,8 @@ __pycache__/
 
 # App runtime data
 .data/
+# Demo database snapshots (may contain sample user content)
+.data_demo/
 
 .cache/
 
