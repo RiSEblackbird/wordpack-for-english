@@ -2,8 +2,8 @@ import { render, screen, waitFor, within, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import { AuthProvider } from './AuthContext';
 import { App } from './App';
+import { AppProviders } from './main';
 
 describe('WordPackListPanel card actions layout (two rows)', () => {
   beforeEach(() => {
@@ -29,9 +29,9 @@ describe('WordPackListPanel card actions layout (two rows)', () => {
 
   function renderWithAuth() {
     return render(
-      <AuthProvider clientId="test-client">
+      <AppProviders googleClientId="test-client">
         <App />
-      </AuthProvider>,
+      </AppProviders>,
     );
   }
 

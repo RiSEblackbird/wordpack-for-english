@@ -2,8 +2,8 @@ import { render, screen, act, waitFor, within, fireEvent } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import { AuthProvider } from './AuthContext';
 import { App } from './App';
+import { AppProviders } from './main';
 
 describe('WordPackPanel E2E (mocked fetch)', () => {
   beforeEach(() => {
@@ -29,9 +29,9 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
   function renderWithAuth() {
     return render(
-      <AuthProvider clientId="test-client">
+      <AppProviders googleClientId="test-client">
         <App />
-      </AuthProvider>,
+      </AppProviders>,
     );
   }
 

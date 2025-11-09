@@ -7,10 +7,6 @@ import { WordPackListPanel } from './components/WordPackListPanel';
 import { ExampleListPanel } from './components/ExampleListPanel';
 import { ArticleImportPanel } from './components/ArticleImportPanel';
 import { ArticleListPanel } from './components/ArticleListPanel';
-import { SettingsProvider } from './SettingsContext';
-import { ModalProvider } from './ModalContext';
-import { ConfirmDialogProvider } from './ConfirmDialogContext';
-import { NotificationsProvider } from './NotificationsContext';
 import { NotificationsOverlay } from './components/NotificationsOverlay';
 import { useSettings } from './SettingsContext';
 import { SIDEBAR_PORTAL_CONTAINER_ID } from './components/SidebarPortal';
@@ -524,17 +520,11 @@ export const App: React.FC = () => {
   );
 
   return (
-    <SettingsProvider>
-      <ModalProvider>
-        <ConfirmDialogProvider>
-          <NotificationsProvider>
-            <ThemeApplier />
-            {appContent}
-            <NotificationsOverlay />
-          </NotificationsProvider>
-        </ConfirmDialogProvider>
-      </ModalProvider>
-    </SettingsProvider>
+    <>
+      <ThemeApplier />
+      {appContent}
+      <NotificationsOverlay />
+    </>
   );
 };
 

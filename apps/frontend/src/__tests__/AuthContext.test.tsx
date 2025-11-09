@@ -2,6 +2,7 @@ import { render, waitFor, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
 import { vi } from 'vitest';
+import type { MockedFunction } from 'vitest';
 import { AuthProvider, useAuth } from '../AuthContext';
 
 const googleProviderMock = vi.fn(({ children }: { children: React.ReactNode }) => <>{children}</>);
@@ -18,7 +19,7 @@ const MissingFlagProbe: React.FC = () => {
 describe('AuthProvider logging behaviour', () => {
   // 新規参画者向けメモ: 認証バイパス有効時のログレベル切り替えを固定するための回帰テスト。
   // バイパス環境では error を抑制し warn に切り替わることをここで保証する。
-  let fetchMock: vi.MockedFunction<typeof fetch>;
+  let fetchMock: MockedFunction<typeof fetch>;
 
   beforeEach(() => {
     fetchMock = vi.fn();
@@ -60,7 +61,7 @@ describe('AuthProvider logging behaviour', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    fetchMock.mockImplementation((input) => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof Request ? input.url : '';
       if (url.endsWith('/api/config')) {
         return Promise.resolve(
@@ -87,7 +88,7 @@ describe('AuthProvider logging behaviour', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    fetchMock.mockImplementation((input) => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input instanceof Request ? input.url : '';
       if (url.endsWith('/api/config')) {
         return Promise.resolve(

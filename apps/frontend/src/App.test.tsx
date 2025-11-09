@@ -2,8 +2,9 @@ import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import type { MockedFunction } from 'vitest';
 import { App } from './App';
-import { AuthProvider } from './AuthContext';
+import { AppProviders } from './main';
 import { AUTO_RETRY_INTERVAL_MS } from './SettingsContext';
 import type { FC, ReactNode } from 'react';
 
@@ -39,7 +40,7 @@ const {
   };
 
   const GoogleLoginMock: FC<{
-    onSuccess?: (response: MockCredentialResponse) => void;
+    onSuccess?: (response?: MockCredentialResponse) => void;
     onError?: () => void;
   }> = ({ onSuccess, onError }) => (
     <button
@@ -60,6 +61,9 @@ vi.mock('@react-oauth/google', () => {
   const GoogleOAuthProvider = ({ children }: { children: ReactNode }) => <>{children}</>;
   return { GoogleOAuthProvider, GoogleLogin: GoogleLoginMock };
 });
+
+type FetchMock = MockedFunction<typeof fetch>;
+type FetchCall = Parameters<FetchMock>;
 
 const resolveUrl = (input: RequestInfo | URL): string => {
   if (typeof input === 'string') return input;
@@ -86,13 +90,13 @@ const logoutSuccess = () => new Response(null, { status: 204 });
 
 const renderWithProviders = (clientId = 'test-client') =>
   render(
-    <AuthProvider clientId={clientId}>
+    <AppProviders googleClientId={clientId}>
       <App />
-    </AuthProvider>,
+    </AppProviders>,
   );
 
-const setupFetchForAuthenticatedFlow = (fetchMock: vi.MockedFunction<typeof fetch>) => {
-  fetchMock.mockImplementation((input, init) => {
+const setupFetchForAuthenticatedFlow = (fetchMock: FetchMock) => {
+  fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = resolveUrl(input);
     if (url.endsWith('/api/config')) {
       return Promise.resolve(configSuccess());
@@ -108,7 +112,7 @@ const setupFetchForAuthenticatedFlow = (fetchMock: vi.MockedFunction<typeof fetc
 };
 
 const completeLogin = async (
-  fetchMock: vi.MockedFunction<typeof fetch>,
+  fetchMock: FetchMock,
   user: ReturnType<typeof userEvent.setup>,
 ) => {
   if (!fetchMock.mock.calls.length) {
@@ -121,11 +125,11 @@ const completeLogin = async (
   await screen.findByPlaceholderText('見出し語を入力');
 };
 
-let fetchMock: vi.MockedFunction<typeof fetch>;
+let fetchMock: FetchMock;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  fetchMock = vi.fn() as vi.MockedFunction<typeof fetch>;
+  fetchMock = vi.fn() as FetchMock;
   (globalThis as any).fetch = fetchMock;
   googleLoginController.reset();
   try {
@@ -137,7 +141,7 @@ beforeEach(() => {
 
 describe('App navigation', () => {
   it('shows login card when user has not authenticated yet', async () => {
-    fetchMock.mockImplementation((input) => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = resolveUrl(input);
       if (url.endsWith('/api/config')) {
         return Promise.resolve(configSuccess());
@@ -152,7 +156,7 @@ describe('App navigation', () => {
   });
 
   it('renders configuration guidance when the Google client ID is missing', async () => {
-    fetchMock.mockImplementation((input) => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = resolveUrl(input);
       if (url.endsWith('/api/config')) {
         return Promise.resolve(configSuccess());
@@ -175,7 +179,7 @@ describe('App navigation', () => {
 
   it('shows the login screen when /api/config responds with 401', async () => {
     const setTimeoutSpy = vi.spyOn(window, 'setTimeout');
-    fetchMock.mockImplementation((input) => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = resolveUrl(input);
       if (url.endsWith('/api/config')) {
         return Promise.resolve(new Response('', { status: 401 }));
@@ -209,7 +213,7 @@ describe('App navigation', () => {
 
     expect(await screen.findByRole('heading', { name: 'WordPack' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'ログアウト' })).toBeInTheDocument();
-    const authCall = fetchMock.mock.calls.find(([input]) =>
+    const authCall = (fetchMock.mock.calls as FetchCall[]).find(([input]) =>
       resolveUrl(input).endsWith('/api/auth/google'),
     );
     expect(authCall).toBeDefined();
@@ -238,13 +242,15 @@ describe('App navigation', () => {
       await screen.findByText('ID トークンを取得できませんでした。ブラウザを更新して再試行してください。'),
     ).toBeInTheDocument();
     expect(
-      fetchMock.mock.calls.some(([input]) => resolveUrl(input).endsWith('/api/auth/google')),
+      (fetchMock.mock.calls as FetchCall[]).some(([input]) =>
+        resolveUrl(input).endsWith('/api/auth/google'),
+      ),
     ).toBe(false);
   });
 
   it('reports telemetry when Google login succeeds without an ID token', async () => {
     const telemetryCalls: Array<{ url: string; init?: RequestInit }> = [];
-    fetchMock.mockImplementation((input, init) => {
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = resolveUrl(input);
       if (url.endsWith('/api/config')) {
         return Promise.resolve(configSuccess());
@@ -308,13 +314,15 @@ describe('App navigation', () => {
       await screen.findByText('Google サインインでエラーが発生しました。時間を置いて再試行してください。'),
     ).toBeInTheDocument();
     expect(
-      fetchMock.mock.calls.some(([input]) => resolveUrl(input).endsWith('/api/auth/google')),
+      (fetchMock.mock.calls as FetchCall[]).some(([input]) =>
+        resolveUrl(input).endsWith('/api/auth/google'),
+      ),
     ).toBe(false);
   });
 
   it('shows retry option when /api/config fetch fails', async () => {
     let attempts = 0;
-    fetchMock.mockImplementation((input) => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = resolveUrl(input);
       if (url.endsWith('/api/config')) {
         if (attempts === 0) {
@@ -349,7 +357,7 @@ describe('App navigation', () => {
 
   it('automatically retries syncing settings when the backend becomes available', async () => {
     let attempts = 0;
-    fetchMock.mockImplementation((input) => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = resolveUrl(input);
       if (url.endsWith('/api/config')) {
         if (attempts === 0) {
@@ -402,7 +410,9 @@ describe('App navigation', () => {
       });
 
       await waitFor(() => {
-        const configCalls = fetchMock.mock.calls.filter(([input]) => resolveUrl(input).endsWith('/api/config'));
+        const configCalls = (fetchMock.mock.calls as FetchCall[]).filter(([input]) =>
+          resolveUrl(input).endsWith('/api/config'),
+        );
         expect(configCalls.length).toBeGreaterThanOrEqual(2);
       });
 
@@ -568,7 +578,7 @@ describe('App navigation', () => {
     });
 
     expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
-    const logoutCalls = fetchMock.mock.calls.filter(([input]) =>
+    const logoutCalls = (fetchMock.mock.calls as FetchCall[]).filter(([input]) =>
       resolveUrl(input).endsWith('/api/auth/logout'),
     );
     expect(logoutCalls).toHaveLength(1);
