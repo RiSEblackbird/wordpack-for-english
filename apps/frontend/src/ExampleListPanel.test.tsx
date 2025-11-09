@@ -2,8 +2,8 @@ import { render, screen, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import { AuthProvider } from './AuthContext';
 import { App } from './App';
+import { AppProviders } from './main';
 
 describe('ExampleListPanel pagination offset behavior', () => {
   beforeEach(() => {
@@ -28,9 +28,9 @@ describe('ExampleListPanel pagination offset behavior', () => {
 
   const renderWithAuth = () =>
     render(
-      <AuthProvider clientId="test-client">
+      <AppProviders googleClientId="test-client">
         <App />
-      </AuthProvider>,
+      </AppProviders>,
     );
 
   const openTab = async (user: ReturnType<typeof userEvent.setup>, label: string) => {

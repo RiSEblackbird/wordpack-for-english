@@ -2,8 +2,8 @@ import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import { AuthProvider } from './AuthContext';
 import { App } from './App';
+import { AppProviders } from './main';
 
 describe('ArticleListPanel bulk delete', () => {
   beforeEach(() => {
@@ -27,9 +27,9 @@ describe('ArticleListPanel bulk delete', () => {
 
   const renderWithAuth = () =>
     render(
-      <AuthProvider clientId="test-client">
+      <AppProviders googleClientId="test-client">
         <App />
-      </AuthProvider>,
+      </AppProviders>,
     );
 
   function setupFetchMocks() {
