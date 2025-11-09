@@ -17,7 +17,8 @@ export type GoogleIdToken = string;
 
 interface StoredAuthPayload {
   user: AuthenticatedUser;
-  token: GoogleIdToken;
+  // UI 用に保持したい追加情報を将来拡張できるように予約枠を残す。
+  [key: string]: unknown;
 }
 
 interface AuthContextValue {
@@ -54,9 +55,11 @@ function readStoredAuth(): StoredAuthPayload | null {
   const raw = window.localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as StoredAuthPayload;
-    if (parsed && parsed.user && parsed.token) {
-      return parsed;
+    const parsed = JSON.parse(raw) as Partial<StoredAuthPayload> & { token?: unknown };
+    if (parsed && typeof parsed === 'object' && parsed.user && typeof parsed.user === 'object') {
+      // 互換性確保のため、旧バージョンが保存した token フィールドは読み飛ばし
+      // （破棄）し、UI 用のユーザー情報だけを復元する。
+      return { user: parsed.user as AuthenticatedUser };
     }
   } catch (error) {
     console.warn('Failed to parse stored auth payload', error);
@@ -67,6 +70,8 @@ function readStoredAuth(): StoredAuthPayload | null {
 /**
  * 現在の認証状態をローカルストレージへ保存する。
  * 副作用: 認証解除時は保存内容を破棄する。
+ * 備考: ID トークンは XSS 時の二次被害を避けるため保存しない。HttpOnly Cookie を前提に
+ *       セッションを維持し、ストレージには UI 表示に必要なユーザー情報のみを残す。
  */
 function persistAuth(payload: StoredAuthPayload | null): void {
   if (typeof window === 'undefined') return;
@@ -112,17 +117,16 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     const stored = readStoredAuth();
     if (stored) {
       setUser(stored.user);
-      setToken(stored.token);
     }
   }, []);
 
   useEffect(() => {
-    if (user && token) {
-      persistAuth({ user, token });
-    } else {
-      persistAuth(null);
+    if (user) {
+      persistAuth({ user });
+      return;
     }
-  }, [user, token]);
+    persistAuth(null);
+  }, [user]);
 
   useEffect(() => {
     let aborted = false;

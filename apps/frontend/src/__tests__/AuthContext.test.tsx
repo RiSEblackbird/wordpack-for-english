@@ -113,3 +113,84 @@ describe('AuthProvider logging behaviour', () => {
     );
   });
 });
+
+describe('AuthProvider persistence behaviour', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    try { localStorage.clear(); } catch { /* ignore */ }
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('persists user information without ID token leakage', async () => {
+    const sampleUser = {
+      google_sub: 'sub-123',
+      email: 'tester@example.com',
+      display_name: 'Tester',
+    };
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith('/api/config') && (!init || init.method === 'GET' || !init.method)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      if (url.endsWith('/api/auth/google') && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ user: sampleUser }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        );
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
+
+    const setItemSpy = vi.spyOn(Object.getPrototypeOf(window.localStorage), 'setItem');
+
+    const SignInProbe: React.FC = () => {
+      const { signIn, user } = useAuth();
+      React.useEffect(() => {
+        if (!user) {
+          signIn('dummy-id-token').catch(() => undefined);
+        }
+      }, [signIn, user]);
+      return null;
+    };
+
+    render(
+      <AuthProvider clientId="test-client">
+        <SignInProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/api/auth/google'),
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(setItemSpy).toHaveBeenCalledWith(
+        'wordpack.auth.v1',
+        expect.any(String),
+      );
+    });
+
+    const [, storedValue] = setItemSpy.mock.calls[setItemSpy.mock.calls.length - 1];
+    const payload = JSON.parse(storedValue as string) as Record<string, unknown>;
+
+    expect(payload).toHaveProperty('user');
+    expect(payload).not.toHaveProperty('token');
+    expect(payload.user).toMatchObject(sampleUser);
+
+    setItemSpy.mockRestore();
+  });
+});
