@@ -740,6 +740,16 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
   const startGoogleLogin = useGoogleLogin({
     flow: 'implicit',
     scope: 'openid email profile',
+    /**
+     * GIS から ID トークンを必ず受け取るよう明示する。
+     * なぜ: access_token のみではバックエンドがユーザーを識別できないため、implicit flow でも id_token を必須化する。
+     */
+    responseType: 'id_token token',
+    /**
+     * 共有端末などで前回のアカウントが保持されないようにする。
+     * なぜ: 誤ったアカウントでのログインを防ぎ、手動でのアカウント切替手順を簡素化する。
+     */
+    prompt: 'select_account',
     onSuccess: handleTokenSuccess,
     onError: handleOAuthError,
     onNonOAuthError: handleNonOAuthError,
