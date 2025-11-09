@@ -41,6 +41,7 @@ def test_client(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setattr(settings, "session_secret_key", "super-secret-key")
     monkeypatch.setattr(settings, "session_max_age_seconds", 3600)
     monkeypatch.setattr(settings, "strict_mode", False)
+    monkeypatch.setattr(settings, "disable_session_auth", False)
 
     # Recreate the app after patching shared modules to ensure new dependencies are wired.
     app = create_app()

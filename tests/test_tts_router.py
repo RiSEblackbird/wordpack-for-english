@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Callable, Iterator
@@ -92,7 +93,7 @@ def test_init_client_reads_settings(monkeypatch) -> None:
     assert client.api_key == "from-settings"
 
 
-def test_tts_authentication_error(monkeypatch, caplog) -> None:
+def test_tts_authentication_error(monkeypatch, caplog, capfd) -> None:
     if AuthenticationError is None:  # pragma: no cover - openai 未導入環境
         return
 
@@ -111,6 +112,19 @@ def test_tts_authentication_error(monkeypatch, caplog) -> None:
                 response = client.post("/api/tts", json={"text": "Hello", "voice": "alloy"})
         assert response.status_code == 502
         assert response.json()["detail"] == "OpenAI authentication failed"
-        assert any("tts_request_failed" in record.getMessage() for record in caplog.records)
+        entries = []
+        for record in caplog.records:
+            message = record.getMessage()
+            if not isinstance(message, str):
+                continue
+            try:
+                payload = json.loads(message)
+            except json.JSONDecodeError:
+                continue
+            entries.append(payload)
+        captured = capfd.readouterr()
+        assert any(entry.get("event") == "tts_request_failed" for entry in entries) or (
+            "tts_request_failed" in captured.err
+        )
     finally:
         tts.client = original_client  # type: ignore[assignment]

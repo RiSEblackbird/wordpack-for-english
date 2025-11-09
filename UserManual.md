@@ -253,7 +253,8 @@
 
 ### B-5. 運用・監視・品質
 - `/metrics` で API パス別の p95・件数・エラー・タイムアウトを確認
-- ログは `structlog` による JSON 形式。`request_complete` に `path`/`latency_ms`
+- ログは `structlog` による JSON 形式。`request_complete` には UUID の `request_id`/
+  `path`/`latency_ms`
 - レート制限: 1分あたりの上限を IP と `X-User-Id`（任意ヘッダ）ごとに適用（超過は `429`）
 - すべての応答に `X-Request-ID`。障害報告時に併記
 - 例外監視（任意）: Sentry DSN 設定があれば重大エラー送信
