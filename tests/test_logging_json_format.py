@@ -34,6 +34,7 @@ def _use_fake_settings() -> object:
         disable_session_auth = True
         langfuse_enabled = False
         langfuse_exclude_paths = []
+        allowed_cors_origins = ()
         strict_mode = False
         wordpack_db_path = ":memory:"
         openai_api_key = None

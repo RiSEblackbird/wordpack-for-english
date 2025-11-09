@@ -1,5 +1,8 @@
-from pydantic import Field, field_validator, model_validator
+from typing import Annotated
+
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings.sources.types import NoDecode
 
 
 DEFAULT_DB_PATH = ".data/wordpack.sqlite3"
@@ -127,6 +130,16 @@ class Settings(BaseSettings):
     sentry_dsn: str | None = Field(
         default=None, description="Sentry DSN (enable if set)"
     )
+    # なぜ: CORS の許可オリジンを設定ファイルから明示することで、誤ったドメインを
+    # 許可しないまま本番リリースしてしまうリスクを避ける。未設定の場合は既存の
+    # ワイルドカード挙動（認証クッキー非許可）にフォールバックする。
+    allowed_cors_origins: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=(),
+        description=(
+            "Comma separated CORS origins / CORS で許可するオリジンのカンマ区切り一覧"
+        ),
+        validation_alias=AliasChoices("allowed_cors_origins", "cors_allowed_origins"),
+    )
     # Langfuse 観測基盤
     langfuse_enabled: bool = Field(
         default=False,
@@ -210,6 +223,40 @@ class Settings(BaseSettings):
             if not isinstance(candidate, str):
                 continue
             trimmed = candidate.strip().lower()
+            if not trimmed or trimmed in seen:
+                continue
+            seen.add(trimmed)
+            normalised.append(trimmed)
+
+        return tuple(normalised)
+
+    @field_validator("allowed_cors_origins", mode="before")
+    @classmethod
+    def _normalise_allowed_cors_origins(
+        cls, raw_origins: object
+    ) -> tuple[str, ...] | object:  # pragma: no cover - pydantic handles typing
+        """Convert environment input into a deduplicated tuple of origins.
+
+        なぜ: CORS 設定を `.env` で管理するときに空白や重複が混ざりやすいため、
+        FastAPI へ渡す前にトリムと重複排除を行って安全な配列へ正規化する。
+        """
+
+        if raw_origins is None:
+            candidates: list[str] = []
+        elif isinstance(raw_origins, str):
+            candidates = raw_origins.split(",")
+        else:
+            try:
+                candidates = list(raw_origins)
+            except TypeError:
+                return raw_origins
+
+        normalised: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+            trimmed = candidate.strip()
             if not trimmed or trimmed in seen:
                 continue
             seen.add(trimmed)
