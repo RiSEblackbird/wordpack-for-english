@@ -37,6 +37,7 @@ const {
     prompt: 'consent',
     scope: 'openid email profile',
     token_type: 'Bearer',
+    id_token: 'mock-id-token',
     ...overrides,
   });
 
@@ -145,9 +146,6 @@ const completeLogin = async (
   if (!fetchMock.mock.calls.length) {
     setupFetchForAuthenticatedFlow(fetchMock);
   }
-  googleLoginController.setImplementation(({ onSuccess }) => {
-    onSuccess?.({ id_token: 'test-id-token' });
-  });
   const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
   await act(async () => {
     await user.click(loginButton);
@@ -171,6 +169,31 @@ beforeEach(() => {
 });
 
 describe('App navigation', () => {
+  it('initializes Google login to always request an ID token', async () => {
+    fetchMock.mockImplementation((input) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(configSuccess());
+      }
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    });
+
+    renderWithProviders();
+
+    await screen.findByRole('heading', { name: 'WordPack にサインイン' });
+
+    expect(useGoogleLoginMock).toHaveBeenCalled();
+    const loginOptions = useGoogleLoginMock.mock.calls[0]?.[0];
+    expect(loginOptions).toMatchObject({
+      flow: 'implicit',
+      scope: 'openid email profile',
+      responseType: 'id_token token',
+      prompt: 'select_account',
+    });
+    // GIS の成功レスポンスを模したモックにも ID トークンが含まれていることを固定化する。
+    expect(createTokenResponse().id_token).toBe('mock-id-token');
+  });
+
   it('shows login card when user has not authenticated yet', async () => {
     fetchMock.mockImplementation((input) => {
       const url = resolveUrl(input);
@@ -251,12 +274,16 @@ describe('App navigation', () => {
     expect(init?.method).toBe('POST');
     expect(init?.credentials).toBe('include');
     expect(init?.headers).toMatchObject({ 'Content-Type': 'application/json' });
-    expect(init?.body).toBe(JSON.stringify({ id_token: 'test-id-token' }));
+    expect(init?.body).toBe(JSON.stringify({ id_token: 'mock-id-token' }));
   });
 
   it('shows an inline error when Google returns a token response without an ID token', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     renderWithProviders();
+
+    googleLoginController.setImplementation(({ onSuccess }) => {
+      onSuccess?.({ id_token: undefined });
+    });
 
     const user = userEvent.setup();
     const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
@@ -289,6 +316,10 @@ describe('App navigation', () => {
     });
 
     renderWithProviders();
+
+    googleLoginController.setImplementation(({ onSuccess }) => {
+      onSuccess?.({ id_token: undefined });
+    });
 
     const user = userEvent.setup();
     const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
