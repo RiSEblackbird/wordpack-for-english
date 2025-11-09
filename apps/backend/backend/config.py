@@ -33,6 +33,13 @@ class Settings(BaseSettings):
             "Google ID トークン検証時に許容する時計ずれ（秒）"
         ),
     )
+    admin_email_allowlist: tuple[str, ...] = Field(
+        default=(),
+        description=(
+            "Email addresses allowed to sign in when restrict mode is enabled / "
+            "ログインを許可するメールアドレス一覧（制限有効時に使用）"
+        ),
+    )
     session_secret_key: str = Field(
         default="",
         description="Secret key for signing session cookies / セッションクッキー署名用シークレット",
@@ -191,6 +198,26 @@ class Settings(BaseSettings):
         is_secure_explicitly_configured = "session_cookie_secure" in self.model_fields_set
         if environment_name == "production" and not is_secure_explicitly_configured:
             self.session_cookie_secure = True
+
+        # ADMIN_EMAIL_ALLOWLIST を文字列/リストいずれでも受け取り、重複排除した正規化済みタプルへ変換する。
+        raw_allowlist = getattr(self, "admin_email_allowlist", ())
+        if isinstance(raw_allowlist, str):
+            candidates = raw_allowlist.split(",")
+        else:
+            candidates = list(raw_allowlist or ())
+
+        normalised: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+            trimmed = candidate.strip().lower()
+            if not trimmed or trimmed in seen:
+                continue
+            seen.add(trimmed)
+            normalised.append(trimmed)
+
+        self.admin_email_allowlist = tuple(normalised)
         return self
 
 
