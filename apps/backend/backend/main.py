@@ -107,6 +107,7 @@ class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
                     is_timeout = True
                 raise
             finally:
+                request_id = getattr(request.state, "request_id", request_id)
                 latency_ms = (time.time() - start) * 1000
                 registry.record(path, latency_ms, is_error=is_error, is_timeout=is_timeout)
                 logger.info(
