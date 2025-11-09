@@ -30,6 +30,76 @@ const NAV_ITEMS: Array<{ key: Tab; label: string }> = [
 const SIDEBAR_ID = 'app-sidebar';
 const MAIN_MAX_WIDTH = 1000;
 const SIDEBAR_WIDTH = 280;
+const OAUTH_TELEMETRY_ENDPOINT = '/api/diagnostics/oauth-telemetry';
+
+const SENSITIVE_TOKEN_KEYS = new Set(['access_token', 'id_token', 'refresh_token', 'code']);
+
+/**
+ * トークンやメールアドレスなどの機微情報をマスクする。
+ * なぜ: 認証トラブルのテレメトリ送信時に個人情報を不用意にログへ残さないため。
+ */
+const sanitizeSecretForTelemetry = (value: string): string => {
+  if (!value) return '***';
+  if (value.length <= 4) return '***';
+  return `${value.slice(0, 2)}…${value.slice(-1)}`;
+};
+
+const sanitizeEmailForTelemetry = (value: string): string => {
+  const [local, domain] = value.split('@');
+  if (!domain) {
+    return sanitizeSecretForTelemetry(value);
+  }
+  if (local.length <= 2) {
+    return `${local.charAt(0) || '*'}***@${domain}`;
+  }
+  return `${local.charAt(0)}***${local.charAt(local.length - 1)}@${domain}`;
+};
+
+const sanitizeTokenResponseForTelemetry = (
+  tokenResponse: TokenResponse & { id_token?: string },
+): Record<string, unknown> => {
+  return Object.entries(tokenResponse).reduce<Record<string, unknown>>((acc, [key, value]) => {
+    if (typeof value === 'string') {
+      if (SENSITIVE_TOKEN_KEYS.has(key)) {
+        acc[key] = sanitizeSecretForTelemetry(value);
+      } else if (value.includes('@')) {
+        acc[key] = sanitizeEmailForTelemetry(value);
+      } else {
+        acc[key] = value;
+      }
+    } else {
+      acc[key] = value as unknown;
+    }
+    return acc;
+  }, {});
+};
+
+/**
+ * ID トークンが欠落した Google ログイン試行をバックエンドへ通知する。
+ * 副作用: fetch が利用可能な場合に限り構造化テレメトリを POST する。
+ */
+const sendMissingIdTokenTelemetry = async (
+  googleClientId: string,
+  tokenResponse: TokenResponse & { id_token?: string },
+): Promise<void> => {
+  if (typeof fetch !== 'function') {
+    return;
+  }
+  try {
+    await fetch(OAUTH_TELEMETRY_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: 'google_login_missing_id_token',
+        googleClientId,
+        errorCategory: 'missing_id_token',
+        tokenResponse: sanitizeTokenResponseForTelemetry(tokenResponse),
+      }),
+    });
+  } catch (error) {
+    console.warn('Failed to send OAuth telemetry for missing ID token', error);
+  }
+};
 
 const HamburgerIcon: React.FC = () => (
   <svg
@@ -432,7 +502,15 @@ const ThemeApplier: React.FC = () => {
  * 副作用: ボタンクリックで Google の認証ポップアップを開き、ID トークンを送信する。
  */
 const LoginScreen: React.FC = () => {
-  const { signIn, isAuthenticating, error, clearError, missingClientId, authBypassActive } = useAuth();
+  const {
+    signIn,
+    isAuthenticating,
+    error,
+    clearError,
+    missingClientId,
+    authBypassActive,
+    googleClientId,
+  } = useAuth();
   const [localError, setLocalError] = useState<string | null>(null);
   const loginStyles = `
         .login-shell {
@@ -596,6 +674,7 @@ const LoginScreen: React.FC = () => {
       localError={localError}
       setLocalError={setLocalError}
       signIn={signIn}
+      googleClientId={googleClientId}
     />
   );
 };
@@ -608,6 +687,7 @@ interface GoogleLoginCardProps {
   localError: string | null;
   setLocalError: React.Dispatch<React.SetStateAction<string | null>>;
   signIn: (idToken: string) => Promise<void>;
+  googleClientId: string;
 }
 
 /**
@@ -622,6 +702,7 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
   localError,
   setLocalError,
   signIn,
+  googleClientId,
 }) => {
   const handleTokenSuccess = async (tokenResponse: TokenResponse & { id_token?: string }) => {
     /**
@@ -631,6 +712,7 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
     const idToken = tokenResponse.id_token;
     if (!idToken) {
       console.warn('Google login succeeded without an ID token', tokenResponse);
+      void sendMissingIdTokenTelemetry(googleClientId, tokenResponse);
       setLocalError('ID トークンを取得できませんでした。ブラウザを更新して再試行してください。');
       return;
     }
