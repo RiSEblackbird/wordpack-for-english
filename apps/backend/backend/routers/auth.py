@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 from http import HTTPStatus
 
@@ -66,6 +67,7 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
             "google_auth_failed",
             user_id=None,
             reason="invalid_token",
+            error=repr(exc),
         )
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="Invalid ID token") from exc
 
@@ -73,12 +75,21 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
     email = id_info.get("email")
     display_name = id_info.get("name") or id_info.get("email")
     hosted_domain = id_info.get("hd") or id_info.get("hostedDomain")
+    email_hash = _hash_for_log(email)
+
+    missing_claims = [
+        claim
+        for claim, value in (("sub", google_sub), ("email", email))
+        if not value
+    ]
 
     if not google_sub or not email or not display_name:
         logger.warning(
             "google_auth_failed",
             user_id=google_sub,
             reason="missing_claims",
+            missing_claims=missing_claims,
+            email_hash=email_hash,
         )
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="ID token is missing required claims")
 
@@ -88,6 +99,9 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
             "google_auth_denied",
             user_id=google_sub,
             reason="domain_mismatch",
+            hosted_domain=hosted_domain,
+            allowed_domain=allowed_hd,
+            email_hash=email_hash,
         )
         raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Google account domain is not allowed")
 
@@ -126,3 +140,15 @@ def _session_cookie_max_age() -> int:
         return max(60, int(settings.session_max_age_seconds))
     except (TypeError, ValueError):  # pragma: no cover - defensive fallback
         return 60 * 60 * 24 * 14
+
+
+def _hash_for_log(value: str | None) -> str | None:
+    """Hash sensitive identifiers before logging to avoid leaking PII."""
+
+    if not value:
+        return None
+    # Google アカウントのメールアドレスなどの PII を直接出力しないよう、
+    # SHA-256 の先頭12文字に圧縮してロギングする。SRE がインシデント時に
+    # 該当アカウントを特定できる粒度を残しつつ漏洩リスクを抑える意図。
+    digest = hashlib.sha256(value.lower().encode("utf-8")).hexdigest()
+    return digest[:12]
