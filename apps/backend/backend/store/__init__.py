@@ -189,6 +189,32 @@ class AppSQLiteStore:
     def save_article(self, article_id: str, **kwargs: Any) -> None:
         self.articles.save_article(article_id, **kwargs)
 
+    # --- Internal compatibility helpers for tests ---
+    def _upsert_lemma(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        label: str,
+        sense_title: str,
+        llm_model: str | None,
+        llm_params: str | None,
+        now: str,
+    ) -> str:
+        """`WordPackStore._upsert_lemma` への委譲ラッパー。
+
+        既存テストが AppSQLiteStore 経由でプライベートAPIを参照しているため、
+        backend.providers の再構成後も互換性を維持するために残している。
+        """
+
+        return self.wordpacks._upsert_lemma(  # type: ignore[attr-defined]
+            conn,
+            label=label,
+            sense_title=sense_title,
+            llm_model=llm_model,
+            llm_params=llm_params,
+            now=now,
+        )
+
     def get_article(
         self, article_id: str
     ) -> tuple[

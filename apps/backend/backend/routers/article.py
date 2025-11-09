@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+"""Article ルーター。backend.providers パッケージの新構造に追随する。"""
+
 import uuid
 from typing import Any
 

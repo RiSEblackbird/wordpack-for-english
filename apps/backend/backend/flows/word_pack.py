@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""WordPack 生成フロー。backend.providers のモジュラ構造を前提に動作する。"""
+
 import json
 import re
 from typing import Any

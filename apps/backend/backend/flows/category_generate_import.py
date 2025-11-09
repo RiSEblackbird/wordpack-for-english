@@ -1,3 +1,5 @@
+"""カテゴリ別の例文生成フロー。backend.providers の分割構成に対応。"""
+
 from __future__ import annotations
 
 import json
@@ -39,6 +41,7 @@ class CategoryGenerateAndImportFlow:
             reasoning_override=reasoning,
             text_override=text,
         )
+        # 新しい backend.providers パッケージで作成した LLM を保持する。
         # 呼び出し元から渡された LLM パラメータを保持し、下流の ArticleImportFlow へも同一の契約で引き継ぐ
         self._llm_info = {
             "model": model,

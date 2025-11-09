@@ -161,7 +161,7 @@ def test_openai_reasoning_param_fallback_on_unexpected_keyword(monkeypatch):
         def __init__(self, api_key: str) -> None:  # type: ignore[no-untyped-def]
             self.responses = _DummyResponses()
 
-    backend.providers.OpenAI = DummyOpenAI  # type: ignore[assignment]
+    backend.providers.llm.OpenAI = DummyOpenAI  # type: ignore[attr-defined, assignment]
 
     # 実行：reasoning/text オプションを与えてプロバイダを取得
     from backend.providers import get_llm_provider
@@ -209,7 +209,7 @@ def test_openai_reasoning_param_fallback_on_unexpected_keyword_nano(monkeypatch)
         def __init__(self, api_key: str) -> None:  # type: ignore[no-untyped-def]
             self.responses = _DummyResponses()
 
-    backend.providers.OpenAI = DummyOpenAI  # type: ignore[assignment]
+    backend.providers.llm.OpenAI = DummyOpenAI  # type: ignore[attr-defined, assignment]
 
     from backend.providers import get_llm_provider
     llm = get_llm_provider(
