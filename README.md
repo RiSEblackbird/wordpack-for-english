@@ -56,6 +56,7 @@ cp env.example .env
 # GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com
 # GOOGLE_ALLOWED_HD=example.com
 # ADMIN_EMAIL_ALLOWLIST=admin@example.com,owner@example.com
+# CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 # SESSION_SECRET_KEY=change-me-to-random-value
 # SESSION_COOKIE_NAME=wp_session
 # SESSION_COOKIE_SECURE=true  # 本番(HTTPS)のみ true。開発(HTTP)は既定で false なので設定不要
@@ -65,6 +66,8 @@ cp env.example .env
 ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。
 
 特定の Google アカウントだけに利用者を絞り込みたい場合は、カンマ区切りでメールアドレスを列挙した `ADMIN_EMAIL_ALLOWLIST` を設定してください。値は小文字に正規化され、完全一致したアドレスのみが `/api/auth/google` の認証を通過します（未設定または空文字の場合は従来どおり全アカウントを許可します）。
+
+`CORS_ALLOWED_ORIGINS` を設定すると、指定したオリジンからのみ資格情報付き CORS を許可します。ローカル開発では `http://127.0.0.1:5173,http://localhost:5173` を指定すると従来どおりフロントエンドと連携できます。未設定の場合はワイルドカード許可となりますが、`Access-Control-Allow-Credentials` は返さないためクッキー連携が無効化されます。
 
 フロントエンド側でも同じクライアントIDを参照できるように、`apps/frontend/.env` を作成して Vite の環境変数を指定してください。
 
@@ -98,6 +101,11 @@ docker compose up --build
 - Backend: http://127.0.0.1:8000
 - Frontend: http://127.0.0.1:5173
 - `apps/frontend/docker-entrypoint.sh` が起動時に依存を確認し、`node_modules/@react-oauth/google` が不足している場合は自動で `npm install` を実行します。このため、新しいフロントエンド依存を追加してもコンテナの再ビルドは不要です。
+
+### Cloud Run へのデプロイ
+- Cloud Run のサービスには `CORS_ALLOWED_ORIGINS` をデプロイ時の環境変数として指定し、本番ドメイン（例: `https://app.example.com,https://admin.example.com`）を列挙します。
+- フロントエンドと同一ドメインでホストする場合も、バックエンドにアクセスするオリジンを完全一致で登録してください。HTTPS を使う環境では `SESSION_COOKIE_SECURE=true` も併せて指定します。
+- ドメインを追加した場合は Cloud Run の再デプロイで環境変数を更新し、反映後に `OPTIONS /healthz` などで `Access-Control-Allow-Origin` ヘッダーが意図した値になっているか確認してください。
 
 ### 認証フロー
 - フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。

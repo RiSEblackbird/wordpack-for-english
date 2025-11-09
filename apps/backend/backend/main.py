@@ -175,10 +175,17 @@ def create_app() -> FastAPI:
     configure_logging()
     app = FastAPI(title="WordPack API", version="0.3.1")
 
+    configured_origins = list(settings.allowed_cors_origins)
+    allow_credentials = bool(configured_origins)
+    if not configured_origins:
+        configured_origins = ["*"]
+
+    # なぜ: ワイルドカード許可時に資格情報を無効化することで、本番でのクッキー漏洩を
+    # 防ぎ、設定で明示された場合のみクレデンシャル付き CORS を許可する。
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=configured_origins,
+        allow_credentials=allow_credentials,
         allow_methods=["*"],
         allow_headers=["*"],
     )
