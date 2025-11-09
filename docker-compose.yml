@@ -9,7 +9,6 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=${ENVIRONMENT:-development}
-      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
       - STRICT_MODE=${STRICT_MODE:-true}
       - AUTO_SEED_ON_STARTUP=${AUTO_SEED_ON_STARTUP:-true}
       - CHROMA_PERSIST_DIR=${CHROMA_PERSIST_DIR:-.chroma}
