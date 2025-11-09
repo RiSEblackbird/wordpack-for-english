@@ -14,6 +14,7 @@ export interface Settings {
   textVerbosity?: 'low' | 'medium' | 'high';
   theme: 'light' | 'dark';
   ttsPlaybackRate: number;
+  ttsVolume: number;
 }
 
 interface SettingsValue {
@@ -51,9 +52,23 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return undefined;
       }
     })();
+    const savedTtsVolume = (() => {
+      try {
+        const raw = localStorage.getItem('wp.ttsVolume');
+        if (!raw) return undefined;
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) ? parsed : undefined;
+      } catch {
+        return undefined;
+      }
+    })();
     const normalizedTtsPlaybackRate = (() => {
       if (!savedTtsPlaybackRate) return 1;
       return Math.min(2, Math.max(0.5, savedTtsPlaybackRate));
+    })();
+    const normalizedTtsVolume = (() => {
+      if (!savedTtsVolume && savedTtsVolume !== 0) return 1;
+      return Math.min(1, Math.max(0, savedTtsVolume));
     })();
     return {
       apiBase: '/api',
@@ -68,6 +83,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       textVerbosity: 'medium',
       theme: savedTheme === 'light' ? 'light' : 'dark',
       ttsPlaybackRate: normalizedTtsPlaybackRate,
+      ttsVolume: normalizedTtsVolume,
     };
   });
   const [status, setStatus] = useState<SettingsStatus>('loading');
@@ -171,6 +187,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     try { localStorage.setItem('wp.ttsPlaybackRate', String(settings.ttsPlaybackRate)); } catch { /* ignore */ }
   }, [settings.ttsPlaybackRate]);
+  // 音量の永続化。音量0〜1の範囲を維持し、音量メニューとAudio APIのブリッジを担保する。
+  useEffect(() => {
+    try { localStorage.setItem('wp.ttsVolume', String(settings.ttsVolume)); } catch { /* ignore */ }
+  }, [settings.ttsVolume]);
   return (
     <SettingsContext.Provider value={{ settings, setSettings }}>
       {status === 'ready' ? (

@@ -26,6 +26,7 @@ describe('SidebarPlaybackRateControl', () => {
       textVerbosity: 'medium',
       theme: 'dark',
       ttsPlaybackRate: 1,
+      ttsVolume: 1,
     };
     setSettingsMock.mockReset();
   });
@@ -42,9 +43,22 @@ describe('SidebarPlaybackRateControl', () => {
     expect(next.ttsPlaybackRate).toBe(1.25);
   });
 
+  it('updates volume when user selects a new option', async () => {
+    render(<SidebarPlaybackRateControl isSidebarOpen />);
+    const select = screen.getByLabelText('音量');
+    const user = userEvent.setup();
+    await user.selectOptions(select, '0.5');
+
+    expect(setSettingsMock).toHaveBeenCalledTimes(1);
+    const updater = setSettingsMock.mock.calls[0][0] as (prev: Settings) => Settings;
+    const next = updater(currentSettings);
+    expect(next.ttsVolume).toBe(0.5);
+  });
+
   it('disables select when sidebar is closed', () => {
     render(<SidebarPlaybackRateControl isSidebarOpen={false} />);
     const select = screen.getByLabelText('音声再生スピード');
     expect(select).toBeDisabled();
+    expect(screen.getByLabelText('音量')).toBeDisabled();
   });
 });

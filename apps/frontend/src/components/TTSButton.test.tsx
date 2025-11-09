@@ -27,7 +27,7 @@ describe('TTSButton', () => {
 
   it('fetches audio, plays it, and keeps default playback speed when context is missing', async () => {
     const playMock = vi.fn().mockResolvedValue(undefined);
-    const audioInstances: Array<{ onended: (() => void) | null; onerror: (() => void) | null; playbackRate: number }> = [];
+    const audioInstances: Array<{ onended: (() => void) | null; onerror: (() => void) | null; playbackRate: number; volume: number }> = [];
     const audioCtor = vi.fn().mockImplementation(() => {
       const instance: any = {
         play: playMock,
@@ -40,6 +40,13 @@ describe('TTSButton', () => {
           this._rate = value;
         },
         _rate: 1,
+        get volume() {
+          return this._volume ?? 1;
+        },
+        set volume(value: number) {
+          this._volume = value;
+        },
+        _volume: 1,
       };
       audioInstances.push(instance);
       return instance;
@@ -62,6 +69,7 @@ describe('TTSButton', () => {
     expect(URL.createObjectURL).toHaveBeenCalled();
     await waitFor(() => expect(screen.getByRole('button', { name: '音声' })).toBeEnabled());
     expect(audioInstances[0].playbackRate).toBeCloseTo(1);
+    expect(audioInstances[0].volume).toBeCloseTo(1);
     act(() => {
       audioInstances[0].onended?.();
     });
@@ -88,7 +96,7 @@ describe('TTSButton', () => {
 
   it('applies playback rate from settings context when available', async () => {
     const playMock = vi.fn().mockResolvedValue(undefined);
-    const audioInstances: Array<{ playbackRate: number; onended: (() => void) | null; onerror: (() => void) | null }> = [];
+    const audioInstances: Array<{ playbackRate: number; onended: (() => void) | null; onerror: (() => void) | null; volume: number }> = [];
     const audioCtor = vi.fn().mockImplementation(() => {
       const instance: any = {
         play: playMock,
@@ -101,6 +109,13 @@ describe('TTSButton', () => {
           this._rate = value;
         },
         _rate: 1,
+        get volume() {
+          return this._volume ?? 1;
+        },
+        set volume(value: number) {
+          this._volume = value;
+        },
+        _volume: 1,
       };
       audioInstances.push(instance);
       return instance;
@@ -124,6 +139,7 @@ describe('TTSButton', () => {
         textVerbosity: 'medium',
         theme: 'dark',
         ttsPlaybackRate: 1.75,
+        ttsVolume: 0.4,
       },
       setSettings: vi.fn(),
     });
@@ -139,5 +155,6 @@ describe('TTSButton', () => {
     await waitFor(() => expect(playMock).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByRole('button', { name: '音声' })).toBeEnabled());
     expect(audioInstances[0].playbackRate).toBeCloseTo(1.75);
+    expect(audioInstances[0].volume).toBeCloseTo(0.4);
   });
 });
