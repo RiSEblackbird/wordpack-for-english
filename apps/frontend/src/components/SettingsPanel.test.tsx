@@ -40,6 +40,7 @@ describe('SettingsPanel', () => {
       textVerbosity: 'medium',
       theme: 'dark',
       ttsPlaybackRate: 1,
+      ttsVolume: 1,
     };
     setSettingsMock.mockReset();
     signOutMock.mockReset();

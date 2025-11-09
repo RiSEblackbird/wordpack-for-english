@@ -17,6 +17,7 @@ vi.mock('../SettingsContext', () => {
     textVerbosity: 'medium' as const,
     theme: 'dark' as const,
     ttsPlaybackRate: 1,
+    ttsVolume: 1,
   };
   return {
     useSettings: () => ({ settings, setSettings: () => {} }),
