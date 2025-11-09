@@ -93,6 +93,10 @@ _EXCEPTION_DICT: dict[str, list[str]] = {
 # cmudict の辞書インスタンスは高コストのためキャッシュ
 _CMU_CACHE: dict[str, list[list[str]]] | None = None
 
+# g2p_en の初期化は重量級かつスレッドごとに重複しがちなため、ロック付きで単一インスタンスを共有
+_G2P_INSTANCE: G2p | None = None
+_G2P_LOCK = threading.Lock()
+
 
 def _get_cmu_dict() -> dict[str, list[list[str]]] | None:
     global _CMU_CACHE
@@ -104,6 +108,23 @@ def _get_cmu_dict() -> dict[str, list[list[str]]] | None:
         except Exception:  # pragma: no cover
             _CMU_CACHE = None
     return _CMU_CACHE
+
+
+def _get_g2p_instance() -> G2p | None:
+    """g2p_en.G2p の生成を一度に集約し、重複初期化と競合を避ける。"""
+
+    global _G2P_INSTANCE
+    if G2p is None:
+        return None
+    if _G2P_INSTANCE is not None:
+        return _G2P_INSTANCE
+    with _G2P_LOCK:
+        if _G2P_INSTANCE is None:
+            try:
+                _G2P_INSTANCE = G2p()
+            except Exception:  # pragma: no cover - オプショナル依存の失敗は安全に握りつぶす
+                _G2P_INSTANCE = None
+        return _G2P_INSTANCE
 
 
 def _call_with_timeout(func: Callable[[], Any], timeout_ms: int) -> Any | None:
@@ -189,7 +210,9 @@ def _g2p_phones(word: str) -> list[str] | None:
         try:
 
             def _run() -> list[str] | None:
-                g2p = G2p()
+                g2p = _get_g2p_instance()
+                if g2p is None:
+                    return None
                 seq = g2p(word)
                 phones = [t for t in seq if t and t[0].isalpha()]
                 return phones or None

@@ -38,6 +38,7 @@ __pycache__/
 
 # Test artifacts
 .coverage
+.pytest_cache/
 
 # Runtime diagnostics logs (may contain telemetry/PII)
 *.log
