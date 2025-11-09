@@ -101,6 +101,15 @@ docker compose up --build
 ### トラブルシューティング
 - **ID トークンが取得できない**: ログイン画面に「ID トークンを取得できませんでした。ブラウザを更新して再試行してください。」と表示された場合は、ブラウザを更新してから再度サインインしてください。それでも解消しない場合は Google OAuth のクライアント ID や承認済みオリジン設定を確認し、バックエンドのターミナルへ出力される `google_login_missing_id_token` ログで `google_client_id` や `error_category` を突き合わせて原因を特定します。テレメトリは `/api/diagnostics/oauth-telemetry` で受信した値をマスクした形で保存されるため、生のトークン値は記録されません。
 
+#### Google 認証失敗時のログキー
+- `event`: 常に `google_auth_failed` または `google_auth_denied` が設定されます。
+- `reason`: 失敗理由。`invalid_token`（署名検証エラー）、`missing_claims`（`sub`/`email` が欠落）や `domain_mismatch`（許可ドメイン不一致）など。
+- `error`: Google SDK から受け取った例外メッセージの `repr`。署名不正などの詳細を確認できます。
+- `missing_claims`: 欠落していたクレームの配列。例: `['email']`。
+- `hosted_domain`: ID トークンに含まれていた `hd`（`hostedDomain`）値。
+- `allowed_domain`: 設定ファイル（`GOOGLE_ALLOWED_HD`）で許可しているドメイン。`None` の場合はドメイン制限が無効。
+- `email_hash`: メールアドレスを小文字化し SHA-256 でハッシュ化した先頭12文字。個人情報を露出させずに該当アカウントを突き合わせる目的で使用します。
+
 ## テスト
 - Backend（Python）
 ```bash

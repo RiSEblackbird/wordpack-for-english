@@ -17,6 +17,8 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
         sys.path.insert(0, str(backend_root))
 
     monkeypatch.setenv("STRICT_MODE", "true" if strict else "false")
+    # セッション認証を無効化して、エンドポイント検証がトークン配布に依存しないようにする。
+    monkeypatch.setenv("DISABLE_SESSION_AUTH", "true")
     if db_path is not None:
         monkeypatch.setenv("WORDPACK_DB_PATH", str(db_path))
 
@@ -38,6 +40,43 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
     importlib.import_module("backend.config")
     importlib.import_module("backend.store")
     return importlib.import_module("backend.main")
+
+
+def _structlog_records(caplog: pytest.LogCaptureFixture, event: str) -> list[dict[str, str]]:
+    """Structlog の JSON メッセージから指定イベントのみ抽出する補助関数。"""
+
+    records: list[dict[str, str]] = []
+    for record in caplog.records:
+        raw = record.getMessage()
+        try:
+            if isinstance(raw, str):
+                payload = json.loads(raw)
+            elif isinstance(raw, dict):
+                payload = raw
+            else:
+                continue
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if payload.get("event") == event:
+            records.append(payload)
+    return records
+
+
+def _structlog_from_text(output: str, event: str) -> list[dict[str, str]]:
+    """capfd/capsys で取得した標準エラー出力から構造化ログを抽出する。"""
+
+    matches: list[dict[str, str]] = []
+    for line in output.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if payload.get("event") == event:
+            matches.append(payload)
+    return matches
 
 
 @pytest.fixture()
@@ -215,6 +254,42 @@ def test_word_pack_study_progress_endpoint(client):
     assert latest
     assert latest["checked_only_count"] == 2
     assert latest["learned_count"] == 1
+
+
+def test_google_auth_logs_error_details(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    capfd: pytest.CaptureFixture[str],
+):
+    """Google 認証失敗時に構造化ログへエラー内容が含まれることを検証。"""
+
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id-log-test")
+    monkeypatch.setenv("SESSION_SECRET_KEY", "log-secret-key")
+    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "auth-log.sqlite3")
+
+    from fastapi.testclient import TestClient as LocalTestClient
+    from google.oauth2 import id_token
+
+    def _raise(_: str, __: object, ___: str) -> dict[str, str]:
+        raise ValueError("signature mismatch")
+
+    monkeypatch.setattr(id_token, "verify_oauth2_token", _raise)
+
+    client = LocalTestClient(backend_main.app)
+
+    with caplog.at_level("WARNING"):
+        resp = client.post("/api/auth/google", json={"id_token": "invalid"})
+
+    assert resp.status_code == 401
+    log_entries = _structlog_records(caplog, "google_auth_failed")
+    if not log_entries:
+        captured = capfd.readouterr()
+        log_entries = _structlog_from_text(captured.err, "google_auth_failed")
+    assert log_entries, "ログから google_auth_failed が検出できません"
+    latest = log_entries[-1]
+    assert latest["reason"] == "invalid_token"
+    assert "signature mismatch" in latest["error"]
 
 
 def test_example_study_progress_endpoint(client):

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
+import hashlib
 from http.cookies import SimpleCookie
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import pytest
 from fastapi.testclient import TestClient
@@ -55,6 +57,26 @@ def _stub_verifier(monkeypatch: pytest.MonkeyPatch, factory: Callable[[], dict[s
     monkeypatch.setattr(id_token, "verify_oauth2_token", _verify)
 
 
+def _structlog_events(caplog: pytest.LogCaptureFixture, event: str) -> list[dict[str, Any]]:
+    """Collect structlog JSON payloads matching the specified event name."""
+
+    matches: list[dict[str, Any]] = []
+    for record in caplog.records:
+        raw = record.getMessage()
+        try:
+            if isinstance(raw, str):
+                payload = json.loads(raw)
+            elif isinstance(raw, dict):
+                payload = raw
+            else:
+                continue
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if payload.get("event") == event:
+            matches.append(payload)
+    return matches
+
+
 def test_google_auth_success_flow(test_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """Successful Google sign-in returns cookie and allows protected access."""
 
@@ -85,7 +107,7 @@ def test_google_auth_success_flow(test_client: TestClient, monkeypatch: pytest.M
 
 
 def test_google_auth_rejects_wrong_domain(
-    test_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Hosted domain mismatch should result in HTTP 403."""
 
@@ -99,12 +121,22 @@ def test_google_auth_rejects_wrong_domain(
         },
     )
 
-    resp = test_client.post("/api/auth/google", json={"id_token": "valid"})
+    with caplog.at_level("WARNING"):
+        resp = test_client.post("/api/auth/google", json={"id_token": "valid"})
     assert resp.status_code == 403
+
+    log_entries = _structlog_events(caplog, "google_auth_denied")
+    assert log_entries, "expected google_auth_denied log entry"
+    log = log_entries[-1]
+    assert log["reason"] == "domain_mismatch"
+    assert log["hosted_domain"] == "other.com"
+    assert log["allowed_domain"] == "example.com"
+    expected_hash = hashlib.sha256("user@other.com".lower().encode("utf-8")).hexdigest()[:12]
+    assert log["email_hash"] == expected_hash
 
 
 def test_google_auth_invalid_signature(
-    test_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Invalid token signature should produce HTTP 401."""
 
@@ -115,8 +147,42 @@ def test_google_auth_invalid_signature(
 
     monkeypatch.setattr(id_token, "verify_oauth2_token", _raise)
 
-    resp = test_client.post("/api/auth/google", json={"id_token": "invalid"})
+    with caplog.at_level("WARNING"):
+        resp = test_client.post("/api/auth/google", json={"id_token": "invalid"})
     assert resp.status_code == 401
+
+    log_entries = _structlog_events(caplog, "google_auth_failed")
+    assert log_entries, "expected google_auth_failed log entry"
+    log = log_entries[-1]
+    assert log["reason"] == "invalid_token"
+    assert "bad signature" in log["error"]
+
+
+def test_google_auth_missing_claims_logs_details(
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ensure missing claims branch records claim names and hashed email."""
+
+    _stub_verifier(
+        monkeypatch,
+        lambda: {
+            "sub": "sub-789",
+            "email": "",
+            "name": None,
+            "hd": "example.com",
+        },
+    )
+
+    with caplog.at_level("WARNING"):
+        resp = test_client.post("/api/auth/google", json={"id_token": "valid"})
+    assert resp.status_code == 401
+
+    log_entries = _structlog_events(caplog, "google_auth_failed")
+    filtered = [entry for entry in log_entries if entry.get("reason") == "missing_claims"]
+    assert filtered, "expected missing_claims log entry"
+    log = filtered[-1]
+    assert log["missing_claims"] == ["email"]
+    assert log.get("email_hash") is None
 
 
 def test_protected_endpoint_requires_cookie(test_client: TestClient) -> None:
