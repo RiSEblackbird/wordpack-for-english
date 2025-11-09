@@ -51,7 +51,7 @@ def test_client(tmp_path, monkeypatch) -> TestClient:
 def _stub_verifier(monkeypatch: pytest.MonkeyPatch, factory: Callable[[], dict[str, str]]) -> None:
     from google.oauth2 import id_token
 
-    def _verify(token: str, request: object, audience: str) -> dict[str, str]:
+    def _verify(token: str, request: object, audience: str, **kwargs) -> dict[str, str]:
         assert audience == settings.google_client_id
         return factory()
 
@@ -143,7 +143,7 @@ def test_google_auth_invalid_signature(
 
     from google.oauth2 import id_token
 
-    def _raise(token: str, request: object, audience: str) -> dict[str, str]:
+    def _raise(token: str, request: object, audience: str, **kwargs) -> dict[str, str]:
         raise ValueError("bad signature")
 
     monkeypatch.setattr(id_token, "verify_oauth2_token", _raise)
@@ -219,3 +219,34 @@ def test_http_session_cookie_visible_for_document_cookie(
     # document.cookie で参照できる前提条件: CookieJar へ平文HTTPでも保存されていること
     session_cookie_value = test_client.cookies.get(settings.session_cookie_name)
     assert session_cookie_value
+
+
+def test_google_auth_passes_clock_skew_to_verifier(
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """設定した clock skew 秒数が verifier に渡されることを検証する。"""
+
+    # 設定を上書き
+    monkeypatch.setattr(settings, "google_clock_skew_seconds", 120)
+
+    from google.oauth2 import id_token
+
+    captured: dict[str, int] = {}
+
+    def _verify(token: str, request: object, audience: str, **kwargs) -> dict[str, str]:
+        # 呼び出し時に clock_skew_in_seconds が渡されることを確認
+        if "clock_skew_in_seconds" in kwargs:
+            captured["clock_skew_in_seconds"] = kwargs["clock_skew_in_seconds"]
+        return {
+            "sub": "sub-skew",
+            "email": "skew@example.com",
+            "name": "Skew OK",
+            "hd": "example.com",
+        }
+
+    monkeypatch.setattr(id_token, "verify_oauth2_token", _verify)
+
+    resp = test_client.post("/api/auth/google", json={"id_token": "valid"})
+    assert resp.status_code == 200
+    # google-auth が古い場合は kwargs が無視される可能性があるため存在チェック込み
+    assert captured.get("clock_skew_in_seconds") == 120

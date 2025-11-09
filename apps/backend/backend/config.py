@@ -26,6 +26,13 @@ class Settings(BaseSettings):
         default=None,
         description="Optional allowed Google Workspace domain / 許可するGoogle Workspaceドメイン",
     )
+    google_clock_skew_seconds: int = Field(
+        default=60,
+        description=(
+            "Allowed clock skew when verifying Google ID tokens (seconds) / "
+            "Google ID トークン検証時に許容する時計ずれ（秒）"
+        ),
+    )
     session_secret_key: str = Field(
         default="",
         description="Secret key for signing session cookies / セッションクッキー署名用シークレット",

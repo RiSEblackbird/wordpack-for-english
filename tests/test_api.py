@@ -271,7 +271,7 @@ def test_google_auth_logs_error_details(
     from fastapi.testclient import TestClient as LocalTestClient
     from google.oauth2 import id_token
 
-    def _raise(_: str, __: object, ___: str) -> dict[str, str]:
+    def _raise(_: str, __: object, ___: str, **____) -> dict[str, str]:
         raise ValueError("signature mismatch")
 
     monkeypatch.setattr(id_token, "verify_oauth2_token", _raise)

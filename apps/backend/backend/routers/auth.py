@@ -57,11 +57,21 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
         )
 
     try:
-        id_info = id_token.verify_oauth2_token(
-            payload.id_token,
-            _google_request,
-            settings.google_client_id,
-        )
+        # 許容する時計ずれ（nbf/iat/exp の境界緩和）。古い google-auth 互換のため TypeError 時は従来呼び出しにフォールバック。
+        _skew = max(0, int(getattr(settings, "google_clock_skew_seconds", 0) or 0))
+        try:
+            id_info = id_token.verify_oauth2_token(
+                payload.id_token,
+                _google_request,
+                settings.google_client_id,
+                clock_skew_in_seconds=_skew,
+            )
+        except TypeError:
+            id_info = id_token.verify_oauth2_token(
+                payload.id_token,
+                _google_request,
+                settings.google_client_id,
+            )
     except ValueError as exc:
         logger.warning(
             "google_auth_failed",
