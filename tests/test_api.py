@@ -252,15 +252,15 @@ def test_word_pack_study_progress_endpoint(client):
     assert r_checked.status_code == 200
     assert r_checked.json() == {"checked_only_count": 1, "learned_count": 0}
 
-    # 学習済みカウント（確認にも加算）
+    # 学習済みカウント（確認カウントは据え置き）
     r_learned = client.post(f"/api/word/packs/{pack_id}/study-progress", json={"kind": "learned"})
     assert r_learned.status_code == 200
-    assert r_learned.json() == {"checked_only_count": 2, "learned_count": 1}
+    assert r_learned.json() == {"checked_only_count": 1, "learned_count": 1}
 
     r_list2 = client.get("/api/word/packs")
     latest = next((it for it in r_list2.json().get("items", []) if it.get("id") == pack_id), None)
     assert latest
-    assert latest["checked_only_count"] == 2
+    assert latest["checked_only_count"] == 1
     assert latest["learned_count"] == 1
 
 
@@ -333,7 +333,7 @@ def test_example_study_progress_endpoint(client):
     r_learned = client.post(f"/api/word/examples/{example_id}/study-progress", json={"kind": "learned"})
     assert r_learned.status_code == 200
     body2 = r_learned.json()
-    assert body2["checked_only_count"] == 2
+    assert body2["checked_only_count"] == 1
     assert body2["learned_count"] == 1
 
 

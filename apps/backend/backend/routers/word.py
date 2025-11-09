@@ -356,9 +356,14 @@ async def update_word_pack_study_progress(
 ) -> WordPackStudyProgressResponse:
     """WordPack単位の確認/学習済みカウントを更新する。"""
 
-    checked_increment = 1
-    learned_increment = 0
-    if req.kind == "learned":
+    # kind に応じて加算対象を明示的に切り替える。
+    # - checked: 確認のみ。checked_only_count を +1、learned_count は変化なし。
+    # - learned: 学習完了。learned_count のみ +1。checked_only_count は「確認止まり」の回数を維持する。
+    if req.kind == "checked":
+        checked_increment = 1
+        learned_increment = 0
+    else:  # req.kind == "learned" のみ通過（Pydantic Literal で保証）
+        checked_increment = 0
         learned_increment = 1
     result = store.update_word_pack_study_progress(
         word_pack_id, checked_increment, learned_increment
@@ -724,9 +729,12 @@ async def update_example_study_progress(
 ) -> ExampleStudyProgressResponse:
     """例文単位の確認/学習済みカウントを更新する。"""
 
-    checked_increment = 1
-    learned_increment = 0
-    if req.kind == "learned":
+    # WordPack と同様に、確認操作と学習完了を明確に分離する。
+    if req.kind == "checked":
+        checked_increment = 1
+        learned_increment = 0
+    else:
+        checked_increment = 0
         learned_increment = 1
     result = store.update_example_study_progress(
         example_id, checked_increment, learned_increment
