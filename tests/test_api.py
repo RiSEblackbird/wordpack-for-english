@@ -1,6 +1,7 @@
 import json
 import sys
 import types
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -77,6 +78,13 @@ def _structlog_from_text(output: str, event: str) -> list[dict[str, str]]:
         if payload.get("event") == event:
             matches.append(payload)
     return matches
+
+
+def _assert_iso_utc(value: str) -> None:
+    """UTC タイムゾーン付き ISO8601 文字列であることを検証する補助。"""
+
+    parsed = datetime.fromisoformat(value)
+    assert parsed.tzinfo == UTC, "timestamp must be timezone-aware UTC"
 
 
 @pytest.fixture()
@@ -713,8 +721,12 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
     art_detail = r_get.json()
     assert art_detail.get("generation_category") == "Dev"
     assert art_detail.get("llm_model")
-    assert art_detail.get("generation_started_at")
-    assert art_detail.get("generation_completed_at")
+    started_at = art_detail.get("generation_started_at")
+    assert started_at
+    _assert_iso_utc(started_at)
+    completed_at = art_detail.get("generation_completed_at")
+    assert completed_at
+    _assert_iso_utc(completed_at)
     assert art_detail.get("generation_duration_ms") is not None
     assert art_detail.get("generation_duration_ms") >= 0
 
@@ -822,8 +834,8 @@ def test_article_import_includes_llm_metadata(monkeypatch, tmp_path):
     assert "reasoning.effort=focused" in data["llm_params"]
     assert "text.verbosity=medium" in data["llm_params"]
     # generation_category は明示指定していないため None のままでよい
-    assert data["generation_started_at"]
-    assert data["generation_completed_at"]
+    _assert_iso_utc(data["generation_started_at"])
+    _assert_iso_utc(data["generation_completed_at"])
     assert data["generation_duration_ms"] >= 0
 
     art_id = data["id"]
@@ -832,8 +844,8 @@ def test_article_import_includes_llm_metadata(monkeypatch, tmp_path):
     detail = r_get.json()
     assert detail["llm_model"] == "gpt-test-alpha"
     assert detail["llm_params"] == data["llm_params"]
-    assert detail["generation_started_at"]
-    assert detail["generation_completed_at"]
+    _assert_iso_utc(detail["generation_started_at"])
+    _assert_iso_utc(detail["generation_completed_at"])
     assert detail["generation_duration_ms"] >= 0
 
 def test_article_import_category_and_zero_duration(monkeypatch, tmp_path):
@@ -884,8 +896,12 @@ def test_article_import_category_and_zero_duration(monkeypatch, tmp_path):
     assert r_get.status_code == 200
     detail = r_get.json()
     assert detail.get("generation_category") == "Common"
-    assert detail.get("generation_started_at")
-    assert detail.get("generation_completed_at")
+    started_at = detail.get("generation_started_at")
+    assert started_at
+    _assert_iso_utc(started_at)
+    completed_at = detail.get("generation_completed_at")
+    assert completed_at
+    _assert_iso_utc(completed_at)
     assert detail.get("generation_duration_ms") is not None
 
 

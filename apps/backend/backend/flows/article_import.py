@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Optional, TypedDict
 
 from fastapi import HTTPException
@@ -591,7 +591,10 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 generation_category = getattr(cat, "value", None) or str(cat)
         except Exception:
             generation_category = None
-        generation_started_at = datetime.utcnow().isoformat()
+        # datetime.utcnow() は Python 3.12 で非推奨となったため、UTC タイムゾーンを明示
+        # 指定して aware datetime を記録する。これにより API 利用者がタイムゾーンを
+        # 推測する必要がなくなり、DeprecationWarning も解消される。
+        generation_started_at = datetime.now(UTC).isoformat()
 
         try:
             graph = create_state_graph()
@@ -867,7 +870,8 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                     ).strip()
                     or None
                 )
-                completed_at = datetime.utcnow().isoformat()
+                # 完了時刻も同様に UTC aware で保存し、計測の一貫性を維持する。
+                completed_at = datetime.now(UTC).isoformat()
                 s["generation_completed_at"] = completed_at
                 duration_ms = None
                 try:
