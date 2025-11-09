@@ -47,12 +47,12 @@ describe('SidebarPlaybackRateControl', () => {
     render(<SidebarPlaybackRateControl isSidebarOpen />);
     const select = screen.getByLabelText('音量');
     const user = userEvent.setup();
-    await user.selectOptions(select, '0.5');
+    await user.selectOptions(select, '3');
 
     expect(setSettingsMock).toHaveBeenCalledTimes(1);
     const updater = setSettingsMock.mock.calls[0][0] as (prev: Settings) => Settings;
     const next = updater(currentSettings);
-    expect(next.ttsVolume).toBe(0.5);
+    expect(next.ttsVolume).toBe(3);
   });
 
   it('disables select when sidebar is closed', () => {
