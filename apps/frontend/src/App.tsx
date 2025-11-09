@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useGoogleLogin, type TokenResponse, type NonOAuthError } from '@react-oauth/google';
+import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { flushSync } from 'react-dom';
 import { SettingsPanel } from './components/SettingsPanel';
 import { WordPackPanel } from './components/WordPackPanel';
@@ -32,7 +32,7 @@ const MAIN_MAX_WIDTH = 1000;
 const SIDEBAR_WIDTH = 280;
 const OAUTH_TELEMETRY_ENDPOINT = '/api/diagnostics/oauth-telemetry';
 
-const SENSITIVE_TOKEN_KEYS = new Set(['access_token', 'id_token', 'refresh_token', 'code']);
+const SENSITIVE_TELEMETRY_KEYS = new Set(['access_token', 'id_token', 'refresh_token', 'code', 'credential']);
 
 /**
  * トークンやメールアドレスなどの機微情報をマスクする。
@@ -55,12 +55,13 @@ const sanitizeEmailForTelemetry = (value: string): string => {
   return `${local.charAt(0)}***${local.charAt(local.length - 1)}@${domain}`;
 };
 
-const sanitizeTokenResponseForTelemetry = (
-  tokenResponse: TokenResponse & { id_token?: string },
-): Record<string, unknown> => {
-  return Object.entries(tokenResponse).reduce<Record<string, unknown>>((acc, [key, value]) => {
+const sanitizeTelemetryPayload = (payload: Record<string, unknown> | null | undefined): Record<string, unknown> => {
+  if (!payload) {
+    return {};
+  }
+  return Object.entries(payload).reduce<Record<string, unknown>>((acc, [key, value]) => {
     if (typeof value === 'string') {
-      if (SENSITIVE_TOKEN_KEYS.has(key)) {
+      if (SENSITIVE_TELEMETRY_KEYS.has(key)) {
         acc[key] = sanitizeSecretForTelemetry(value);
       } else if (value.includes('@')) {
         acc[key] = sanitizeEmailForTelemetry(value);
@@ -80,7 +81,7 @@ const sanitizeTokenResponseForTelemetry = (
  */
 const sendMissingIdTokenTelemetry = async (
   googleClientId: string,
-  tokenResponse: TokenResponse & { id_token?: string },
+  credentialResponse: CredentialResponse | null | undefined,
 ): Promise<void> => {
   if (typeof fetch !== 'function') {
     return;
@@ -93,7 +94,7 @@ const sendMissingIdTokenTelemetry = async (
         event: 'google_login_missing_id_token',
         googleClientId,
         errorCategory: 'missing_id_token',
-        tokenResponse: sanitizeTokenResponseForTelemetry(tokenResponse),
+        tokenResponse: sanitizeTelemetryPayload(credentialResponse as Record<string, unknown> | undefined),
       }),
     });
   } catch (error) {
@@ -597,6 +598,15 @@ const LoginScreen: React.FC = () => {
           opacity: 0.78;
           box-shadow: none;
         }
+        .login-google-button {
+          display: flex;
+          justify-content: center;
+        }
+        .login-google-button > div {
+          width: 100%;
+          display: flex;
+          justify-content: center;
+        }
         body.theme-dark .login-button {
           background: linear-gradient(135deg, rgba(96, 165, 250, 0.95), var(--color-accent, #60a5fa));
           border-color: rgba(148, 163, 184, 0.45);
@@ -704,15 +714,15 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
   signIn,
   googleClientId,
 }) => {
-  const handleTokenSuccess = async (tokenResponse: TokenResponse & { id_token?: string }) => {
+  const handleCredentialSuccess = async (credentialResponse: CredentialResponse) => {
     /**
-     * Google Identity Services の OAuth フローで得られたトークンレスポンスを精査する。
-     * なぜ: access_token のみではバックエンドがユーザーを特定できないため、必須の ID トークンを確認する。
+     * Google Identity Services から返却された credential（ID トークン）を検証に回す。
+     * なぜ: credential の欠落はバックエンドでユーザーを識別できない致命的な状態だから。
      */
-    const idToken = tokenResponse.id_token;
+    const idToken = credentialResponse?.credential;
     if (!idToken) {
-      console.warn('Google login succeeded without an ID token', tokenResponse);
-      void sendMissingIdTokenTelemetry(googleClientId, tokenResponse);
+      console.warn('Google login succeeded without an ID token', credentialResponse);
+      void sendMissingIdTokenTelemetry(googleClientId, credentialResponse);
       setLocalError('ID トークンを取得できませんでした。ブラウザを更新して再試行してください。');
       return;
     }
@@ -724,51 +734,19 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
     }
   };
 
-  const handleOAuthError = () => {
+  const handleCredentialError = () => {
     setLocalError('Google サインインでエラーが発生しました。時間を置いて再試行してください。');
   };
 
-  const handleNonOAuthError = (nonOAuthError: NonOAuthError) => {
-    console.error('Failed to initiate Google login flow due to a non-OAuth error', nonOAuthError);
-    setLocalError('Google サインインを開始できませんでした。ブラウザのポップアップ設定を確認してください。');
-  };
-
-  /**
-   * Google の OAuth ログインフローを開始するための関数を初期化する。
-   * 副作用: 認証スコープとエラーハンドリングを一元化し、保守メンバーが仕様差異を見落とさないようにする。
-   */
-  const startGoogleLogin = useGoogleLogin({
-    flow: 'implicit',
-    scope: 'openid email profile',
-    /**
-     * GIS から ID トークンを必ず受け取るよう明示する。
-     * なぜ: access_token のみではバックエンドがユーザーを識別できないため、implicit flow でも id_token を必須化する。
-     */
-    responseType: 'id_token token',
-    /**
-     * 共有端末などで前回のアカウントが保持されないようにする。
-     * なぜ: 誤ったアカウントでのログインを防ぎ、手動でのアカウント切替手順を簡素化する。
-     */
-    prompt: 'select_account',
-    onSuccess: handleTokenSuccess,
-    onError: handleOAuthError,
-    onNonOAuthError: handleNonOAuthError,
-  });
-
-  /**
-   * ログインボタン押下時に Google のポップアップを開く。
-   * 副作用: 直前のエラー表示をクリアし、新しいログインフローを開始する。
-   */
-  const handleLoginClick = () => {
+  const handleBeforeGoogleInteraction = () => {
     clearError();
     setLocalError(null);
-    try {
-      startGoogleLogin();
-    } catch (err) {
-      console.error('Failed to start Google login flow', err);
-      setLocalError('Google サインインを開始できませんでした。ブラウザのポップアップ設定を確認してください。');
-    }
   };
+
+  const googleButtonTheme =
+    typeof document !== 'undefined' && document.body.classList.contains('theme-dark')
+      ? 'filled_black'
+      : 'filled_blue';
 
   const combinedError = localError || error;
 
@@ -783,29 +761,26 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
             {combinedError}
           </div>
         ) : null}
-        {/* Googleのブランドカラーを示すアイコンを表示して、ボタンを視認しやすくする */}
-        <button
-          type="button"
-          className="login-button"
-          onClick={handleLoginClick}
-          disabled={isAuthenticating}
+        <div
+          className="login-google-button"
+          onClickCapture={handleBeforeGoogleInteraction}
+          style={{
+            pointerEvents: isAuthenticating ? 'none' : 'auto',
+            opacity: isAuthenticating ? 0.72 : 1,
+          }}
         >
-          <span className="login-button__icon" aria-hidden="true">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path d="M18.64 10.2045C18.64 9.56636 18.5827 8.95272 18.4764 8.36363H10V11.8454H14.92C14.7082 12.9704 14.0927 13.9236 13.1395 14.5636V16.9545H15.9564C17.6582 15.3636 18.64 12.9909 18.64 10.2045Z" fill="#4285F4" />
-              <path d="M10 19C12.43 19 14.4673 18.1945 15.9564 16.9545L13.1395 14.5636C12.3286 15.1064 11.2714 15.4318 10 15.4318C7.65547 15.4318 5.67184 13.8236 4.96475 11.6982H2.04285V14.1728C3.52284 17.1818 6.52284 19 10 19Z" fill="#34A853" />
-              <path d="M4.96474 11.6982C4.78474 11.1554 4.68293 10.5727 4.68293 9.97726C4.68293 9.38182 4.78474 8.79999 4.96474 8.25726V5.78272H2.04284C1.47556 6.90908 1.14284 8.20453 1.14284 9.57725C1.14284 10.95 1.47556 12.2454 2.04284 13.3718L4.96474 11.6982Z" fill="#FBBC05" />
-              <path d="M10 4.56818C11.3854 4.56818 12.6218 5.04545 13.5882 5.95909L16.0264 3.52091C14.4645 2.04545 12.4273 1.13636 10 1.13636C6.52284 1.13636 3.52284 2.95455 2.04285 5.78273L4.96475 8.25727C5.67184 6.13182 7.65547 4.56818 10 4.56818Z" fill="#EA4335" />
-            </svg>
-          </span>
-          <span className="login-button__label">Googleでログイン</span>
-        </button>
+          <GoogleLogin
+            onSuccess={handleCredentialSuccess}
+            onError={handleCredentialError}
+            useOneTap={false}
+            theme={googleButtonTheme as 'filled_black' | 'filled_blue'}
+            text="signin_with"
+            shape="pill"
+            width="320"
+            locale="ja"
+            context="signin"
+          />
+        </div>
         <p className="login-note">成功するとブラウザにセッションクッキーを保存します。</p>
         {isAuthenticating ? (
           <div className="login-progress">
