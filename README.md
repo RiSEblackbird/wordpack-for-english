@@ -56,8 +56,10 @@ cp env.example .env
 # GOOGLE_ALLOWED_HD=example.com
 # SESSION_SECRET_KEY=change-me-to-random-value
 # SESSION_COOKIE_NAME=wp_session
-# SESSION_COOKIE_SECURE=false  # ローカルHTTPでCookieを試す場合のみ
+# SESSION_COOKIE_SECURE=true  # 本番(HTTPS)のみ true。開発(HTTP)は既定で false なので設定不要
 ```
+
+ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。
 
 フロントエンド側でも同じクライアントIDを参照できるように、`apps/frontend/.env` を作成して Vite の環境変数を指定してください。
 

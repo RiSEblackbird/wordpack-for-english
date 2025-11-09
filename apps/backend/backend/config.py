@@ -1,4 +1,4 @@
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,7 +35,7 @@ class Settings(BaseSettings):
         description="Session cookie name / セッションクッキー名",
     )
     session_cookie_secure: bool = Field(
-        default=True,
+        default=False,
         description="Whether to mark session cookie as Secure / セッションクッキーにSecure属性を付与するか",
     )
     session_max_age_seconds: int = Field(
@@ -168,6 +168,23 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
+
+
+    @model_validator(mode="after")
+    def _apply_environment_sensitive_defaults(self) -> "Settings":
+        """Harmonise environment defaults without overriding explicit choices.
+
+        なぜ: ローカル開発環境（HTTPアクセスが多い）で Secure 属性が有効だと
+        document.cookie からセッション Cookie を参照できずログイン検証が失敗する。
+        ENVIRONMENT=production のときだけ Secure を既定で有効化し、環境変数や
+        テストから明示的に設定された値は上書きしない。
+        """
+
+        environment_name = (self.environment or "").lower()
+        is_secure_explicitly_configured = "session_cookie_secure" in self.model_fields_set
+        if environment_name == "production" and not is_secure_explicitly_configured:
+            self.session_cookie_secure = True
+        return self
 
 
 settings = Settings()

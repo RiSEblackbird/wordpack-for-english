@@ -4,11 +4,6 @@ from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import Callable
 
-from http.cookies import SimpleCookie
-from http.cookies import SimpleCookie
-from pathlib import Path
-from typing import Callable
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -42,8 +37,6 @@ def test_client(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setattr(settings, "google_client_id", "test-client-id")
     monkeypatch.setattr(settings, "google_allowed_hd", "example.com")
     monkeypatch.setattr(settings, "session_secret_key", "super-secret-key")
-    monkeypatch.setattr(settings, "session_cookie_name", "wp_session_test")
-    monkeypatch.setattr(settings, "session_cookie_secure", False)
     monkeypatch.setattr(settings, "session_max_age_seconds", 3600)
     monkeypatch.setattr(settings, "strict_mode", False)
 
@@ -133,3 +126,29 @@ def test_protected_endpoint_requires_cookie(test_client: TestClient) -> None:
     test_client.cookies.clear()
     resp = test_client.get("/api/word/")
     assert resp.status_code == 401
+
+
+def test_http_session_cookie_visible_for_document_cookie(
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HTTP ローカル環境でも document.cookie から wp_session を参照できることを保証する。"""
+
+    _stub_verifier(
+        monkeypatch,
+        lambda: {
+            "sub": "sub-http",
+            "email": "document@example.com",
+            "name": "Doc Cookie",
+            "hd": "example.com",
+        },
+    )
+
+    login_response = test_client.post("/api/auth/google", json={"id_token": "valid"})
+    assert login_response.status_code == 200
+
+    set_cookie_header = login_response.headers["set-cookie"]
+    assert "Secure" not in set_cookie_header
+
+    # document.cookie で参照できる前提条件: CookieJar へ平文HTTPでも保存されていること
+    session_cookie_value = test_client.cookies.get(settings.session_cookie_name)
+    assert session_cookie_value
