@@ -157,4 +157,65 @@ describe('TTSButton', () => {
     expect(audioInstances[0].playbackRate).toBeCloseTo(1.75);
     expect(audioInstances[0].volume).toBeCloseTo(0.4);
   });
+
+  it('supports boosted volume selection up to 300 percent', async () => {
+    const playMock = vi.fn().mockResolvedValue(undefined);
+    const audioInstances: Array<{ playbackRate: number; onended: (() => void) | null; onerror: (() => void) | null; volume: number }> = [];
+    const audioCtor = vi.fn().mockImplementation(() => {
+      const instance: any = {
+        play: playMock,
+        onended: null as (() => void) | null,
+        onerror: null as (() => void) | null,
+        get playbackRate() {
+          return this._rate ?? 1;
+        },
+        set playbackRate(value: number) {
+          this._rate = value;
+        },
+        _rate: 1,
+        get volume() {
+          return this._volume ?? 1;
+        },
+        set volume(value: number) {
+          this._volume = value;
+        },
+        _volume: 1,
+      };
+      audioInstances.push(instance);
+      return instance;
+    });
+    (global as any).Audio = audioCtor;
+    URL.createObjectURL = vi.fn().mockReturnValue('blob:mock-url');
+    URL.revokeObjectURL = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(new Response('audio-data', { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const settingsSpy = vi.spyOn(SettingsContext, 'useSettings').mockReturnValue({
+      settings: {
+        apiBase: '/api',
+        pronunciationEnabled: true,
+        regenerateScope: 'all',
+        autoAdvanceAfterGrade: false,
+        requestTimeoutMs: 360000,
+        model: 'gpt-5-mini',
+        temperature: 0.6,
+        reasoningEffort: 'minimal',
+        textVerbosity: 'medium',
+        theme: 'dark',
+        ttsPlaybackRate: 1,
+        ttsVolume: 2.5,
+      },
+      setSettings: vi.fn(),
+    });
+
+    render(<TTSButton text="Boosted" />);
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '音声' }));
+    });
+
+    expect(settingsSpy).toHaveBeenCalled();
+    await waitFor(() => expect(playMock).toHaveBeenCalled());
+    expect(audioInstances[0].volume).toBeCloseTo(2.5);
+  });
 });

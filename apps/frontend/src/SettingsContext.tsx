@@ -68,7 +68,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     })();
     const normalizedTtsVolume = (() => {
       if (!savedTtsVolume && savedTtsVolume !== 0) return 1;
-      return Math.min(1, Math.max(0, savedTtsVolume));
+      return Math.min(3, Math.max(0, savedTtsVolume));
     })();
     return {
       apiBase: '/api',
@@ -187,7 +187,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     try { localStorage.setItem('wp.ttsPlaybackRate', String(settings.ttsPlaybackRate)); } catch { /* ignore */ }
   }, [settings.ttsPlaybackRate]);
-  // 音量の永続化。音量0〜1の範囲を維持し、音量メニューとAudio APIのブリッジを担保する。
+  // 音量の永続化。音量0〜3の範囲を維持し、音量メニューとAudio APIのブリッジを担保する。
   useEffect(() => {
     try { localStorage.setItem('wp.ttsVolume', String(settings.ttsVolume)); } catch { /* ignore */ }
   }, [settings.ttsVolume]);

@@ -2,8 +2,22 @@ import React, { useCallback } from 'react';
 import { useSettings } from '../SettingsContext';
 
 const PLAYBACK_RATE_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-// 音量の候補は 0〜100% を 25% 刻みで用意し、音量選択メニューの期待動作を固定化する。
-const VOLUME_OPTIONS = [0, 0.25, 0.5, 0.75, 1];
+// 音量の候補は 0〜300% を 25% 刻みで網羅し、ユーザーの細かな調整要求に応える。
+const VOLUME_OPTIONS = [
+  0,
+  0.25,
+  0.5,
+  0.75,
+  1,
+  1.25,
+  1.5,
+  1.75,
+  2,
+  2.25,
+  2.5,
+  2.75,
+  3,
+];
 
 type Props = {
   isSidebarOpen: boolean;
@@ -28,7 +42,8 @@ export const SidebarPlaybackRateControl: React.FC<Props> = ({ isSidebarOpen }) =
   const handleVolumeChange = useCallback(
     (event: React.ChangeEvent<HTMLSelectElement>) => {
       const parsed = Number(event.target.value);
-      const clamped = Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 1;
+      // UIから渡される値を0〜3の範囲へ正規化し、アプリ全体で一貫した音量倍率を共有する。
+      const clamped = Number.isFinite(parsed) ? Math.min(3, Math.max(0, parsed)) : 1;
       setSettings((prev) => ({ ...prev, ttsVolume: clamped }));
     },
     [setSettings],
@@ -69,7 +84,7 @@ export const SidebarPlaybackRateControl: React.FC<Props> = ({ isSidebarOpen }) =
             </option>
           ))}
         </select>
-        <small id="sidebar-tts-volume-help">0%（ミュート）〜100%まで音量を即座に変更できます。</small>
+        <small id="sidebar-tts-volume-help">0%（ミュート）〜300%まで音量を即座に変更できます。</small>
       </div>
     </section>
   );

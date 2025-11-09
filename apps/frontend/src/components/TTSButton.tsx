@@ -20,7 +20,8 @@ export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
       contextPlaybackRate = Math.min(2, Math.max(0.5, settings.ttsPlaybackRate));
     }
     if (typeof settings.ttsVolume === 'number' && Number.isFinite(settings.ttsVolume)) {
-      contextVolume = Math.min(1, Math.max(0, settings.ttsVolume));
+      // サイドバーで設定した音量倍率を0〜3へ丸め込み、ボリューム共有の破綻を防ぐ。
+      contextVolume = Math.min(3, Math.max(0, settings.ttsVolume));
     }
   } catch (err) {
     contextApiBase = undefined;
@@ -53,7 +54,36 @@ export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
       const audio = new Audio(url);
       // UIで指定された再生速度と音量をAudioインスタンスに反映させ、設定の即時性を担保する。
       audio.playbackRate = contextPlaybackRate;
-      audio.volume = contextVolume;
+      const normalizedVolume = Math.min(3, Math.max(0, contextVolume));
+      if (normalizedVolume <= 1) {
+        audio.volume = normalizedVolume;
+      } else if (
+        typeof AudioContext !== 'undefined' &&
+        typeof HTMLMediaElement !== 'undefined' &&
+        audio instanceof HTMLMediaElement
+      ) {
+        // 300%までの増幅を実現するため、Web Audio API の GainNode で音量を拡張する。
+        audio.volume = 1;
+        try {
+          const audioContext = new AudioContext();
+          const source = audioContext.createMediaElementSource(audio);
+          const gainNode = audioContext.createGain();
+          gainNode.gain.value = normalizedVolume;
+          source.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          const closeContext = () => {
+            audioContext.close().catch(() => {
+              // close失敗はユーザー操作に影響しないため握りつぶす。
+            });
+          };
+          audio.addEventListener('ended', closeContext, { once: true });
+          audio.addEventListener('error', closeContext, { once: true });
+        } catch (err) {
+          audio.volume = normalizedVolume;
+        }
+      } else {
+        audio.volume = normalizedVolume;
+      }
       audio.onended = () => {
         URL.revokeObjectURL(url);
       };
