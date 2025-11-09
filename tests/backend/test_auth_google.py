@@ -83,7 +83,11 @@ def _structlog_events(caplog: pytest.LogCaptureFixture, event: str) -> list[dict
     return matches
 
 
-def test_google_auth_success_flow(test_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_google_auth_success_flow(
+    test_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Successful Google sign-in returns cookie and allows protected access."""
 
     _stub_verifier(
@@ -96,7 +100,8 @@ def test_google_auth_success_flow(test_client: TestClient, monkeypatch: pytest.M
         },
     )
 
-    login_response = test_client.post("/api/auth/google", json={"id_token": "valid"})
+    with caplog.at_level("INFO"):
+        login_response = test_client.post("/api/auth/google", json={"id_token": "valid"})
     assert login_response.status_code == 200
     body = login_response.json()
     assert body["user"]["google_sub"] == "sub-123"
@@ -110,6 +115,17 @@ def test_google_auth_success_flow(test_client: TestClient, monkeypatch: pytest.M
     assert protected.status_code in {200, 501}
     # Both 200 (non-strict) and 501 (strict placeholder) imply auth succeeded; ensure not 401.
     assert protected.status_code != 401
+
+    log_entries = _structlog_events(caplog, "google_auth_succeeded")
+    assert log_entries, "expected google_auth_succeeded log entry"
+    latest = log_entries[-1]
+    assert latest["reason"] == "authenticated"
+    expected_hash = hashlib.sha256("user@example.com".lower().encode("utf-8")).hexdigest()[:12]
+    assert latest["email_hash"] == expected_hash
+    assert "email" not in latest
+    expected_display_hash = hashlib.sha256("Example User".lower().encode("utf-8")).hexdigest()[:12]
+    assert latest["display_name_hash"] == expected_display_hash
+    assert "display_name" not in latest
 
 
 def test_google_auth_rejects_wrong_domain(

@@ -152,12 +152,8 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
     )
     request.state.user = user
     request.state.user_id = google_sub
-    logger.info(
-        "google_auth_succeeded",
-        user_id=google_sub,
-        reason="authenticated",
-        email=email,
-    )
+    # 成功ログは個人情報を直接出力しないよう `_log_google_auth_success` へ委譲する。
+    _log_google_auth_success(google_sub, email, display_name)
     return response
 
 
@@ -180,3 +176,24 @@ def _hash_for_log(value: str | None) -> str | None:
     # 該当アカウントを特定できる粒度を残しつつ漏洩リスクを抑える意図。
     digest = hashlib.sha256(value.lower().encode("utf-8")).hexdigest()
     return digest[:12]
+
+
+def _log_google_auth_success(
+    user_id: str,
+    email: str | None,
+    display_name: str | None,
+) -> None:
+    """Log sanitized Google auth success events for Cloud Logging compliance.
+
+    新規メンバーでも誤って平文の識別子を記録しないよう、この関数経由で
+    ログを出力する。必要なときは `_hash_for_log` を再利用して display_name も
+    ハッシュ化する方針を徹底する。
+    """
+
+    logger.info(
+        "google_auth_succeeded",
+        user_id=user_id,
+        reason="authenticated",
+        email_hash=_hash_for_log(email),
+        display_name_hash=_hash_for_log(display_name),
+    )
