@@ -1,3 +1,5 @@
+"""Flow 基盤ユーティリティ。backend.providers の新構成と連携する。"""
+
 from typing import Any
 
 # 共通: LangGraph の StateGraph をインポート（テスト用スタブにも対応）

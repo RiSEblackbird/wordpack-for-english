@@ -1,6 +1,8 @@
 import json
 import uuid
 from datetime import datetime
+"""Word エンドポイント。backend.providers パッケージ経由で LLM を取得する。"""
+
 from functools import partial
 from typing import Any, Callable, Mapping, Optional
 
@@ -45,7 +47,11 @@ def _get_override_value(source: object, key: str) -> Any:
 
 
 def build_llm_info(overrides: object) -> dict[str, Any]:
-    """LLM の使用モデル名と主要パラメータを抽出する。"""
+    """LLM の使用モデル名と主要パラメータを抽出する。
+
+    backend.providers の階層化後も API 利用者に返す情報形式を変えないため、
+    ここで辞書化してメタ情報を統一している。
+    """
 
     # なぜ: LLM オプションを追加するたびに各エンドポイントへ重複修正が波及するのを防ぐため、
     #       build_llm_info でメタ情報の組み立てを一元化している。将来オプションが増えたら
@@ -193,7 +199,11 @@ async def run_wordpack_flow(
     scope: Any,
     http_error_mapping: Mapping[str, Callable[..., HTTPException]] | None = None,
 ) -> tuple[WordPack, dict[str, Any]]:
-    """WordPackFlow を構築して実行し、生成結果と LLM メタを返す。"""
+    """WordPackFlow を構築して実行し、生成結果と LLM メタを返す。
+
+    backend.providers の LLM パッケージ化に伴い、ここで `get_llm_provider` を
+    呼び出してから Flow へ依存性注入する設計にそろえている。
+    """
 
     # なぜ: Flow 実行・例外分類・LLM メタ設定を単一関数にまとめておくことで、
     #       将来の流用時に1箇所の修正で全エンドポイントへ反映できるようにする。

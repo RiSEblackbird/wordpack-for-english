@@ -1,4 +1,5 @@
 from __future__ import annotations
+"""記事インポート Flow。backend.providers の分割後 API を利用する。"""
 
 import json
 import uuid
@@ -564,6 +565,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
             reasoning_override=getattr(req, "reasoning", None),
             text_override=getattr(req, "text_opts", None),
         )
+        # backend.providers パッケージから取得した LLM を Flow 内で共有する。
 
         # UI/契約と整合する LLM パラメータ表示用の簡易連結
         def _fmt_llm_params() -> str | None:
