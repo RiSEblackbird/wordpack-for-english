@@ -39,6 +39,9 @@ __pycache__/
 # Test artifacts
 .coverage
 
+# Runtime diagnostics logs (may contain telemetry/PII)
+*.log
+
 # App runtime data
 .data/
 

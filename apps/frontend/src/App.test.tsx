@@ -272,6 +272,51 @@ describe('App navigation', () => {
     ).toBe(false);
   });
 
+  it('reports telemetry when Google login succeeds without an ID token', async () => {
+    const telemetryCalls: Array<{ url: string; init?: RequestInit }> = [];
+    fetchMock.mockImplementation((input, init) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(configSuccess());
+      }
+      if (url.endsWith('/api/diagnostics/oauth-telemetry')) {
+        telemetryCalls.push({ url, init });
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      return Promise.resolve(
+        new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      );
+    });
+
+    renderWithProviders();
+
+    const user = userEvent.setup();
+    const loginButton = await screen.findByRole('button', { name: 'Googleでログイン' });
+    await act(async () => {
+      await user.click(loginButton);
+    });
+
+    await waitFor(() => {
+      expect(telemetryCalls).toHaveLength(1);
+    });
+
+    const { init } = telemetryCalls[0];
+    expect(init?.method).toBe('POST');
+    expect(init?.headers).toMatchObject({ 'Content-Type': 'application/json' });
+    const body = JSON.parse((init?.body as string) ?? '{}');
+    expect(body).toMatchObject({
+      event: 'google_login_missing_id_token',
+      googleClientId: 'test-client',
+      errorCategory: 'missing_id_token',
+    });
+    expect(body.tokenResponse).toBeDefined();
+    expect(body.tokenResponse.access_token).not.toBe('mock-access-token');
+
+    expect(
+      await screen.findByText('ID トークンを取得できませんでした。ブラウザを更新して再試行してください。'),
+    ).toBeInTheDocument();
+  });
+
   it('surfaces the default error message when Google signals a failure', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     googleLoginController.setImplementation(({ onError }) => {

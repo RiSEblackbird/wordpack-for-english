@@ -30,6 +30,7 @@ interface AuthContextValue {
   clearError: () => void;
   authBypassActive: boolean;
   missingClientId: boolean;
+  googleClientId: string;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -249,6 +250,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       clearError,
       authBypassActive,
       missingClientId,
+      googleClientId: clientIdRef.current,
     }),
     [
       user,
@@ -260,6 +262,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       clearError,
       authBypassActive,
       missingClientId,
+      normalizedClientId,
     ],
   );
 
