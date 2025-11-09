@@ -111,6 +111,7 @@ docker compose up --build
 - フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。
 - 「Googleでログイン」ボタンは Google Identity Services の `GoogleLogin` コンポーネントを用いており、承認後に `credential`（ID トークン）を取得して `/api/auth/google` へ送信し、セッション Cookie を受け取ります。credential が欠落した場合は直ちにエラー帯を表示し、`/api/diagnostics/oauth-telemetry` へ状況を送信して原因調査に活用します。
 - バックエンド側で `ADMIN_EMAIL_ALLOWLIST` を設定している場合、リストに含まれないメールアドレスは検証後でも即座に 403 となり、構造化ログには `google_auth_denied` / `email_not_allowlisted` が記録されます。利用者を追加したい場合はリストへメールアドレスを追記して再起動してください。
+- バックエンドの構造化ログでは `google_auth_succeeded` を含むすべての Google 認証イベントで `email_hash`（および `display_name_hash`）が記録され、平文のメールアドレスや表示名は Cloud Logging へ送出されません。調査時はハッシュ値で突き合わせてください。
 - ポップアップは locale=ja で描画され、共有端末でも毎回アカウント選択ダイアログが表示されます。別アカウントでログインしたい場合は表示されたポップアップで希望のアカウントを選択してください。選択後の動作は従来どおり `/api/auth/google` の検証とセッションクッキー付与で完結します。
 - ヘッダー右側の「ログアウト」ボタン、または「設定」タブ下部の「ログアウト（Google セッションを終了）」ボタンから明示的にサインアウトできます。ログアウト時は `/api/auth/logout` へ通知した上でセッション Cookie を削除し、再びサインイン画面へ戻ります。
 - 既存のセッション Cookie が有効な状態でリロードした場合は、ローカルに保存されたユーザー情報を使って自動的に復元されます（Cookie が無効化されている場合は再ログインが必要です）。
