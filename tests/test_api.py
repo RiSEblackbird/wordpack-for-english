@@ -204,11 +204,24 @@ def test_word_pack_sanitizes_english_sense_title(
 
 
 def test_word_pack_llm_model_updates_on_generate_and_regenerate(client):
-    # 1) 生成時に model を上書きし、llm_model に反映されること
-    r_gen = client.post("/api/word/pack", json={"lemma": "alpha", "model": "gpt-4o-mini", "temperature": 0.5})
+    # 1) 生成時に model/パラメータを上書きし、llm_model と llm_params に反映されること
+    r_gen = client.post(
+        "/api/word/pack",
+        json={
+            "lemma": "alpha",
+            "model": "gpt-4o-mini",
+            "temperature": 0.5,
+            "reasoning": {"effort": "medium"},
+            "text": {"verbosity": "low"},
+        },
+    )
     assert r_gen.status_code == 200
     wp = r_gen.json()
     assert wp.get("llm_model") == "gpt-4o-mini"
+    assert wp.get("llm_params")
+    assert "temperature=0.50" in wp["llm_params"]
+    assert "reasoning.effort=medium" in wp["llm_params"]
+    assert "text.verbosity=low" in wp["llm_params"]
     assert isinstance(wp.get("sense_title"), str) and wp["sense_title"].strip()
     # 2) 保存済み一覧から ID を取得
     r_list = client.get("/api/word/packs")
@@ -216,20 +229,125 @@ def test_word_pack_llm_model_updates_on_generate_and_regenerate(client):
     items = r_list.json().get("items", [])
     pack_id = next((it["id"] for it in items if it.get("lemma") == "alpha"), None)
     assert pack_id, "generated pack not found"
+    r_detail = client.get(f"/api/word/packs/{pack_id}")
+    assert r_detail.status_code == 200
+    detail_before = r_detail.json()
+    assert detail_before.get("llm_params") == wp.get("llm_params")
     # 3) 再生成で model を別値に上書きし、llm_model が更新されること
     r_regen = client.post(f"/api/word/packs/{pack_id}/regenerate", json={
         "pronunciation_enabled": True,
         "regenerate_scope": "all",
         "model": "gpt-5-nano",
+        "temperature": 0.3,
         "reasoning": {"effort": "minimal"},
         "text": {"verbosity": "medium"},
     })
     assert r_regen.status_code == 200
     wp2 = r_regen.json()
     assert wp2.get("llm_model") == "gpt-5-nano"
+    assert wp2.get("llm_params")
+    assert "temperature=0.30" in wp2["llm_params"]
+    assert "reasoning.effort=minimal" in wp2["llm_params"]
+    assert "text.verbosity=medium" in wp2["llm_params"]
     assert isinstance(wp2.get("sense_title"), str) and wp2["sense_title"].strip()
+    r_detail_after = client.get(f"/api/word/packs/{pack_id}")
+    assert r_detail_after.status_code == 200
+    detail_after = r_detail_after.json()
+    assert detail_after.get("llm_params") == wp2.get("llm_params")
 
 
+def test_generate_examples_uses_llm_meta(client, monkeypatch):
+    """例文生成APIがLLMメタ情報をレスポンスおよび保存内容へ反映することを検証する。"""
+
+    from backend.store import store as backend_store
+    from backend.models.word import (
+        WordPack,
+        Pronunciation,
+        Collocations,
+        Examples,
+        Etymology,
+        ExampleCategory,
+    )
+    from backend.flows.word_pack import WordPackFlow
+
+    pack = WordPack(
+        lemma="gamma",
+        sense_title="ガンマ",
+        pronunciation=Pronunciation(
+            ipa_GA=None,
+            ipa_RP=None,
+            syllables=None,
+            stress_index=None,
+            linking_notes=[],
+        ),
+        senses=[],
+        collocations=Collocations(),
+        contrast=[],
+        examples=Examples(),
+        etymology=Etymology(note="-", confidence="low"),
+        study_card="",
+        citations=[],
+        confidence="low",
+    )
+    pack_id = "wp:gamma:meta"
+    backend_store.save_word_pack(pack_id, "gamma", pack.model_dump_json())
+
+    examples_cls = Examples
+
+    def _fake_generate(self, lemma: str, plan: dict[ExampleCategory, int]):
+        cat = next(iter(plan.keys()))
+        model_name = self._llm_info.get("model")
+        params = self._llm_info.get("params")
+        return {
+            cat: [
+                examples_cls.ExampleItem(
+                    en="Stub example 1.",
+                    ja="スタブ例文1。",
+                    grammar_ja=None,
+                    category=cat,
+                    llm_model=model_name,
+                    llm_params=params,
+                ),
+                examples_cls.ExampleItem(
+                    en="Stub example 2.",
+                    ja="スタブ例文2。",
+                    grammar_ja=None,
+                    category=cat,
+                    llm_model=model_name,
+                    llm_params=params,
+                ),
+            ]
+        }
+
+    monkeypatch.setattr(WordPackFlow, "generate_examples_for_categories", _fake_generate, raising=False)
+
+    resp = client.post(
+        f"/api/word/packs/{pack_id}/examples/Dev/generate",
+        json={
+            "model": "gpt-example-mini",
+            "temperature": 0.25,
+            "reasoning": {"effort": "low"},
+            "text": {"verbosity": "medium"},
+        },
+    )
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["category"] == "Dev"
+    assert payload.get("added") == 2
+    assert payload["items"]
+    first = payload["items"][0]
+    assert first["llm_model"] == "gpt-example-mini"
+    assert "temperature=0.25" in first["llm_params"]
+    assert "reasoning.effort=low" in first["llm_params"]
+    assert "text.verbosity=medium" in first["llm_params"]
+
+    r_detail = client.get(f"/api/word/packs/{pack_id}")
+    assert r_detail.status_code == 200
+    detail = r_detail.json()
+    examples = detail.get("examples", {}).get("Dev", [])
+    assert len(examples) >= 2
+    assert examples[-1]["llm_model"] == "gpt-example-mini"
+    assert "temperature=0.25" in examples[-1]["llm_params"]
 def test_word_lookup(client):
     resp = client.get("/api/word")
     assert resp.status_code == 200
