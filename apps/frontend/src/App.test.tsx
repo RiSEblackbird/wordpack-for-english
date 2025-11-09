@@ -208,6 +208,7 @@ describe('App navigation', () => {
     await completeLogin(fetchMock, user);
 
     expect(await screen.findByRole('heading', { name: 'WordPack' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ログアウト' })).toBeInTheDocument();
     const authCall = fetchMock.mock.calls.find(([input]) =>
       resolveUrl(input).endsWith('/api/auth/google'),
     );
@@ -554,28 +555,22 @@ describe('App navigation', () => {
     expect(computed.alignContent === 'flex-start' || computed.alignContent === '').toBe(true);
   });
 
-  it('returns to the login screen when signing out', async () => {
+  it('returns to the login screen when signing out via the header control', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     renderWithProviders();
 
     const user = userEvent.setup();
     await completeLogin(fetchMock, user);
 
-    const openMenu = await screen.findByRole('button', { name: 'メニューを開く' });
-    await act(async () => {
-      await user.click(openMenu);
-    });
-
-    const settingsTab = await screen.findByRole('button', { name: '設定' });
-    await act(async () => {
-      await user.click(settingsTab);
-    });
-
-    const logoutButton = await screen.findByRole('button', { name: 'ログアウト（Google セッションを終了）' });
+    const logoutButton = await screen.findByRole('button', { name: 'ログアウト' });
     await act(async () => {
       await user.click(logoutButton);
     });
 
     expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
+    const logoutCalls = fetchMock.mock.calls.filter(([input]) =>
+      resolveUrl(input).endsWith('/api/auth/logout'),
+    );
+    expect(logoutCalls).toHaveLength(1);
   });
 });
