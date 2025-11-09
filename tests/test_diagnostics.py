@@ -44,20 +44,21 @@ def test_oauth_telemetry_masks_sensitive_fields(
     response = diagnostics_client.post("/api/diagnostics/oauth-telemetry", json=payload)
 
     assert response.status_code == 204
-    lines = [ln for ln in caplog.text.splitlines() if ln.strip()]
-    telemetry_line = next(
-        (
-            ln
-            for ln in lines
-            if ln.strip().startswith("{") and "google_login_missing_id_token" in ln
-        ),
-        None,
-    )
-    assert telemetry_line is not None, "expected warning log not emitted"
+    telemetry_entry = None
+    for record in caplog.records:
+        message = record.getMessage()
+        try:
+            parsed = json.loads(message)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if parsed.get("event") == "google_login_missing_id_token":
+            telemetry_entry = parsed
+            break
 
-    parsed = json.loads(telemetry_line)
-    token_response = parsed.get("token_response", {})
+    assert telemetry_entry is not None, "expected warning log not emitted"
+
+    token_response = telemetry_entry.get("token_response", {})
     assert token_response.get("access_token") != "mock-access-token"
     assert "user@example.com" not in json.dumps(token_response)
-    assert parsed.get("google_client_id") == "frontend-client"
-    assert parsed.get("error_category") == "missing_id_token"
+    assert telemetry_entry.get("google_client_id") == "frontend-client"
+    assert telemetry_entry.get("error_category") == "missing_id_token"
