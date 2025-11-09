@@ -1,4 +1,4 @@
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +31,13 @@ class Settings(BaseSettings):
         description=(
             "Allowed clock skew when verifying Google ID tokens (seconds) / "
             "Google ID トークン検証時に許容する時計ずれ（秒）"
+        ),
+    )
+    admin_email_allowlist: tuple[str, ...] = Field(
+        default=(),
+        description=(
+            "Email addresses allowed to sign in when restrict mode is enabled / "
+            "ログインを許可するメールアドレス一覧（制限有効時に使用）"
         ),
     )
     session_secret_key: str = Field(
@@ -177,6 +184,39 @@ class Settings(BaseSettings):
     )
 
 
+    @field_validator("admin_email_allowlist", mode="before")
+    @classmethod
+    def _normalise_admin_allowlist(
+        cls, raw_allowlist: object
+    ) -> tuple[str, ...] | object:  # pragma: no cover - pydantic handles typing
+        """Normalise allowlist values before model parsing.
+
+        文字列/シーケンスのいずれでも受け取り、重複排除・小文字化したタプルへ変換する。
+        """
+
+        if raw_allowlist is None:
+            candidates: list[str] = []
+        elif isinstance(raw_allowlist, str):
+            candidates = raw_allowlist.split(",")
+        else:
+            try:
+                candidates = list(raw_allowlist)
+            except TypeError:
+                return raw_allowlist
+
+        normalised: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+            trimmed = candidate.strip().lower()
+            if not trimmed or trimmed in seen:
+                continue
+            seen.add(trimmed)
+            normalised.append(trimmed)
+
+        return tuple(normalised)
+
     @model_validator(mode="after")
     def _apply_environment_sensitive_defaults(self) -> "Settings":
         """Harmonise environment defaults without overriding explicit choices.
@@ -191,6 +231,7 @@ class Settings(BaseSettings):
         is_secure_explicitly_configured = "session_cookie_secure" in self.model_fields_set
         if environment_name == "production" and not is_secure_explicitly_configured:
             self.session_cookie_secure = True
+
         return self
 
 

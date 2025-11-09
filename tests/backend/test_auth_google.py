@@ -42,6 +42,11 @@ def test_client(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setattr(settings, "session_max_age_seconds", 3600)
     monkeypatch.setattr(settings, "strict_mode", False)
     monkeypatch.setattr(settings, "disable_session_auth", False)
+    monkeypatch.setattr(
+        settings,
+        "admin_email_allowlist",
+        ("user@example.com", "document@example.com", "skew@example.com"),
+    )
 
     # Recreate the app after patching shared modules to ensure new dependencies are wired.
     app = create_app()
@@ -134,6 +139,38 @@ def test_google_auth_rejects_wrong_domain(
     assert log["allowed_domain"] == "example.com"
     expected_hash = hashlib.sha256("user@other.com".lower().encode("utf-8")).hexdigest()[:12]
     assert log["email_hash"] == expected_hash
+
+
+def test_google_auth_rejects_email_not_allowlisted(
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Emails outside ADMIN_EMAIL_ALLOWLIST must be denied even if the domain matches."""
+
+    monkeypatch.setattr(settings, "admin_email_allowlist", ("admin@example.com",))
+
+    _stub_verifier(
+        monkeypatch,
+        lambda: {
+            "sub": "sub-allowlist-deny",
+            "email": "user@example.com",
+            "name": "Outside Allowlist",
+            "hd": "example.com",
+        },
+    )
+
+    with caplog.at_level("WARNING"):
+        resp = test_client.post("/api/auth/google", json={"id_token": "valid"})
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "Google account email is not allowlisted"
+
+    log_entries = _structlog_events(caplog, "google_auth_denied")
+    matching = [entry for entry in log_entries if entry.get("reason") == "email_not_allowlisted"]
+    assert matching, "expected email_not_allowlisted log entry"
+    latest = matching[-1]
+    assert latest["allowlist_size"] == 1
+    assert latest["hosted_domain"] == "example.com"
+    expected_hash = hashlib.sha256("user@example.com".lower().encode("utf-8")).hexdigest()[:12]
+    assert latest["email_hash"] == expected_hash
 
 
 def test_google_auth_invalid_signature(

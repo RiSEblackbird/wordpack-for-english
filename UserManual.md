@@ -23,6 +23,7 @@
 ### A-2-1. サインインとサインアウト
 - 最初にアクセスすると Google アカウントのサインイン画面が表示されます。
 - 「Googleでログイン」ボタンを押すとポップアップが開き、認証に成功すると自動的にアプリ本体へ遷移します。
+- 管理者が `ADMIN_EMAIL_ALLOWLIST` を設定している場合、許可リストに載っていないメールアドレスでログインしようとすると「403 Forbidden」と表示されます。別アカウントを利用するか、管理者に連絡してリストへ登録してもらってください。
 - ログアウトしたい場合は画面右上の「ログアウト」ボタンを押すか、「設定」タブ最下部の「ログアウト（Google セッションを終了）」ボタンを押してください。押下と同時にセッション Cookie が破棄され、再びサインイン画面へ戻ります。
 - ブラウザにセッション Cookie が残っている間は、リロード後も自動的にログイン状態が復元されます。Cookie を削除した場合は再度サインインが必要です。
 
@@ -181,7 +182,7 @@
   ```bash
   # Backend（リポジトリルートで）
   # .env に OPENAI_API_KEY を設定
-  # Google ログインを使う場合は GOOGLE_CLIENT_ID / SESSION_SECRET_KEY も設定
+  # Google ログインを使う場合は GOOGLE_CLIENT_ID / SESSION_SECRET_KEY / ADMIN_EMAIL_ALLOWLIST を必要に応じて設定
   python -m uvicorn backend.main:app --reload --app-dir apps/backend
 
   # Frontend
@@ -189,7 +190,7 @@
   npm run dev
   ```
 - ヒント（APIキー/出力）:
-  - `.env` に `OPENAI_API_KEY` と `GOOGLE_CLIENT_ID`、必要であれば `GOOGLE_ALLOWED_HD`
+- `.env` に `OPENAI_API_KEY` と `GOOGLE_CLIENT_ID`、必要であれば `GOOGLE_ALLOWED_HD` や `ADMIN_EMAIL_ALLOWLIST`
   - `.env` の `SESSION_SECRET_KEY` は十分な長さの乱数を設定
   - テスト/CI はモックのため不要
   - 本番は `STRICT_MODE=true` 推奨（開発では `false` 可）
@@ -202,7 +203,7 @@
 4. 「承認済みの JavaScript 生成元」にローカル開発で利用する `http://127.0.0.1:5173` と `http://localhost:5173` を追加します。HTTPS のカスタムドメインを使う場合は同様に追加します。
 5. 「承認済みのリダイレクト URI」にも `http://127.0.0.1:5173` と `http://localhost:5173` を登録します。Google Identity Services のポップアップを利用するため、オリジンを合わせておくと認証が安定します。
 6. 発行されたクライアント ID を控え、JSON シークレットをダウンロードする場合は `google-oauth-client-secret.json` などの名前で安全な場所に保管してください（リポジトリ直下では `.gitignore` により除外されます）。
-7. `.env` に `GOOGLE_CLIENT_ID=<取得したクライアントID>`、必要なら `GOOGLE_ALLOWED_HD=<許可ドメイン>` を記入し、`SESSION_SECRET_KEY=<十分な長さの乱数>` を設定します。フロントエンド側では `apps/frontend/.env` に `VITE_GOOGLE_CLIENT_ID=<同じクライアントID>` を指定してください。
+7. `.env` に `GOOGLE_CLIENT_ID=<取得したクライアントID>`、必要なら `GOOGLE_ALLOWED_HD=<許可ドメイン>` や `ADMIN_EMAIL_ALLOWLIST=<許可メールアドレス>` を記入し、`SESSION_SECRET_KEY=<十分な長さの乱数>` を設定します。フロントエンド側では `apps/frontend/.env` に `VITE_GOOGLE_CLIENT_ID=<同じクライアントID>` を指定してください。
 
 > **メモ:** `.env` や `apps/frontend/.env` を作成したら、バックエンド/フロントエンドを起動する前に必ず環境変数を設定してください。起動後に追加した場合は、それぞれのプロセスを再起動して読み直す必要があります。
 

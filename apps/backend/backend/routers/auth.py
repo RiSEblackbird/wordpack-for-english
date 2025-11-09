@@ -115,6 +115,24 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
         )
         raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Google account domain is not allowed")
 
+    # 許可されたメールアドレス一覧が設定されている場合は、完全一致で照合して拒否理由を明示的に記録する。
+    allowlisted_emails = getattr(settings, "admin_email_allowlist", ())
+    if allowlisted_emails:
+        normalised_email = email.strip().lower()
+        if normalised_email not in allowlisted_emails:
+            logger.warning(
+                "google_auth_denied",
+                user_id=google_sub,
+                reason="email_not_allowlisted",
+                hosted_domain=hosted_domain,
+                email_hash=email_hash,
+                allowlist_size=len(allowlisted_emails),
+            )
+            raise HTTPException(
+                status_code=HTTPStatus.FORBIDDEN,
+                detail="Google account email is not allowlisted",
+            )
+
     user = store.record_user_login(
         google_sub=google_sub,
         email=email,

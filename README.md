@@ -55,6 +55,7 @@ cp env.example .env
 # Google ログインを利用する場合は以下も設定（ドメイン制限は任意）
 # GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com
 # GOOGLE_ALLOWED_HD=example.com
+# ADMIN_EMAIL_ALLOWLIST=admin@example.com,owner@example.com
 # SESSION_SECRET_KEY=change-me-to-random-value
 # SESSION_COOKIE_NAME=wp_session
 # SESSION_COOKIE_SECURE=true  # 本番(HTTPS)のみ true。開発(HTTP)は既定で false なので設定不要
@@ -62,6 +63,8 @@ cp env.example .env
 ```
 
 ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。
+
+特定の Google アカウントだけに利用者を絞り込みたい場合は、カンマ区切りでメールアドレスを列挙した `ADMIN_EMAIL_ALLOWLIST` を設定してください。値は小文字に正規化され、完全一致したアドレスのみが `/api/auth/google` の認証を通過します（未設定または空文字の場合は従来どおり全アカウントを許可します）。
 
 フロントエンド側でも同じクライアントIDを参照できるように、`apps/frontend/.env` を作成して Vite の環境変数を指定してください。
 
@@ -73,7 +76,7 @@ echo "VITE_GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com" >> .env
 
 `VITE_GOOGLE_CLIENT_ID` はバックエンドの `GOOGLE_CLIENT_ID` と一致している必要があります。Google Console で発行した OAuth 2.0 Web クライアント ID を指定してください。
 
-バックエンド・フロントエンドのどちらも起動前に `.env` と `apps/frontend/.env` を用意し、`GOOGLE_CLIENT_ID`（必要に応じて `GOOGLE_ALLOWED_HD`）、`SESSION_SECRET_KEY`、`VITE_GOOGLE_CLIENT_ID` を設定しておくと、初回起動から Google ログインが有効になります。
+バックエンド・フロントエンドのどちらも起動前に `.env` と `apps/frontend/.env` を用意し、`GOOGLE_CLIENT_ID`（必要に応じて `GOOGLE_ALLOWED_HD` や `ADMIN_EMAIL_ALLOWLIST`）、`SESSION_SECRET_KEY`、`VITE_GOOGLE_CLIENT_ID` を設定しておくと、初回起動から Google ログインが有効になります。
 
 補足（時計ずれの吸収）  
 `GOOGLE_CLOCK_SKEW_SECONDS` を指定すると、Google の ID トークン検証で `iat`/`nbf`/`exp` の境界に対して指定秒数のゆとりを持たせます。既定は 60 秒で、Docker/WSL などの軽微な時計ずれによる “Token used too early” を回避できます（セキュリティ上の影響は軽微ですが、必要最小限の値にしてください）。
@@ -99,6 +102,7 @@ docker compose up --build
 ### 認証フロー
 - フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。
 - 「Googleでログイン」ボタンは Google Identity Services の `GoogleLogin` コンポーネントを用いており、承認後に `credential`（ID トークン）を取得して `/api/auth/google` へ送信し、セッション Cookie を受け取ります。credential が欠落した場合は直ちにエラー帯を表示し、`/api/diagnostics/oauth-telemetry` へ状況を送信して原因調査に活用します。
+- バックエンド側で `ADMIN_EMAIL_ALLOWLIST` を設定している場合、リストに含まれないメールアドレスは検証後でも即座に 403 となり、構造化ログには `google_auth_denied` / `email_not_allowlisted` が記録されます。利用者を追加したい場合はリストへメールアドレスを追記して再起動してください。
 - ポップアップは locale=ja で描画され、共有端末でも毎回アカウント選択ダイアログが表示されます。別アカウントでログインしたい場合は表示されたポップアップで希望のアカウントを選択してください。選択後の動作は従来どおり `/api/auth/google` の検証とセッションクッキー付与で完結します。
 - ヘッダー右側の「ログアウト」ボタン、または「設定」タブ下部の「ログアウト（Google セッションを終了）」ボタンから明示的にサインアウトできます。ログアウト時は `/api/auth/logout` へ通知した上でセッション Cookie を削除し、再びサインイン画面へ戻ります。
 - 既存のセッション Cookie が有効な状態でリロードした場合は、ローカルに保存されたユーザー情報を使って自動的に復元されます（Cookie が無効化されている場合は再ログインが必要です）。
@@ -106,10 +110,11 @@ docker compose up --build
 
 ### トラブルシューティング
 - **ID トークンが取得できない**: ログイン画面に「ID トークンを取得できませんでした。ブラウザを更新して再試行してください。」と表示された場合は、ブラウザを更新してから再度サインインしてください。それでも解消しない場合は Google OAuth のクライアント ID や承認済みオリジン設定を確認し、バックエンドのターミナルへ出力される `google_login_missing_id_token` ログで `google_client_id` や `error_category` を突き合わせて原因を特定します。テレメトリは `/api/diagnostics/oauth-telemetry` で受信した値をマスクした形で保存されるため、生のトークン値は記録されません。
+- **403 Forbidden が表示される**: `ADMIN_EMAIL_ALLOWLIST` にメールアドレスが登録されていない場合は、Google 認証に成功しても即座に拒否されます。管理者に連絡して対象メールをリストへ追加してもらってください。ログには `google_auth_denied` / `email_not_allowlisted` とハッシュ化されたメールアドレスが出力されます。
 
 #### Google 認証失敗時のログキー
 - `event`: 常に `google_auth_failed` または `google_auth_denied` が設定されます。
-- `reason`: 失敗理由。`invalid_token`（署名検証エラー）、`missing_claims`（`sub`/`email` が欠落）や `domain_mismatch`（許可ドメイン不一致）など。
+- `reason`: 失敗理由。`invalid_token`（署名検証エラー）、`missing_claims`（`sub`/`email` が欠落）、`domain_mismatch`（許可ドメイン不一致）、`email_not_allowlisted`（許可リスト外のメールアドレス）など。
 - `error`: Google SDK から受け取った例外メッセージの `repr`。署名不正などの詳細を確認できます。
 - `missing_claims`: 欠落していたクレームの配列。例: `['email']`。
 - `hosted_domain`: ID トークンに含まれていた `hd`（`hostedDomain`）値。
