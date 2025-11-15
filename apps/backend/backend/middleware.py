@@ -117,7 +117,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ]
         for key in expired_keys:
             self._user_buckets.pop(key, None)
-        while len(self._user_buckets) > self._max_user_buckets:
+        while len(self._user_buckets) >= self._max_user_buckets:
             # OrderedDict preserves insertion order; pop oldest entries first.
             self._user_buckets.popitem(last=False)
 
@@ -209,8 +209,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 },
             )
 
-        user_bucket = self._get_user_bucket(user_key, now)
-        ok_user, remaining_user = user_bucket.allow()
+        ok_user = True
+        remaining_user: int | None = None
+        if is_authenticated:
+            user_bucket = self._get_user_bucket(user_key, now)
+            ok_user, remaining_user = user_bucket.allow()
+
         if not ok_user:
             detail = (
                 "Too Many Requests (per User)"

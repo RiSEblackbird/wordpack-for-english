@@ -105,7 +105,8 @@ def test_rate_limit_ignores_user_header_without_session(monkeypatch: pytest.Monk
     response2 = _dispatch(middleware, second)
 
     assert response1.status_code == 200
-    assert response2.status_code == 429
+    assert response2.status_code == 200
+    assert middleware._anon_bucket_key not in middleware._user_buckets
 
 
 def test_rate_limit_prunes_stale_user_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
