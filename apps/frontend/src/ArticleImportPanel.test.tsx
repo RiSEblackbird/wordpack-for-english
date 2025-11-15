@@ -1,9 +1,10 @@
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { App } from './App';
 import { AppProviders } from './main';
+import { ARTICLE_IMPORT_TEXT_MAX_LENGTH } from './constants/article';
 
 describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
   beforeEach(() => {
@@ -212,6 +213,32 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/generate_and_import') : ((c[0] as URL).toString().endsWith('/api/article/generate_and_import'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(genBodies.some((b) => b.model === 'gpt-5-nano' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
+  });
+
+  it('disables import button and alerts when text length exceeds limit', async () => {
+    const fetchMock = setupFetchMocks();
+    renderWithAuth();
+
+    const user = userEvent.setup();
+    await openTab(user, '文章インポート');
+
+    const textarea = screen.getByPlaceholderText('文章を貼り付け（日本語/英語）');
+    const overLimitText = 'あ'.repeat(ARTICLE_IMPORT_TEXT_MAX_LENGTH + 1);
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: overLimitText } });
+    });
+
+    const importButton = screen.getByRole('button', { name: 'インポート' });
+    expect(importButton).toBeDisabled();
+    const warning = screen.getByText(
+      `文章は${ARTICLE_IMPORT_TEXT_MAX_LENGTH}文字以内で入力してください（現在 ${overLimitText.length} 文字）`,
+    );
+    expect(warning).toHaveAttribute('role', 'alert');
+
+    const importBodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/import') : ((c[0] as URL).toString().endsWith('/api/article/import'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(importBodies).toHaveLength(0);
   });
 
   it('sends the selected category when generating and importing examples', async () => {

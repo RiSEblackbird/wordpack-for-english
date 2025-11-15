@@ -5,6 +5,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from .word import ExampleCategory
 
 
+# インポート文章の文字数上限を統一管理する定数。
+# バックエンド/フロントエンド双方のバリデーション要件を同期するため、
+# 関連モジュールから再利用できるようモデルモジュールに配置する。
+ARTICLE_IMPORT_TEXT_MAX_LENGTH: int = 4000
+
+
 class ArticleImportRequest(BaseModel):
     """文章インポート用リクエスト。
 
@@ -13,7 +19,9 @@ class ArticleImportRequest(BaseModel):
     """
 
     text: str = Field(
-        min_length=1, description="インポート対象の文章（日本語/英語いずれも可）"
+        min_length=1,
+        max_length=ARTICLE_IMPORT_TEXT_MAX_LENGTH,
+        description="インポート対象の文章（日本語/英語いずれも可）",
     )
     # 任意のLLM指定（word endpoints と整合）
     model: str | None = Field(default=None)

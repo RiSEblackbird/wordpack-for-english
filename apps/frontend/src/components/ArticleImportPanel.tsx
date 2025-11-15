@@ -9,6 +9,7 @@ import { Modal } from './Modal';
 import { WordPackPanel } from './WordPackPanel';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
 import { SidebarPortal } from './SidebarPortal';
+import { ARTICLE_IMPORT_TEXT_MAX_LENGTH } from '../constants/article';
 
 interface ArticleWordPackLink {
   word_pack_id: string;
@@ -37,6 +38,13 @@ export const ArticleImportPanel: React.FC = () => {
 
   const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
 
+  const trimmedText = useMemo(() => text.trim(), [text]);
+  const isTextTooLong = useMemo(
+    () => trimmedText.length > ARTICLE_IMPORT_TEXT_MAX_LENGTH,
+    [trimmedText],
+  );
+  const importDisabled = loading || !trimmedText || isTextTooLong;
+
   const showAdvancedModelOptions = useMemo(() => {
     const lower = (model || '').toLowerCase();
     return lower === 'gpt-5-mini' || lower === 'gpt-5-nano';
@@ -50,6 +58,14 @@ export const ArticleImportPanel: React.FC = () => {
   const importArticle = async () => {
     const selectedModel = model;
     const selectedCategory = category;
+    if (!trimmedText) {
+      return;
+    }
+    if (trimmedText.length > ARTICLE_IMPORT_TEXT_MAX_LENGTH) {
+      // 入力文字数超過時は即座にユーザーへ警告を返し、API呼び出しを抑止する。
+      setMsg({ kind: 'alert', text: `文章は${ARTICLE_IMPORT_TEXT_MAX_LENGTH}文字以内で入力してください` });
+      return;
+    }
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -58,7 +74,7 @@ export const ArticleImportPanel: React.FC = () => {
     setArticle(null);
     const notifId = addNotification({ title: '文章インポート中...', message: 'LLMで要約と語彙抽出を実行しています', status: 'progress', model: selectedModel });
     try {
-      const body: any = { text: text.trim(), generation_category: selectedCategory };
+      const body: any = { text: trimmedText, generation_category: selectedCategory };
       // WordPackPanel と同様のモデル選択ロジック
       body.model = selectedModel;
       if ((selectedModel || '').toLowerCase() === 'gpt-5-mini' || (selectedModel || '').toLowerCase() === 'gpt-5-nano') {
@@ -175,9 +191,14 @@ export const ArticleImportPanel: React.FC = () => {
               disabled={loading}
               style={{ width: '100%', minHeight: '5rem', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
             />
+            {isTextTooLong ? (
+              <p role="alert" style={{ color: 'var(--color-danger, #b00020)', marginTop: '0.25rem' }}>
+                文章は{ARTICLE_IMPORT_TEXT_MAX_LENGTH}文字以内で入力してください（現在 {trimmedText.length} 文字）
+              </p>
+            ) : null}
           </div>
           <div className="sidebar-actions">
-            <button type="button" onClick={importArticle} disabled={loading || !text.trim()}>
+            <button type="button" onClick={importArticle} disabled={importDisabled}>
               インポート
             </button>
             <div className="sidebar-field">
