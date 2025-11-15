@@ -189,11 +189,11 @@ def create_app() -> FastAPI:
     configured_proxies = [value for value in settings.trusted_proxy_ips if value]
     if not configured_proxies:
         configured_proxies = ["127.0.0.1"]
-    proxy_argument: list[str] | str
+    proxy_argument: str
     if len(configured_proxies) == 1:
         proxy_argument = configured_proxies[0]
     else:
-        proxy_argument = list(configured_proxies)
+        proxy_argument = ",".join(configured_proxies)
     configured_hosts = list(settings.allowed_hosts)
     if not configured_hosts:
         configured_hosts = ["*"]
