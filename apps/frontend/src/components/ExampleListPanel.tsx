@@ -134,6 +134,25 @@ export const ExampleListPanel: React.FC = () => {
     [],
   );
 
+  // 文字起こしタイピングの回数が記録された時に、一覧とプレビューモーダルの値を最新化する。
+  const handleTranscriptionTypingRecorded = useCallback(
+    (payload: { id: number; word_pack_id: string; transcription_typing_count: number }) => {
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === payload.id
+            ? { ...it, transcription_typing_count: payload.transcription_typing_count ?? 0 }
+            : it,
+        ),
+      );
+      setPreviewItem((prev) =>
+        prev && prev.id === payload.id
+          ? { ...prev, transcription_typing_count: payload.transcription_typing_count ?? 0 }
+          : prev,
+      );
+    },
+    [],
+  );
+
   const toggleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => toggleSetValue(prev, id));
   }, []);
@@ -181,6 +200,7 @@ export const ExampleListPanel: React.FC = () => {
             ...it,
             checked_only_count: it.checked_only_count ?? 0,
             learned_count: it.learned_count ?? 0,
+            transcription_typing_count: it.transcription_typing_count ?? 0,
           })),
         );
         setTotal(res.total);
@@ -276,7 +296,23 @@ export const ExampleListPanel: React.FC = () => {
         .ex-select-checkbox { display: inline-flex; align-items: center; justify-content: center; }
         .ex-select-checkbox input { width: 1rem; height: 1rem; cursor: pointer; }
         .ex-card h4 { margin: 0 0 0.25rem 0; font-size: 1.0em; }
-        .ex-meta { font-size: 0.75em; color: #6b7280; }
+        .ex-meta {
+          display: inline-flex;
+          flex-wrap: wrap;
+          gap: 0.4rem;
+          font-size: 0.75em;
+          color: #6b7280;
+        }
+        /* メタ情報内のバッジはカード/リスト共通で読みやすい色と余白に統一する */
+        .ex-meta-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.2rem;
+          padding: 0.1rem 0.35rem;
+          border-radius: 9999px;
+          background-color: rgba(30, 136, 229, 0.12);
+          color: #1565c0;
+        }
         .ex-actions { display: flex; gap: 0.5rem; margin-top: 0.4rem; flex-wrap: wrap; align-items: center; }
         .ex-actions button,
         .ex-actions .ex-tts-btn {
@@ -389,8 +425,15 @@ export const ExampleListPanel: React.FC = () => {
                           aria-label={`例文 ${it.en} を選択`}
                         />
                       </label>
-                      <div className="ex-meta">
-                        {it.lemma} / {it.category}
+                      <div className="ex-meta" aria-label={`例文 ${it.lemma} のメタ情報`}>
+                        <span>{it.lemma} / {it.category}</span>
+                        {/* 一覧上でも文字起こしタイピングの利用状況をすぐ把握できるようにバッジで明示する */}
+                        <span
+                          className="ex-meta-badge"
+                          aria-label={`タイピング練習回数 ${it.transcription_typing_count ?? 0}回`}
+                        >
+                          タイピング練習: {it.transcription_typing_count ?? 0}回
+                        </span>
                       </div>
                     </div>
                     <h4 className="ex-en">{it.en}</h4>
@@ -435,8 +478,19 @@ export const ExampleListPanel: React.FC = () => {
                       />
                     </label>
                     <div style={{ flex: 1 }}>
-                      <div className="ex-meta" style={{ marginBottom: 4 }}>
-                        {it.lemma} / {it.category}
+                      <div
+                        className="ex-meta"
+                        style={{ marginBottom: 4 }}
+                        aria-label={`例文 ${it.lemma} のメタ情報`}
+                      >
+                        <span>{it.lemma} / {it.category}</span>
+                        {/* リスト表示でも同一フォーマットでタイピング練習の回数を共有する */}
+                        <span
+                          className="ex-meta-badge"
+                          aria-label={`タイピング練習回数 ${it.transcription_typing_count ?? 0}回`}
+                        >
+                          タイピング練習: {it.transcription_typing_count ?? 0}回
+                        </span>
                       </div>
                       <div className="ex-en">{it.en}</div>
                       <div className="ex-actions">
@@ -484,6 +538,7 @@ export const ExampleListPanel: React.FC = () => {
         onClose={() => setPreviewOpen(false)}
         item={previewItem}
         onStudyProgressRecorded={handleExampleProgressRecorded}
+        onTranscriptionTypingRecorded={handleTranscriptionTypingRecorded}
       />
     </section>
   );

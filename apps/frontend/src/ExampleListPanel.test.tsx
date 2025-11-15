@@ -72,6 +72,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
             grammar_ja: null,
             created_at: new Date().toISOString(),
             word_pack_updated_at: null,
+            transcription_typing_count: 0,
           };
         });
         return new Response(
@@ -172,6 +173,101 @@ describe('ExampleListPanel pagination offset behavior', () => {
     expect(firstTranslationButton).not.toBeDisabled();
   }, 15000);
 
+  it('文字起こしタイピングの記録が一覧の回数表示へ即座に反映される', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString();
+      const method = init?.method ?? 'GET';
+
+      if (url.endsWith('/api/config') && method === 'GET') {
+        return new Response(
+          JSON.stringify({ request_timeout_ms: 60000 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (url.startsWith('/api/word/packs') && method === 'GET') {
+        return new Response(
+          JSON.stringify({ items: [], total: 0, limit: 200, offset: 0 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (url.startsWith('/api/word/examples?') && method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 1,
+                word_pack_id: 'wp:test:1',
+                lemma: 'lemma1',
+                category: 'Dev',
+                en: 'example en 1',
+                ja: '例文 ja 1',
+                grammar_ja: null,
+                created_at: new Date().toISOString(),
+                word_pack_updated_at: null,
+                transcription_typing_count: 0,
+              },
+            ],
+            total: 1,
+            limit: 200,
+            offset: 0,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (url.endsWith('/api/word/examples/1/transcription-typing') && method === 'POST') {
+        const body = init?.body ? JSON.parse(init.body as string) : {};
+        expect(body).toEqual({ content: 'example en 1' });
+        return new Response(
+          JSON.stringify({ id: 1, word_pack_id: 'wp:test:1', transcription_typing_count: 3 }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+
+      return new Response('not found', { status: 404 });
+    });
+
+    renderWithAuth();
+
+    const user = userEvent.setup();
+
+    await openTab(user, '例文一覧');
+    await screen.findByRole('heading', { name: '例文一覧' });
+
+    const typingBadge = await screen.findByText('タイピング練習: 0回');
+    expect(typingBadge).toBeInTheDocument();
+
+    const card = await screen.findByTestId('example-card');
+    await act(async () => {
+      await user.click(card);
+    });
+
+    const toggleTypingButton = await screen.findByRole('button', { name: '文字起こしタイピング (0)' });
+    await act(async () => {
+      await user.click(toggleTypingButton);
+    });
+
+    const textarea = await screen.findByLabelText('文字起こしタイピング入力');
+    await act(async () => {
+      await user.type(textarea, 'example en 1');
+    });
+
+    const recordButton = await screen.findByRole('button', { name: 'タイピング記録' });
+    await act(async () => {
+      await user.click(recordButton);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('タイピング練習: 3回')).toBeInTheDocument();
+    });
+
+    await screen.findByRole('button', { name: '文字起こしタイピング (3)' });
+
+    fetchMock.mockRestore();
+  }, 20000);
+
   it('選択した例文をまとめて削除できる', async () => {
     const itemsFirstPage = [
       {
@@ -184,6 +280,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
         grammar_ja: null,
         created_at: new Date().toISOString(),
         word_pack_updated_at: null,
+        transcription_typing_count: 0,
       },
       {
         id: 2,
@@ -195,6 +292,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
         grammar_ja: null,
         created_at: new Date().toISOString(),
         word_pack_updated_at: null,
+        transcription_typing_count: 0,
       },
       {
         id: 3,
@@ -206,6 +304,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
         grammar_ja: null,
         created_at: new Date().toISOString(),
         word_pack_updated_at: null,
+        transcription_typing_count: 0,
       },
     ];
 
