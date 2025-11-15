@@ -210,6 +210,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   /**
    * セッションクッキーの破棄をブラウザへ指示する。
    * 副作用: document.cookie に Max-Age=0 の値を書き込み、後続リクエストを匿名化。
+   * 備考: サーバー側が Cookie を削除できない異常時のみ利用するフォールバック手段。
    */
   const clearSessionCookie = useCallback(() => {
     if (typeof document === 'undefined') return;
@@ -223,20 +224,25 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   const signOut = useCallback(async () => {
     setIsAuthenticating(true);
     setError(null);
+    let fallbackRequired = false;
     try {
       const response = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include',
       });
-      if (!response.ok && response.status !== 404) {
+      if (response.status !== 204 && response.status !== 200) {
         console.warn('Unexpected response when logging out', response.status);
+        fallbackRequired = true;
       }
     } catch (err) {
       console.warn('Failed to notify backend about logout', err);
+      fallbackRequired = true;
     } finally {
       setUser(null);
       setToken(null);
-      clearSessionCookie();
+      if (fallbackRequired) {
+        clearSessionCookie();
+      }
       setIsAuthenticating(false);
     }
   }, [clearSessionCookie]);
