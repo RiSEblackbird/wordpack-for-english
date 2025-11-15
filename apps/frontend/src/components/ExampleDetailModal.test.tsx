@@ -1,8 +1,20 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import userEvent from '@testing-library/user-event';
 import { ExampleDetailModal, type ExampleItemData } from './ExampleDetailModal';
 import { SettingsProvider } from '../SettingsContext';
 import type { ReactNode } from 'react';
+import { act } from 'react';
+
+const mockFetchJson = vi.hoisted(() => vi.fn());
+
+vi.mock('../lib/fetcher', () => {
+  class MockApiError extends Error {}
+  return {
+    fetchJson: mockFetchJson,
+    ApiError: MockApiError,
+  };
+});
 
 vi.mock('../SettingsContext', () => {
   const settings = {
@@ -36,6 +48,10 @@ describe('ExampleDetailModal', () => {
     created_at: '2024-05-01T09:00:00+09:00',
   };
 
+  beforeEach(() => {
+    mockFetchJson.mockReset();
+  });
+
   it('renders TTS buttons for original and translated texts', () => {
     render(
       <SettingsProvider>
@@ -59,5 +75,101 @@ describe('ExampleDetailModal', () => {
 
     expect(screen.getByRole('button', { name: '確認した (2)' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '学習した (1)' })).toBeInTheDocument();
+  });
+
+  it('toggles transcription typing form', async () => {
+    const user = userEvent.setup();
+    render(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={item} />
+      </SettingsProvider>
+    );
+
+    const toggleButton = screen.getByRole('button', { name: '文字起こしタイピング (0)' });
+    await act(async () => {
+      await user.click(toggleButton);
+    });
+
+    expect(screen.getByLabelText('文字起こしタイピング入力')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'タイピング記録' })).toBeDisabled();
+  });
+
+  it('enforces transcription length tolerance', async () => {
+    const user = userEvent.setup();
+    render(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={item} />
+      </SettingsProvider>
+    );
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '文字起こしタイピング (0)' }));
+    });
+    const textarea = screen.getByLabelText('文字起こしタイピング入力');
+    await act(async () => {
+      await user.clear(textarea);
+      await user.type(textarea, 'short');
+    });
+
+    const recordButton = screen.getByRole('button', { name: 'タイピング記録' });
+    expect(recordButton).toBeDisabled();
+    expect(screen.getByText(/入力文字数差:/)).toHaveTextContent(/入力文字数差: -\d+/);
+
+    await act(async () => {
+      await user.clear(textarea);
+      await user.type(textarea, 'Test sentence in English.');
+    });
+    expect(recordButton).toBeEnabled();
+  });
+
+  it('sends transcription typing record to API and notifies parent', async () => {
+    const user = userEvent.setup();
+    const handler = vi.fn();
+    mockFetchJson.mockResolvedValueOnce({
+      id: 101,
+      word_pack_id: 'wp:test',
+      transcription_typing_count: 5,
+    });
+
+    render(
+      <SettingsProvider>
+        <ExampleDetailModal
+          isOpen
+          onClose={() => {}}
+          item={{ ...item, transcription_typing_count: 2 }}
+          onTranscriptionTypingRecorded={handler}
+        />
+      </SettingsProvider>
+    );
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '文字起こしタイピング (2)' }));
+    });
+    const textarea = screen.getByLabelText('文字起こしタイピング入力');
+    await act(async () => {
+      await user.clear(textarea);
+      await user.type(textarea, item.en);
+    });
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'タイピング記録' }));
+    });
+
+    await waitFor(() => {
+      expect(mockFetchJson).toHaveBeenCalledWith(
+        '/api/word/examples/101/transcription-typing',
+        expect.objectContaining({
+          method: 'POST',
+          body: { content: item.en },
+        })
+      );
+    });
+    expect(handler).toHaveBeenCalledWith({
+      id: 101,
+      word_pack_id: 'wp:test',
+      transcription_typing_count: 5,
+    });
+    expect(screen.getByRole('button', { name: '文字起こしタイピング (5)' })).toBeInTheDocument();
+    expect(screen.getByText('タイピング記録を保存しました')).toBeInTheDocument();
   });
 });
