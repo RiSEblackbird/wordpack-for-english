@@ -4,13 +4,13 @@ import hashlib
 from datetime import UTC, datetime
 from http import HTTPStatus
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from pydantic import BaseModel, Field
 
-from ..auth import issue_session_token
+from ..auth import get_current_user, issue_session_token
 from ..config import settings
 from ..logging import logger
 from ..store import store
@@ -154,6 +154,30 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
     request.state.user_id = google_sub
     # 成功ログは個人情報を直接出力しないよう `_log_google_auth_success` へ委譲する。
     _log_google_auth_success(google_sub, email, display_name)
+    return response
+
+
+@router.post("/api/auth/logout", status_code=HTTPStatus.NO_CONTENT)
+async def logout(response: Response, user: dict[str, str] = Depends(get_current_user)) -> Response:
+    """Invalidate the session cookie so subsequent requests become anonymous.
+
+    新メンバー向け補足: フロントエンドはバックエンドにログアウトを通知し、ここで
+    HttpOnly Cookie を削除することでセッションを終了させる。追加のクリーンアップが
+    必要になった場合もこのハンドラーで一元管理する。"""
+
+    cookie_name = settings.session_cookie_name or "wp_session"
+    response.status_code = HTTPStatus.NO_CONTENT
+    response.delete_cookie(
+        key=cookie_name,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+    )
+    logger.info(
+        "logout_completed",
+        user_id=user.get("google_sub"),
+        reason="logout",
+    )
     return response
 
 
