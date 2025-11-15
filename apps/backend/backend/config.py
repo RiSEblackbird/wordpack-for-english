@@ -125,7 +125,7 @@ class Settings(BaseSettings):
     )
     rate_limit_per_min_user: int = Field(
         default=240,
-        description="Per-user API requests per minute / ユーザ単位の毎分上限（X-User-Id）",
+        description="Per-user API requests per minute / 認証セッション単位の毎分上限",
     )
     sentry_dsn: str | None = Field(
         default=None, description="Sentry DSN (enable if set)"
