@@ -196,6 +196,8 @@ def create_app() -> FastAPI:
     # Starlette では後から追加したミドルウェアが外側で実行されるため、コード上は
     # RequestID → AccessLog → RateLimit の順で登録する。AccessLog 側で request_id の
     # フォールバック採番も行い、どの順序でも `request_complete` のログに ID が残る。
+    # RateLimit は署名付きセッション Cookie を検証して 429 を即時返却するため、
+    # 最外層に置き、アプリ本体に到達する前に負荷を抑制する。
     app.add_middleware(AccessLogAndMetricsMiddleware)
     app.add_middleware(
         RateLimitMiddleware,
