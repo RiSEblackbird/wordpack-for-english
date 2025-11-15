@@ -197,6 +197,10 @@
   - テスト/CI はモックのため不要
   - 本番は `STRICT_MODE=true` 推奨（開発では `false` 可）
 - 途中切れ対策に `LLM_MAX_TOKENS` を 1200–1800（推奨1500）
+- セキュリティヘッダ (`SecurityHeadersMiddleware`) の調整
+  - HTTPS 運用で HSTS の寿命を変えたい場合は `SECURITY_HSTS_MAX_AGE_SECONDS` を設定し、サブドメイン除外時は `SECURITY_HSTS_INCLUDE_SUBDOMAINS=false`
+  - `SECURITY_CSP_DEFAULT_SRC` と `SECURITY_CSP_CONNECT_SRC` にカンマ区切りで CSP オリジンを記述（`'self'` を含めたい場合は引用符ごと入力）
+  - Swagger UI など外部 CDN が必要な場合は `https://cdn.jsdelivr.net` などをリストへ追加する
 
 ### B-1-1. Google OAuth クライアントの作成手順
 1. [Google Cloud Console](https://console.cloud.google.com/) を開き、対象プロジェクトを作成または選択します。

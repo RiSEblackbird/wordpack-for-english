@@ -65,6 +65,9 @@ cp env.example .env
 # SESSION_SECRET_KEY=Qv6G5zH1pN8wX4rT7yL2mC9dF0sJ3kV5bR1nP7tW4qY8uZ6  # 32文字以上の乱数文字列を必ず使用
 # SESSION_COOKIE_NAME=wp_session
 # SESSION_COOKIE_SECURE=true  # 本番(HTTPS)のみ true。開発(HTTP)は既定で false なので設定不要
+# SECURITY_HSTS_MAX_AGE_SECONDS=63072000  # HSTS の max-age（秒）
+# SECURITY_CSP_DEFAULT_SRC='self',https://cdn.jsdelivr.net  # CSP の default-src 許可リスト
+# SECURITY_CSP_CONNECT_SRC='self',https://api.example.com  # API fetch で許可する接続先
 # GOOGLE_CLOCK_SKEW_SECONDS=60  # Google IDトークン検証時に許容する時計ずれ（秒）
 ```
 
@@ -75,6 +78,8 @@ cp env.example .env
 `SESSION_SECRET_KEY` は 32 文字以上の十分に乱数性を持つ文字列を必ず指定してください。`change-me` など既知のプレースホルダーや短い値を設定すると、アプリケーション起動時に検証エラーとなり実行が停止します。外部に公開する環境では `openssl rand -base64 48` などで生成した値を `.env` へ保存し、リポジトリへコミットしない運用を徹底してください。
 
 `CORS_ALLOWED_ORIGINS` を設定すると、指定したオリジンからのみ資格情報付き CORS を許可します。ローカル開発では `http://127.0.0.1:5173,http://localhost:5173` を指定すると従来どおりフロントエンドと連携できます。未設定の場合はワイルドカード許可となりますが、`Access-Control-Allow-Credentials` は返さないためクッキー連携が無効化されます。
+
+バックエンドは `SecurityHeadersMiddleware` で HSTS / CSP / X-Frame-Options / X-Content-Type-Options / Referrer-Policy / Permissions-Policy を強制付与します。HTTPS 運用時に HSTS の寿命を調整したい場合は `SECURITY_HSTS_MAX_AGE_SECONDS` を設定し、`SECURITY_HSTS_INCLUDE_SUBDOMAINS=false` や `SECURITY_HSTS_PRELOAD=true` でディレクティブを切り替えてください。CSP のオリジンは `SECURITY_CSP_DEFAULT_SRC`・`SECURITY_CSP_CONNECT_SRC` にカンマ区切りで指定します。Swagger UI などで外部 CDN を利用する場合は `'self'`（引用符付き）に加えて `https://cdn.jsdelivr.net` などを列挙してください。
 
 フロントエンド側でも同じクライアントIDを参照できるように、`apps/frontend/.env` を作成して Vite の環境変数を指定してください。
 

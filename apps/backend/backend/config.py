@@ -134,6 +134,51 @@ class Settings(BaseSettings):
         default=240,
         description="Per-user API requests per minute / 認証セッション単位の毎分上限",
     )
+    # --- Security headers ---
+    security_hsts_max_age_seconds: int = Field(
+        default=63072000,
+        description=(
+            "Strict-Transport-Security max-age directive in seconds / "
+            "Strict-Transport-Security の max-age（秒）"
+        ),
+    )
+    security_hsts_include_subdomains: bool = Field(
+        default=True,
+        description=(
+            "Whether to append includeSubDomains to Strict-Transport-Security / "
+            "Strict-Transport-Security に includeSubDomains を付与するか"
+        ),
+    )
+    security_hsts_preload: bool = Field(
+        default=False,
+        description=(
+            "Whether to append preload to Strict-Transport-Security / "
+            "Strict-Transport-Security に preload を付与するか"
+        ),
+    )
+    security_csp_default_src: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=("'self'",),
+        description=(
+            "Content-Security-Policy default-src sources (comma separated) / "
+            "Content-Security-Policy の default-src で許可するソース"
+        ),
+        validation_alias=AliasChoices(
+            "security_csp_default_src",
+            "security_csp_origins",
+        ),
+    )
+    security_csp_connect_src: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=(),
+        description=(
+            "Content-Security-Policy connect-src sources (comma separated). "
+            "Empty tuple falls back to default-src / "
+            "Content-Security-Policy の connect-src で許可するソース（空の場合は default-src を利用）"
+        ),
+        validation_alias=AliasChoices(
+            "security_csp_connect_src",
+            "security_csp_connect_origins",
+        ),
+    )
     sentry_dsn: str | None = Field(
         default=None, description="Sentry DSN (enable if set)"
     )
@@ -287,6 +332,46 @@ class Settings(BaseSettings):
                 candidates = list(raw_origins)
             except TypeError:
                 return raw_origins
+
+        normalised: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+            trimmed = candidate.strip()
+            if not trimmed or trimmed in seen:
+                continue
+            seen.add(trimmed)
+            normalised.append(trimmed)
+
+        return tuple(normalised)
+
+    @field_validator(
+        "security_csp_default_src",
+        "security_csp_connect_src",
+        mode="before",
+    )
+    @classmethod
+    def _normalise_csp_sources(
+        cls, raw_sources: object
+    ) -> tuple[str, ...] | object:  # pragma: no cover - pydantic handles typing
+        """Normalise CSP directive source values to trimmed, deduplicated tuples.
+
+        なぜ: CSP の許可リストは空白や重複が混ざりやすく、誤ったスペースや
+        末尾のスラッシュ差異があるとセキュリティヘッダが意図通りに作用しない。
+        事前にトリムと重複排除を行い、設定ミスに起因する許可漏れ/過剰許可を
+        防止する。
+        """
+
+        if raw_sources is None:
+            candidates: list[str] = []
+        elif isinstance(raw_sources, str):
+            candidates = raw_sources.split(",")
+        else:
+            try:
+                candidates = list(raw_sources)
+            except TypeError:
+                return raw_sources
 
         normalised: list[str] = []
         seen: set[str] = set()
