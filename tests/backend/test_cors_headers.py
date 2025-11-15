@@ -1,6 +1,12 @@
 """FastAPI の CORS 応答ヘッダーを検証するテスト。"""
 
+import os
+
 from fastapi.testclient import TestClient
+
+_SAFE_SECRET = "N4vR7yU0wX3zB6cF9hJ2kM5pQ8sT1aL4"  # 32文字の擬似乱数
+
+os.environ.setdefault("SESSION_SECRET_KEY", _SAFE_SECRET)
 
 from backend.config import Settings
 from backend import main as backend_main
@@ -32,6 +38,7 @@ def test_cors_allows_only_configured_origin() -> None:
                 "https://app.example.com",
                 "https://admin.example.com",
             ),
+            session_secret_key=_SAFE_SECRET,
             _env_file=None,
         )
     )
@@ -61,7 +68,9 @@ def test_cors_allows_only_configured_origin() -> None:
 def test_cors_wildcard_disables_credentials() -> None:
     """許可オリジン未設定時はワイルドカードと `allow_credentials=false` を返す。"""
 
-    client = _build_app_with_settings(Settings(_env_file=None))
+    client = _build_app_with_settings(
+        Settings(session_secret_key=_SAFE_SECRET, _env_file=None)
+    )
 
     preflight = client.options(
         "/healthz",
@@ -74,3 +83,4 @@ def test_cors_wildcard_disables_credentials() -> None:
     assert preflight.status_code == 200
     assert preflight.headers["access-control-allow-origin"] == "*"
     assert "access-control-allow-credentials" not in preflight.headers
+

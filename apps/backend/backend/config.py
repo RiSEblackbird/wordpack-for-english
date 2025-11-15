@@ -6,6 +6,13 @@ from pydantic_settings.sources.types import NoDecode
 
 
 DEFAULT_DB_PATH = ".data/wordpack.sqlite3"
+_MIN_SESSION_SECRET_KEY_LENGTH = 32
+_PLACEHOLDER_SESSION_SECRETS = frozenset({
+    "change-me",
+    "changeme",
+    "change-me-to-random-value",
+    "please-change-me",
+})
 
 
 class Settings(BaseSettings):
@@ -196,6 +203,36 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
+
+    @field_validator("session_secret_key", mode="after")
+    @classmethod
+    def _validate_session_secret(
+        cls, value: str
+    ) -> str:
+        """Ensure session secret keys are safely randomised before accepting them.
+
+        なぜ: セッション署名鍵が既知のプレースホルダーや短い文字列のまま起動すると
+        総当たり攻撃で利用者のセッションが奪取される恐れがあるため、環境変数の
+        読み込み段階で検証し、危険な値は即座に拒否する。
+        """
+
+        secret = (value or "").strip()
+        if not secret:
+            raise ValueError(
+                "SESSION_SECRET_KEY must be a non-empty random string",
+            )
+
+        if secret.casefold() in _PLACEHOLDER_SESSION_SECRETS:
+            raise ValueError(
+                "SESSION_SECRET_KEY must not use placeholder values like 'change-me'",
+            )
+
+        if len(secret) < _MIN_SESSION_SECRET_KEY_LENGTH:
+            raise ValueError(
+                "SESSION_SECRET_KEY must be at least 32 characters long",
+            )
+
+        return secret
 
     @field_validator("admin_email_allowlist", mode="before")
     @classmethod

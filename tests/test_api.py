@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+_TEST_SESSION_SECRET = "L5qS8vZ1xC4nR7tM0pW3yB6dF9hJ2kG8"  # 32文字の擬似乱数
+
 
 def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_path: Path | None = None):
     """テスト用に backend.* モジュールを再読み込みしてクリーンな状態を準備する補助関数。"""
@@ -20,6 +22,7 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
     monkeypatch.setenv("STRICT_MODE", "true" if strict else "false")
     # セッション認証を無効化して、エンドポイント検証がトークン配布に依存しないようにする。
     monkeypatch.setenv("DISABLE_SESSION_AUTH", "true")
+    monkeypatch.setenv("SESSION_SECRET_KEY", _TEST_SESSION_SECRET)
     if db_path is not None:
         monkeypatch.setenv("WORDPACK_DB_PATH", str(db_path))
 

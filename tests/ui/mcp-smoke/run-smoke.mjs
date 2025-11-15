@@ -282,6 +282,8 @@ async function setupBackend(env) {
     WORDPACK_DB_PATH: sqlitePath,
     LANGFUSE_ENABLED: 'false',
     DISABLE_SESSION_AUTH: 'true',
+    SESSION_SECRET_KEY:
+      env.SESSION_SECRET_KEY || 'k8V1sN4qP7zW2xR5tY8uB3vH6mJ9cL2pF5aD7gK1hS4nE6r',
   };
   spawnWithLogs('backend', 'python', ['-m', 'uvicorn', 'backend.main:app', '--host', '127.0.0.1', '--port', '8000', '--log-level', 'warning'], {
     cwd: repoRoot,
