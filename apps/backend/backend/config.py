@@ -224,6 +224,28 @@ class Settings(BaseSettings):
         description="Max characters to record for prompt/input to Langfuse",
     )
 
+    trusted_proxy_ips: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=("127.0.0.1",),
+        description=(
+            "Trusted proxy IPs/CIDR ranges for ProxyHeadersMiddleware / "
+            "ProxyHeadersMiddleware に渡す信頼済みプロキシの IP または CIDR"
+        ),
+        validation_alias=AliasChoices(
+            "trusted_proxy_ips",
+            "forwarded_allow_ips",
+        ),
+    )
+    allowed_hosts: Annotated[tuple[str, ...], NoDecode] = Field(
+        default=("*",),
+        description=(
+            "Allowed hosts for TrustedHostMiddleware / TrustedHostMiddleware で許可するホスト名"
+        ),
+        validation_alias=AliasChoices(
+            "allowed_hosts",
+            "trusted_hosts",
+        ),
+    )
+
     # --- Strict mode ---
     strict_mode: bool = Field(
         default=True,
@@ -332,6 +354,77 @@ class Settings(BaseSettings):
                 candidates = list(raw_origins)
             except TypeError:
                 return raw_origins
+
+        normalised: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+            trimmed = candidate.strip()
+            if not trimmed or trimmed in seen:
+                continue
+            seen.add(trimmed)
+            normalised.append(trimmed)
+
+        return tuple(normalised)
+
+    @field_validator("trusted_proxy_ips", mode="before")
+    @classmethod
+    def _normalise_trusted_proxy_ips(
+        cls, raw_ips: object
+    ) -> tuple[str, ...] | object:  # pragma: no cover - pydantic handles typing
+        """Normalise trusted proxy definitions into a trimmed, deduplicated tuple.
+
+        なぜ: Cloud Run やロードバランサの IP 範囲を `.env` で管理するとき、
+        空白や重複・誤入力が混ざると本来信頼すべきヘッダが拒否され、
+        アクセス元 IP の解析やレート制限の判定が正しく行われなくなる。
+        入力段階で正規化し、ProxyHeadersMiddleware へ安全に渡す。
+        """
+
+        if raw_ips is None:
+            candidates: list[str] = []
+        elif isinstance(raw_ips, str):
+            candidates = raw_ips.split(",")
+        else:
+            try:
+                candidates = list(raw_ips)
+            except TypeError:
+                return raw_ips
+
+        normalised: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            if not isinstance(candidate, str):
+                continue
+            trimmed = candidate.strip()
+            if not trimmed or trimmed in seen:
+                continue
+            seen.add(trimmed)
+            normalised.append(trimmed)
+
+        return tuple(normalised)
+
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
+    def _normalise_allowed_hosts(
+        cls, raw_hosts: object
+    ) -> tuple[str, ...] | object:  # pragma: no cover - pydantic handles typing
+        """Normalise allowed hostnames/patterns before TrustedHostMiddleware consumes them.
+
+        なぜ: TrustedHostMiddleware の許可リストに空白や重複を残すと、
+        想定外のホストヘッダを許可したり、必要なドメインを拒否する恐れがある。
+        あらかじめトリムと重複排除を行い、安全なホスト配列を構成する。
+        """
+
+        if raw_hosts is None:
+            candidates: list[str] = []
+        elif isinstance(raw_hosts, str):
+            candidates = raw_hosts.split(",")
+        else:
+            try:
+                candidates = list(raw_hosts)
+            except TypeError:
+                return raw_hosts
 
         normalised: list[str] = []
         seen: set[str] = set()
