@@ -123,6 +123,7 @@ docker compose up --build
 - フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。
 - 「Googleでログイン」ボタンは Google Identity Services の `GoogleLogin` コンポーネントを用いており、承認後に `credential`（ID トークン）を取得して `/api/auth/google` へ送信し、セッション Cookie を受け取ります。credential が欠落した場合は直ちにエラー帯を表示し、`/api/diagnostics/oauth-telemetry` へ状況を送信して原因調査に活用します。
 - バックエンド側で `ADMIN_EMAIL_ALLOWLIST` を設定している場合、リストに含まれないメールアドレスは検証後でも即座に 403 となり、構造化ログには `google_auth_denied` / `email_not_allowlisted` が記録されます。利用者を追加したい場合はリストへメールアドレスを追記して再起動してください。
+- Google が返す ID トークンで `email_verified` が `true` でない場合は本人確認が完了していないと判断し、403 で拒否します。ログには `google_auth_denied` / `email_unverified` とハッシュ化済みメールアドレスが残るため、問い合わせ対応時はこの値をもとに利用者へメールアドレスの確認手続きを案内してください。
 - バックエンドの構造化ログでは `google_auth_succeeded` を含むすべての Google 認証イベントで `email_hash`（および `display_name_hash`）が記録され、平文のメールアドレスや表示名は Cloud Logging へ送出されません。調査時はハッシュ値で突き合わせてください。
 - ポップアップは locale=ja で描画され、共有端末でも毎回アカウント選択ダイアログが表示されます。別アカウントでログインしたい場合は表示されたポップアップで希望のアカウントを選択してください。選択後の動作は従来どおり `/api/auth/google` の検証とセッションクッキー付与で完結します。
 - ヘッダー右側の「ログアウト」ボタン、または「設定」タブ下部の「ログアウト（Google セッションを終了）」ボタンから明示的にサインアウトできます。ログアウト時は `/api/auth/logout` へ通知し、バックエンドが HttpOnly セッション Cookie を失効させたうえで再びサインイン画面へ戻ります。万一バックエンドが応答しない場合はクライアント側で Cookie を削除するフォールバックが働きます。
@@ -133,10 +134,11 @@ docker compose up --build
 ### トラブルシューティング
 - **ID トークンが取得できない**: ログイン画面に「ID トークンを取得できませんでした。ブラウザを更新して再試行してください。」と表示された場合は、ブラウザを更新してから再度サインインしてください。それでも解消しない場合は Google OAuth のクライアント ID や承認済みオリジン設定を確認し、バックエンドのターミナルへ出力される `google_login_missing_id_token` ログで `google_client_id` や `error_category` を突き合わせて原因を特定します。テレメトリは `/api/diagnostics/oauth-telemetry` で受信した値をマスクした形で保存されるため、生のトークン値は記録されません。
 - **403 Forbidden が表示される**: `ADMIN_EMAIL_ALLOWLIST` にメールアドレスが登録されていない場合は、Google 認証に成功しても即座に拒否されます。管理者に連絡して対象メールをリストへ追加してもらってください。ログには `google_auth_denied` / `email_not_allowlisted` とハッシュ化されたメールアドレスが出力されます。
+- **403 Forbidden（メール未確認）**: 利用者の Google アカウントで「メールアドレスの確認」が完了していない場合、ID トークンの `email_verified` が `false`（または欠落）となり 403 が返ります。Google アカウントのセキュリティ設定からメール確認を済ませたうえで再試行してください。構造化ログには `google_auth_denied` / `email_unverified` が記録されます。
 
 #### Google 認証失敗時のログキー
 - `event`: 常に `google_auth_failed` または `google_auth_denied` が設定されます。
-- `reason`: 失敗理由。`invalid_token`（署名検証エラー）、`missing_claims`（`sub`/`email` が欠落）、`domain_mismatch`（許可ドメイン不一致）、`email_not_allowlisted`（許可リスト外のメールアドレス）など。
+- `reason`: 失敗理由。`invalid_token`（署名検証エラー）、`missing_claims`（`sub`/`email` が欠落）、`domain_mismatch`（許可ドメイン不一致）、`email_not_allowlisted`（許可リスト外のメールアドレス）、`email_unverified`（Google 側でメール確認が未完了）など。
 - `error`: Google SDK から受け取った例外メッセージの `repr`。署名不正などの詳細を確認できます。
 - `missing_claims`: 欠落していたクレームの配列。例: `['email']`。
 - `hosted_domain`: ID トークンに含まれていた `hd`（`hostedDomain`）値。

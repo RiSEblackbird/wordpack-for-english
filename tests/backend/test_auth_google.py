@@ -97,6 +97,7 @@ def test_google_auth_success_flow(
             "email": "user@example.com",
             "name": "Example User",
             "hd": "example.com",
+            "email_verified": True,
         },
     )
 
@@ -140,6 +141,7 @@ def test_google_auth_rejects_wrong_domain(
             "email": "user@other.com",
             "name": "Other Domain",
             "hd": "other.com",
+            "email_verified": True,
         },
     )
 
@@ -171,6 +173,7 @@ def test_google_auth_rejects_email_not_allowlisted(
             "email": "user@example.com",
             "name": "Outside Allowlist",
             "hd": "example.com",
+            "email_verified": True,
         },
     )
 
@@ -187,6 +190,36 @@ def test_google_auth_rejects_email_not_allowlisted(
     assert latest["hosted_domain"] == "example.com"
     expected_hash = hashlib.sha256("user@example.com".lower().encode("utf-8")).hexdigest()[:12]
     assert latest["email_hash"] == expected_hash
+
+
+def test_google_auth_rejects_unverified_email(
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """ID token が未検証メールを示した場合は 403 と構造化ログを返す。"""
+
+    _stub_verifier(
+        monkeypatch,
+        lambda: {
+            "sub": "sub-unverified",
+            "email": "pending@example.com",
+            "name": "Pending User",
+            "hd": "example.com",
+            "email_verified": False,
+        },
+    )
+
+    with caplog.at_level("WARNING"):
+        resp = test_client.post("/api/auth/google", json={"id_token": "valid"})
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "Google account email must be verified"
+
+    log_entries = _structlog_events(caplog, "google_auth_denied")
+    matching = [entry for entry in log_entries if entry.get("reason") == "email_unverified"]
+    assert matching, "expected email_unverified log entry"
+    log = matching[-1]
+    expected_hash = hashlib.sha256("pending@example.com".lower().encode("utf-8")).hexdigest()[:12]
+    assert log["email_hash"] == expected_hash
+    assert log.get("user_id") == "sub-unverified"
 
 
 def test_google_auth_invalid_signature(
@@ -224,6 +257,7 @@ def test_google_auth_missing_claims_logs_details(
             "email": "",
             "name": None,
             "hd": "example.com",
+            "email_verified": True,
         },
     )
 
@@ -260,6 +294,7 @@ def test_http_session_cookie_visible_for_document_cookie(
             "email": "document@example.com",
             "name": "Doc Cookie",
             "hd": "example.com",
+            "email_verified": True,
         },
     )
 
@@ -295,6 +330,7 @@ def test_google_auth_passes_clock_skew_to_verifier(
             "email": "skew@example.com",
             "name": "Skew OK",
             "hd": "example.com",
+            "email_verified": True,
         }
 
     monkeypatch.setattr(id_token, "verify_oauth2_token", _verify)
