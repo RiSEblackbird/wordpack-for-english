@@ -2,8 +2,9 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
-import { TTSButton } from './TTSButton';
 import * as SettingsContext from '../SettingsContext';
+import { TTSButton } from './TTSButton';
+import { TTS_TEXT_MAX_LENGTH } from '../constants/tts';
 
 describe('TTSButton', () => {
   const originalFetch = global.fetch;
@@ -92,6 +93,24 @@ describe('TTSButton', () => {
 
     await waitFor(() => expect(alertMock).toHaveBeenCalledWith('音声の取得に失敗しました'));
     expect(consoleMock).toHaveBeenCalled();
+  });
+
+  it('alerts and blocks fetch when text exceeds the maximum length', async () => {
+    const alertMock = vi.fn();
+    window.alert = alertMock;
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const overLimit = 'a'.repeat(TTS_TEXT_MAX_LENGTH + 1);
+
+    render(<TTSButton text={overLimit} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '音声' }));
+
+    expect(alertMock).toHaveBeenCalledWith(
+      `テキストは ${TTS_TEXT_MAX_LENGTH} 文字以内で入力してください。`
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('applies playback rate from settings context when available', async () => {

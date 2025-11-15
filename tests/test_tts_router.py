@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 from typing import Callable, Iterator
 
-from fastapi.testclient import TestClient
 import httpx
+from fastapi.testclient import TestClient
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1] / "apps" / "backend"
 if str(BACKEND_ROOT) not in sys.path:
@@ -60,6 +60,25 @@ def test_tts_synth_streams_audio(monkeypatch) -> None:
         assert response.headers["content-type"].startswith("audio/mpeg")
         assert response.content == b"foobar"
         assert dummy_response.closed is True
+    finally:
+        tts.client = original_client  # type: ignore[assignment]
+
+
+def test_tts_rejects_excessively_long_text(monkeypatch) -> None:
+    """音声合成リクエストの文字数超過時に 413 が返却されることを検証する。"""
+
+    original_client = tts.client
+    tts.client = None  # type: ignore[assignment]
+    try:
+        over_limit = "a" * (tts.TTS_TEXT_MAX_LENGTH + 1)
+        app = create_app()
+        with TestClient(app) as client:
+            response = client.post("/api/tts", json={"text": over_limit})
+        assert response.status_code == 413
+        detail = response.json()["detail"]
+        assert detail["error"] == "tts_text_too_long"
+        assert detail["max_length"] == tts.TTS_TEXT_MAX_LENGTH
+        assert str(tts.TTS_TEXT_MAX_LENGTH) in detail["message"]
     finally:
         tts.client = original_client  # type: ignore[assignment]
 
