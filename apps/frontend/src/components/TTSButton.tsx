@@ -1,5 +1,6 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useSettings } from '../SettingsContext';
+import { TTS_TEXT_MAX_LENGTH } from '../constants/tts';
 
 type Props = {
   text: string;
@@ -36,6 +37,19 @@ export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
     if (loading) return;
     const trimmed = text?.trim();
     if (!trimmed) return;
+    // バックエンドと同じ閾値で事前チェックし、無駄な HTTP リクエストを避ける。
+    if (trimmed.length > TTS_TEXT_MAX_LENGTH) {
+      if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+        console.warn(
+          '[TTS] text exceeds max length',
+          { maxLength: TTS_TEXT_MAX_LENGTH, actualLength: trimmed.length }
+        );
+      }
+      if (typeof window !== 'undefined' && typeof window.alert === 'function') {
+        window.alert(`テキストは ${TTS_TEXT_MAX_LENGTH} 文字以内で入力してください。`);
+      }
+      return;
+    }
     if (typeof window === 'undefined' || typeof Audio === 'undefined') {
       return;
     }

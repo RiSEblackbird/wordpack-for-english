@@ -3,11 +3,12 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Iterator
+from typing import Any, Iterator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, constr
+from pydantic import BaseModel, ValidationError, constr
 
 from ..config import settings
 from ..logging import logger
@@ -28,6 +29,9 @@ except Exception:  # pragma: no cover - openai SDK が無い環境では初期�
     ) = RateLimitError = None  # type: ignore[assignment]
     OpenAI = None  # type: ignore[assignment]
 
+
+# TTS 入力文字数の上限。フロントエンド (apps/frontend/src/constants/tts.ts) と同期する。
+TTS_TEXT_MAX_LENGTH = 500
 
 router = APIRouter(prefix="/api/tts", tags=["tts"])
 
@@ -56,8 +60,36 @@ client = _init_client()
 
 
 class TTSIn(BaseModel):
-    text: constr(min_length=1)
+    text: constr(min_length=1, max_length=TTS_TEXT_MAX_LENGTH)
     voice: str = "alloy"
+
+
+def _build_text_too_long_error() -> dict[str, Any]:
+    """TTS 入力テキスト超過時に返却するエラー本文を標準化する。"""
+
+    return {
+        "error": "tts_text_too_long",
+        "message": (
+            "読み上げテキストは"
+            f"{TTS_TEXT_MAX_LENGTH}文字以内で入力してください。"
+        ),
+        "max_length": TTS_TEXT_MAX_LENGTH,
+    }
+
+
+def _validate_tts_request(payload: dict[str, Any]) -> TTSIn:
+    """TTS リクエストを検証し、文字数超過だけは 413 へ変換する。"""
+
+    try:
+        return TTSIn.model_validate(payload)
+    except ValidationError as exc:
+        for err in exc.errors():
+            if err.get("type") == "string_too_long" and tuple(err.get("loc", ())) == ("text",):
+                raise HTTPException(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    detail=_build_text_too_long_error(),
+                ) from exc
+        raise RequestValidationError(exc.errors()) from exc
 
 
 def _tts_client() -> OpenAI | None:  # type: ignore[valid-type]
@@ -104,10 +136,25 @@ def _map_openai_exception(exc: Exception) -> tuple[int, str, str]:
 
 
 @router.post("", response_class=StreamingResponse)
-def synth(req: TTSIn, request: Request) -> StreamingResponse:
+def synth(request: Request, payload: dict[str, Any] = Body(...)) -> StreamingResponse:
     """Synthesize speech using OpenAI TTS and stream MP3 audio to the client."""
     t0 = time.perf_counter()
     request_id = _loggable_request_id(request)
+    raw_text = payload.get("text") if isinstance(payload, dict) else None
+    raw_text_chars = len(raw_text) if isinstance(raw_text, str) else 0
+
+    try:
+        req = _validate_tts_request(payload)
+    except HTTPException as exc:
+        logger.warning(
+            "tts_request_rejected",
+            request_id=request_id,
+            reason="text_too_long",
+            text_chars=raw_text_chars,
+            max_length=TTS_TEXT_MAX_LENGTH,
+        )
+        raise exc
+
     text_chars = len(req.text)
     logger.info(
         "tts_request",
