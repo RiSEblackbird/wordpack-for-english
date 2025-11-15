@@ -19,7 +19,6 @@ vi.mock('../AuthContext', () => ({
     signOut: signOutMock,
     isAuthenticating: false,
     user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
-    token: 'token',
     error: null,
     clearError: vi.fn(),
     authBypassActive: false,
