@@ -86,6 +86,7 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
     display_name = id_info.get("name") or id_info.get("email")
     hosted_domain = id_info.get("hd") or id_info.get("hostedDomain")
     email_hash = _hash_for_log(email)
+    email_verified = id_info.get("email_verified")
 
     missing_claims = [
         claim
@@ -102,6 +103,20 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
             email_hash=email_hash,
         )
         raise HTTPException(status_code=HTTPStatus.UNAUTHORIZED, detail="ID token is missing required claims")
+
+    # Google から検証済みフラグが降りてこない場合は、サポートとの調査時に
+    # ハッシュ化済みメールと拒否理由を突合できるように記録して即座に拒否する。
+    if email_verified is not True:
+        logger.warning(
+            "google_auth_denied",
+            user_id=google_sub,
+            reason="email_unverified",
+            email_hash=email_hash,
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail="Google account email must be verified",
+        )
 
     allowed_hd = (settings.google_allowed_hd or "").strip()
     if allowed_hd and hosted_domain != allowed_hd:
