@@ -136,13 +136,14 @@ class WordPackStore:
                         llm_params,
                         checked_count,
                         learned_count,
+                        transcription_typing_count,
                     ) in iter_example_rows(examples):
                         conn.execute(
                             """
                             INSERT INTO word_pack_examples(
                                 word_pack_id, category, position, en, ja, grammar_ja, llm_model, llm_params,
-                                checked_only_count, learned_count, created_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                                checked_only_count, learned_count, transcription_typing_count, created_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                             """,
                             (
                                 word_pack_id,
@@ -155,6 +156,7 @@ class WordPackStore:
                                 llm_params,
                                 checked_count,
                                 learned_count,
+                                transcription_typing_count,
                                 now,
                             ),
                         )
@@ -507,7 +509,8 @@ class WordPackStore:
                 llm_model,
                 llm_params,
                 checked_only_count,
-                learned_count
+                learned_count,
+                transcription_typing_count
             FROM word_pack_examples
             WHERE word_pack_id = ?
             ORDER BY category ASC, position ASC, id ASC;
@@ -537,6 +540,9 @@ class WordPackStore:
                 r["checked_only_count"]
             )
             item["learned_count"] = normalize_non_negative_int(r["learned_count"])
+            item["transcription_typing_count"] = normalize_non_negative_int(
+                r["transcription_typing_count"]
+            )
             examples.setdefault(cat, []).append(item)
         for cat in EXAMPLE_CATEGORIES:
             examples.setdefault(cat, [])

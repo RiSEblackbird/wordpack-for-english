@@ -173,7 +173,7 @@ class AppSQLiteStore:
         search_mode: str = "contains",
         category: str | None = None,
     ) -> list[
-        tuple[int, str, str, str, str, str, str | None, str, str | None, int, int]
+        tuple[int, str, str, str, str, str, str | None, str, str | None, int, int, int]
     ]:
         return self.examples.list_examples(
             limit=limit,
@@ -184,6 +184,13 @@ class AppSQLiteStore:
             search_mode=search_mode,
             category=category,
         )
+
+    def update_example_transcription_typing(
+        self, example_id: int, input_length: int
+    ) -> int | None:
+        """例文の文字起こし練習カウンタを更新するラッパー。"""
+
+        return self.examples.update_example_transcription_typing(example_id, input_length)
 
     # --- Articles ---
     def save_article(self, article_id: str, **kwargs: Any) -> None:
