@@ -177,6 +177,11 @@ class Examples(BaseModel):
             ge=0,
             description="この例文を学習完了と記録した回数（非負整数）",
         )
+        transcription_typing_count: int = Field(
+            default=0,
+            ge=0,
+            description="文字起こしトレーニングで入力された延べ文字数（非負整数）",
+        )
 
     Dev: list[ExampleItem] = Field(default_factory=list)
     CS: list[ExampleItem] = Field(default_factory=list)
@@ -211,6 +216,11 @@ class ExampleListItem(BaseModel):
         ge=0,
         description="例文を学習済みと記録した回数（非負整数）",
     )
+    transcription_typing_count: int = Field(
+        default=0,
+        ge=0,
+        description="例文の文字起こし練習で積み上がった入力文字数",
+    )
 
 
 class ExampleListResponse(BaseModel):
@@ -218,6 +228,21 @@ class ExampleListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ExampleTranscriptionTypingRequest(BaseModel):
+    input_length: int = Field(
+        ge=1,
+        le=2000,
+        description="文字起こしで入力された文字数（1〜2000の範囲）",
+    )
+
+
+class ExampleTranscriptionTypingResponse(BaseModel):
+    transcription_typing_count: int = Field(
+        ge=0,
+        description="更新後の文字起こし入力累積文字数",
+    )
 
 
 class ExamplesBulkDeleteRequest(BaseModel):

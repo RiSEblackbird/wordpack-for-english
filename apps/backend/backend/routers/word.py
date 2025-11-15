@@ -21,6 +21,8 @@ from ..models.word import (
     ExampleListResponse,
     ExamplesBulkDeleteRequest,
     ExamplesBulkDeleteResponse,
+    ExampleTranscriptionTypingRequest,
+    ExampleTranscriptionTypingResponse,
     WordPackCreateRequest,
     WordPackListItem,
     WordPackListResponse,
@@ -760,6 +762,7 @@ async def list_examples(
         pack_updated_at,
         checked_only_count,
         learned_count,
+        transcription_typing_count,
     ) in items_raw:
         items.append(
             ExampleListItem(
@@ -774,6 +777,7 @@ async def list_examples(
                 word_pack_updated_at=pack_updated_at,
                 checked_only_count=checked_only_count,
                 learned_count=learned_count,
+                transcription_typing_count=transcription_typing_count,
             )
         )
     return ExampleListResponse(items=items, total=total, limit=limit, offset=offset)
@@ -823,6 +827,25 @@ async def update_example_study_progress(
         checked_only_count=checked_only_count,
         learned_count=learned_count,
     )
+
+
+@router.post(
+    "/examples/{example_id}/transcription-typing",
+    response_model=ExampleTranscriptionTypingResponse,
+    summary="例文の文字起こし練習入力を記録",
+)
+async def update_example_transcription_typing(
+    example_id: int, req: ExampleTranscriptionTypingRequest
+) -> ExampleTranscriptionTypingResponse:
+    """入力長の妥当性を確認しつつ文字起こしカウントを加算する。"""
+
+    try:
+        updated = store.update_example_transcription_typing(example_id, req.input_length)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Example not found")
+    return ExampleTranscriptionTypingResponse(transcription_typing_count=updated)
 
 
 class LemmaLookupResponse(BaseModel):

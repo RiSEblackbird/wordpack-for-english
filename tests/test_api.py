@@ -340,6 +340,7 @@ def test_generate_examples_uses_llm_meta(client, monkeypatch):
     assert "temperature=0.25" in first["llm_params"]
     assert "reasoning.effort=low" in first["llm_params"]
     assert "text.verbosity=medium" in first["llm_params"]
+    assert first.get("transcription_typing_count", 0) == 0
 
     r_detail = client.get(f"/api/word/packs/{pack_id}")
     assert r_detail.status_code == 200
@@ -348,6 +349,7 @@ def test_generate_examples_uses_llm_meta(client, monkeypatch):
     assert len(examples) >= 2
     assert examples[-1]["llm_model"] == "gpt-example-mini"
     assert "temperature=0.25" in examples[-1]["llm_params"]
+    assert examples[-1]["transcription_typing_count"] == 0
 def test_word_lookup(client):
     resp = client.get("/api/word")
     assert resp.status_code == 200
@@ -440,6 +442,7 @@ def test_example_study_progress_endpoint(client):
     examples = r_examples.json().get("items", [])
     assert examples, "expected at least one example"
     ex = examples[0]
+    assert ex.get("transcription_typing_count") == 0
     example_id = ex["id"]
 
     r_checked = client.post(f"/api/word/examples/{example_id}/study-progress", json={"kind": "checked"})
@@ -453,6 +456,92 @@ def test_example_study_progress_endpoint(client):
     body2 = r_learned.json()
     assert body2["checked_only_count"] == 1
     assert body2["learned_count"] == 1
+
+
+def test_update_example_transcription_typing(client):
+    """文字起こし入力の長さが妥当な場合に加算されることを検証する。"""
+
+    resp = client.post("/api/word/pack", json={"lemma": "transcribe"})
+    assert resp.status_code == 200
+
+    r_list = client.get("/api/word/packs")
+    assert r_list.status_code == 200
+    pack_items = r_list.json().get("items", [])
+    pack = next((it for it in pack_items if it.get("lemma") == "transcribe"), None)
+    assert pack is not None
+    pack_id = pack["id"]
+
+    from backend.store import store as backend_store
+
+    backend_store.append_examples(
+        pack_id,
+        "Dev",
+        [
+            {
+                "en": "Typing practice for transcription.",
+                "ja": "文字起こし練習用の例文。",
+            }
+        ],
+    )
+
+    r_examples = client.get("/api/word/examples?limit=1&order_by=created_at&order_dir=desc")
+    assert r_examples.status_code == 200
+    example = r_examples.json()["items"][0]
+    example_id = example["id"]
+    base_length = len(example["en"])
+
+    r_update = client.post(
+        f"/api/word/examples/{example_id}/transcription-typing",
+        json={"input_length": base_length},
+    )
+    assert r_update.status_code == 200
+    body = r_update.json()
+    assert body == {"transcription_typing_count": base_length}
+
+    r_update_again = client.post(
+        f"/api/word/examples/{example_id}/transcription-typing",
+        json={"input_length": base_length + 5},
+    )
+    assert r_update_again.status_code == 200
+    body_again = r_update_again.json()
+    assert body_again == {"transcription_typing_count": base_length * 2 + 5}
+
+
+def test_update_example_transcription_typing_rejects_out_of_range(client):
+    """英文長と大きく乖離する入力長は 422 で拒否する。"""
+
+    resp = client.post("/api/word/pack", json={"lemma": "reject"})
+    assert resp.status_code == 200
+
+    r_list = client.get("/api/word/packs")
+    assert r_list.status_code == 200
+    pack_items = r_list.json().get("items", [])
+    pack = next((it for it in pack_items if it.get("lemma") == "reject"), None)
+    assert pack is not None
+    pack_id = pack["id"]
+
+    from backend.store import store as backend_store
+
+    backend_store.append_examples(
+        pack_id,
+        "Dev",
+        [
+            {
+                "en": "Short.",
+                "ja": "短い例文。",
+            }
+        ],
+    )
+
+    r_examples = client.get("/api/word/examples?limit=1&order_by=created_at&order_dir=desc")
+    assert r_examples.status_code == 200
+    example_id = r_examples.json()["items"][0]["id"]
+
+    r_invalid = client.post(
+        f"/api/word/examples/{example_id}/transcription-typing",
+        json={"input_length": 9999},
+    )
+    assert r_invalid.status_code == 422
 
 
 def test_sentence_check_removed(client):

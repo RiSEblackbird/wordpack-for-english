@@ -27,6 +27,7 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
             llm_params TEXT,
             checked_only_count INTEGER NOT NULL DEFAULT 0,
             learned_count INTEGER NOT NULL DEFAULT 0,
+            transcription_typing_count INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             FOREIGN KEY(word_pack_id) REFERENCES word_packs(id) ON DELETE CASCADE
         );
@@ -41,6 +42,15 @@ def ensure_tables(conn: sqlite3.Connection) -> None:
         ON word_pack_examples(word_pack_id, category, position);
         """
     )
+    cur = conn.execute("PRAGMA table_info(word_pack_examples);")
+    column_names = {str(row["name"]) for row in cur.fetchall()}
+    if "transcription_typing_count" not in column_names:
+        conn.execute(
+            """
+            ALTER TABLE word_pack_examples
+            ADD COLUMN transcription_typing_count INTEGER NOT NULL DEFAULT 0;
+            """
+        )
 
 
 class ExampleStore:
@@ -204,8 +214,8 @@ class ExampleStore:
                         """
                         INSERT INTO word_pack_examples(
                             word_pack_id, category, position, en, ja, grammar_ja, llm_model, llm_params,
-                            checked_only_count, learned_count, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                            checked_only_count, learned_count, transcription_typing_count, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                         """,
                         (
                             word_pack_id,
@@ -218,6 +228,9 @@ class ExampleStore:
                             llm_params,
                             checked_only_count,
                             learned_count,
+                            normalize_non_negative_int(
+                                (item or {}).get("transcription_typing_count")
+                            ),
                             now,
                         ),
                     )
@@ -278,7 +291,7 @@ class ExampleStore:
         search_mode: str = "contains",
         category: str | None = None,
     ) -> list[
-        tuple[int, str, str, str, str, str, str | None, str, str | None, int, int]
+        tuple[int, str, str, str, str, str, str | None, str, str | None, int, int, int]
     ]:
         """検索条件付きで例文を取得する。"""
 
@@ -322,7 +335,8 @@ class ExampleStore:
                     wpe.created_at AS created_at,
                     wp.updated_at AS pack_updated_at,
                     wpe.checked_only_count AS checked_only_count,
-                    wpe.learned_count AS learned_count
+                    wpe.learned_count AS learned_count,
+                    wpe.transcription_typing_count AS transcription_typing_count
                 FROM word_pack_examples wpe
                 JOIN word_packs wp ON wp.id = wpe.word_pack_id
                 JOIN lemmas lm ON lm.id = wp.lemma_id
@@ -333,7 +347,7 @@ class ExampleStore:
                 tuple(params + [limit, offset]),
             )
             items: list[
-                tuple[int, str, str, str, str, str, str | None, str, str | None, int, int]
+                tuple[int, str, str, str, str, str, str | None, str, str | None, int, int, int]
             ] = []
             for r in cur.fetchall():
                 items.append(
@@ -349,9 +363,56 @@ class ExampleStore:
                         r["pack_updated_at"],
                         normalize_non_negative_int(r["checked_only_count"]),
                         normalize_non_negative_int(r["learned_count"]),
+                        normalize_non_negative_int(r["transcription_typing_count"]),
                     )
                 )
             return items
+
+    def update_example_transcription_typing(
+        self, example_id: int, input_length: int
+    ) -> int | None:
+        """文字起こし練習の入力長をバリデートし、累積カウントへ加算する。"""
+
+        try:
+            normalized_length = int(input_length)
+        except (TypeError, ValueError) as exc:  # 異常な入力は 422 相当へ委譲
+            raise ValueError("input length must be convertible to int") from exc
+        if normalized_length <= 0:
+            raise ValueError("input length must be positive")
+
+        with self._conn_provider() as conn:
+            with conn:
+                cur = conn.execute(
+                    """
+                    SELECT en, transcription_typing_count
+                    FROM word_pack_examples
+                    WHERE id = ?;
+                    """,
+                    (example_id,),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return None
+
+                expected_length = len(str(row["en"] or ""))
+                # なぜ: UI 側が送る入力長は英文長とほぼ一致するため、乖離が±10文字を
+                # 超えた場合は異常入力として弾く。これは bot などによる加算誤用防止策。
+                if abs(expected_length - normalized_length) > 10:
+                    raise ValueError(
+                        "input length deviates from sentence length beyond tolerance"
+                    )
+
+                current = normalize_non_negative_int(row["transcription_typing_count"])
+                updated = current + normalized_length
+                conn.execute(
+                    """
+                    UPDATE word_pack_examples
+                    SET transcription_typing_count = ?
+                    WHERE id = ?;
+                    """,
+                    (updated, example_id),
+                )
+                return updated
 
     def _reindex_category(
         self, conn: sqlite3.Connection, word_pack_id: str, category: str
@@ -394,6 +455,9 @@ def iter_example_rows(examples: Mapping[str, Any]) -> Iterable[tuple]:
                 (item or {}).get("checked_only_count")
             )
             learned_count = normalize_non_negative_int((item or {}).get("learned_count"))
+            transcription_typing_count = normalize_non_negative_int(
+                (item or {}).get("transcription_typing_count")
+            )
             yield (
                 category,
                 pos,
@@ -404,4 +468,5 @@ def iter_example_rows(examples: Mapping[str, Any]) -> Iterable[tuple]:
                 llm_params,
                 checked_only_count,
                 learned_count,
+                transcription_typing_count,
             )
