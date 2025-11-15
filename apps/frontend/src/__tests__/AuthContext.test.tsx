@@ -167,7 +167,7 @@ describe('AuthProvider persistence behaviour', () => {
       const { signIn, user } = useAuth();
       React.useEffect(() => {
         if (!user) {
-          void signIn('dummy-id-token');
+          void (signIn('dummy-id-token').catch(() => undefined));
         }
       }, [signIn, user]);
       return null;
