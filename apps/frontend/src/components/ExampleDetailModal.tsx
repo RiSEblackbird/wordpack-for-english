@@ -85,7 +85,12 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
           body: { kind },
         },
       );
-      setLocalCounts({ checked: res.checked_only_count, learned: res.learned_count });
+      // 学習記録更新後も最新の文字起こし回数を保持するため、既存値を引き継ぎつつ2項目のみ上書きする。
+      setLocalCounts((prev) => ({
+        checked: res.checked_only_count,
+        learned: res.learned_count,
+        transcriptionTyping: prev.transcriptionTyping,
+      }));
       try {
         onStudyProgressRecorded?.({
           id: res.id,
