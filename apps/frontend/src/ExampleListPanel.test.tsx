@@ -16,7 +16,6 @@ describe('ExampleListPanel pagination offset behavior', () => {
         'wordpack.auth.v1',
         JSON.stringify({
           user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
-          token: 'token',
         }),
       );
     } catch {}
