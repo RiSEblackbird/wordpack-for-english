@@ -62,6 +62,8 @@ cp env.example .env
 # GOOGLE_ALLOWED_HD=example.com
 # ADMIN_EMAIL_ALLOWLIST=admin@example.com,owner@example.com
 # CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
+# TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22
+# ALLOWED_HOSTS=app-1234567890-uc.a.run.app,api.example.com
 # SESSION_SECRET_KEY=Qv6G5zH1pN8wX4rT7yL2mC9dF0sJ3kV5bR1nP7tW4qY8uZ6  # 32文字以上の乱数文字列を必ず使用
 # SESSION_COOKIE_NAME=wp_session
 # SESSION_COOKIE_SECURE=true  # 本番(HTTPS)のみ true。開発(HTTP)は既定で false なので設定不要
@@ -78,6 +80,10 @@ cp env.example .env
 `SESSION_SECRET_KEY` は 32 文字以上の十分に乱数性を持つ文字列を必ず指定してください。`change-me` など既知のプレースホルダーや短い値を設定すると、アプリケーション起動時に検証エラーとなり実行が停止します。外部に公開する環境では `openssl rand -base64 48` などで生成した値を `.env` へ保存し、リポジトリへコミットしない運用を徹底してください。
 
 `CORS_ALLOWED_ORIGINS` を設定すると、指定したオリジンからのみ資格情報付き CORS を許可します。ローカル開発では `http://127.0.0.1:5173,http://localhost:5173` を指定すると従来どおりフロントエンドと連携できます。未設定の場合はワイルドカード許可となりますが、`Access-Control-Allow-Credentials` は返さないためクッキー連携が無効化されます。
+
+`TRUSTED_PROXY_IPS` は `ProxyHeadersMiddleware` に渡す信頼済みプロキシ（IP または CIDR）の一覧です。Cloud Run を HTTPS ロードバランサ経由で公開している場合、Google Cloud Load Balancer の送信元レンジ `35.191.0.0/16,130.211.0.0/22` を列挙すると `X-Forwarded-For` から実クライアント IP を復元できます。複数のプロキシをチェーンしている場合は、外側から順にすべての信頼区間を指定してください。
+
+`ALLOWED_HOSTS` は Starlette の `TrustedHostMiddleware` で許可するホスト名です。Cloud Run 既定ホスト（`app-xxxx.a.run.app`）に加えて、利用中のカスタムドメイン（例: `api.example.com`）を列挙してください。ワイルドカードのまま運用すると Host ヘッダ偽装に弱くなるため、本番環境では必ず明示したドメインのみに絞り込みます。
 
 バックエンドは `SecurityHeadersMiddleware` で HSTS / CSP / X-Frame-Options / X-Content-Type-Options / Referrer-Policy / Permissions-Policy を強制付与します。HTTPS 運用時に HSTS の寿命を調整したい場合は `SECURITY_HSTS_MAX_AGE_SECONDS` を設定し、`SECURITY_HSTS_INCLUDE_SUBDOMAINS=false` や `SECURITY_HSTS_PRELOAD=true` でディレクティブを切り替えてください。CSP のオリジンは `SECURITY_CSP_DEFAULT_SRC`・`SECURITY_CSP_CONNECT_SRC` にカンマ区切りで指定します。Swagger UI などで外部 CDN を利用する場合は `'self'`（引用符付き）に加えて `https://cdn.jsdelivr.net` などを列挙してください。
 
@@ -116,6 +122,8 @@ docker compose up --build
 
 ### Cloud Run へのデプロイ
 - Cloud Run のサービスには `CORS_ALLOWED_ORIGINS` をデプロイ時の環境変数として指定し、本番ドメイン（例: `https://app.example.com,https://admin.example.com`）を列挙します。
+- `TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22` を設定し、Google Cloud Load Balancer からの `X-Forwarded-For` を信頼します。Cloud Armor や別プロキシを併用する場合は追加レンジも列挙してください。
+- `ALLOWED_HOSTS` には Cloud Run のデフォルトホスト (`app-xxxx.a.run.app`) とカスタムドメイン（例: `api.example.com`）の両方を登録し、Host ヘッダ偽装を防ぎます。
 - フロントエンドと同一ドメインでホストする場合も、バックエンドにアクセスするオリジンを完全一致で登録してください。HTTPS を使う環境では `SESSION_COOKIE_SECURE=true` も併せて指定します。
 - ドメインを追加した場合は Cloud Run の再デプロイで環境変数を更新し、反映後に `OPTIONS /healthz` などで `Access-Control-Allow-Origin` ヘッダーが意図した値になっているか確認してください。
 

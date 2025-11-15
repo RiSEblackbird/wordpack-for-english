@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import time
 from pathlib import Path
 from typing import Any
@@ -9,8 +10,10 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response
 from starlette.types import ASGIApp
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 try:  # FastAPI/Starlette のバージョンにより存在しない場合がある
     from starlette.middleware.timeout import TimeoutMiddleware  # type: ignore
@@ -27,17 +30,21 @@ from .config import settings
 from .indexing import seed_domain_terms, seed_from_jsonl, seed_word_snippets
 from .logging import configure_logging, logger
 from .metrics import registry
-from .middleware import (
-    RateLimitMiddleware,
-    RequestIDMiddleware,
-    SecurityHeadersMiddleware,
-)
+from .middleware import RateLimitMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware
 from .observability import request_trace
 from .providers import ChromaClientFactory, shutdown_providers
 from .routers import article as article_router
 from .routers import auth as auth_router
 from .routers import config as cfg
 from .routers import diagnostics, health, tts, word
+
+
+_PROXY_MIDDLEWARE_PARAM = (
+    "forwarded_allow_ips"
+    if "forwarded_allow_ips"
+    in inspect.signature(ProxyHeadersMiddleware.__init__).parameters
+    else "trusted_hosts"
+)
 
 class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
     """Emit structured request logs and capture latency/metrics for each call.
@@ -179,6 +186,17 @@ def create_app() -> FastAPI:
     configure_logging()
     app = FastAPI(title="WordPack API", version="0.3.1")
 
+    configured_proxies = [value for value in settings.trusted_proxy_ips if value]
+    if not configured_proxies:
+        configured_proxies = ["127.0.0.1"]
+    proxy_argument: list[str] | str
+    if len(configured_proxies) == 1:
+        proxy_argument = configured_proxies[0]
+    else:
+        proxy_argument = list(configured_proxies)
+    configured_hosts = list(settings.allowed_hosts)
+    if not configured_hosts:
+        configured_hosts = ["*"]
     configured_origins = list(settings.allowed_cors_origins)
     allow_credentials = bool(configured_origins)
     if not configured_origins:
@@ -196,19 +214,32 @@ def create_app() -> FastAPI:
 
     _maybe_add_timeout_middleware(app)
     app.add_middleware(RequestIDMiddleware)
-    # Middleware stack (inner → outer): RequestID → AccessLog → RateLimit → Security
+    # Middleware stack (inner → outer):
+    #   RequestID → AccessLog → RateLimit → TrustedHost → SecurityHeaders → ProxyHeaders
+    #   （Timeout →）CORSMiddleware がさらに内側に位置する。
     # Starlette では後から追加したミドルウェアが外側で実行される。RequestID で
     # `request_id` を採番し、AccessLog 側で構造化ログとメトリクスを記録する。レート
-    # 制限は署名付きセッションクッキーを検証して 429 を返すため外側に配置し、最後
-    # に Security を被せることで、RateLimit や FastAPI の自動レスポンスも含めて全ての
-    # 応答へ HSTS/CSP などのヘッダを確実に付与する。
+    # 制限は署名付きセッションクッキーを検証して 429 を返すため外側に配置する。
+    # TrustedHost は Host ヘッダ偽装をアプリケーション処理よりも前に拒否し、
+    # SecurityHeaders をその外側に配置することで RateLimit や FastAPI の自動レスポンス
+    # にも HSTS/CSP を付与する。最外周の ProxyHeaders で信頼済みプロキシが付与する
+    # X-Forwarded-For/X-Forwarded-Proto を読み替え、AccessLog や RateLimit が実際のクライア
+    # ント IP を参照できるようにしている。
     app.add_middleware(AccessLogAndMetricsMiddleware)
     app.add_middleware(
         RateLimitMiddleware,
         ip_capacity_per_minute=settings.rate_limit_per_min_ip,
         user_capacity_per_minute=settings.rate_limit_per_min_user,
     )
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=configured_hosts,
+    )
     app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(
+        ProxyHeadersMiddleware,
+        **{_PROXY_MIDDLEWARE_PARAM: proxy_argument},
+    )
 
     if settings.disable_session_auth:
         logger.warning(
