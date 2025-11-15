@@ -27,7 +27,11 @@ from .config import settings
 from .indexing import seed_domain_terms, seed_from_jsonl, seed_word_snippets
 from .logging import configure_logging, logger
 from .metrics import registry
-from .middleware import RateLimitMiddleware, RequestIDMiddleware
+from .middleware import (
+    RateLimitMiddleware,
+    RequestIDMiddleware,
+    SecurityHeadersMiddleware,
+)
 from .observability import request_trace
 from .providers import ChromaClientFactory, shutdown_providers
 from .routers import article as article_router
@@ -192,18 +196,19 @@ def create_app() -> FastAPI:
 
     _maybe_add_timeout_middleware(app)
     app.add_middleware(RequestIDMiddleware)
-    # Middleware stack (inner → outer): RequestID → AccessLog → RateLimit
-    # Starlette では後から追加したミドルウェアが外側で実行されるため、コード上は
-    # RequestID → AccessLog → RateLimit の順で登録する。AccessLog 側で request_id の
-    # フォールバック採番も行い、どの順序でも `request_complete` のログに ID が残る。
-    # RateLimit は署名付きセッション Cookie を検証して 429 を即時返却するため、
-    # 最外層に置き、アプリ本体に到達する前に負荷を抑制する。
+    # Middleware stack (inner → outer): RequestID → AccessLog → RateLimit → Security
+    # Starlette では後から追加したミドルウェアが外側で実行される。RequestID で
+    # `request_id` を採番し、AccessLog 側で構造化ログとメトリクスを記録する。レート
+    # 制限は署名付きセッションクッキーを検証して 429 を返すため外側に配置し、最後
+    # に Security を被せることで、RateLimit や FastAPI の自動レスポンスも含めて全ての
+    # 応答へ HSTS/CSP などのヘッダを確実に付与する。
     app.add_middleware(AccessLogAndMetricsMiddleware)
     app.add_middleware(
         RateLimitMiddleware,
         ip_capacity_per_minute=settings.rate_limit_per_min_ip,
         user_capacity_per_minute=settings.rate_limit_per_min_user,
     )
+    app.add_middleware(SecurityHeadersMiddleware)
 
     if settings.disable_session_auth:
         logger.warning(

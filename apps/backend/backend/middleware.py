@@ -5,7 +5,7 @@ import time
 import uuid
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Iterable
 
 from fastapi import Request
 from itsdangerous import BadSignature, SignatureExpired
@@ -15,6 +15,102 @@ from starlette.responses import JSONResponse, Response
 from .auth import verify_session_token
 from .config import settings
 from .logging import logger
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Attach strict security headers to every HTTP response before it leaves the API.
+
+    なぜ: API レスポンスから HSTS や CSP 等のヘッダが欠落すると、HTTPS 化済みでも
+    ダウングレード攻撃やクリックジャッキング、想定外の外部ドメインからのリソース
+    読み込みを許してしまう。共通ミドルウェアで一括設定し、`.env` から許可オリジンを
+    管理できるようにすることで、セキュリティ制御と運用負荷を両立させる。
+    """
+
+    def __init__(self, app) -> None:
+        super().__init__(app)
+        self._headers = self._build_header_map()
+
+    @staticmethod
+    def _merge_sources(*groups: Iterable[str]) -> tuple[str, ...]:
+        """Merge multiple CSP source tuples while preserving order and removing duplicates."""
+
+        merged: list[str] = []
+        seen: set[str] = set()
+        for group in groups:
+            for candidate in group:
+                if not candidate or candidate in seen:
+                    continue
+                seen.add(candidate)
+                merged.append(candidate)
+        return tuple(merged)
+
+    def _build_hsts_value(self) -> str:
+        """Construct the Strict-Transport-Security header value based on settings."""
+
+        max_age = max(0, int(settings.security_hsts_max_age_seconds))
+        directives = [f"max-age={max_age}"]
+        if settings.security_hsts_include_subdomains:
+            directives.append("includeSubDomains")
+        if settings.security_hsts_preload:
+            directives.append("preload")
+        return "; ".join(directives)
+
+    def _build_csp_value(self) -> str:
+        """Compose the Content-Security-Policy directive string from configured sources."""
+
+        default_sources = settings.security_csp_default_src or ("'self'",)
+        connect_sources = (
+            settings.security_csp_connect_src
+            if settings.security_csp_connect_src
+            else default_sources
+        )
+        # Swagger UI などのスタイル適用に必要な inline CSS を許可しつつ、
+        # データ URI のみを追加許可することで XSS の攻撃面を最小化する。
+        style_sources = self._merge_sources(default_sources, ("'unsafe-inline'",))
+        img_sources = self._merge_sources(default_sources, ("data:",))
+        font_sources = self._merge_sources(default_sources, ("data:",))
+        script_sources = default_sources
+
+        directives = [
+            ("default-src", default_sources),
+            ("connect-src", connect_sources),
+            ("img-src", img_sources),
+            ("script-src", script_sources),
+            ("style-src", style_sources),
+            ("font-src", font_sources),
+            ("frame-ancestors", ("'none'",)),
+            ("object-src", ("'none'",)),
+            ("base-uri", ("'self'",)),
+            ("form-action", ("'self'",)),
+        ]
+
+        parts: list[str] = []
+        for directive, sources in directives:
+            if not sources:
+                continue
+            joined_sources = " ".join(sources)
+            parts.append(f"{directive} {joined_sources}")
+        return "; ".join(parts)
+
+    def _build_header_map(self) -> dict[str, str]:
+        """Prepare the static header map applied to every response."""
+
+        return {
+            "Strict-Transport-Security": self._build_hsts_value(),
+            "Content-Security-Policy": self._build_csp_value(),
+            "X-Frame-Options": "DENY",
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "strict-origin-when-cross-origin",
+            "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        }
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:  # type: ignore[override]
+        response = await call_next(request)
+        for header_name, value in self._headers.items():
+            response.headers[header_name] = value
+        return response
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
