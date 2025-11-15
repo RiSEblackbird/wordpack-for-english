@@ -15,7 +15,6 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
         'wordpack.auth.v1',
         JSON.stringify({
           user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
-          token: 'token',
         }),
       );
     } catch {}

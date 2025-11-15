@@ -23,7 +23,6 @@ interface StoredAuthPayload {
 
 interface AuthContextValue {
   user: AuthenticatedUser | null;
-  token: GoogleIdToken | null;
   isAuthenticating: boolean;
   error: string | null;
   signIn: (idToken: GoogleIdToken) => Promise<void>;
@@ -84,7 +83,6 @@ function persistAuth(payload: StoredAuthPayload | null): void {
 
 export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNode }> = ({ clientId, children }) => {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
-  const [token, setToken] = useState<GoogleIdToken | null>(null);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authBypassActive, setAuthBypassActive] = useState(false);
@@ -143,7 +141,6 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
           setUser((prev) =>
             prev ?? AUTH_BYPASS_USER,
           );
-          setToken((prev) => prev ?? 'development-bypass');
         }
       } catch (err) {
         console.warn('Failed to detect authentication bypass flag from /api/config', err);
@@ -165,15 +162,15 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     /**
      * バイパスフラグ有効時にユーザー情報を初期化する。
      * 新規参画者向け補足: 認証をスキップする開発専用ルートを確実に起動するため、
-     * ここでモックユーザーとトークンを注入する。
+     * ここでモックユーザーを注入する。ID トークンは保持せず、Cookie によるセッションだけを信頼する。
      */
     setUser(AUTH_BYPASS_USER);
-    setToken('development-bypass');
   }, [authBypassActive, user]);
 
   /**
    * Google から取得した ID トークンをバックエンドへ送信し、セッションを確立する。
    * 副作用: セッション Cookie 設定、ユーザー状態の更新、エラー時は状態クリア。
+   * 注意: XSS 耐性を高めるため、ID トークンはローカル状態へ保持せずスコープ終了とともに破棄する。
    */
   const signIn = useCallback(async (idToken: GoogleIdToken) => {
     setIsAuthenticating(true);
@@ -193,7 +190,6 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
         throw new Error(detail);
       }
       setUser(payload.user);
-      setToken(idToken);
     } catch (err) {
       console.error('Google sign-in failed', err);
       if (err instanceof Error) {
@@ -239,7 +235,6 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       fallbackRequired = true;
     } finally {
       setUser(null);
-      setToken(null);
       if (fallbackRequired) {
         clearSessionCookie();
       }
@@ -252,7 +247,6 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      token,
       isAuthenticating,
       error,
       signIn,
@@ -264,7 +258,6 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     }),
     [
       user,
-      token,
       isAuthenticating,
       error,
       signIn,

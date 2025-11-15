@@ -16,6 +16,15 @@ const MissingFlagProbe: React.FC = () => {
   return <span data-testid="client-flag">{missingClientId ? 'missing' : 'ok'}</span>;
 };
 
+const TokenLeakProbe: React.FC = () => {
+  const contextValue = useAuth();
+  const hasTokenKey = Object.prototype.hasOwnProperty.call(
+    contextValue as Record<string, unknown>,
+    'token',
+  );
+  return <span data-testid="token-leak">{hasTokenKey ? 'leaked' : 'clean'}</span>;
+};
+
 describe('AuthProvider logging behaviour', () => {
   // 新規参画者向けメモ: 認証バイパス有効時のログレベル切り替えを固定するための回帰テスト。
   // バイパス環境では error を抑制し warn に切り替わることをここで保証する。
@@ -158,7 +167,7 @@ describe('AuthProvider persistence behaviour', () => {
       const { signIn, user } = useAuth();
       React.useEffect(() => {
         if (!user) {
-          signIn('dummy-id-token').catch(() => undefined);
+          void signIn('dummy-id-token');
         }
       }, [signIn, user]);
       return null;
@@ -192,5 +201,30 @@ describe('AuthProvider persistence behaviour', () => {
     expect(payload.user).toMatchObject(sampleUser);
 
     setItemSpy.mockRestore();
+  });
+});
+
+describe('AuthProvider public API surface', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    try { localStorage.clear(); } catch { /* ignore */ }
+  });
+
+  it('does not expose token field via context value', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(
+      <AuthProvider clientId="test-client">
+        <TokenLeakProbe />
+      </AuthProvider>,
+    );
+
+    expect(await screen.findByTestId('token-leak')).toHaveTextContent('clean');
+    expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
   });
 });
