@@ -333,6 +333,8 @@
 
 1. 画面上部のタブから「文章インポート」を選択します。
 2. テキストエリアに文章（日本語/英語）を貼り付けます。
+   - 1回のインポートで扱えるのは最大 4,000 文字です。超過するとボタンが無効化され、警告文が表示されます。
+   - API に直接リクエストする場合も同じ制限が適用され、`413 Request Entity Too Large` として `error=article_import_text_too_long` が返ります。
 3. モデルとパラメータを選択します。
    - モデル: 「gpt-5-mini / gpt-5-nano / gpt-4.1-mini / gpt-4o-mini」から選択
    - gpt-5-mini / gpt-5-nano を選ぶと `reasoning.effort` と `text.verbosity` の選択欄が表示されます（推論系）。

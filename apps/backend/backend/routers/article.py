@@ -6,12 +6,14 @@ import json
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Body, HTTPException, Query, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ValidationError
 
 from ..config import settings
 from ..logging import logger
 from ..models.article import (
+    ARTICLE_IMPORT_TEXT_MAX_LENGTH,
     ArticleImportRequest,
     ArticleDetailResponse,
     ArticleListItem,
@@ -182,10 +184,41 @@ def _post_filter_lemmas(raw: list[str]) -> list[str]:
     return uniq
 
 
+def _build_text_too_long_error() -> dict[str, Any]:
+    """記事インポートテキスト超過時の標準化されたエラーボディを生成する。"""
+
+    return {
+        "error": "article_import_text_too_long",
+        "message": (
+            "文章インポートのテキストは"
+            f"{ARTICLE_IMPORT_TEXT_MAX_LENGTH}文字以内で入力してください。"
+        ),
+        "max_length": ARTICLE_IMPORT_TEXT_MAX_LENGTH,
+    }
+
+
+def _validate_import_request(payload: dict[str, Any]) -> ArticleImportRequest:
+    """ArticleImportRequest の検証を行い、文字数超過時のみ 413 を通知する。"""
+
+    try:
+        return ArticleImportRequest.model_validate(payload)
+    except ValidationError as exc:  # FastAPI の 422 を尊重しつつ 413 を上書き
+        for err in exc.errors():
+            if err.get("type") == "string_too_long" and tuple(err.get("loc", ())) == ("text",):
+                raise HTTPException(
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                    detail=_build_text_too_long_error(),
+                ) from exc
+        raise RequestValidationError(exc.errors()) from exc
+
+
 @router.post(
     "/import", response_model=ArticleDetailResponse, response_model_exclude_none=True
 )
-async def import_article(req: ArticleImportRequest) -> ArticleDetailResponse:
+async def import_article(payload: dict[str, Any] = Body(...)) -> ArticleDetailResponse:
+    """文章インポートを受け付け、文字数超過は 413 で通知する。"""
+
+    req = _validate_import_request(payload)
     flow = ArticleImportFlow()
     # ルータ層は薄く、Langfuse の親スパンを貼ってフローを呼び出す
     from ..observability import request_trace
