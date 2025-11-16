@@ -202,7 +202,18 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             raise RuntimeError(msg) from exc
         if not aggregation:
             return 0
-        return int(getattr(aggregation[0], "value", 0) or 0)
+
+        result = aggregation[0]
+        count_value: Any | None = None
+        try:
+            count_value = result["count"]  # type: ignore[index]
+        except Exception:
+            aggregate_fields = getattr(result, "aggregate_fields", None)
+            if isinstance(aggregate_fields, Mapping):
+                count_value = aggregate_fields.get("count")
+        if count_value is None and getattr(result, "alias", None) == "count":
+            count_value = getattr(result, "value", None)
+        return int(count_value or 0)
 
     def list_word_packs_with_flags(
         self, limit: int = 50, offset: int = 0

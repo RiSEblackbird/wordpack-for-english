@@ -154,6 +154,10 @@ class FakeAggregationResult:
     def __init__(self, alias: str, value: int) -> None:
         self.alias = alias
         self.value = value
+        self.aggregate_fields = {alias: value}
+
+    def __getitem__(self, key: str) -> int:
+        return self.aggregate_fields[key]
 
 
 class FakeTransaction:
