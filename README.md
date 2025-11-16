@@ -115,6 +115,19 @@ npm run dev
 ```
 
 ### Docker（任意）
+
+#### Backend イメージのビルドと単体起動
+```bash
+# Cloud Run と同じ Dockerfile.backend を使って API 用イメージを作成
+docker build -f Dockerfile.backend -t wordpack-backend .
+
+# Firestore を利用する本番挙動を再現したい場合は ENVIRONMENT=production を指定
+docker run --rm -p 8000:8000 -e ENVIRONMENT=production wordpack-backend
+```
+- `ENVIRONMENT` を `production` にすると Firestore などの本番用依存をロードし、`development` の場合はローカル SQLite を利用します。サービスアカウントをボリュームで渡す場合は `-v $PWD/gcp-service-account.json:/secrets/sa.json -e GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa.json` のように設定してください。
+- `CMD` は `uvicorn backend.main:app --host 0.0.0.0 --port 8000 --app-dir apps/backend` に固定しているため、`docker run` でそのまま FastAPI を起動できます。
+
+#### docker compose
 ```bash
 docker compose up --build
 ```
@@ -123,11 +136,23 @@ docker compose up --build
 - `apps/frontend/docker-entrypoint.sh` が起動時に依存を確認し、`node_modules/@react-oauth/google` が不足している場合は自動で `npm install` を実行します。このため、新しいフロントエンド依存を追加してもコンテナの再ビルドは不要です。
 
 ### Cloud Run へのデプロイ
-- Cloud Run のサービスには `CORS_ALLOWED_ORIGINS` をデプロイ時の環境変数として指定し、本番ドメイン（例: `https://app.example.com,https://admin.example.com`）を列挙します。
-- `TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22` を設定し、Google Cloud Load Balancer からの `X-Forwarded-For` を信頼します。Cloud Armor や別プロキシを併用する場合は追加レンジも列挙してください。
-- `ALLOWED_HOSTS` には Cloud Run のデフォルトホスト (`app-xxxx.a.run.app`) とカスタムドメイン（例: `api.example.com`）の両方を登録し、Host ヘッダ偽装を防ぎます。
-- フロントエンドと同一ドメインでホストする場合も、バックエンドにアクセスするオリジンを完全一致で登録してください。HTTPS を使う環境では `SESSION_COOKIE_SECURE=true` も併せて指定します。
-- ドメインを追加した場合は Cloud Run の再デプロイで環境変数を更新し、反映後に `OPTIONS /healthz` などで `Access-Control-Allow-Origin` ヘッダーが意図した値になっているか確認してください。
+1. Cloud Build またはローカルからバックエンド用イメージをビルドします。
+   ```bash
+   # GCP の Artifact Registry へ push する例
+   gcloud builds submit --tag "${REGION}-docker.pkg.dev/${PROJECT_ID}/wordpack/backend:$(git rev-parse --short HEAD)" \
+     --file Dockerfile.backend --machine-type=e2-medium --timeout=30m \
+     --build-arg ENVIRONMENT=production
+   ```
+2. Cloud Run サービスをデプロイし、Firestore・OAuth 等で必要な環境変数を明示します。
+   ```bash
+   gcloud run deploy wordpack-backend \
+     --image "${REGION}-docker.pkg.dev/${PROJECT_ID}/wordpack/backend:$(git rev-parse --short HEAD)" \
+     --region=${REGION} \
+     --allow-unauthenticated \
+      --set-env-vars "ENVIRONMENT=production,CORS_ALLOWED_ORIGINS=https://app.example.com\,https://admin.example.com,TRUSTED_PROXY_IPS=35.191.0.0/16\,130.211.0.0/22,ALLOWED_HOSTS=app-xxxx.a.run.app\,api.example.com"
+   ```
+3. `GOOGLE_APPLICATION_CREDENTIALS` や Secret Manager を利用して Firestore サービスアカウント権限を付与し、`/healthz` への `GET` / `OPTIONS` で `Access-Control-Allow-Origin` と Cloud Logging へ出力される構造化ログを確認します。
+4. `SESSION_COOKIE_SECURE=true` など HTTPS 固有設定を有効にし、必要に応じて `TRUSTED_PROXY_IPS` や `ALLOWED_HOSTS` を Cloud Run の環境変数で更新してください。
 
 ### 認証フロー
 - フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。
