@@ -193,6 +193,35 @@ OPENAI_API_KEY=sk-xxxxx
 - `--image-tag`（既定: `git rev-parse --short HEAD`）、`--build-arg KEY=VALUE`、`--machine-type`、`--timeout` で Cloud Build の詳細を調整できます。Artifact Registry のリポジトリパスは `--artifact-repo` で差し替えられます。
 - `make deploy-cloud-run PROJECT_ID=... REGION=...` を実行すると同じスクリプトが呼び出されます。`gcloud config set project ...` / `gcloud config set run/region ...` を済ませていれば、Makefile 実行時の `PROJECT_ID` / `REGION` も省略できます。CI/CD では `gcloud auth login` / `gcloud auth configure-docker` の完了を前提としてください。
 
+#### release-cloud-run（Firestore インデックス同期 + Cloud Run デプロイ）
+
+`make release-cloud-run` は Firestore インデックスの同期 → Cloud Run 用 dry-run → 本番デプロイの順序を固定し、`.env.deploy`（もしくは `ENV_FILE` で指定したファイル）が見つからない場合は即座に停止します。Dry-run で Pydantic 設定を検証してから Cloud Build/Run を実行するため、GitHub Actions でも設定ミスの検知が容易です。
+
+- 前提条件
+  - `PROJECT_ID` と `REGION` を Make 実行時に必ず指定する（gcloud の既定値には依存しません）。
+  - Firestore Admin / Cloud Run Admin / Artifact Registry Writer 権限を持つサービスアカウントで `gcloud auth login` または `gcloud auth activate-service-account` を済ませ、`gcloud auth configure-docker` も完了させておく。
+  - `.env.deploy` など本番用の env ファイルを準備し、`SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず含める（`ENV_FILE` でパスを切り替え可能）。
+- 使い方
+
+```bash
+# Firestoreインデックス同期 → Cloud Run dry-run → 本番デプロイ
+make release-cloud-run \
+  PROJECT_ID=my-prod-project \
+  REGION=asia-northeast1 \
+  ENV_FILE=.env.deploy
+
+# GitHub Actions 等でインデックス同期を省略し、CI専用 env を使う場合
+make release-cloud-run \
+  PROJECT_ID=${{ env.GCP_PROJECT_ID }} \
+  REGION=${{ env.GCP_REGION }} \
+  ENV_FILE=configs/cloud-run/ci.env \
+  SKIP_FIRESTORE_INDEX_SYNC=true
+```
+
+- `SKIP_FIRESTORE_INDEX_SYNC=true` を付けると Firestore 側を更新せず Cloud Run デプロイのみを実行します（既にインデックスを同期済みの CI/CD 環境向け）。
+- Dry-run (`scripts/deploy_cloud_run.sh --dry-run`) は必ず本番デプロイの直前に走るため、設定エラーは gcloud コマンドの前で検知されます。
+- `ENV_FILE` を省略した場合でも `.env.deploy` の存在確認を行い、欠落しているとターゲットが失敗します。
+
 Cloud Run を外部 HTTP(S) ロードバランサ経由で公開する場合は `TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22` を設定（または既定値のまま維持）して `X-Forwarded-For` を信頼してください。このレンジを登録しておくと、アクセスログや RateLimit が Google Cloud Load Balancer の固定 IP ではなく実際のクライアント IP を記録できます。独自のプロキシを挟む構成では、その CIDR を Cloud Run の環境変数で必ず明示してください。
 
 ### Firebase Hosting でのリライト構成
