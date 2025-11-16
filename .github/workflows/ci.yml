@@ -117,4 +117,32 @@ jobs:
           CHROME_EXECUTABLE: ${{ steps.chrome.outputs.chrome-path }}
         run: npm run smoke
 
+  cloud_run_guard:
+    name: Cloud Run config guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install shellcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Lint deploy script
+        run: shellcheck scripts/deploy_cloud_run.sh
+
+      - name: Dry-run Cloud Run deployment
+        run: ./scripts/deploy_cloud_run.sh --dry-run --env-file configs/cloud-run/ci.env --project-id ci-placeholder-project --region asia-northeast1 --service wordpack-backend
+
 
