@@ -35,10 +35,12 @@ def _use_fake_settings() -> object:
         langfuse_enabled = False
         langfuse_exclude_paths = []
         allowed_cors_origins = ()
+        allowed_hosts = ()
         strict_mode = False
         wordpack_db_path = ":memory:"
         openai_api_key = None
         voyage_api_key = None
+        trusted_proxy_ips = ()
 
     fake_config.settings = _Settings()
     sys.modules["backend.config"] = fake_config
