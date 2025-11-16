@@ -147,26 +147,40 @@ docker compose up --build
 - `apps/frontend/docker-entrypoint.sh` が起動時に依存を確認し、`node_modules/@react-oauth/google` が不足している場合は自動で `npm install` を実行します。このため、新しいフロントエンド依存を追加してもコンテナの再ビルドは不要です。
 
 ### Cloud Run へのデプロイ
-1. Cloud Build またはローカルからバックエンド用イメージをビルドします。
-   ```bash
-   # GCP の Artifact Registry へ push する例
-   gcloud builds submit --tag "${REGION}-docker.pkg.dev/${PROJECT_ID}/wordpack/backend:$(git rev-parse --short HEAD)" \
-     --file Dockerfile.backend --machine-type=e2-medium --timeout=30m \
-     --build-arg ENVIRONMENT=production
-   ```
-2. Cloud Run サービスをデプロイし、Firestore・OAuth 等で必要な環境変数を明示します。デプロイ直前に 32 文字以上の乱数を生成して `SESSION_SECRET_KEY` へ代入し、以降のコマンドで使い回してください。
-   ```bash
-   export SESSION_SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
-   gcloud run deploy wordpack-backend \
-     --image "${REGION}-docker.pkg.dev/${PROJECT_ID}/wordpack/backend:$(git rev-parse --short HEAD)" \
-     --region=${REGION} \
-     --allow-unauthenticated \
-      --set-env-vars "ENVIRONMENT=production,SESSION_SECRET_KEY=${SESSION_SECRET_KEY},CORS_ALLOWED_ORIGINS=https://app.example.com\,https://admin.example.com,TRUSTED_PROXY_IPS=35.191.0.0/16\,130.211.0.0/22,ALLOWED_HOSTS=app-xxxx.a.run.app\,api.example.com"
-   ```
-3. `GOOGLE_APPLICATION_CREDENTIALS` や Secret Manager を利用して Firestore サービスアカウント権限を付与し、`/healthz` への `GET` / `OPTIONS` で `Access-Control-Allow-Origin` と Cloud Logging へ出力される構造化ログを確認します。
-4. `SESSION_COOKIE_SECURE=true` など HTTPS 固有設定を有効にし、必要に応じて `TRUSTED_PROXY_IPS` や `ALLOWED_HOSTS` を Cloud Run の環境変数で更新してください。`ALLOWED_HOSTS` を設定しない場合、Cloud Run ではサービスがブート前に失敗するため（ENVIRONMENT=production の既定 `*` は禁止）、サービスポートを公開する URL を必ず列挙してください。
+`scripts/deploy_cloud_run.sh` が Cloud Run 用イメージのビルドからデプロイまでを自動化します。`.env.deploy`（もしくは `--env-file` で指定したファイル）に本番環境の設定をまとめ、`SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず明示してください。
 
-   Cloud Run を外部 HTTP(S) ロードバランサ経由で公開する場合は `TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22` を設定（または既定値のまま維持）して `X-Forwarded-For` を信頼してください。このレンジを登録しておくと、アクセスログや RateLimit が Google Cloud Load Balancer の固定 IP ではなく実際のクライアント IP を記録できます。独自のプロキシを挟む構成では、その CIDR を Cloud Run の環境変数で必ず明示してください。
+```env
+# .env.deploy の例
+ENVIRONMENT=production
+PROJECT_ID=my-prod-project
+REGION=asia-northeast1
+CLOUD_RUN_SERVICE=wordpack-backend
+ARTIFACT_REPOSITORY=wordpack/backend
+SESSION_SECRET_KEY=<openssl rand -base64 48 の結果>
+CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
+TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22
+ALLOWED_HOSTS=app-xxxx.a.run.app,api.example.com
+GOOGLE_CLIENT_ID=123456.apps.googleusercontent.com
+OPENAI_API_KEY=sk-xxxxx
+```
+
+準備ができたら次のコマンドでデプロイします（`--generate-secret` を付けると不足時に `openssl rand -base64 <length>` で自動生成されます）。
+
+```bash
+./scripts/deploy_cloud_run.sh \
+  --project-id my-prod-project \
+  --region asia-northeast1 \
+  --service wordpack-backend \
+  --artifact-repo wordpack/backend \
+  --generate-secret
+```
+
+- スクリプトは `.env.deploy` を読み込んだあとに `python -m apps.backend.backend.config` を実行し、Pydantic 設定の検証に失敗した場合は `gcloud builds submit` へ進む前に停止します。`TRUSTED_PROXY_IPS` と `ALLOWED_HOSTS` を省略したまま `ENVIRONMENT=production` で実行すると検証段階で即座にエラーになります。
+- `--dry-run` を指定すると gcloud コマンドを実行せずに設定のみ検証します。CI では `configs/cloud-run/ci.env` を使ってこのモードを呼び出し、欠落した環境変数を早期検知しています。
+- `--image-tag`（既定: `git rev-parse --short HEAD`）、`--build-arg KEY=VALUE`、`--machine-type`、`--timeout` で Cloud Build の詳細を調整できます。Artifact Registry のリポジトリパスは `--artifact-repo` で差し替えられます。
+- `make deploy-cloud-run PROJECT_ID=... REGION=...` を実行すると同じスクリプトが呼び出されます。CI/CD では `gcloud auth login` / `gcloud auth configure-docker` の完了を前提としてください。
+
+Cloud Run を外部 HTTP(S) ロードバランサ経由で公開する場合は `TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22` を設定（または既定値のまま維持）して `X-Forwarded-For` を信頼してください。このレンジを登録しておくと、アクセスログや RateLimit が Google Cloud Load Balancer の固定 IP ではなく実際のクライアント IP を記録できます。独自のプロキシを挟む構成では、その CIDR を Cloud Run の環境変数で必ず明示してください。
 
 ### Firebase Hosting でのリライト構成
 Cloud Run の API を Firebase Hosting のフロントエンドと同一ドメインで公開する場合は、`firebase.json` に `/api` 向けリライトを定義しておくと CORS 設定を最小限にできます。`apps/frontend/dist` を Hosting に配置する例を示します。

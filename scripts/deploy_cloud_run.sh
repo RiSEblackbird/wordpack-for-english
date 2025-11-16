@@ -1,0 +1,280 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# このスクリプトは Cloud Run へのデプロイを自動化し、
+# 1) .env/.env.deploy から設定を読み込む
+# 2) Python の設定ローダーでバリデーションする
+# 3) gcloud builds submit → gcloud run deploy を実行する
+# --dry-run を付けると 1) と 2) のみを実行して早期検知ができます。
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "$REPO_ROOT"
+
+# log: RFC3339 timestamp付きで情報ログを整形します。
+log() {
+  printf '[%s] %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$*"
+}
+
+# err: エラーを stderr へ出力して失敗理由を即座に共有します。
+err() {
+  printf 'Error: %s\n' "$*" >&2
+}
+
+usage() {
+  cat <<'USAGE'
+Cloud Run deployment helper
+
+Usage:
+  scripts/deploy_cloud_run.sh [options]
+
+Options:
+  --project-id <id>          GCP Project ID (fallback: PROJECT_ID in env file)
+  --region <region>          Artifact Registry / Cloud Run region
+  --service <name>           Cloud Run service name (default: wordpack-backend)
+  --artifact-repo <path>     Artifact Registry repo path (default: wordpack/backend)
+  --image-tag <tag>          Image tag (default: git rev-parse --short HEAD)
+  --build-arg KEY=VALUE      Additional docker build arg (repeatable)
+  --env-file <path>          Explicit env file (default: .env.deploy or .env)
+  --generate-secret          Generate SESSION_SECRET_KEY via openssl if missing
+  --secret-length <bytes>    Byte size for openssl rand -base64 (default: 48)
+  --machine-type <type>      Cloud Build machine type (default: e2-medium)
+  --timeout <duration>       Cloud Build timeout, e.g. 30m
+  --dry-run                  Validate config only (skip gcloud build/deploy)
+  -h, --help                 Show this help
+USAGE
+}
+
+# require_cmd: コマンドが存在しない場合は即終了し、失敗を後段へ伝搬させます。
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    err "Required command not found: $cmd"
+    exit 1
+  fi
+}
+
+# escape_env_value: --set-env-vars へ安全に渡すため、改行やカンマを除去・エスケープします。
+escape_env_value() {
+  local raw trimmed
+  raw="$(printf '%s' "$1" | tr -d '\r\n')"
+  trimmed="${raw//\\/\\\\}"
+  trimmed="${trimmed//,/\\,}"
+  printf '%s' "$trimmed"
+}
+
+# add_env_key: Cloud Run へ渡す環境変数リストを重複なく蓄積します。
+add_env_key() {
+  local key="$1"
+  [[ -z "$key" ]] && return 0
+  DEPLOY_ENV_KEYS["$key"]=1
+}
+
+ENV_FILE=""
+PROJECT_ID_ARG=""
+REGION_ARG=""
+SERVICE_NAME="wordpack-backend"
+ARTIFACT_REPOSITORY="wordpack/backend"
+IMAGE_TAG=""
+SECRET_LENGTH=48
+GENERATE_SECRET=false
+DRY_RUN=false
+MACHINE_TYPE="e2-medium"
+BUILD_TIMEOUT="30m"
+declare -a EXTRA_BUILD_ARGS=()
+
+declare -A DEPLOY_ENV_KEYS=()
+declare -a IGNORE_DEPLOY_KEYS=(PROJECT_ID REGION CLOUD_RUN_SERVICE ARTIFACT_REPOSITORY IMAGE_TAG MACHINE_TYPE BUILD_TIMEOUT)
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --project-id)
+      PROJECT_ID_ARG="$2"
+      shift 2
+      ;;
+    --region)
+      REGION_ARG="$2"
+      shift 2
+      ;;
+    --service)
+      SERVICE_NAME="$2"
+      shift 2
+      ;;
+    --artifact-repo)
+      ARTIFACT_REPOSITORY="$2"
+      shift 2
+      ;;
+    --image-tag)
+      IMAGE_TAG="$2"
+      shift 2
+      ;;
+    --env-file)
+      ENV_FILE="$2"
+      shift 2
+      ;;
+    --build-arg)
+      EXTRA_BUILD_ARGS+=("$2")
+      shift 2
+      ;;
+    --generate-secret)
+      GENERATE_SECRET=true
+      shift 1
+      ;;
+    --secret-length)
+      SECRET_LENGTH="$2"
+      shift 2
+      ;;
+    --machine-type)
+      MACHINE_TYPE="$2"
+      shift 2
+      ;;
+    --timeout)
+      BUILD_TIMEOUT="$2"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      shift 1
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      err "Unknown option: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -z "$ENV_FILE" ]]; then
+  if [[ -f ".env.deploy" ]]; then
+    ENV_FILE=".env.deploy"
+  elif [[ -f ".env" ]]; then
+    ENV_FILE=".env"
+  else
+    err "Env file not found. Create .env.deploy or specify --env-file."
+    exit 1
+  fi
+fi
+
+if [[ ! "$SECRET_LENGTH" =~ ^[0-9]+$ ]]; then
+  err "--secret-length must be numeric"
+  exit 1
+fi
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  err "Env file does not exist: $ENV_FILE"
+  exit 1
+fi
+
+log "Loading environment variables from $ENV_FILE"
+set -a
+# shellcheck disable=SC1090
+source "$ENV_FILE"
+set +a
+
+PROJECT_ID="${PROJECT_ID_ARG:-${PROJECT_ID:-}}"
+REGION="${REGION_ARG:-${REGION:-}}"
+if [[ -z "${ENVIRONMENT:-}" ]]; then
+  ENVIRONMENT=production
+fi
+export ENVIRONMENT
+
+if [[ "$GENERATE_SECRET" == true || -z "${SESSION_SECRET_KEY:-}" ]]; then
+  if [[ "$GENERATE_SECRET" == false ]]; then
+    log "SESSION_SECRET_KEY is missing; enabling --generate-secret automatically"
+  fi
+  require_cmd openssl
+  SESSION_SECRET_KEY="$(openssl rand -base64 "$SECRET_LENGTH" | tr -d '\r\n')"
+  export SESSION_SECRET_KEY
+  log "Generated SESSION_SECRET_KEY with length $SECRET_LENGTH"
+fi
+
+if [[ -z "$PROJECT_ID" ]]; then
+  err "PROJECT_ID is required (use --project-id or set in env file)"
+  exit 1
+fi
+
+if [[ -z "$REGION" ]]; then
+  err "REGION is required (use --region or set in env file)"
+  exit 1
+fi
+
+add_env_key "ENVIRONMENT"
+add_env_key "SESSION_SECRET_KEY"
+add_env_key "CORS_ALLOWED_ORIGINS"
+add_env_key "TRUSTED_PROXY_IPS"
+add_env_key "ALLOWED_HOSTS"
+
+while IFS= read -r line || [[ -n "$line" ]]; do
+  line="${line%%$'\r'}"
+  [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+  if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+    add_env_key "${BASH_REMATCH[1]}"
+  fi
+done < "$ENV_FILE"
+
+for ignore_key in "${IGNORE_DEPLOY_KEYS[@]}"; do
+  unset "DEPLOY_ENV_KEYS[$ignore_key]"
+done
+
+for required_key in SESSION_SECRET_KEY CORS_ALLOWED_ORIGINS TRUSTED_PROXY_IPS ALLOWED_HOSTS; do
+  if [[ -z "${!required_key:-}" ]]; then
+    err "$required_key must be set in $ENV_FILE or environment"
+    exit 1
+  fi
+done
+
+require_cmd git
+IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"
+IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}:${IMAGE_TAG}"
+
+require_cmd python
+log "Validating backend settings via python -m apps.backend.backend.config"
+PYTHONPATH="$REPO_ROOT" python -m apps.backend.backend.config >/dev/null
+log "Backend configuration validated successfully"
+
+if [[ "$DRY_RUN" == true ]]; then
+  log "Dry run mode: skipping gcloud build/deploy"
+  log "Prepared image URI: $IMAGE_URI"
+  exit 0
+fi
+
+require_cmd gcloud
+
+log "Submitting build to Cloud Build: $IMAGE_URI"
+BUILD_CMD=(gcloud builds submit --tag "$IMAGE_URI" --file Dockerfile.backend --machine-type="$MACHINE_TYPE" --timeout="$BUILD_TIMEOUT")
+if [[ ${#EXTRA_BUILD_ARGS[@]} -gt 0 ]]; then
+  for build_arg in "${EXTRA_BUILD_ARGS[@]}"; do
+    BUILD_CMD+=(--build-arg "$build_arg")
+  done
+fi
+"${BUILD_CMD[@]}"
+
+log "Preparing --set-env-vars payload"
+ENV_VARS_ARGS=()
+mapfile -t SORTED_DEPLOY_KEYS < <(printf '%s\n' "${!DEPLOY_ENV_KEYS[@]}" | sort)
+for key in "${SORTED_DEPLOY_KEYS[@]}"; do
+  value="${!key-}"
+  [[ -z "$value" ]] && continue
+  escaped="$(escape_env_value "$value")"
+  ENV_VARS_ARGS+=("${key}=${escaped}")
+done
+
+if [[ ${#ENV_VARS_ARGS[@]} -eq 0 ]]; then
+  err "No environment variables collected for deployment"
+  exit 1
+fi
+
+ENV_VARS_STRING=$(IFS=','; printf '%s' "${ENV_VARS_ARGS[*]}")
+
+log "Deploying service ${SERVICE_NAME} to region ${REGION}"
+gcloud run deploy "$SERVICE_NAME" \
+  --image "$IMAGE_URI" \
+  --region "$REGION" \
+  --allow-unauthenticated \
+  --set-env-vars "$ENV_VARS_STRING"
+
+log "Deployment completed"
