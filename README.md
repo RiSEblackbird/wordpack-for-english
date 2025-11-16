@@ -153,7 +153,14 @@ docker compose up --build
 - `apps/frontend/docker-entrypoint.sh` が起動時に依存を確認し、`node_modules/@react-oauth/google` が不足している場合は自動で `npm install` を実行します。このため、新しいフロントエンド依存を追加してもコンテナの再ビルドは不要です。
 
 ### Cloud Run へのデプロイ
-`scripts/deploy_cloud_run.sh` が Cloud Run 用イメージのビルドからデプロイまでを自動化します。`.env.deploy`（もしくは `--env-file` で指定したファイル）に本番環境の設定をまとめ、`SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず明示してください。
+`scripts/deploy_cloud_run.sh` が Cloud Run 用イメージのビルドからデプロイまでを自動化します。まずはテンプレートを複製して、本番用の `.env.deploy` を作成してください。
+
+```bash
+cp env.deploy.example .env.deploy
+# コピー後に PROJECT_ID などを本番値へ置き換える
+```
+
+`.env.deploy`（もしくは `--env-file` で指定したファイル）に本番環境の設定をまとめ、`SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず明示します。`SESSION_SECRET_KEY` は `./scripts/deploy_cloud_run.sh --generate-secret` を付けて実行すると不足時に `openssl rand -base64 <length>` で安全な値へ自動補完できます。
 
 ```env
 # .env.deploy の例
@@ -162,7 +169,7 @@ PROJECT_ID=my-prod-project
 REGION=asia-northeast1
 CLOUD_RUN_SERVICE=wordpack-backend
 ARTIFACT_REPOSITORY=wordpack/backend
-SESSION_SECRET_KEY=<openssl rand -base64 48 の結果>
+SESSION_SECRET_KEY=<後述の --generate-secret か openssl rand -base64 48 で生成>
 CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com
 TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22
 ALLOWED_HOSTS=app-xxxx.a.run.app,api.example.com
@@ -170,7 +177,7 @@ GOOGLE_CLIENT_ID=123456.apps.googleusercontent.com
 OPENAI_API_KEY=sk-xxxxx
 ```
 
-準備ができたら次のコマンドでデプロイします（`--generate-secret` を付けると不足時に `openssl rand -base64 <length>` で自動生成されます）。
+準備ができたら次のコマンドでデプロイします。テンプレートをコピーした直後で `SESSION_SECRET_KEY` が空の場合は、`--generate-secret` を付けることで不足分を `openssl rand -base64 <length>` で自動生成できます。
 
 ```bash
 ./scripts/deploy_cloud_run.sh \
