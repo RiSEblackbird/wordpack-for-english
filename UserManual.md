@@ -287,7 +287,7 @@
 - LLM 機能有効時でも内部スレッドは共有プールで制御（長時間運用でのスレッド増加なし）
 
 #### B-5-1. Cloud Run への自動デプロイ
-- `scripts/deploy_cloud_run.sh` が Cloud Build → Cloud Run Deploy を一括で実行します。`.env.deploy`（または `--env-file` で指定するファイル）に `ENVIRONMENT=production` と `SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を記載してください。`PROJECT_ID` / `REGION` を同じファイルに含めるとコマンド引数を短縮できます。
+- `scripts/deploy_cloud_run.sh` が Cloud Build → Cloud Run Deploy を一括で実行します。最初に `cp env.deploy.example .env.deploy` でテンプレートを複製し、`PROJECT_ID` や `REGION`、ドメイン情報を本番値へ置き換えてください。`.env.deploy`（または `--env-file` で指定するファイル）に `ENVIRONMENT=production` と `SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を記載してください。`PROJECT_ID` / `REGION` を同じファイルに含めるとコマンド引数を短縮できます。
 - 実行例:
   ```bash
   ./scripts/deploy_cloud_run.sh \
@@ -297,7 +297,7 @@
     --artifact-repo wordpack/backend \
     --generate-secret
   ```
-  - `--generate-secret` は `SESSION_SECRET_KEY` が未設定のときに `openssl rand -base64 <length>` で安全な乱数を生成します。既存値を維持したい場合は `.env.deploy` にあらかじめ貼り付けておけば上書きされません。
+  - `--generate-secret` は `SESSION_SECRET_KEY` が未設定のときに `openssl rand -base64 <length>` で安全な乱数を生成します。テンプレートをコピーしただけで未記入の場合でも、このオプションを付ければ安全な値が自動で補完されます。既存値を維持したい場合は `.env.deploy` にあらかじめ貼り付けておけば上書きされません。
   - `--dry-run` を付けると設定のロード（`python -m apps.backend.backend.config`）までを実行し、gcloud コマンドをスキップします。CI では `configs/cloud-run/ci.env` を入力にして dry-run を常時実行し、必須設定の欠落をブロックしています。
   - `--image-tag`（既定: `git rev-parse --short HEAD`）、`--build-arg KEY=VALUE`、`--machine-type`、`--timeout` などで Cloud Build のパラメータを細かく制御できます。`--artifact-repo` で Artifact Registry のリポジトリを差し替え可能です。
 - `make deploy-cloud-run PROJECT_ID=... REGION=...` を利用すれば、Makefile から同じスクリプトを呼び出せます。GitHub Actions の `Cloud Run config guard` ジョブでも `scripts/deploy_cloud_run.sh --dry-run` を実行しており、`shellcheck` でスクリプトの静的解析も同ジョブで通過させます。ローカルでスクリプトを更新した場合は `shellcheck scripts/deploy_cloud_run.sh` を必ず実行してください。

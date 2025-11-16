@@ -23,6 +23,7 @@ bin-release/
 !.env.example
 # Cloud Run デプロイ用の秘密情報は必ずローカルファイル (.env.deploy など) に閉じ込める
 .env.deploy
+!env.deploy.example
 configs/cloud-run/*.secrets
 google-oauth-client-secret.json
 client_secret_*.json
