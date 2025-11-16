@@ -71,6 +71,12 @@ cp env.example .env
 # SECURITY_CSP_DEFAULT_SRC='self',https://cdn.jsdelivr.net  # CSP の default-src 許可リスト
 # SECURITY_CSP_CONNECT_SRC='self',https://api.example.com  # API fetch で許可する接続先
 # GOOGLE_CLOCK_SKEW_SECONDS=60  # Google IDトークン検証時に許容する時計ずれ（秒）
+
+# Frontend（apps/frontend 配下の Vite プロジェクト）
+npm run prepare:frontend-env  # apps/frontend/.env が無い場合に .env.example をコピー
+# または `cp apps/frontend/.env.example apps/frontend/.env`
+# VITE_GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com
+# VITE_SESSION_COOKIE_NAME=wp_session
 ```
 
 ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。
@@ -100,17 +106,17 @@ Firestore に保存する主要コレクションは `firestore.indexes.json` �
 
 バックエンドは `SecurityHeadersMiddleware` で HSTS / CSP / X-Frame-Options / X-Content-Type-Options / Referrer-Policy / Permissions-Policy を強制付与します。HTTPS 運用時に HSTS の寿命を調整したい場合は `SECURITY_HSTS_MAX_AGE_SECONDS` を設定し、`SECURITY_HSTS_INCLUDE_SUBDOMAINS=false` や `SECURITY_HSTS_PRELOAD=true` でディレクティブを切り替えてください。CSP のオリジンは `SECURITY_CSP_DEFAULT_SRC`・`SECURITY_CSP_CONNECT_SRC` にカンマ区切りで指定します。Swagger UI などで外部 CDN を利用する場合は `'self'`（引用符付き）に加えて `https://cdn.jsdelivr.net` などを列挙してください。
 
-フロントエンド側でも同じクライアントIDを参照できるように、`apps/frontend/.env` を作成して Vite の環境変数を指定してください。
+フロントエンド側でも同じクライアントIDを参照できるように、`apps/frontend/.env.example` を `apps/frontend/.env` としてコピーしてください。ルートディレクトリで `npm run prepare:frontend-env` を実行するとテンプレートを自動で複製します（`.env` が存在する場合は上書きしません）。
 
 ```bash
-cd apps/frontend
-cp .env.example .env  # 無い場合は自作でOK
-echo "VITE_GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com" >> .env
+# ルートで実行
+npm run prepare:frontend-env
+# 既に .env がある場合や手動で書き換える場合は apps/frontend/.env.example を直接編集してください
 ```
 
-`VITE_GOOGLE_CLIENT_ID` はバックエンドの `GOOGLE_CLIENT_ID` と一致している必要があります。Google Console で発行した OAuth 2.0 Web クライアント ID を指定してください。
+`VITE_GOOGLE_CLIENT_ID` はバックエンドの `GOOGLE_CLIENT_ID` と一致している必要があります。Google Console で発行した OAuth 2.0 Web クライアント ID を指定してください。`AuthContext.tsx` では `VITE_SESSION_COOKIE_NAME` も参照するため、FastAPI 側の `SESSION_COOKIE_NAME` を変更した場合はフロントエンドの `.env` も合わせて更新します。
 
-バックエンド・フロントエンドのどちらも起動前に `.env` と `apps/frontend/.env` を用意し、`GOOGLE_CLIENT_ID`（必要に応じて `GOOGLE_ALLOWED_HD` や `ADMIN_EMAIL_ALLOWLIST`）、`SESSION_SECRET_KEY`、`VITE_GOOGLE_CLIENT_ID` を設定しておくと、初回起動から Google ログインが有効になります。
+バックエンド・フロントエンドのどちらも起動前に `.env` と `apps/frontend/.env` を用意し、`GOOGLE_CLIENT_ID`（必要に応じて `GOOGLE_ALLOWED_HD` や `ADMIN_EMAIL_ALLOWLIST`）、`SESSION_SECRET_KEY`、`VITE_GOOGLE_CLIENT_ID`、`VITE_SESSION_COOKIE_NAME` を設定しておくと、初回起動から Google ログインが有効になります。
 
 補足（時計ずれの吸収）  
 `GOOGLE_CLOCK_SKEW_SECONDS` を指定すると、Google の ID トークン検証で `iat`/`nbf`/`exp` の境界に対して指定秒数のゆとりを持たせます。既定は 60 秒で、Docker/WSL などの軽微な時計ずれによる “Token used too early” を回避できます（セキュリティ上の影響は軽微ですが、必要最小限の値にしてください）。
