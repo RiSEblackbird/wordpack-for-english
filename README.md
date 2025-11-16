@@ -99,7 +99,7 @@ cp env.example .env
 
 `CORS_ALLOWED_ORIGINS` を設定すると、指定したオリジンからのみ資格情報付き CORS を許可します。ローカル開発では `http://127.0.0.1:5173,http://localhost:5173` を指定すると従来どおりフロントエンドと連携できます。未設定の場合はワイルドカード許可となりますが、`Access-Control-Allow-Credentials` は返さないためクッキー連携が無効化されます。
 
-`TRUSTED_PROXY_IPS` は `ProxyHeadersMiddleware` に渡す信頼済みプロキシ（IP または CIDR）の一覧です。Cloud Run を HTTPS ロードバランサ経由で公開している場合、Google Cloud Load Balancer の送信元レンジ `35.191.0.0/16,130.211.0.0/22` を列挙すると `X-Forwarded-For` から実クライアント IP を復元できます。複数のプロキシをチェーンしている場合は、外側から順にすべての信頼区間を指定してください。
+`TRUSTED_PROXY_IPS` は `ProxyHeadersMiddleware` に渡す信頼済みプロキシ（IP または CIDR）の一覧です。Cloud Run を HTTPS ロードバランサ経由で公開している場合、Google Cloud Load Balancer の送信元レンジ `35.191.0.0/16,130.211.0.0/22` を列挙すると `X-Forwarded-For` から実クライアント IP を復元できます。複数のプロキシをチェーンしている場合は、外側から順にすべての信頼区間を指定してください。`ENVIRONMENT=production` でこの変数を省略した場合でも安全のために同レンジが自動適用されますが、Cloud Run 以外の経路を挟むなら自前の CIDR へ差し替えてください。空文字列などで未設定のまま起動すると、RateLimit が全リクエストをロードバランサ由来とみなしてしまうため起動が失敗します。
 
 `ALLOWED_HOSTS` は Starlette の `TrustedHostMiddleware` で許可するホスト名です。Cloud Run 既定ホスト（`app-xxxx.a.run.app`）に加えて、利用中のカスタムドメイン（例: `api.example.com`）を列挙してください。ワイルドカードのまま運用すると Host ヘッダ偽装に弱くなるため、本番環境では必ず明示したドメインのみに絞り込みます。
 
@@ -170,6 +170,8 @@ docker compose up --build
    ```
 3. `GOOGLE_APPLICATION_CREDENTIALS` や Secret Manager を利用して Firestore サービスアカウント権限を付与し、`/healthz` への `GET` / `OPTIONS` で `Access-Control-Allow-Origin` と Cloud Logging へ出力される構造化ログを確認します。
 4. `SESSION_COOKIE_SECURE=true` など HTTPS 固有設定を有効にし、必要に応じて `TRUSTED_PROXY_IPS` や `ALLOWED_HOSTS` を Cloud Run の環境変数で更新してください。
+
+   Cloud Run を外部 HTTP(S) ロードバランサ経由で公開する場合は `TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22` を設定（または既定値のまま維持）して `X-Forwarded-For` を信頼してください。このレンジを登録しておくと、アクセスログや RateLimit が Google Cloud Load Balancer の固定 IP ではなく実際のクライアント IP を記録できます。独自のプロキシを挟む構成では、その CIDR を Cloud Run の環境変数で必ず明示してください。
 
 ### Firebase Hosting でのリライト構成
 Cloud Run の API を Firebase Hosting のフロントエンドと同一ドメインで公開する場合は、`firebase.json` に `/api` 向けリライトを定義しておくと CORS 設定を最小限にできます。`apps/frontend/dist` を Hosting に配置する例を示します。
