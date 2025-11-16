@@ -245,7 +245,7 @@ fi
 require_cmd gcloud
 
 log "Submitting build to Cloud Build: $IMAGE_URI"
-BUILD_CMD=(gcloud builds submit --tag "$IMAGE_URI" --file Dockerfile.backend --machine-type="$MACHINE_TYPE" --timeout="$BUILD_TIMEOUT")
+BUILD_CMD=(gcloud builds submit --project "$PROJECT_ID" --tag "$IMAGE_URI" --file Dockerfile.backend --machine-type="$MACHINE_TYPE" --timeout="$BUILD_TIMEOUT")
 if [[ ${#EXTRA_BUILD_ARGS[@]} -gt 0 ]]; then
   for build_arg in "${EXTRA_BUILD_ARGS[@]}"; do
     BUILD_CMD+=(--build-arg "$build_arg")
@@ -272,6 +272,7 @@ ENV_VARS_STRING=$(IFS=','; printf '%s' "${ENV_VARS_ARGS[*]}")
 
 log "Deploying service ${SERVICE_NAME} to region ${REGION}"
 gcloud run deploy "$SERVICE_NAME" \
+  --project "$PROJECT_ID" \
   --image "$IMAGE_URI" \
   --region "$REGION" \
   --allow-unauthenticated \
