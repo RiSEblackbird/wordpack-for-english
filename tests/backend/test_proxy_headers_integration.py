@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from fastapi import Request
 from starlette.testclient import TestClient
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
@@ -83,3 +84,21 @@ def test_access_log_reports_forwarded_ip(
         entry.get("event") == "request_complete" and entry.get("client_ip") == forwarded_ip
         for entry in observed
     )
+
+
+def test_request_client_host_reflects_forwarded_for(proxy_app_factory) -> None:
+    forwarded_ip = "198.51.100.200"
+    app = proxy_app_factory()
+
+    @app.get("/echo-client-ip")
+    async def echo_client_ip(request: Request) -> dict[str, str | None]:
+        """実際に FastAPI のハンドラから参照した client.host を検証する。"""
+
+        client = request.client.host if request.client else None
+        return {"client_ip": client}
+
+    with TestClient(app) as client:
+        response = client.get("/echo-client-ip", headers={"X-Forwarded-For": forwarded_ip})
+
+    assert response.status_code == 200
+    assert response.json().get("client_ip") == forwarded_ip

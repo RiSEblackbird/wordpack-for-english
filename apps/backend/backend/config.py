@@ -8,6 +8,8 @@ from pydantic_settings.sources.types import NoDecode
 
 DEFAULT_DB_PATH = ".data/wordpack.sqlite3"
 _MIN_SESSION_SECRET_KEY_LENGTH = 32
+# ローカル開発環境で `uvicorn` を直接叩くときは 127.0.0.1 のみを信頼する。
+_DEFAULT_LOCAL_TRUSTED_PROXY: tuple[str, ...] = ("127.0.0.1",)
 _PLACEHOLDER_SESSION_SECRETS = frozenset({
     "change-me",
     "changeme",
@@ -19,6 +21,15 @@ _KNOWN_LEAKED_SESSION_SECRET_SHA256 = frozenset(
         # ハッシュ値だけを保持し、過去に公開してしまった文字列の再利用を検知する。
         "8450352d877b76fb1f1ff9814c28408b254399e695f97bc3e446ee01dcd317d5",
     }
+)
+
+# Cloud Run/External HTTP(S) Load Balancer が付与する `X-Forwarded-For` から
+# 実クライアント IP を復元するために信頼すべき既定 CIDR。
+# なぜ: 本番環境でロードバランサ経由のアクセスを扱う際に、これらのレンジを
+# 信頼しないと RateLimit やアクセスログが全件ロードバランサ IP と解釈される。
+_DEFAULT_PRODUCTION_TRUSTED_PROXIES: tuple[str, ...] = (
+    "35.191.0.0/16",
+    "130.211.0.0/22",
 )
 
 
@@ -243,7 +254,7 @@ class Settings(BaseSettings):
     )
 
     trusted_proxy_ips: Annotated[tuple[str, ...], NoDecode] = Field(
-        default=("127.0.0.1",),
+        default=_DEFAULT_LOCAL_TRUSTED_PROXY,
         description=(
             "Trusted proxy IPs/CIDR ranges for ProxyHeadersMiddleware / "
             "ProxyHeadersMiddleware に渡す信頼済みプロキシの IP または CIDR"
@@ -509,13 +520,30 @@ class Settings(BaseSettings):
         なぜ: ローカル開発環境（HTTPアクセスが多い）で Secure 属性が有効だと
         document.cookie からセッション Cookie を参照できずログイン検証が失敗する。
         ENVIRONMENT=production のときだけ Secure を既定で有効化し、環境変数や
-        テストから明示的に設定された値は上書きしない。
+        テストから明示的に設定された値は上書きしない。また Cloud Run などの
+        プロキシを経由する本番環境では、`X-Forwarded-For` を信頼する IP レンジを
+        必ず指定しないと実クライアント単位の監査やレート制御が破綻する。
         """
 
         environment_name = (self.environment or "").lower()
         is_secure_explicitly_configured = "session_cookie_secure" in self.model_fields_set
         if environment_name == "production" and not is_secure_explicitly_configured:
             self.session_cookie_secure = True
+
+        is_trusted_proxy_explicit = "trusted_proxy_ips" in self.model_fields_set
+        if environment_name == "production":
+            configured_proxies = tuple(self.trusted_proxy_ips or ())
+            should_apply_production_defaults = (
+                not is_trusted_proxy_explicit
+                and configured_proxies == _DEFAULT_LOCAL_TRUSTED_PROXY
+            )
+            if should_apply_production_defaults:
+                self.trusted_proxy_ips = _DEFAULT_PRODUCTION_TRUSTED_PROXIES
+                configured_proxies = self.trusted_proxy_ips
+            if not configured_proxies:
+                raise ValueError(
+                    "TRUSTED_PROXY_IPS must be configured in production (e.g. 35.191.0.0/16,130.211.0.0/22)"
+                )
 
         return self
 
