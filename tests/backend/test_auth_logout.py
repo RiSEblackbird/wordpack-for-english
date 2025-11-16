@@ -74,6 +74,7 @@ def test_logout_deletes_session_cookie(test_client, monkeypatch):
             "email": "logout@example.com",
             "name": "Logout Tester",
             "hd": "example.com",
+            "email_verified": True,
         },
     )
 

@@ -6,6 +6,7 @@ pytest
 httpx
 pytest-cov
 google-auth
+google-cloud-firestore
 itsdangerous
 langgraph
 chromadb

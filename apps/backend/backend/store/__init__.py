@@ -9,6 +9,7 @@ from typing import Any, Iterator
 
 from ..config import settings
 from . import articles, examples, users, wordpacks
+from .firestore_store import AppFirestoreStore
 from .examples import EXAMPLE_CATEGORIES
 
 
@@ -251,10 +252,18 @@ class AppSQLiteStore:
         return self.articles.delete_article(article_id)
 
 
-store = AppSQLiteStore(db_path=settings.wordpack_db_path)
+def _create_store() -> AppSQLiteStore | AppFirestoreStore:
+    env = (settings.environment or "").strip().lower()
+    if env == "production":
+        return AppFirestoreStore()
+    return AppSQLiteStore(db_path=settings.wordpack_db_path)
+
+
+store = _create_store()
 
 __all__ = [
     "AppSQLiteStore",
+    "AppFirestoreStore",
     "store",
     "EXAMPLE_CATEGORIES",
 ]

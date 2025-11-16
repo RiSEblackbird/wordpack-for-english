@@ -72,7 +72,7 @@ class WordPackStore:
             sense_candidates,
             (checked_only_count, learned_count),
             (lemma_llm_model, lemma_llm_params),
-        ) = self._split_examples_from_payload(data)
+        ) = split_examples_from_payload(data)
         sense_title = choose_sense_title(
             sense_title_raw,
             sense_candidates,
@@ -179,7 +179,7 @@ class WordPackStore:
             if row is None:
                 return None
             rows = self._load_examples_rows(conn, word_pack_id)
-            data_json = self._merge_core_with_examples(row["data"], rows)
+            data_json = merge_core_with_examples(row["data"], rows)
             try:
                 data_dict = json.loads(data_json) if data_json else {}
             except Exception:
@@ -377,125 +377,6 @@ class WordPackStore:
                 return None
             return (row["id"], row["lemma"], row["sense_title"])  # type: ignore[return-value]
 
-    def _split_examples_from_payload(
-        self, data: str | Mapping[str, Any]
-    ) -> tuple[
-        str,
-        Mapping[str, Any] | None,
-        str,
-        list[str],
-        tuple[int, int],
-        tuple[str | None, str | None],
-    ]:
-        """JSON から例文を抽出し、本体とメタ情報を分離する。"""
-
-        checked_only_count = 0
-        learned_count = 0
-        lemma_llm_model: str | None = None
-        lemma_llm_params: str | None = None
-
-        if isinstance(data, Mapping):
-            parsed: Mapping[str, Any] = dict(data)
-        else:
-            try:
-                parsed = json.loads(data) if data else {}
-            except Exception:
-                empty_json = json.dumps({}, ensure_ascii=False)
-                return (
-                    data if isinstance(data, str) else empty_json,
-                    None,
-                    "",
-                    [],
-                    (checked_only_count, learned_count),
-                    (lemma_llm_model, lemma_llm_params),
-                )
-            if not isinstance(parsed, Mapping):
-                empty_json = json.dumps({}, ensure_ascii=False)
-                return (
-                    data if isinstance(data, str) else empty_json,
-                    None,
-                    "",
-                    [],
-                    (checked_only_count, learned_count),
-                    (lemma_llm_model, lemma_llm_params),
-                )
-
-        sense_title = ""
-        sense_candidates: list[str] = []
-        try:
-            sense_title = str(parsed.get("sense_title") or "").strip()
-        except Exception:
-            sense_title = ""
-
-        try:
-            val = str(parsed.get("llm_model") or "").strip()
-            lemma_llm_model = val or None
-        except Exception:
-            lemma_llm_model = None
-        try:
-            val = str(parsed.get("llm_params") or "").strip()
-            lemma_llm_params = val or None
-        except Exception:
-            lemma_llm_params = None
-
-        try:
-            checked_only_count = normalize_non_negative_int(
-                (parsed or {}).get("checked_only_count")
-            )
-        except Exception:
-            checked_only_count = 0
-        try:
-            learned_count = normalize_non_negative_int(
-                (parsed or {}).get("learned_count")
-            )
-        except Exception:
-            learned_count = 0
-
-        senses_payload = parsed.get("senses") if isinstance(parsed, Mapping) else None
-        if isinstance(senses_payload, Sequence):
-            for sense in senses_payload:
-                if not isinstance(sense, Mapping):
-                    continue
-                for key in (
-                    "gloss_ja",
-                    "term_overview_ja",
-                    "term_core_ja",
-                    "definition_ja",
-                    "nuances_ja",
-                ):
-                    try:
-                        val = str(sense.get(key) or "").strip()
-                    except Exception:
-                        val = ""
-                    if val:
-                        sense_candidates.append(val)
-
-        examples = parsed.get("examples") if isinstance(parsed, Mapping) else None
-        if isinstance(examples, Mapping):
-            core = dict(parsed)
-            core.pop("examples", None)
-            return (
-                json.dumps(core, ensure_ascii=False),
-                examples,
-                sense_title,
-                sense_candidates,
-                (checked_only_count, learned_count),
-                (lemma_llm_model, lemma_llm_params),
-            )
-        serialized = (
-            json.dumps(parsed, ensure_ascii=False)
-            if not isinstance(data, str)
-            else data
-        )
-        return (
-            serialized,
-            None,
-            sense_title,
-            sense_candidates,
-            (checked_only_count, learned_count),
-            (lemma_llm_model, lemma_llm_params),
-        )
-
     def _load_examples_rows(
         self, conn: sqlite3.Connection, word_pack_id: str
     ) -> Sequence[sqlite3.Row]:
@@ -518,36 +399,6 @@ class WordPackStore:
             (word_pack_id,),
         )
         return cur.fetchall()
-
-    def _merge_core_with_examples(
-        self, core_json: str, rows: Sequence[sqlite3.Row]
-    ) -> str:
-        try:
-            core = json.loads(core_json) if core_json else {}
-        except Exception:
-            core = {}
-        examples: dict[str, list[dict[str, Any]]] = {cat: [] for cat in EXAMPLE_CATEGORIES}
-        for r in rows:
-            cat = r["category"]
-            item: dict[str, Any] = {"en": r["en"], "ja": r["ja"]}
-            if r["grammar_ja"]:
-                item["grammar_ja"] = r["grammar_ja"]
-            if r["llm_model"]:
-                item["llm_model"] = r["llm_model"]
-            if r["llm_params"]:
-                item["llm_params"] = r["llm_params"]
-            item["checked_only_count"] = normalize_non_negative_int(
-                r["checked_only_count"]
-            )
-            item["learned_count"] = normalize_non_negative_int(r["learned_count"])
-            item["transcription_typing_count"] = normalize_non_negative_int(
-                r["transcription_typing_count"]
-            )
-            examples.setdefault(cat, []).append(item)
-        for cat in EXAMPLE_CATEGORIES:
-            examples.setdefault(cat, [])
-        core["examples"] = examples
-        return json.dumps(core, ensure_ascii=False)
 
     def _upsert_lemma(
         self,
@@ -613,3 +464,150 @@ class WordPackStore:
             (new_label, new_sense_title, new_llm_model, new_llm_params, lemma_id),
         )
         return lemma_id
+
+
+def split_examples_from_payload(
+    data: str | Mapping[str, Any]
+) -> tuple[
+    str,
+    Mapping[str, Any] | None,
+    str,
+    list[str],
+    tuple[int, int],
+    tuple[str | None, str | None],
+]:
+    """JSON から例文を抽出し、本体とメタ情報を分離する。"""
+
+    checked_only_count = 0
+    learned_count = 0
+    lemma_llm_model: str | None = None
+    lemma_llm_params: str | None = None
+
+    if isinstance(data, Mapping):
+        parsed: Mapping[str, Any] = dict(data)
+    else:
+        try:
+            parsed = json.loads(data) if data else {}
+        except Exception:
+            empty_json = json.dumps({}, ensure_ascii=False)
+            return (
+                data if isinstance(data, str) else empty_json,
+                None,
+                "",
+                [],
+                (checked_only_count, learned_count),
+                (lemma_llm_model, lemma_llm_params),
+            )
+        if not isinstance(parsed, Mapping):
+            empty_json = json.dumps({}, ensure_ascii=False)
+            return (
+                data if isinstance(data, str) else empty_json,
+                None,
+                "",
+                [],
+                (checked_only_count, learned_count),
+                (lemma_llm_model, lemma_llm_params),
+            )
+
+    sense_title = ""
+    sense_candidates: list[str] = []
+    try:
+        sense_title = str(parsed.get("sense_title") or "").strip()
+    except Exception:
+        sense_title = ""
+
+    try:
+        val = str(parsed.get("llm_model") or "").strip()
+        lemma_llm_model = val or None
+    except Exception:
+        lemma_llm_model = None
+    try:
+        val = str(parsed.get("llm_params") or "").strip()
+        lemma_llm_params = val or None
+    except Exception:
+        lemma_llm_params = None
+
+    try:
+        checked_only_count = normalize_non_negative_int((parsed or {}).get("checked_only_count"))
+    except Exception:
+        checked_only_count = 0
+    try:
+        learned_count = normalize_non_negative_int((parsed or {}).get("learned_count"))
+    except Exception:
+        learned_count = 0
+
+    senses_payload = parsed.get("senses") if isinstance(parsed, Mapping) else None
+    if isinstance(senses_payload, Sequence):
+        for sense in senses_payload:
+            if not isinstance(sense, Mapping):
+                continue
+            for key in (
+                "gloss_ja",
+                "term_overview_ja",
+                "term_core_ja",
+                "definition_ja",
+                "nuances_ja",
+            ):
+                try:
+                    val = str(sense.get(key) or "").strip()
+                except Exception:
+                    val = ""
+                if val:
+                    sense_candidates.append(val)
+
+    examples = parsed.get("examples") if isinstance(parsed, Mapping) else None
+    if isinstance(examples, Mapping):
+        core = dict(parsed)
+        core.pop("examples", None)
+        return (
+            json.dumps(core, ensure_ascii=False),
+            examples,
+            sense_title,
+            sense_candidates,
+            (checked_only_count, learned_count),
+            (lemma_llm_model, lemma_llm_params),
+        )
+    serialized = (
+        json.dumps(parsed, ensure_ascii=False)
+        if not isinstance(data, str)
+        else data
+    )
+    return (
+        serialized,
+        None,
+        sense_title,
+        sense_candidates,
+        (checked_only_count, learned_count),
+        (lemma_llm_model, lemma_llm_params),
+    )
+
+
+def merge_core_with_examples(
+    core_json: str, rows: Sequence[Mapping[str, Any] | sqlite3.Row]
+) -> str:
+    """WordPack 本体 JSON に例文を合成して返す。"""
+
+    try:
+        core = json.loads(core_json) if core_json else {}
+    except Exception:
+        core = {}
+    examples: dict[str, list[dict[str, Any]]] = {cat: [] for cat in EXAMPLE_CATEGORIES}
+    for r in rows:
+        category = r["category"]
+        item: dict[str, Any] = {"en": r["en"], "ja": r["ja"]}
+        if r["grammar_ja"]:
+            item["grammar_ja"] = r["grammar_ja"]
+        if r["llm_model"]:
+            item["llm_model"] = r["llm_model"]
+        if r["llm_params"]:
+            item["llm_params"] = r["llm_params"]
+        item["checked_only_count"] = normalize_non_negative_int(r["checked_only_count"])
+        item["learned_count"] = normalize_non_negative_int(r["learned_count"])
+        item["transcription_typing_count"] = normalize_non_negative_int(
+            r["transcription_typing_count"]
+        )
+        examples.setdefault(category, []).append(item)
+    for cat in EXAMPLE_CATEGORIES:
+        examples.setdefault(cat, [])
+    core["examples"] = examples
+    return json.dumps(core, ensure_ascii=False)

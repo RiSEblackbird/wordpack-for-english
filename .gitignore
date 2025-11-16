@@ -20,6 +20,8 @@ bin-release/
 .env
 google-oauth-client-secret.json
 client_secret_*.json
+firestore-service-account*.json
+gcp-service-account*.json
 *.pem
 *.p12
 *.pfx
