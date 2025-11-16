@@ -54,6 +54,30 @@ require_cmd() {
   fi
 }
 
+# ensure_gcloud: gcloud が必要な処理（フォールバック/本番デプロイ）の前に一度だけ存在を確認します。
+ensure_gcloud() {
+  if [[ "${GCLOUD_CMD_CHECKED:-false}" != true ]]; then
+    require_cmd gcloud
+    GCLOUD_CMD_CHECKED=true
+  fi
+}
+
+# get_gcloud_config_value: gcloud の設定から値を安全に取得します。未設定時は空文字を返します。
+get_gcloud_config_value() {
+  local key="$1"
+  ensure_gcloud
+  local value=""
+  if value="$(gcloud config get-value "$key" --format='value(.)' 2>/dev/null)"; then
+    value="$(printf '%s' "$value" | tr -d '\r\n')"
+  else
+    value=""
+  fi
+  if [[ "$value" == "(unset)" ]]; then
+    value=""
+  fi
+  printf '%s' "$value"
+}
+
 # escape_env_value: --set-env-vars へ安全に渡すため、改行やカンマを除去・エスケープします。
 escape_env_value() {
   local raw trimmed
@@ -85,6 +109,7 @@ declare -a EXTRA_BUILD_ARGS=()
 
 declare -A DEPLOY_ENV_KEYS=()
 declare -a IGNORE_DEPLOY_KEYS=(PROJECT_ID REGION CLOUD_RUN_SERVICE ARTIFACT_REPOSITORY IMAGE_TAG MACHINE_TYPE BUILD_TIMEOUT)
+GCLOUD_CMD_CHECKED=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -193,12 +218,33 @@ if [[ "$GENERATE_SECRET" == true || -z "${SESSION_SECRET_KEY:-}" ]]; then
 fi
 
 if [[ -z "$PROJECT_ID" ]]; then
-  err "PROJECT_ID is required (use --project-id or set in env file)"
+  PROJECT_ID="$(get_gcloud_config_value 'project')"
+  if [[ -n "$PROJECT_ID" ]]; then
+    log "PROJECT_ID not provided; falling back to gcloud config project: $PROJECT_ID"
+  fi
+fi
+
+if [[ -z "$REGION" ]]; then
+  REGION="$(get_gcloud_config_value 'run/region')"
+  if [[ -n "$REGION" ]]; then
+    log "REGION not provided; falling back to gcloud config run/region: $REGION"
+  fi
+fi
+
+if [[ -z "$REGION" ]]; then
+  REGION="$(get_gcloud_config_value 'compute/region')"
+  if [[ -n "$REGION" ]]; then
+    log "REGION not provided; falling back to gcloud config compute/region: $REGION"
+  fi
+fi
+
+if [[ -z "$PROJECT_ID" ]]; then
+  err "PROJECT_ID is required (use --project-id, set in env file, or configure gcloud)"
   exit 1
 fi
 
 if [[ -z "$REGION" ]]; then
-  err "REGION is required (use --region or set in env file)"
+  err "REGION is required (use --region, set in env file, or configure gcloud)"
   exit 1
 fi
 
@@ -242,7 +288,7 @@ if [[ "$DRY_RUN" == true ]]; then
   exit 0
 fi
 
-require_cmd gcloud
+ensure_gcloud
 
 log "Submitting build to Cloud Build: $IMAGE_URI"
 BUILD_CMD=(gcloud builds submit --project "$PROJECT_ID" --tag "$IMAGE_URI" --file Dockerfile.backend --machine-type="$MACHINE_TYPE" --timeout="$BUILD_TIMEOUT")
