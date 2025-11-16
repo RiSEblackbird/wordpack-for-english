@@ -177,7 +177,7 @@ GOOGLE_CLIENT_ID=123456.apps.googleusercontent.com
 OPENAI_API_KEY=sk-xxxxx
 ```
 
-準備ができたら次のコマンドでデプロイします。テンプレートをコピーした直後で `SESSION_SECRET_KEY` が空の場合は、`--generate-secret` を付けることで不足分を `openssl rand -base64 <length>` で自動生成できます。
+準備ができたら次のコマンドでデプロイします。テンプレートをコピーした直後で `SESSION_SECRET_KEY` が空の場合は、`--generate-secret` を付けることで不足分を `openssl rand -base64 <length>` で自動生成できます。`gcloud config set project <id>` や `gcloud config set run/region <region>`（未設定時は `compute/region`）で既定値を登録しておくと、`--project-id` / `--region` を省略した際に CLI 設定から自動的に補完され、フォールバックで採用された値はスクリプトのログにも出力されます。
 
 ```bash
 ./scripts/deploy_cloud_run.sh \
@@ -191,7 +191,7 @@ OPENAI_API_KEY=sk-xxxxx
 - スクリプトは `.env.deploy` を読み込んだあとに `python -m apps.backend.backend.config` を実行し、Pydantic 設定の検証に失敗した場合は `gcloud builds submit` へ進む前に停止します。`TRUSTED_PROXY_IPS` と `ALLOWED_HOSTS` を省略したまま `ENVIRONMENT=production` で実行すると検証段階で即座にエラーになります。
 - `--dry-run` を指定すると gcloud コマンドを実行せずに設定のみ検証します。CI では `configs/cloud-run/ci.env` を使ってこのモードを呼び出し、欠落した環境変数を早期検知しています。
 - `--image-tag`（既定: `git rev-parse --short HEAD`）、`--build-arg KEY=VALUE`、`--machine-type`、`--timeout` で Cloud Build の詳細を調整できます。Artifact Registry のリポジトリパスは `--artifact-repo` で差し替えられます。
-- `make deploy-cloud-run PROJECT_ID=... REGION=...` を実行すると同じスクリプトが呼び出されます。CI/CD では `gcloud auth login` / `gcloud auth configure-docker` の完了を前提としてください。
+- `make deploy-cloud-run PROJECT_ID=... REGION=...` を実行すると同じスクリプトが呼び出されます。`gcloud config set project ...` / `gcloud config set run/region ...` を済ませていれば、Makefile 実行時の `PROJECT_ID` / `REGION` も省略できます。CI/CD では `gcloud auth login` / `gcloud auth configure-docker` の完了を前提としてください。
 
 Cloud Run を外部 HTTP(S) ロードバランサ経由で公開する場合は `TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22` を設定（または既定値のまま維持）して `X-Forwarded-For` を信頼してください。このレンジを登録しておくと、アクセスログや RateLimit が Google Cloud Load Balancer の固定 IP ではなく実際のクライアント IP を記録できます。独自のプロキシを挟む構成では、その CIDR を Cloud Run の環境変数で必ず明示してください。
 
