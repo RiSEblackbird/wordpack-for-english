@@ -545,6 +545,18 @@ class Settings(BaseSettings):
                     "TRUSTED_PROXY_IPS must be configured in production (e.g. 35.191.0.0/16,130.211.0.0/22)"
                 )
 
+        allowed_hosts = tuple(self.allowed_hosts or ())
+        # なぜ: Cloud Run 等の本番環境でワイルドカード Host を許可すると、
+        #      Host ヘッダ偽装や別ドメインからの CSRF が成立する恐れがある。
+        #      既定の `*` から切り替えられていない場合は早期に失敗させ、
+        #      Cloud Run のデフォルト URL やカスタムドメインの明示を強制する。
+        if environment_name == "production":
+            has_wildcard_host = any(host == "*" for host in allowed_hosts)
+            if has_wildcard_host or not allowed_hosts:
+                raise ValueError(
+                    "ALLOWED_HOSTS must list the Cloud Run default URL or custom domains in production"
+                )
+
         return self
 
 

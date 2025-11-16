@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
 
 _SAFE_SECRET = "Z8nQ1rV4tY7wB0cD3fG6hJ9kL2mP5sX1"  # 32文字の擬似乱数
+_CLOUD_RUN_HOST = "app-1234567890-uc.a.run.app"
 
 os.environ.setdefault("SESSION_SECRET_KEY", _SAFE_SECRET)
 
@@ -32,12 +33,21 @@ def test_session_cookie_secure_defaults_to_false_in_development() -> None:
 def test_session_cookie_secure_defaults_to_true_in_production() -> None:
     """本番環境では Secure 属性が既定で有効化される。"""
 
-    config = Settings(environment="production", _env_file=None)
+    config = Settings(
+        environment="production",
+        allowed_hosts=(_CLOUD_RUN_HOST,),
+        _env_file=None,
+    )
     assert config.session_cookie_secure is True
 
 
 def test_session_cookie_secure_respects_explicit_override() -> None:
     """環境変数やコードで明示した値は本番でも優先される。"""
 
-    config = Settings(environment="production", session_cookie_secure=False, _env_file=None)
+    config = Settings(
+        environment="production",
+        session_cookie_secure=False,
+        allowed_hosts=(_CLOUD_RUN_HOST,),
+        _env_file=None,
+    )
     assert config.session_cookie_secure is False
