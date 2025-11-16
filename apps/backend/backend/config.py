@@ -1,3 +1,4 @@
+import hashlib
 from typing import Annotated
 
 from pydantic import AliasChoices, Field, field_validator, model_validator
@@ -13,6 +14,23 @@ _PLACEHOLDER_SESSION_SECRETS = frozenset({
     "change-me-to-random-value",
     "please-change-me",
 })
+_KNOWN_LEAKED_SESSION_SECRET_SHA256 = frozenset(
+    {
+        # ハッシュ値だけを保持し、過去に公開してしまった文字列の再利用を検知する。
+        "8450352d877b76fb1f1ff9814c28408b254399e695f97bc3e446ee01dcd317d5",
+    }
+)
+
+
+def _is_known_leaked_session_secret(secret: str) -> bool:
+    """Return True when the given secret matches a previously published value.
+
+    なぜ: ドキュメントで一度でも掲載したシークレットは攻撃者に周知されているため、
+    起動時に検知して強制停止し、安全な乱数へ差し替える運用を徹底させる。
+    """
+
+    hashed = hashlib.sha256(secret.encode("utf-8")).hexdigest()
+    return hashed in _KNOWN_LEAKED_SESSION_SECRET_SHA256
 
 
 class Settings(BaseSettings):
@@ -292,6 +310,11 @@ class Settings(BaseSettings):
         if secret.casefold() in _PLACEHOLDER_SESSION_SECRETS:
             raise ValueError(
                 "SESSION_SECRET_KEY must not use placeholder values like 'change-me'",
+            )
+
+        if _is_known_leaked_session_secret(secret):
+            raise ValueError(
+                "SESSION_SECRET_KEY must not reuse published sample values",
             )
 
         if len(secret) < _MIN_SESSION_SECRET_KEY_LENGTH:
