@@ -228,7 +228,7 @@
   # Firebase CLI を使いたい場合
   make deploy-firestore-indexes PROJECT_ID=my-firebase-project TOOL=firebase
   ```
-  - 内部では `scripts/deploy_firestore_indexes.sh` が `gcloud alpha firestore indexes composite create --index-file firestore.indexes.json` もしくは `firebase deploy --only firestore:indexes --non-interactive` を呼び出します。
+  - 内部では `scripts/deploy_firestore_indexes.sh` が JSON を展開し、gcloud ルートでは各インデックスに対して `gcloud alpha firestore indexes composite create --field-config=...` を順次実行します（`ALREADY_EXISTS` はスキップ）。Firebase ルートでは `firebase deploy --only firestore:indexes --non-interactive` を呼び出します。
 - ローカルでの適用確認:
   ```bash
   firebase emulators:start --only firestore --project wordpack-local

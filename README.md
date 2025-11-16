@@ -82,7 +82,7 @@ Firestore に保存する主要コレクションは `firestore.indexes.json` �
 
 | 操作 | コマンド | 補足 |
 | --- | --- | --- |
-| gcloud で本番/検証プロジェクトへ適用 | `make deploy-firestore-indexes PROJECT_ID=my-gcp-project` | `scripts/deploy_firestore_indexes.sh` が `gcloud alpha firestore indexes composite create --index-file firestore.indexes.json` を呼び出します。 |
+| gcloud で本番/検証プロジェクトへ適用 | `make deploy-firestore-indexes PROJECT_ID=my-gcp-project` | `scripts/deploy_firestore_indexes.sh` が `firestore.indexes.json` を展開し、各定義ごとに `gcloud alpha firestore indexes composite create --field-config=...` を順次実行します（既存インデックスは自動でスキップ）。 |
 | Firebase CLI で適用 | `make deploy-firestore-indexes PROJECT_ID=my-firebase-project TOOL=firebase` | CI/ローカルともに `firebase deploy --only firestore:indexes --non-interactive` を使うルート。 |
 | エミュレータでの検証 | `firebase emulators:start --only firestore --project wordpack-local` | ルート直下の `firestore.indexes.json` を自動で読み込みます。`FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` を指定して API/テストを実行してください。 |
 
