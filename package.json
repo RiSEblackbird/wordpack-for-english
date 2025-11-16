@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "smoke": "npm run smoke --prefix tests/ui/mcp-smoke"
+    "smoke": "npm run smoke --prefix tests/ui/mcp-smoke",
+    "build:frontend": "npm run build --prefix apps/frontend",
+    "deploy:hosting": "npm run build:frontend && firebase deploy --only hosting --non-interactive",
+    "emulate:hosting": "npm run build:frontend && firebase emulators:start --only hosting"
   }
 }

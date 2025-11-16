@@ -237,6 +237,30 @@
   ```
   - エミュレータを起動すると `firestore.indexes.json` が読み込まれます。`Ctrl+C` で停止し、必要に応じて `FIRESTORE_EMULATOR_HOST` を付与した API/テストを実行してください。
 
+### B-1-4. Firebase Hosting の rewrite/deploy 手順
+- ルート直下に `firebase.json` と `.firebaserc` を追加しました。Cloud Run と同一ドメインで提供する場合は必ず値を差し替えてください。
+ - 差し替え対象の早見表:
+
+| 項目 | 既定値 | ファイル | 差し替え方法 |
+| --- | --- | --- | --- |
+| Firebase Hosting プロジェクト ID (staging) | `wordpack-staging` | `.firebaserc` (`projects.staging`) | `firebase use --add` を実行するか、手動で編集して実際のプロジェクト ID を入力。`production` も同様 |
+| Cloud Run サービス ID | `wordpack-backend` | `firebase.json` (`hosting.rewrites[0].run.serviceId`) | Cloud Run のサービス名に合わせて編集 |
+| Cloud Run リージョン | `asia-northeast1` | `firebase.json` (`hosting.rewrites[0].run.region`) | 実際にデプロイしているリージョンへ置換 |
+| Hosting 公開ディレクトリ | `apps/frontend/dist` | `firebase.json` (`hosting.public`) | Vite の出力先が異なる場合に更新。`ignore` 配列で `firebase.json`・`.firebaserc`・`node_modules` などを除外済み |
+
+- rewrite 設定は README と同じく `/api{,/**}` を Cloud Run、その他を `index.html` へ転送する SPA 想定です。
+- CLI 実行フロー:
+
+  ```bash
+  npm install -g firebase-tools   # 未導入の場合
+  npm run build:frontend          # apps/frontend の Vite ビルド
+  npm run emulate:hosting         # firebase emulators:start --only hosting
+  # 動作確認後に Ctrl+C で停止
+  npm run deploy:hosting          # firebase deploy --only hosting --non-interactive
+  ```
+
+- `emulate:hosting` で `http://127.0.0.1:5000` を開き、`/api` が Cloud Run へフォワードされることを確認してから本番/ステージングへデプロイしてください。
+
 ### B-10. オブザーバビリティ（Langfuse）
 - `.env` に `LANGFUSE_ENABLED=true` と各キーを設定し、`requirements.txt` の `langfuse` を導入してください。
 - 本アプリは Langfuse v3（OpenTelemetry）を使用します。

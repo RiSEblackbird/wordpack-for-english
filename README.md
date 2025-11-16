@@ -169,30 +169,24 @@ docker compose up --build
    Cloud Run を外部 HTTP(S) ロードバランサ経由で公開する場合は `TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22` を設定（または既定値のまま維持）して `X-Forwarded-For` を信頼してください。このレンジを登録しておくと、アクセスログや RateLimit が Google Cloud Load Balancer の固定 IP ではなく実際のクライアント IP を記録できます。独自のプロキシを挟む構成では、その CIDR を Cloud Run の環境変数で必ず明示してください。
 
 ### Firebase Hosting でのリライト構成
-Cloud Run の API を Firebase Hosting のフロントエンドと同一ドメインで公開する場合は、`firebase.json` に `/api` 向けリライトを定義しておくと CORS 設定を最小限にできます。`apps/frontend/dist` を Hosting に配置する例を示します。
+リポジトリ直下に `firebase.json`（`apps/frontend/dist` を公開ルートに設定し、`/api` を Cloud Run の `wordpack-backend` へフォワード）と `.firebaserc`（`wordpack-staging`/`wordpack-production` というプレースホルダープロジェクト）を追加しました。まずは以下の値を自分の環境に合わせて更新してください。
 
-```json
-{
-  "hosting": {
-    "public": "apps/frontend/dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      {
-        "source": "/api{,/**}",
-        "run": {
-          "serviceId": "wordpack-backend",
-          "region": "asia-northeast1"
-        }
-      },
-      { "source": "/**", "destination": "/index.html" }
-    ]
-  }
-}
-```
+| 項目 | 既定値 | 記述箇所 | 差し替え方法 |
+| --- | --- | --- | --- |
+| Firebase Hosting プロジェクト ID (staging) | `wordpack-staging` | `.firebaserc` (`projects.staging`) | `firebase use --add` やファイル編集で任意のプロジェクト ID を登録。`production` も同様に置き換える |
+| Cloud Run サービス ID | `wordpack-backend` | `firebase.json` (`rewrites[0].run.serviceId`) | Cloud Run のサービス名に変更。複数サービスを使う場合は `rewrites` を追加 |
+| Cloud Run リージョン | `asia-northeast1` | `firebase.json` (`rewrites[0].run.region`) | Cloud Run をデプロイしたリージョンに変更 |
+| ホスティング公開ディレクトリ | `apps/frontend/dist` | `firebase.json` (`hosting.public`) | ビルド成果物のパスが異なる場合は差し替え。`ignore` 配列で `firebase.json`/`.firebaserc`/`node_modules` など不要ファイルを除外 |
 
-1. `npm run build --prefix apps/frontend` で Vite のビルド成果物を生成。
-2. `firebase deploy --only hosting` を実行すると、`/api` 配下は Cloud Run へフォワードされ、それ以外は `index.html` へリライトされます。
-3. 同一オリジンになるため、`CORS_ALLOWED_ORIGINS` に Hosting ドメイン（例: `https://<project>.web.app`）を列挙し、`ALLOWED_HOSTS` にも同じドメインを追加すれば Cookie を安全に共有できます。
+> `firebase.json` の `rewrites` は README の旧版と同じ JSON を採用しています。`/api{,/**}` は Cloud Run へ、それ以外は SPA 用の `index.html` へリライトされます。
+
+#### デプロイとローカル検証
+1. Firebase CLI (`npm install -g firebase-tools`) とプロジェクト認証を済ませ、`.firebaserc` のプロジェクト ID を編集します。
+2. `npm run build:frontend` で `apps/frontend/dist` を生成します（`npm run deploy:hosting` などのスクリプトが内部で自動実行）。
+3. ローカル検証は `npm run emulate:hosting`（`firebase emulators:start --only hosting` を同梱）で行います。起動後に `http://127.0.0.1:5000` へアクセスし、`/api` パスが Cloud Run へフォワードされることを確認してください。
+4. 本番/ステージングへの反映は `npm run deploy:hosting` を実行します。`firebase deploy --only hosting --non-interactive` を呼び出すため、CI でもそのまま利用できます。
+
+同一オリジンに統合されるため、`CORS_ALLOWED_ORIGINS` に Hosting ドメイン（例: `https://<project>.web.app`）を追加し、`ALLOWED_HOSTS` にも同じドメインを登録すると Cookie を安全に共有できます。
 
 ### Firestore エミュレータを使ったローカルテスト
 `ENVIRONMENT=production` で起動するとバックエンドは `AppFirestoreStore` を選択します。Firestore エミュレータを併用すれば本番相当のデータフローをローカルで検証できます。

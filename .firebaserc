@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "wordpack-staging",
+    "staging": "wordpack-staging",
+    "production": "wordpack-production"
+  }
+}
