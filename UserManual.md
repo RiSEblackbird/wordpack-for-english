@@ -302,6 +302,25 @@
   - `--image-tag`（既定: `git rev-parse --short HEAD`）、`--build-arg KEY=VALUE`、`--machine-type`、`--timeout` などで Cloud Build のパラメータを細かく制御できます。`--artifact-repo` で Artifact Registry のリポジトリを差し替え可能です。
 - `make deploy-cloud-run PROJECT_ID=... REGION=...` を利用すれば、Makefile から同じスクリプトを呼び出せます。`gcloud config` に既定プロジェクト/リージョンを設定済みなら、Make 実行時の `PROJECT_ID` / `REGION` 省略も可能です。GitHub Actions の `Cloud Run config guard` ジョブでも `scripts/deploy_cloud_run.sh --dry-run` を実行しており、`shellcheck` でスクリプトの静的解析も同ジョブで通過させます。ローカルでスクリプトを更新した場合は `shellcheck scripts/deploy_cloud_run.sh` を必ず実行してください。
 
+##### release-cloud-run ターゲット（本番リリースの順序制御）
+
+- `make release-cloud-run PROJECT_ID=... REGION=...` を使うと、Firestore インデックス同期 → Cloud Run dry-run → 本番デプロイの順序が保証されます。`.env.deploy`（または `ENV_FILE` で指定したファイル）の存在確認に失敗した場合はその場で停止します。
+- 前提条件
+  - Firestore Admin / Cloud Run Admin / Artifact Registry Writer 権限を持つサービスアカウントで `gcloud auth login` または `gcloud auth activate-service-account --key-file <json>` を実行し、`gcloud auth configure-docker` も済ませておく。
+  - Make 実行時に `PROJECT_ID` / `REGION` を必ず指定する（gcloud 側の既定値に依存しない）。
+  - `.env.deploy` などの env ファイルを用意し、`SESSION_SECRET_KEY`・`CORS_ALLOWED_ORIGINS`・`TRUSTED_PROXY_IPS`・`ALLOWED_HOSTS` を含める。CI 用には `ENV_FILE=configs/cloud-run/ci.env` のように分離可能。
+- GitHub Actions での実行例:
+
+  ```bash
+  make release-cloud-run \
+    PROJECT_ID=${{ env.GCP_PROJECT_ID }} \
+    REGION=${{ env.GCP_REGION }} \
+    ENV_FILE=configs/cloud-run/ci.env \
+    SKIP_FIRESTORE_INDEX_SYNC=true
+  ```
+
+- 既に Firestore インデックスが同期済みの検証環境では `SKIP_FIRESTORE_INDEX_SYNC=true` を指定し、Cloud Run の dry-run + 本番デプロイのみを実行できます。Dry-run (`scripts/deploy_cloud_run.sh --dry-run`) はターゲット内部で必ず実行されるため、設定エラーは gcloud 実行前に検出されます。
+
 ### B-6. トラブルシュート（詳細）
 - 語義/例文が空になる
   - 確認するログイベント: `wordpack_generate_request` / `llm_provider_select` / `wordpack_llm_output_received` / `wordpack_llm_json_parsed` / `wordpack_examples_built` / `wordpack_senses_built` / `wordpack_generate_response`
