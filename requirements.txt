@@ -6,7 +6,8 @@ pytest
 httpx
 pytest-cov
 google-auth
-google-cloud-firestore
+# Firestore backend を安定運用するため v2 系へ明示固定
+google-cloud-firestore>=2.11.0,<3.0.0
 itsdangerous
 langgraph
 chromadb
