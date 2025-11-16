@@ -18,6 +18,9 @@ bin-release/
 # information for Eclipse / Flash Builder.
 
 .env
+.env.local
+.env.*
+!.env.example
 google-oauth-client-secret.json
 client_secret_*.json
 firestore-service-account*.json

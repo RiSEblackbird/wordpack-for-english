@@ -64,7 +64,7 @@ cp env.example .env
 # CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 # TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22
 # ALLOWED_HOSTS=app-1234567890-uc.a.run.app,api.example.com
-# SESSION_SECRET_KEY=Qv6G5zH1pN8wX4rT7yL2mC9dF0sJ3kV5bR1nP7tW4qY8uZ6  # 32文字以上の乱数文字列を必ず使用
+# SESSION_SECRET_KEY=<paste a 32+ char random string generated via `openssl rand -base64 48 | tr -d '\n'`>
 # SESSION_COOKIE_NAME=wp_session
 # SESSION_COOKIE_SECURE=true  # 本番(HTTPS)のみ true。開発(HTTP)は既定で false なので設定不要
 # SECURITY_HSTS_MAX_AGE_SECONDS=63072000  # HSTS の max-age（秒）
@@ -95,7 +95,7 @@ cp env.example .env
 
 特定の Google アカウントだけに利用者を絞り込みたい場合は、カンマ区切りでメールアドレスを列挙した `ADMIN_EMAIL_ALLOWLIST` を設定してください。値は小文字に正規化され、完全一致したアドレスのみが `/api/auth/google` の認証を通過します（未設定または空文字の場合は従来どおり全アカウントを許可します）。
 
-`SESSION_SECRET_KEY` は 32 文字以上の十分に乱数性を持つ文字列を必ず指定してください。`change-me` など既知のプレースホルダーや短い値を設定すると、アプリケーション起動時に検証エラーとなり実行が停止します。外部に公開する環境では `openssl rand -base64 48` などで生成した値を `.env` へ保存し、リポジトリへコミットしない運用を徹底してください。
+`SESSION_SECRET_KEY` は 32 文字以上の十分に乱数性を持つ文字列を必ず指定してください。`change-me` など既知のプレースホルダーや短い値を設定すると、アプリケーション起動時に検証エラーとなり実行が停止します。外部に公開する環境では `openssl rand -base64 48 | tr -d '\n'` などで生成した値を `.env` へ保存し、リポジトリへコミットしない運用を徹底してください。過去にドキュメントへ掲載したサンプル値もハッシュ照合で拒否されるため、再利用は避けてください。
 
 `CORS_ALLOWED_ORIGINS` を設定すると、指定したオリジンからのみ資格情報付き CORS を許可します。ローカル開発では `http://127.0.0.1:5173,http://localhost:5173` を指定すると従来どおりフロントエンドと連携できます。未設定の場合はワイルドカード許可となりますが、`Access-Control-Allow-Credentials` は返さないためクッキー連携が無効化されます。
 
@@ -159,13 +159,14 @@ docker compose up --build
      --file Dockerfile.backend --machine-type=e2-medium --timeout=30m \
      --build-arg ENVIRONMENT=production
    ```
-2. Cloud Run サービスをデプロイし、Firestore・OAuth 等で必要な環境変数を明示します。
+2. Cloud Run サービスをデプロイし、Firestore・OAuth 等で必要な環境変数を明示します。デプロイ直前に 32 文字以上の乱数を生成して `SESSION_SECRET_KEY` へ代入し、以降のコマンドで使い回してください。
    ```bash
+   export SESSION_SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
    gcloud run deploy wordpack-backend \
      --image "${REGION}-docker.pkg.dev/${PROJECT_ID}/wordpack/backend:$(git rev-parse --short HEAD)" \
      --region=${REGION} \
      --allow-unauthenticated \
-      --set-env-vars "ENVIRONMENT=production,CORS_ALLOWED_ORIGINS=https://app.example.com\,https://admin.example.com,TRUSTED_PROXY_IPS=35.191.0.0/16\,130.211.0.0/22,ALLOWED_HOSTS=app-xxxx.a.run.app\,api.example.com"
+      --set-env-vars "ENVIRONMENT=production,SESSION_SECRET_KEY=${SESSION_SECRET_KEY},CORS_ALLOWED_ORIGINS=https://app.example.com\,https://admin.example.com,TRUSTED_PROXY_IPS=35.191.0.0/16\,130.211.0.0/22,ALLOWED_HOSTS=app-xxxx.a.run.app\,api.example.com"
    ```
 3. `GOOGLE_APPLICATION_CREDENTIALS` や Secret Manager を利用して Firestore サービスアカウント権限を付与し、`/healthz` への `GET` / `OPTIONS` で `Access-Control-Allow-Origin` と Cloud Logging へ出力される構造化ログを確認します。
 4. `SESSION_COOKIE_SECURE=true` など HTTPS 固有設定を有効にし、必要に応じて `TRUSTED_PROXY_IPS` や `ALLOWED_HOSTS` を Cloud Run の環境変数で更新してください。
