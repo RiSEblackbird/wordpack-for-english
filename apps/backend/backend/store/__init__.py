@@ -158,9 +158,13 @@ class AppSQLiteStore:
         search: str | None = None,
         search_mode: str = "contains",
         category: str | None = None,
+        word_pack_id: str | None = None,
     ) -> int:
         return self.examples.count_examples(
-            search=search, search_mode=search_mode, category=category
+            search=search,
+            search_mode=search_mode,
+            category=category,
+            word_pack_id=word_pack_id,
         )
 
     def list_examples(
@@ -173,6 +177,7 @@ class AppSQLiteStore:
         search: str | None = None,
         search_mode: str = "contains",
         category: str | None = None,
+        word_pack_id: str | None = None,
     ) -> list[
         tuple[int, str, str, str, str, str, str | None, str, str | None, int, int, int]
     ]:
@@ -184,6 +189,7 @@ class AppSQLiteStore:
             search=search,
             search_mode=search_mode,
             category=category,
+            word_pack_id=word_pack_id,
         )
 
     def update_example_transcription_typing(

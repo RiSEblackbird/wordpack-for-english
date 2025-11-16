@@ -247,12 +247,15 @@ class ExampleStore:
         search: str | None = None,
         search_mode: str = "contains",
         category: str | None = None,
+        word_pack_id: str | None = None,
     ) -> int:
         """検索条件付きで例文件数を返す。"""
 
         with self._conn_provider() as conn:
             where_clauses: list[str] = []
             params: list[object] = []
+            # Firestore 実装との API 整合性を保つため word_pack_id を受け取るが、
+            # SQLite 実装では横断検索のみを想定しているため現状は未使用。
             if isinstance(category, str) and category:
                 where_clauses.append("wpe.category = ?")
                 params.append(category)
@@ -290,6 +293,7 @@ class ExampleStore:
         search: str | None = None,
         search_mode: str = "contains",
         category: str | None = None,
+        word_pack_id: str | None = None,
     ) -> list[
         tuple[int, str, str, str, str, str, str | None, str, str | None, int, int, int]
     ]:
@@ -307,6 +311,7 @@ class ExampleStore:
         with self._conn_provider() as conn:
             where_clauses: list[str] = []
             params: list[object] = []
+            # word_pack_id は Firestore 実装との互換性のための受け皿。
             if isinstance(category, str) and category:
                 where_clauses.append("wpe.category = ?")
                 params.append(category)
