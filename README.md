@@ -149,7 +149,7 @@ docker compose up --build
      --image "${REGION}-docker.pkg.dev/${PROJECT_ID}/wordpack/backend:$(git rev-parse --short HEAD)" \
      --region=${REGION} \
      --allow-unauthenticated \
-     --set-env-vars "ENVIRONMENT=production,CORS_ALLOWED_ORIGINS=https://app.example.com,https://admin.example.com,TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22,ALLOWED_HOSTS=app-xxxx.a.run.app,api.example.com"
+      --set-env-vars "ENVIRONMENT=production,CORS_ALLOWED_ORIGINS=https://app.example.com\,https://admin.example.com,TRUSTED_PROXY_IPS=35.191.0.0/16\,130.211.0.0/22,ALLOWED_HOSTS=app-xxxx.a.run.app\,api.example.com"
    ```
 3. `GOOGLE_APPLICATION_CREDENTIALS` や Secret Manager を利用して Firestore サービスアカウント権限を付与し、`/healthz` への `GET` / `OPTIONS` で `Access-Control-Allow-Origin` と Cloud Logging へ出力される構造化ログを確認します。
 4. `SESSION_COOKIE_SECURE=true` など HTTPS 固有設定を有効にし、必要に応じて `TRUSTED_PROXY_IPS` や `ALLOWED_HOSTS` を Cloud Run の環境変数で更新してください。
