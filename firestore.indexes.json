@@ -1,0 +1,33 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "word_packs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "created_at", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "examples",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "word_pack_id", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "position", "order": "ASCENDING" },
+        { "fieldPath": "example_id", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "examples",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "word_pack_id", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "position", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

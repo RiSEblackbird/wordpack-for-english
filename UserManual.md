@@ -220,6 +220,23 @@
 - 設定手順やスモークテストの観点、Codex 用プロンプトは `docs/testing/chrome-devtools-mcp-ui-testing.md` と `tests/ui/` 配下の資料を参照してください。
 - テスト結果を基にフロントエンドを修正した際は、Vitest (`npm run test`) と MCP スモークテストを双方とも再実行して回帰を確認してください（CI の自動実行と併せてローカル再確認する運用です）。
 
+### B-1-3. Firestore インデックス同期フロー
+- `firestore.indexes.json` に `word_packs` / `examples` 用の複合インデックスを定義済みです。Cloud Firestore / Firebase エミュレータ / Firebase CLI で同じファイルを読み込めるようにしてあり、Web コンソールでの手作業登録は不要です。
+- 本番/検証へのデプロイ:
+  ```bash
+  make deploy-firestore-indexes PROJECT_ID=my-gcp-project
+  # Firebase CLI を使いたい場合
+  make deploy-firestore-indexes PROJECT_ID=my-firebase-project TOOL=firebase
+  ```
+  - 内部では `scripts/deploy_firestore_indexes.sh` が JSON を展開し、gcloud ルートでは各インデックスに対して `gcloud alpha firestore indexes composite create --field-config=...` を順次実行します（`ALREADY_EXISTS` はスキップ）。Firebase ルートでは `firebase deploy --only firestore:indexes --non-interactive` を呼び出します。
+- ローカルでの適用確認:
+  ```bash
+  firebase emulators:start --only firestore --project wordpack-local
+  # 別ターミナル
+  FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 ENVIRONMENT=production pytest tests/backend/test_firestore_store.py
+  ```
+  - エミュレータを起動すると `firestore.indexes.json` が読み込まれます。`Ctrl+C` で停止し、必要に応じて `FIRESTORE_EMULATOR_HOST` を付与した API/テストを実行してください。
+
 ### B-10. オブザーバビリティ（Langfuse）
 - `.env` に `LANGFUSE_ENABLED=true` と各キーを設定し、`requirements.txt` の `langfuse` を導入してください。
 - 本アプリは Langfuse v3（OpenTelemetry）を使用します。
