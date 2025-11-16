@@ -79,6 +79,28 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         self._examples = client.collection("examples")
         self._metadata = client.collection("metadata")
 
+    def _ordered_word_pack_query(self) -> firestore.Query:
+        """Builds a deterministic descending query for word_packs collection."""
+
+        return self._word_packs.order_by(
+            "created_at", direction=firestore.Query.DESCENDING
+        )
+
+    def _fetch_word_pack_snapshots(
+        self, limit: int, offset: int
+    ) -> list[firestore.DocumentSnapshot]:
+        """Apply limit/offset on Firestore side and fetch matching snapshots."""
+
+        normalized_limit = max(0, int(limit))
+        normalized_offset = max(0, int(offset))
+        if normalized_limit == 0:
+            return []
+        query = self._ordered_word_pack_query()
+        if normalized_offset:
+            query = query.offset(normalized_offset)
+        query = query.limit(normalized_limit)
+        return list(query.stream())
+
     def save_word_pack(self, word_pack_id: str, lemma: str, data: str) -> None:
         now = _now_iso()
         (
@@ -152,12 +174,13 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             str(data.get("updated_at") or ""),
         )
 
-    def list_word_packs(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str, str]]:
-        docs = list(self._word_packs.stream())
-        docs.sort(key=lambda d: str((d.to_dict() or {}).get("created_at") or ""), reverse=True)
-        sliced = docs[offset : offset + limit]
+    def list_word_packs(
+        self, limit: int = 50, offset: int = 0
+    ) -> list[tuple[str, str, str, str, str]]:
+        # Firestore 側で order_by + limit/offset を適用し、安定したページングを実現する。
+        docs = self._fetch_word_pack_snapshots(limit, offset)
         items: list[tuple[str, str, str, str, str]] = []
-        for doc in sliced:
+        for doc in docs:
             data = doc.to_dict() or {}
             items.append(
                 (
@@ -171,16 +194,22 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         return items
 
     def count_word_packs(self) -> int:
-        return sum(1 for _ in self._word_packs.stream())
+        query = self._ordered_word_pack_query()
+        try:
+            aggregation = query.count().get()
+        except AttributeError as exc:  # pragma: no cover - defensive fallback
+            msg = "Firestore client does not support aggregation queries"
+            raise RuntimeError(msg) from exc
+        if not aggregation:
+            return 0
+        return int(getattr(aggregation[0], "value", 0) or 0)
 
     def list_word_packs_with_flags(
         self, limit: int = 50, offset: int = 0
     ) -> list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int]]:
-        docs = list(self._word_packs.stream())
-        docs.sort(key=lambda d: str((d.to_dict() or {}).get("created_at") or ""), reverse=True)
-        sliced = docs[offset : offset + limit]
+        docs = self._fetch_word_pack_snapshots(limit, offset)
         results: list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int]] = []
-        for doc in sliced:
+        for doc in docs:
             data = doc.to_dict() or {}
             counts_raw = data.get("examples_category_counts") or {}
             counts = {cat: int(counts_raw.get(cat, 0)) for cat in EXAMPLE_CATEGORIES}

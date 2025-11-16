@@ -77,6 +77,22 @@ cp env.example .env
 
 `ENVIRONMENT=production` のときバックエンドは Cloud Firestore へ永続化します。Google Cloud のサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を必ず設定し、Firestore プロジェクトで `users` / `word_packs` / `examples` などのコレクション作成権限を付与してください。その他の環境では従来どおりローカル SQLite ファイル（`WORDPACK_DB_PATH`）が利用されます。
 
+#### Firestore のインデックス要件
+`word_packs` コレクションでは `created_at` を降順で並べ替えたうえで `limit` / `offset` を適用し、Aggregation Query の `count()` で全件数を取得します。単一フィールドインデックスを無効化していない限り追加設定は不要ですが、`firestore.indexes.json` を手動管理している場合は次のようなエントリーを含めて `gcloud firestore indexes composite create`（または Firebase CLI）でデプロイしてください。
+
+```json
+{
+  "collectionGroup": "word_packs",
+  "queryScope": "COLLECTION",
+  "fields": [
+    {"fieldPath": "created_at", "order": "DESCENDING"},
+    {"fieldPath": "__name__", "order": "ASCENDING"}
+  ]
+}
+```
+
+`created_at` の昇順/降順インデックスが揃っていれば Firestore 側で安定したページングと件数取得が行われ、バックエンドが大量ドキュメントをストリーム処理する必要がなくなります。
+
 特定の Google アカウントだけに利用者を絞り込みたい場合は、カンマ区切りでメールアドレスを列挙した `ADMIN_EMAIL_ALLOWLIST` を設定してください。値は小文字に正規化され、完全一致したアドレスのみが `/api/auth/google` の認証を通過します（未設定または空文字の場合は従来どおり全アカウントを許可します）。
 
 `SESSION_SECRET_KEY` は 32 文字以上の十分に乱数性を持つ文字列を必ず指定してください。`change-me` など既知のプレースホルダーや短い値を設定すると、アプリケーション起動時に検証エラーとなり実行が停止します。外部に公開する環境では `openssl rand -base64 48` などで生成した値を `.env` へ保存し、リポジトリへコミットしない運用を徹底してください。

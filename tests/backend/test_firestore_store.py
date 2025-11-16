@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import sys
 from typing import Any
 
 import pytest
-
-from pathlib import Path
-import sys
+from google.cloud import firestore
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
 
@@ -65,14 +65,95 @@ class FakeCollectionReference:
     def __init__(self, client: "FakeFirestoreClient", name: str) -> None:
         self._client = client
         self._name = name
+        self._count_calls = 0
 
     def document(self, doc_id: str) -> FakeDocumentReference:
         return FakeDocumentReference(self._client, self._name, doc_id)
 
-    def stream(self):  # pragma: no cover - simple iterator
+    def _all_snapshots(self) -> list[FakeDocumentSnapshot]:
         bucket = self._client._data.setdefault(self._name, {})
-        for doc_id, data in bucket.items():
-            yield FakeDocumentSnapshot(self._name, doc_id, dict(data), self._client)
+        return [
+            FakeDocumentSnapshot(self._name, doc_id, dict(data), self._client)
+            for doc_id, data in bucket.items()
+        ]
+
+    def stream(self):  # pragma: no cover - simple iterator
+        for snapshot in self._all_snapshots():
+            yield snapshot
+
+    def order_by(self, field_path: str, direction=firestore.Query.ASCENDING):
+        return FakeQuery(self, field_path, direction)
+
+    @property
+    def count_calls(self) -> int:
+        return self._count_calls
+
+
+class FakeQuery:
+    def __init__(
+        self,
+        collection: FakeCollectionReference,
+        field_path: str | None,
+        direction,
+    ) -> None:
+        self._collection = collection
+        self._field_path = field_path
+        self._descending = direction == firestore.Query.DESCENDING
+        self._limit: int | None = None
+        self._offset = 0
+
+    def order_by(self, field_path: str, direction=firestore.Query.ASCENDING) -> "FakeQuery":
+        self._field_path = field_path
+        self._descending = direction == firestore.Query.DESCENDING
+        return self
+
+    def limit(self, value: int) -> "FakeQuery":
+        self._limit = max(0, int(value))
+        return self
+
+    def offset(self, value: int) -> "FakeQuery":
+        self._offset = max(0, int(value))
+        return self
+
+    def _matching_snapshots(self) -> list[FakeDocumentSnapshot]:
+        docs = self._collection._all_snapshots()
+        if self._field_path:
+            docs.sort(
+                key=lambda snap: str((snap.to_dict() or {}).get(self._field_path) or ""),
+                reverse=self._descending,
+            )
+        if self._offset:
+            docs = docs[self._offset :]
+        if self._limit is not None:
+            docs = docs[: self._limit]
+        return docs
+
+    def stream(self):  # pragma: no cover - passthrough iterator
+        for snapshot in self._matching_snapshots():
+            yield snapshot
+
+    def count(self, alias: str | None = None) -> "FakeAggregationQuery":
+        self._collection._count_calls += 1
+        return FakeAggregationQuery(self, alias or "count")
+
+
+class FakeAggregationQuery:
+    def __init__(self, query: FakeQuery, alias: str) -> None:
+        self._query = query
+        self._alias = alias
+
+    def stream(self, *args: Any, **kwargs: Any):  # pragma: no cover - simple iterator
+        total = len(self._query._matching_snapshots())
+        yield FakeAggregationResult(self._alias, total)
+
+    def get(self, *args: Any, **kwargs: Any) -> list["FakeAggregationResult"]:
+        return list(self.stream(*args, **kwargs))
+
+
+class FakeAggregationResult:
+    def __init__(self, alias: str, value: int) -> None:
+        self.alias = alias
+        self.value = value
 
 
 class FakeTransaction:
@@ -156,6 +237,50 @@ def test_firestore_example_progress_and_deletion(firestore_store: AppFirestoreSt
     counts = firestore_store.wordpacks.list_word_packs_with_flags(limit=1)[0][6]
     assert counts["Dev"] == 0
     assert counts["CS"] == 1
+
+
+def test_list_word_packs_paginates_via_firestore_query(
+    firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    timestamps = iter(
+        [
+            "2024-01-01T00:00:01+00:00",
+            "2024-01-01T00:00:02+00:00",
+            "2024-01-01T00:00:03+00:00",
+        ]
+    )
+    monkeypatch.setattr("backend.store.firestore_store._now_iso", lambda: next(timestamps))
+
+    for idx, lemma in enumerate(["Alpha", "Beta", "Gamma"], start=1):
+        firestore_store.save_word_pack(
+            f"wp-{idx}",
+            lemma,
+            json.dumps({"lemma": lemma, "examples": {}}, ensure_ascii=False),
+        )
+
+    first_page = firestore_store.list_word_packs(limit=2, offset=0)
+    assert [row[1] for row in first_page] == ["Gamma", "Beta"]
+
+    second_page = firestore_store.list_word_packs(limit=2, offset=2)
+    assert [row[1] for row in second_page] == ["Alpha"]
+
+    flagged_page = firestore_store.list_word_packs_with_flags(limit=1, offset=1)
+    assert [row[1] for row in flagged_page] == ["Beta"]
+
+
+def test_count_word_packs_uses_server_side_aggregation(
+    firestore_store: AppFirestoreStore,
+) -> None:
+    for idx, lemma in enumerate(["Delta", "Echo"], start=1):
+        firestore_store.save_word_pack(
+            f"pack-{idx}",
+            lemma,
+            json.dumps({"lemma": lemma, "examples": {}}, ensure_ascii=False),
+        )
+
+    total = firestore_store.count_word_packs()
+    assert total == 2
+    assert firestore_store.wordpacks._word_packs.count_calls == 1
 
 
 def test_store_factory_switches_to_firestore(monkeypatch: pytest.MonkeyPatch) -> None:
