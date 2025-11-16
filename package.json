@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "smoke": "npm run smoke --prefix tests/ui/mcp-smoke"
+    "smoke": "npm run smoke --prefix tests/ui/mcp-smoke",
+    "prepare:frontend-env": "node ./scripts/prepare-frontend-env.mjs"
   }
 }
