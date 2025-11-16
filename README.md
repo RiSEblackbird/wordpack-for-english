@@ -78,20 +78,15 @@ cp env.example .env
 `ENVIRONMENT=production` のときバックエンドは Cloud Firestore へ永続化します。Google Cloud のサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を必ず設定し、Firestore プロジェクトで `users` / `word_packs` / `examples` などのコレクション作成権限を付与してください。その他の環境では従来どおりローカル SQLite ファイル（`WORDPACK_DB_PATH`）が利用されます。
 
 #### Firestore のインデックス要件
-`word_packs` コレクションでは `created_at` を降順で並べ替えたうえで `limit` / `offset` を適用し、Aggregation Query の `count()` で全件数を取得します。単一フィールドインデックスを無効化していない限り追加設定は不要ですが、`firestore.indexes.json` を手動管理している場合は次のようなエントリーを含めて `gcloud firestore indexes composite create`（または Firebase CLI）でデプロイしてください。
+Firestore に保存する主要コレクションは `firestore.indexes.json` で複合インデックスを一括管理しています。`word_packs`（`created_at` 降順 + `__name__`）、`examples`（`word_pack_id`/`category` フィルタ + `position` / `example_id` の組み合わせ）を固定することで、バックエンドのページネーションと `Aggregation Query` の `count()` が常に安定します。JSON ファイルはそのまま Cloud Firestore / エミュレータ / Firebase CLI で流用できるようにしてあるため、手作業で Web Console に登録する必要はありません。
 
-```json
-{
-  "collectionGroup": "word_packs",
-  "queryScope": "COLLECTION",
-  "fields": [
-    {"fieldPath": "created_at", "order": "DESCENDING"},
-    {"fieldPath": "__name__", "order": "ASCENDING"}
-  ]
-}
-```
+| 操作 | コマンド | 補足 |
+| --- | --- | --- |
+| gcloud で本番/検証プロジェクトへ適用 | `make deploy-firestore-indexes PROJECT_ID=my-gcp-project` | `scripts/deploy_firestore_indexes.sh` が `gcloud alpha firestore indexes composite create --index-file firestore.indexes.json` を呼び出します。 |
+| Firebase CLI で適用 | `make deploy-firestore-indexes PROJECT_ID=my-firebase-project TOOL=firebase` | CI/ローカルともに `firebase deploy --only firestore:indexes --non-interactive` を使うルート。 |
+| エミュレータでの検証 | `firebase emulators:start --only firestore --project wordpack-local` | ルート直下の `firestore.indexes.json` を自動で読み込みます。`FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` を指定して API/テストを実行してください。 |
 
-`created_at` の昇順/降順インデックスが揃っていれば Firestore 側で安定したページングと件数取得が行われ、バックエンドが大量ドキュメントをストリーム処理する必要がなくなります。
+`firebase emulators:start` を起動したターミナルには「Loaded indexes from firestore.indexes.json」のように読み込みログが表示されます。エミュレーターを止める際は `Ctrl+C` で終了し、`pytest tests/backend/test_firestore_store.py` などの Firestore ストア向けテストを再実行して差分がないことを確認してください。
 
 特定の Google アカウントだけに利用者を絞り込みたい場合は、カンマ区切りでメールアドレスを列挙した `ADMIN_EMAIL_ALLOWLIST` を設定してください。値は小文字に正規化され、完全一致したアドレスのみが `/api/auth/google` の認証を通過します（未設定または空文字の場合は従来どおり全アカウントを許可します）。
 
