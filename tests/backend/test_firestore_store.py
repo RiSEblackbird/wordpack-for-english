@@ -66,6 +66,7 @@ class FakeCollectionReference:
         self._client = client
         self._name = name
         self._count_calls = 0
+        self._query_log: list[dict[str, Any]] = []
 
     def document(self, doc_id: str) -> FakeDocumentReference:
         return FakeDocumentReference(self._client, self._name, doc_id)
@@ -78,33 +79,52 @@ class FakeCollectionReference:
         ]
 
     def stream(self):  # pragma: no cover - simple iterator
-        for snapshot in self._all_snapshots():
+        docs = self._all_snapshots()
+        self._record_query([], len(docs))
+        for snapshot in docs:
             yield snapshot
 
     def order_by(self, field_path: str, direction=firestore.Query.ASCENDING):
-        return FakeQuery(self, field_path, direction)
+        return FakeQuery(self).order_by(field_path, direction)
+
+    def where(self, field_path: str, op_string: str, value: Any):
+        return FakeQuery(self).where(field_path, op_string, value)
+
+    def count(self, alias: str | None = None) -> "FakeAggregationQuery":
+        self._count_calls += 1
+        return FakeAggregationQuery(FakeQuery(self), alias or "count")
 
     @property
     def count_calls(self) -> int:
         return self._count_calls
 
+    def _record_query(
+        self, filters: list[tuple[str, str, Any]], size: int
+    ) -> None:  # pragma: no cover - bookkeeping helper
+        self._query_log.append({"filters": list(filters), "size": size})
+
+    def reset_query_log(self) -> None:
+        self._query_log.clear()
+
+    @property
+    def query_log(self) -> list[dict[str, Any]]:
+        return list(self._query_log)
+
 
 class FakeQuery:
-    def __init__(
-        self,
-        collection: FakeCollectionReference,
-        field_path: str | None,
-        direction,
-    ) -> None:
+    def __init__(self, collection: FakeCollectionReference) -> None:
         self._collection = collection
-        self._field_path = field_path
-        self._descending = direction == firestore.Query.DESCENDING
+        self._orderings: list[tuple[str, bool]] = []
+        self._filters: list[tuple[str, str, Any]] = []
         self._limit: int | None = None
         self._offset = 0
 
     def order_by(self, field_path: str, direction=firestore.Query.ASCENDING) -> "FakeQuery":
-        self._field_path = field_path
-        self._descending = direction == firestore.Query.DESCENDING
+        self._orderings.append((field_path, direction == firestore.Query.DESCENDING))
+        return self
+
+    def where(self, field_path: str, op_string: str, value: Any) -> "FakeQuery":
+        self._filters.append((field_path, op_string, value))
         return self
 
     def limit(self, value: int) -> "FakeQuery":
@@ -117,10 +137,16 @@ class FakeQuery:
 
     def _matching_snapshots(self) -> list[FakeDocumentSnapshot]:
         docs = self._collection._all_snapshots()
-        if self._field_path:
+        for field_path, op_string, expected in self._filters:
+            docs = [
+                doc
+                for doc in docs
+                if self._matches_filter(doc, field_path, op_string, expected)
+            ]
+        for field_path, descending in reversed(self._orderings):
             docs.sort(
-                key=lambda snap: str((snap.to_dict() or {}).get(self._field_path) or ""),
-                reverse=self._descending,
+                key=lambda snap, fp=field_path: self._order_value(snap, fp),
+                reverse=descending,
             )
         if self._offset:
             docs = docs[self._offset :]
@@ -129,12 +155,42 @@ class FakeQuery:
         return docs
 
     def stream(self):  # pragma: no cover - passthrough iterator
-        for snapshot in self._matching_snapshots():
+        results = self._matching_snapshots()
+        self._collection._record_query(self._filters, len(results))
+        for snapshot in results:
             yield snapshot
 
     def count(self, alias: str | None = None) -> "FakeAggregationQuery":
         self._collection._count_calls += 1
         return FakeAggregationQuery(self, alias or "count")
+
+    def _matches_filter(
+        self,
+        snapshot: FakeDocumentSnapshot,
+        field_path: str,
+        op_string: str,
+        expected: Any,
+    ) -> bool:
+        data = snapshot.to_dict() or {}
+        actual = data.get(field_path)
+        if op_string == "==":
+            return actual == expected
+        if op_string == ">=":
+            return actual >= expected
+        if op_string == "<=":
+            return actual <= expected
+        if op_string == ">":
+            return actual > expected
+        if op_string == "<":
+            return actual < expected
+        raise NotImplementedError(f"unsupported operator: {op_string}")
+
+    def _order_value(self, snapshot: FakeDocumentSnapshot, field_path: str) -> Any:
+        data = snapshot.to_dict() or {}
+        value = data.get(field_path)
+        if isinstance(value, (int, float)):
+            return value
+        return str(value or "")
 
 
 class FakeAggregationQuery:
@@ -296,3 +352,51 @@ def test_store_factory_switches_to_firestore(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(store_module, "AppFirestoreStore", lambda: sentinel)
     new_store = store_module._create_store()
     assert new_store is sentinel
+
+
+def test_example_queries_limit_scanned_documents(
+    firestore_store: AppFirestoreStore,
+) -> None:
+    """大量データ下でも対象パックの件数だけを走査することを検証する。"""
+
+    categories = ["Dev", "CS"]
+    per_category = 10
+    for idx in range(1, 16):
+        lemma = f"Lemma-{idx}"
+        payload = {
+            "lemma": lemma,
+            "examples": {
+                cat: [
+                    {"en": f"{cat} example {idx}-{n}", "ja": f"{cat} ja {idx}-{n}"}
+                    for n in range(per_category)
+                ]
+                for cat in categories
+            },
+        }
+        firestore_store.save_word_pack(
+            f"mass-{idx}", lemma, json.dumps(payload, ensure_ascii=False)
+        )
+
+    target_pack = "mass-3"
+    collection = firestore_store.examples._examples
+    collection.reset_query_log()
+
+    remaining = firestore_store.delete_example(target_pack, "Dev", 0)
+    assert remaining == per_category - 1
+
+    log = collection.query_log
+    assert len(log) >= 3
+    first, second, third = log[:3]
+
+    assert ("word_pack_id", "==", target_pack) in first["filters"]
+    assert ("category", "==", "Dev") in first["filters"]
+    assert first["size"] == per_category
+
+    assert ("word_pack_id", "==", target_pack) in second["filters"]
+    assert ("category", "==", "Dev") in second["filters"]
+    assert second["size"] == per_category - 1
+
+    assert ("word_pack_id", "==", target_pack) in third["filters"]
+    assert all(f[0] != "category" for f in third["filters"])
+    total_examples_in_pack = per_category * len(categories) - 1
+    assert third["size"] == total_examples_in_pack

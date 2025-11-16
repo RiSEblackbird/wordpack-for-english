@@ -19,6 +19,26 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _extract_count_from_aggregation(
+    aggregation: Sequence[Any] | None,
+) -> int:
+    """Extracts the numeric count from Firestore aggregation results."""
+
+    if not aggregation:
+        return 0
+    result = aggregation[0]
+    count_value: Any | None = None
+    try:
+        count_value = result["count"]  # type: ignore[index]
+    except Exception:
+        aggregate_fields = getattr(result, "aggregate_fields", None)
+        if isinstance(aggregate_fields, Mapping):
+            count_value = aggregate_fields.get("count")
+    if count_value is None and getattr(result, "alias", None) == "count":
+        count_value = getattr(result, "value", None)
+    return int(count_value or 0)
+
+
 class FirestoreBaseStore:
     """Firestore クライアント共通のヘルパー。"""
 
@@ -200,20 +220,7 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         except AttributeError as exc:  # pragma: no cover - defensive fallback
             msg = "Firestore client does not support aggregation queries"
             raise RuntimeError(msg) from exc
-        if not aggregation:
-            return 0
-
-        result = aggregation[0]
-        count_value: Any | None = None
-        try:
-            count_value = result["count"]  # type: ignore[index]
-        except Exception:
-            aggregate_fields = getattr(result, "aggregate_fields", None)
-            if isinstance(aggregate_fields, Mapping):
-                count_value = aggregate_fields.get("count")
-        if count_value is None and getattr(result, "alias", None) == "count":
-            count_value = getattr(result, "value", None)
-        return int(count_value or 0)
+        return _extract_count_from_aggregation(aggregation)
 
     def list_word_packs_with_flags(
         self, limit: int = 50, offset: int = 0
@@ -487,6 +494,35 @@ class FirestoreExampleStore(FirestoreBaseStore):
         self._examples = client.collection("examples")
         self._wordpacks = wordpacks
 
+    def _build_examples_query(
+        self, *, word_pack_id: str | None = None, category: str | None = None
+    ) -> firestore.Query | firestore.CollectionReference:
+        """Create a query that narrows down examples by pack/category."""
+
+        query: firestore.Query | firestore.CollectionReference = self._examples
+        if word_pack_id:
+            query = query.where("word_pack_id", "==", word_pack_id)
+        if category:
+            query = query.where("category", "==", category)
+        return query
+
+    def _normalize_example_snapshot(
+        self, snapshot: firestore.DocumentSnapshot
+    ) -> dict[str, Any]:
+        """Convert snapshot data into a normalized dict for downstream use."""
+
+        data = snapshot.to_dict() or {}
+        entry = dict(data)
+        entry["category"] = str(entry.get("category") or "")
+        entry["position"] = int(entry.get("position") or 0)
+        entry["word_pack_id"] = str(entry.get("word_pack_id") or "")
+        example_id = entry.get("example_id")
+        if example_id is None:
+            raw_id = snapshot.id
+            example_id = int(raw_id) if str(raw_id).isdigit() else raw_id
+        entry["example_id"] = example_id
+        return entry
+
     def update_example_study_progress(
         self, example_id: int, checked_increment: int, learned_increment: int
     ) -> tuple[str, int, int] | None:
@@ -511,9 +547,14 @@ class FirestoreExampleStore(FirestoreBaseStore):
     def delete_example(self, word_pack_id: str, category: str, index: int) -> int | None:
         if index < 0:
             return None
-        docs = self._examples_for_pack(word_pack_id)
-        category_docs = [doc for doc in docs if doc["category"] == category]
-        category_docs.sort(key=lambda d: (int(d["position"]), int(d["example_id"])))
+        query = (
+            self._build_examples_query(word_pack_id=word_pack_id, category=category)
+            .order_by("position")
+            .order_by("example_id")
+        )
+        category_docs = [
+            self._normalize_example_snapshot(snapshot) for snapshot in query.stream()
+        ]
         if index >= len(category_docs):
             return None
         target = category_docs[index]
@@ -551,8 +592,23 @@ class FirestoreExampleStore(FirestoreBaseStore):
     ) -> int:
         if not items:
             return 0
-        docs = [doc for doc in self._examples_for_pack(word_pack_id) if doc["category"] == category]
-        start_pos = max((int(doc["position"]) for doc in docs), default=-1) + 1
+        last_snapshot = next(
+            iter(
+                self._build_examples_query(
+                    word_pack_id=word_pack_id, category=category
+                )
+                .order_by("position", direction=firestore.Query.DESCENDING)
+                .limit(1)
+                .stream()
+            ),
+            None,
+        )
+        last_position = (
+            int((last_snapshot.to_dict() or {}).get("position") or -1)
+            if last_snapshot is not None
+            else -1
+        )
+        start_pos = last_position + 1
         now = _now_iso()
         ids = self._wordpacks.reserve_example_ids(len(items))
         id_iter = iter(ids)
@@ -605,12 +661,25 @@ class FirestoreExampleStore(FirestoreBaseStore):
         search: str | None = None,
         search_mode: str = "contains",
         category: str | None = None,
+        word_pack_id: str | None = None,
     ) -> int:
+        query_text = str((search or "").strip())
+        if not query_text:
+            query = self._build_examples_query(
+                word_pack_id=word_pack_id, category=category
+            )
+            try:
+                aggregation = query.count().get()
+            except AttributeError:
+                aggregation = None
+            else:
+                return _extract_count_from_aggregation(aggregation)
         return len(
             self._filter_examples(
                 search=search,
                 search_mode=search_mode,
                 category=category,
+                word_pack_id=word_pack_id,
             )
         )
 
@@ -624,10 +693,16 @@ class FirestoreExampleStore(FirestoreBaseStore):
         search: str | None = None,
         search_mode: str = "contains",
         category: str | None = None,
+        word_pack_id: str | None = None,
     ) -> list[
         tuple[int, str, str, str, str, str, str | None, str, str | None, int, int, int]
     ]:
-        items = self._filter_examples(search=search, search_mode=search_mode, category=category)
+        items = self._filter_examples(
+            search=search,
+            search_mode=search_mode,
+            category=category,
+            word_pack_id=word_pack_id,
+        )
         reverse = str(order_dir).lower() == "desc"
         key_map = {
             "created_at": lambda d: str(d.get("created_at") or ""),
@@ -684,23 +759,18 @@ class FirestoreExampleStore(FirestoreBaseStore):
 
     def _examples_for_pack(self, word_pack_id: str) -> list[dict[str, Any]]:
         docs: list[dict[str, Any]] = []
-        for snapshot in self._examples.stream():
-            data = snapshot.to_dict() or {}
-            if data.get("word_pack_id") != word_pack_id:
-                continue
-            entry = dict(data)
-            entry["category"] = str(entry.get("category") or "")
-            entry["position"] = int(entry.get("position") or 0)
-            example_id = entry.get("example_id")
-            if example_id is None:
-                example_id = int(snapshot.id) if snapshot.id.isdigit() else snapshot.id
-            entry["example_id"] = example_id
-            docs.append(entry)
+        query = self._build_examples_query(word_pack_id=word_pack_id)
+        for snapshot in query.stream():
+            docs.append(self._normalize_example_snapshot(snapshot))
         return docs
 
     def _reindex_category(self, word_pack_id: str, category: str) -> None:
-        docs = [doc for doc in self._examples_for_pack(word_pack_id) if doc["category"] == category]
-        docs.sort(key=lambda d: (int(d["position"]), int(d["example_id"])))
+        query = (
+            self._build_examples_query(word_pack_id=word_pack_id, category=category)
+            .order_by("position")
+            .order_by("example_id")
+        )
+        docs = [self._normalize_example_snapshot(snapshot) for snapshot in query.stream()]
         for new_pos, doc in enumerate(docs):
             self._examples.document(str(doc["example_id"])).update({"position": new_pos})
 
@@ -719,17 +789,17 @@ class FirestoreExampleStore(FirestoreBaseStore):
         search: str | None,
         search_mode: str,
         category: str | None,
+        word_pack_id: str | None = None,
     ) -> list[dict[str, Any]]:
         docs: list[dict[str, Any]] = []
-        raw = list(self._examples.stream())
+        query = self._build_examples_query(word_pack_id=word_pack_id, category=category)
+        raw = list(query.stream())
         query = str((search or "").strip())
         query_lower = query.lower()
         pack_cache: dict[str, Mapping[str, Any]] = {}
         for snapshot in raw:
-            data = snapshot.to_dict() or {}
-            if category and data.get("category") != category:
-                continue
-            en_value = str(data.get("en") or "")
+            entry = self._normalize_example_snapshot(snapshot)
+            en_value = str(entry.get("en") or "")
             if query:
                 en_lower = en_value.lower()
                 if search_mode == "prefix" and not en_lower.startswith(query_lower):
@@ -738,8 +808,6 @@ class FirestoreExampleStore(FirestoreBaseStore):
                     continue
                 if search_mode not in ("prefix", "suffix") and query_lower not in en_lower:
                     continue
-            entry = dict(data)
-            entry.setdefault("example_id", int(snapshot.id) if snapshot.id.isdigit() else snapshot.id)
             pack_id = str(entry.get("word_pack_id") or "")
             if pack_id and pack_id not in pack_cache:
                 meta = self._wordpacks.get_word_pack_metadata(pack_id)
