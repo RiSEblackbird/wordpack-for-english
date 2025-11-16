@@ -170,6 +170,42 @@ docker compose up --build
 3. `GOOGLE_APPLICATION_CREDENTIALS` や Secret Manager を利用して Firestore サービスアカウント権限を付与し、`/healthz` への `GET` / `OPTIONS` で `Access-Control-Allow-Origin` と Cloud Logging へ出力される構造化ログを確認します。
 4. `SESSION_COOKIE_SECURE=true` など HTTPS 固有設定を有効にし、必要に応じて `TRUSTED_PROXY_IPS` や `ALLOWED_HOSTS` を Cloud Run の環境変数で更新してください。
 
+### Firebase Hosting でのリライト構成
+Cloud Run の API を Firebase Hosting のフロントエンドと同一ドメインで公開する場合は、`firebase.json` に `/api` 向けリライトを定義しておくと CORS 設定を最小限にできます。`apps/frontend/dist` を Hosting に配置する例を示します。
+
+```json
+{
+  "hosting": {
+    "public": "apps/frontend/dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "/api{,/**}",
+        "run": {
+          "serviceId": "wordpack-backend",
+          "region": "asia-northeast1"
+        }
+      },
+      { "source": "/**", "destination": "/index.html" }
+    ]
+  }
+}
+```
+
+1. `npm run build --prefix apps/frontend` で Vite のビルド成果物を生成。
+2. `firebase deploy --only hosting` を実行すると、`/api` 配下は Cloud Run へフォワードされ、それ以外は `index.html` へリライトされます。
+3. 同一オリジンになるため、`CORS_ALLOWED_ORIGINS` に Hosting ドメイン（例: `https://<project>.web.app`）を列挙し、`ALLOWED_HOSTS` にも同じドメインを追加すれば Cookie を安全に共有できます。
+
+### Firestore エミュレータを使ったローカルテスト
+`ENVIRONMENT=production` で起動するとバックエンドは `AppFirestoreStore` を選択します。Firestore エミュレータを併用すれば本番相当のデータフローをローカルで検証できます。
+
+1. Firebase CLI をインストールし、別ターミナルで `firebase emulators:start --only firestore --project wordpack-local` を起動。
+2. API を起動する環境で `ENVIRONMENT=production FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` を設定し、`python -m uvicorn backend.main:app --app-dir apps/backend` を実行します（サービスアカウントは不要）。
+3. テストも `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 ENVIRONMENT=production pytest tests/backend/test_firestore_store.py` のように実行すれば、Fake クライアントだけでなく実際のエミュレータ相手の結合テストを追加できます。
+4. エミュレータ利用をやめる場合は `ENVIRONMENT` を `development` に戻すだけで SQLite へフォールバックします。
+
+Cloud Run や Firebase Hosting へ出荷する前に、上記の手順で Firestore 統合を通しで確認すると移行時のトラブルを減らせます。
+
 ### 認証フロー
 - フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。
 - 「Googleでログイン」ボタンは Google Identity Services の `GoogleLogin` コンポーネントを用いており、承認後に `credential`（ID トークン）を取得して `/api/auth/google` へ送信し、セッション Cookie を受け取ります。credential が欠落した場合は直ちにエラー帯を表示し、`/api/diagnostics/oauth-telemetry` へ状況を送信して原因調査に活用します。
