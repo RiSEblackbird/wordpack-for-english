@@ -25,10 +25,24 @@ def _reset_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_production_rejects_wildcard_hosts() -> None:
-    """本番環境でワイルドカードのみを許可すると起動が失敗する。"""
+    """本番環境でワイルドカードを含む設定は拒否される。"""
 
     with pytest.raises(ValueError):
         Settings(environment="production", _env_file=None)
+
+    with pytest.raises(ValueError):
+        Settings(
+            environment="production",
+            allowed_hosts=("*", _CLOUD_RUN_HOST),
+            _env_file=None,
+        )
+
+
+def test_production_rejects_empty_hosts() -> None:
+    """空配列のままでも create_app 側でワイルドカードにフォールバックするので拒否。"""
+
+    with pytest.raises(ValueError):
+        Settings(environment="production", allowed_hosts=(), _env_file=None)
 
 
 def test_production_allows_explicit_hosts() -> None:
