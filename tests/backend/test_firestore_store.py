@@ -335,6 +335,28 @@ def test_firestore_example_progress_and_deletion(firestore_store: AppFirestoreSt
     assert counts["CS"] == 1
 
 
+def test_contains_search_prefers_specific_term(
+    firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = {
+        "lemma": "Chunk",
+        "examples": {
+            "Dev": [
+                {"en": "Analyze xyz value", "ja": "xyzの値を分析する"},
+            ]
+        },
+    }
+    firestore_store.save_word_pack(
+        "wp-search", payload["lemma"], json.dumps(payload, ensure_ascii=False)
+    )
+
+    firestore_store.examples._examples.reset_query_log()
+    firestore_store.list_examples(search="yz", search_mode="contains")
+
+    filters = firestore_store.examples._examples.query_log[0]["filters"]
+    assert ("search_terms", "array_contains", "yz") in filters
+
+
 def test_list_word_packs_paginates_via_firestore_query(
     firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:

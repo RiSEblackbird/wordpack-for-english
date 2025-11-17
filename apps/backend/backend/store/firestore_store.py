@@ -568,7 +568,9 @@ class FirestoreExampleStore(FirestoreBaseStore):
         terms = _extract_search_terms(normalized)
         if not terms:
             return query, None
-        query = query.where("search_terms", "array_contains", terms[0])
+
+        most_specific_term = max(terms, key=lambda term: (len(term), term))
+        query = query.where("search_terms", "array_contains", most_specific_term)
         return query, None
 
     def _paginate_ordered_query(
