@@ -39,6 +39,39 @@ def _extract_count_from_aggregation(
     return int(count_value or 0)
 
 
+def _normalize_search_text(text: str | None) -> str:
+    """検索用に英文を正規化（小文字化・前後空白除去）する。"""
+
+    return str((text or "").strip()).lower()
+
+
+def _extract_search_terms(normalized_text: str) -> list[str]:
+    """部分一致検索のために短いN-gramとトークンを抽出する。"""
+
+    compact = normalized_text.replace("\n", " ")
+    terms: set[str] = set()
+    for token in compact.replace("/", " ").replace(",", " ").split():
+        stripped = token.strip()
+        if stripped:
+            terms.add(stripped)
+    condensed = normalized_text.replace(" ", "")
+    for size in (1, 2, 3):
+        if len(condensed) < size:
+            continue
+        for idx in range(len(condensed) - size + 1):
+            terms.add(condensed[idx : idx + size])
+    return sorted(terms)
+
+
+def _build_search_payload(en: str) -> dict[str, Any]:
+    normalized = _normalize_search_text(en)
+    return {
+        "search_en": normalized,
+        "search_en_reversed": normalized[::-1],
+        "search_terms": _extract_search_terms(normalized),
+    }
+
+
 class FirestoreBaseStore:
     """Firestore クライアント共通のヘルパー。"""
 
@@ -358,6 +391,7 @@ class FirestoreWordPackStore(FirestoreBaseStore):
                     "pack_updated_at": updated_at,
                     "lemma": lemma,
                     "sense_title": sense_title,
+                    **_build_search_payload(en),
                 }
             )
             counts[category] = counts.get(category, 0) + 1
@@ -506,6 +540,63 @@ class FirestoreExampleStore(FirestoreBaseStore):
             query = query.where("category", "==", category)
         return query
 
+    def _apply_search_filters(
+        self,
+        query: firestore.Query | firestore.CollectionReference,
+        *,
+        search: str | None,
+        search_mode: str,
+    ) -> tuple[firestore.Query | firestore.CollectionReference, str | None]:
+        """検索条件を Firestore の where 節で表現し、必要な order_by キーを返す。"""
+
+        normalized = _normalize_search_text(search)
+        if not normalized:
+            return query, None
+        if search_mode == "prefix":
+            upper_bound = normalized + "\uf8ff"
+            query = query.where("search_en", ">=", normalized).where(
+                "search_en", "<=", upper_bound
+            )
+            return query, "search_en"
+        if search_mode == "suffix":
+            reversed_query = normalized[::-1]
+            upper_bound = reversed_query + "\uf8ff"
+            query = query.where("search_en_reversed", ">=", reversed_query).where(
+                "search_en_reversed", "<=", upper_bound
+            )
+            return query, "search_en_reversed"
+        terms = _extract_search_terms(normalized)
+        if not terms:
+            return query, None
+        query = query.where("search_terms", "array_contains", terms[0])
+        return query, None
+
+    def _paginate_ordered_query(
+        self,
+        query: firestore.Query | firestore.CollectionReference,
+        *,
+        primary_order: str,
+        secondary_order: str | None,
+        direction: firestore.Query.DESCENDING | firestore.Query.ASCENDING,
+        offset: int,
+        limit: int,
+    ) -> list[firestore.DocumentSnapshot]:
+        """order_by + start_after + limit を組み合わせたページングを適用する。"""
+
+        ordered = query.order_by(primary_order, direction=direction)
+        if secondary_order and secondary_order != primary_order:
+            ordered = ordered.order_by(secondary_order, direction=direction)
+        ordered = ordered.order_by("__name__", direction=direction)
+        cursor: firestore.DocumentSnapshot | None = None
+        if offset:
+            cursor = None
+            for snap in ordered.limit(offset).stream():
+                cursor = snap
+            if cursor is None:
+                return []
+            ordered = ordered.start_after(cursor)
+        return list(ordered.limit(limit).stream())
+
     def _normalize_example_snapshot(
         self, snapshot: firestore.DocumentSnapshot
     ) -> dict[str, Any]:
@@ -648,6 +739,7 @@ class FirestoreExampleStore(FirestoreBaseStore):
                     "pack_updated_at": now,
                     "lemma": lemma_label,
                     "sense_title": sense_title,
+                    **_build_search_payload(en),
                 }
             )
             inserted += 1
@@ -663,25 +755,19 @@ class FirestoreExampleStore(FirestoreBaseStore):
         category: str | None = None,
         word_pack_id: str | None = None,
     ) -> int:
-        query_text = str((search or "").strip())
-        if not query_text:
-            query = self._build_examples_query(
-                word_pack_id=word_pack_id, category=category
-            )
-            try:
-                aggregation = query.count().get()
-            except AttributeError:
-                aggregation = None
-            else:
-                return _extract_count_from_aggregation(aggregation)
-        return len(
-            self._filter_examples(
-                search=search,
-                search_mode=search_mode,
-                category=category,
-                word_pack_id=word_pack_id,
-            )
+        base_query = self._build_examples_query(
+            word_pack_id=word_pack_id, category=category
         )
+        filtered_query, _order_hint = self._apply_search_filters(
+            base_query, search=search, search_mode=search_mode
+        )
+        try:
+            aggregation = filtered_query.count().get()
+        except AttributeError:
+            aggregation = None
+        else:
+            return _extract_count_from_aggregation(aggregation)
+        return sum(1 for _ in filtered_query.stream())
 
     def list_examples(
         self,
@@ -697,43 +783,71 @@ class FirestoreExampleStore(FirestoreBaseStore):
     ) -> list[
         tuple[int, str, str, str, str, str, str | None, str, str | None, int, int, int]
     ]:
-        items = self._filter_examples(
-            search=search,
-            search_mode=search_mode,
-            category=category,
-            word_pack_id=word_pack_id,
-        )
-        reverse = str(order_dir).lower() == "desc"
-        key_map = {
-            "created_at": lambda d: str(d.get("created_at") or ""),
-            "pack_updated_at": lambda d: str(d.get("pack_updated_at") or ""),
-            "lemma": lambda d: str(d.get("lemma") or ""),
-            "category": lambda d: str(d.get("category") or ""),
+        normalized_limit = max(0, int(limit))
+        normalized_offset = max(0, int(offset))
+        if normalized_limit == 0:
+            return []
+
+        direction = firestore.Query.DESCENDING
+        if str(order_dir).lower() == "asc":
+            direction = firestore.Query.ASCENDING
+
+        order_map = {
+            "created_at": "created_at",
+            "pack_updated_at": "pack_updated_at",
+            "lemma": "lemma",
+            "category": "category",
         }
-        sort_key = key_map.get(order_by, key_map["created_at"])
-        items.sort(key=sort_key, reverse=reverse)
-        sliced = items[offset : offset + limit]
-        result: list[
+        requested_order = order_map.get(order_by, "created_at")
+        base_query = self._build_examples_query(
+            word_pack_id=word_pack_id, category=category
+        )
+        filtered_query, search_order = self._apply_search_filters(
+            base_query, search=search, search_mode=search_mode
+        )
+        primary_order = search_order or requested_order
+        snapshots = self._paginate_ordered_query(
+            filtered_query,
+            primary_order=primary_order,
+            secondary_order=requested_order if search_order else None,
+            direction=direction,
+            offset=normalized_offset,
+            limit=normalized_limit,
+        )
+
+        pack_cache: dict[str, Mapping[str, Any]] = {}
+        results: list[
             tuple[int, str, str, str, str, str, str | None, str, str | None, int, int, int]
         ] = []
-        for doc in sliced:
-            result.append(
+        for snapshot in snapshots:
+            entry = self._normalize_example_snapshot(snapshot)
+            pack_id = str(entry.get("word_pack_id") or "")
+            if pack_id and pack_id not in pack_cache:
+                pack_cache[pack_id] = (
+                    self._wordpacks.get_word_pack_metadata(pack_id) or {}
+                )
+            meta = pack_cache.get(pack_id, {})
+            if not entry.get("lemma") and meta:
+                entry["lemma"] = meta.get("lemma_label")
+            if meta and not entry.get("pack_updated_at"):
+                entry["pack_updated_at"] = meta.get("updated_at")
+            results.append(
                 (
-                    int(doc["example_id"]),
-                    str(doc["word_pack_id"]),
-                    str(doc.get("lemma") or ""),
-                    str(doc.get("category") or ""),
-                    str(doc.get("en") or ""),
-                    str(doc.get("ja") or ""),
-                    doc.get("grammar_ja"),
-                    str(doc.get("created_at") or ""),
-                    str(doc.get("pack_updated_at") or ""),
-                    normalize_non_negative_int(doc.get("checked_only_count")),
-                    normalize_non_negative_int(doc.get("learned_count")),
-                    normalize_non_negative_int(doc.get("transcription_typing_count")),
+                    int(entry["example_id"]),
+                    pack_id,
+                    str(entry.get("lemma") or ""),
+                    str(entry.get("category") or ""),
+                    str(entry.get("en") or ""),
+                    str(entry.get("ja") or ""),
+                    entry.get("grammar_ja"),
+                    str(entry.get("created_at") or ""),
+                    str(entry.get("pack_updated_at") or ""),
+                    normalize_non_negative_int(entry.get("checked_only_count")),
+                    normalize_non_negative_int(entry.get("learned_count")),
+                    normalize_non_negative_int(entry.get("transcription_typing_count")),
                 )
             )
-        return result
+        return results
 
     def update_example_transcription_typing(
         self, example_id: int, input_length: int
@@ -782,45 +896,6 @@ class FirestoreExampleStore(FirestoreBaseStore):
         self._wordpacks.update_word_pack_metadata(
             word_pack_id, category_counts=normalized
         )
-
-    def _filter_examples(
-        self,
-        *,
-        search: str | None,
-        search_mode: str,
-        category: str | None,
-        word_pack_id: str | None = None,
-    ) -> list[dict[str, Any]]:
-        docs: list[dict[str, Any]] = []
-        query = self._build_examples_query(word_pack_id=word_pack_id, category=category)
-        raw = list(query.stream())
-        query = str((search or "").strip())
-        query_lower = query.lower()
-        pack_cache: dict[str, Mapping[str, Any]] = {}
-        for snapshot in raw:
-            entry = self._normalize_example_snapshot(snapshot)
-            en_value = str(entry.get("en") or "")
-            if query:
-                en_lower = en_value.lower()
-                if search_mode == "prefix" and not en_lower.startswith(query_lower):
-                    continue
-                if search_mode == "suffix" and not en_lower.endswith(query_lower):
-                    continue
-                if search_mode not in ("prefix", "suffix") and query_lower not in en_lower:
-                    continue
-            pack_id = str(entry.get("word_pack_id") or "")
-            if pack_id and pack_id not in pack_cache:
-                meta = self._wordpacks.get_word_pack_metadata(pack_id)
-                if meta is None:
-                    meta = {}
-                pack_cache[pack_id] = meta
-            meta = pack_cache.get(pack_id, {})
-            if not entry.get("lemma") and meta:
-                entry["lemma"] = meta.get("lemma_label")
-            if meta:
-                entry["pack_updated_at"] = meta.get("updated_at")
-            docs.append(entry)
-        return docs
 
 
 class FirestoreArticleStore(FirestoreBaseStore):
