@@ -15,6 +15,7 @@ from ..id_factory import generate_word_pack_id
 from ..providers import get_llm_provider
 from ..logging import logger
 from ..models.word import (
+    DEFAULT_ETYMOLOGY_PLACEHOLDER,
     WordPack,
     ExampleCategory,
     ExampleListItem,
@@ -528,7 +529,7 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
         },
         contrast=[],
         examples={"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []},
-        etymology={"note": "-", "confidence": "low"},
+        etymology={"note": DEFAULT_ETYMOLOGY_PLACEHOLDER, "confidence": "low"},
         study_card="",
         citations=[],
         confidence="low",

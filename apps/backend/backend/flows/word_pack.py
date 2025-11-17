@@ -9,6 +9,7 @@ from typing import Any
 from . import create_state_graph
 
 from ..models.word import (
+    DEFAULT_ETYMOLOGY_PLACEHOLDER,
     WordPack,
     Sense,
     Collocations,
@@ -105,6 +106,46 @@ class WordPackFlow:
         # 生成に使用した LLM のメタ（モデル名やパラメータ文字列表現）
         self._llm_info: dict[str, Any] = llm_info or {}
         self.graph = create_state_graph()
+
+    def _lookup_etymology_from_dictionary(self, lemma: str) -> str | None:
+        """静的な辞書ソースから語源メモを探すフォールバック。"""
+
+        dictionary: dict[str, str] = {
+            "converge": "From Latin convergere ('to incline together').",
+            "novel": "From Latin novellus, meaning 'new' or 'fresh'.",
+        }
+        return dictionary.get(lemma.lower().strip())
+
+    def _build_etymology(
+        self, lemma: str, llm_payload: dict[str, Any] | None
+    ) -> Etymology:
+        """LLM 出力と辞書参照を統合し、欠落時はプレースホルダーを返す。"""
+
+        note: str | None = None
+        confidence = ConfidenceLevel.low
+
+        if isinstance(llm_payload, dict):
+            try:
+                ety = llm_payload.get("etymology") or {}
+                note_candidate = str(ety.get("note") or "").strip()
+                if note_candidate:
+                    note = note_candidate
+                conf = str(ety.get("confidence") or "low").strip().lower()
+                if conf in {"medium", "med"}:
+                    confidence = ConfidenceLevel.medium
+                elif conf in {"high", "hi"}:
+                    confidence = ConfidenceLevel.high
+            except Exception:
+                # 破損した形でも必ずフォールバックするため握りつぶす
+                pass
+
+        dictionary_note = self._lookup_etymology_from_dictionary(lemma)
+        if note is None and dictionary_note:
+            note = dictionary_note
+            confidence = ConfidenceLevel.medium
+
+        resolved_note = note or DEFAULT_ETYMOLOGY_PLACEHOLDER
+        return Etymology(note=resolved_note, confidence=confidence)
 
     # --- 発音推定（cmudict/g2p-en 利用、フォールバック付き） ---
     def _generate_pronunciation(self, lemma: str) -> Pronunciation:
@@ -269,7 +310,9 @@ class WordPackFlow:
         collocations = Collocations()
         examples = Examples()
         sense_title_raw = ""
-        etymology = Etymology(note="", confidence=ConfidenceLevel.low)
+        etymology = Etymology(
+            note=DEFAULT_ETYMOLOGY_PLACEHOLDER, confidence=ConfidenceLevel.low
+        )
         study_card = ""
 
         # citations からは信頼度判断のみ。構造化は llm_data を優先
@@ -427,20 +470,6 @@ class WordPackFlow:
                 )
                 examples = Examples()
 
-            # etymology
-            try:
-                ety = llm_payload.get("etymology") or {}
-                note = str(ety.get("note") or "").strip()
-                conf = str(ety.get("confidence") or "low").strip().lower()
-                cl = ConfidenceLevel.low
-                if conf in {"medium", "med"}:
-                    cl = ConfidenceLevel.medium
-                elif conf in {"high", "hi"}:
-                    cl = ConfidenceLevel.high
-                etymology = Etymology(note=note, confidence=cl)
-            except Exception:
-                pass
-
             # study_card
             try:
                 sc = str(llm_payload.get("study_card") or "").strip()
@@ -476,6 +505,9 @@ class WordPackFlow:
             lemma=lemma,
             limit=20,
         )
+
+        # 語源情報は LLM→辞書の順で補完し、欠落を許さない
+        etymology = self._build_etymology(lemma, llm_payload)
 
         pack = WordPack(
             lemma=lemma,

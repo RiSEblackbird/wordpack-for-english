@@ -31,6 +31,8 @@ firebase-debug.log
 !env.deploy.example
 configs/cloud-run/*.env.local
 configs/cloud-run/*.secrets
+apps/backend/.env
+apps/backend/.env.*
 google-oauth-client-secret.json
 client_secret_*.json
 firestore-service-account*.json

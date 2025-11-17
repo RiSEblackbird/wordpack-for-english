@@ -11,6 +11,7 @@ from .common import Citation, ConfidenceLevel
 
 
 LEMMA_ALLOWED_PATTERN = re.compile(r"^[A-Za-z0-9\-\' ]+$")
+DEFAULT_ETYMOLOGY_PLACEHOLDER = "語源情報はまだ収集中です。"
 
 
 def _validate_lemma(value: str) -> str:
@@ -230,8 +231,22 @@ class Examples(BaseModel):
 
 
 class Etymology(BaseModel):
-    note: str
+    """語源メモ。欠落時はフォールバック文言を許容する。"""
+
+    note: str | None = Field(
+        default=None,
+        description="語源の概要。空や None はフォールバック文言で補われる。",
+    )
     confidence: ConfidenceLevel = ConfidenceLevel.low
+
+    @field_validator("note", mode="after")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        # 余分な空白を落とし、空文字は None として扱うことでレスポンス側のフォールバックを明示化する。
+        if value is None:
+            return None
+        trimmed = str(value).strip()
+        return trimmed or None
 
 
 # --- Example listing API models ---
@@ -346,13 +361,13 @@ class WordPack(BaseModel):
                         "Business": [],
                         "Common": [],
                     },
-                    "etymology": {"note": "TBD", "confidence": "low"},
+                    "etymology": {"note": "語源情報はまだ収集中です。", "confidence": "low"},
                     "study_card": "この語の要点（暫定）。",
                     "citations": [],
                     "confidence": "low",
                 }
             ],
-            "x-schema-version": "0.3.1",
+            "x-schema-version": "0.3.2",
         }
     )
 

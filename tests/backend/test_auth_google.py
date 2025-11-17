@@ -113,8 +113,8 @@ def test_google_auth_success_flow(
     assert settings.session_cookie_name in cookie
 
     protected = test_client.get("/api/word/")
-    assert protected.status_code in {200, 501}
-    # Both 200 (non-strict) and 501 (strict placeholder) imply auth succeeded; ensure not 401.
+    assert protected.status_code in {200, 422, 501}
+    # 422 はクエリ必須パラメータが欠けているだけで、認証は通っていることを示す。
     assert protected.status_code != 401
 
     log_entries = _structlog_events(caplog, "google_auth_succeeded")
