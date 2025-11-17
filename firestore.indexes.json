@@ -9,6 +9,15 @@
       ]
     },
     {
+      "collectionGroup": "word_packs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "lemma_label_lower", "order": "ASCENDING" },
+        { "fieldPath": "updated_at", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "examples",
       "queryScope": "COLLECTION",
       "fields": [

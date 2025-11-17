@@ -8,277 +8,23 @@ from typing import Any
 import pytest
 from google.cloud import firestore
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
+# ルート（apps/backend 配下）をテストから直接解決できるようにする。
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "apps" / "backend"))
+import backend.store.firestore_store as firestore_module
+from tests.firestore_fakes import (
+    FakeAggregationQuery,
+    FakeAggregationResult,
+    FakeCollectionReference,
+    FakeDocumentReference,
+    FakeDocumentSnapshot,
+    FakeFirestoreClient,
+    FakeQuery,
+    FakeTransaction,
+)
 
-from backend.store.firestore_store import AppFirestoreStore  # noqa: E402
-
-
-class FakeDocumentSnapshot:
-    def __init__(self, collection: str, doc_id: str, data: dict[str, Any] | None, client: "FakeFirestoreClient") -> None:
-        self._collection = collection
-        self.id = doc_id
-        self._data = data
-        self._client = client
-
-    @property
-    def exists(self) -> bool:
-        return self._data is not None
-
-    def to_dict(self) -> dict[str, Any] | None:
-        return None if self._data is None else dict(self._data)
-
-    @property
-    def reference(self) -> "FakeDocumentReference":
-        return FakeDocumentReference(self._client, self._collection, self.id)
-
-
-class FakeDocumentReference:
-    def __init__(self, client: "FakeFirestoreClient", collection: str, doc_id: str) -> None:
-        self._client = client
-        self._collection = collection
-        self.id = doc_id
-
-    def set(self, data: dict[str, Any], merge: bool = False) -> None:
-        bucket = self._client._data.setdefault(self._collection, {})
-        if merge and self.id in bucket:
-            bucket[self.id].update(data)
-        else:
-            bucket[self.id] = dict(data)
-
-    def update(self, data: dict[str, Any]) -> None:
-        bucket = self._client._data.setdefault(self._collection, {})
-        if self.id not in bucket:
-            raise KeyError(f"document {self._collection}/{self.id} not found")
-        bucket[self.id].update(data)
-
-    def get(self, transaction: "FakeTransaction" | None = None) -> FakeDocumentSnapshot:
-        bucket = self._client._data.setdefault(self._collection, {})
-        payload = dict(bucket[self.id]) if self.id in bucket else None
-        return FakeDocumentSnapshot(self._collection, self.id, payload, self._client)
-
-    def delete(self) -> None:
-        bucket = self._client._data.setdefault(self._collection, {})
-        bucket.pop(self.id, None)
-
-
-class FakeCollectionReference:
-    def __init__(self, client: "FakeFirestoreClient", name: str) -> None:
-        self._client = client
-        self._name = name
-        self._count_calls = 0
-        self._query_log: list[dict[str, Any]] = []
-
-    def document(self, doc_id: str) -> FakeDocumentReference:
-        return FakeDocumentReference(self._client, self._name, doc_id)
-
-    def _all_snapshots(self) -> list[FakeDocumentSnapshot]:
-        bucket = self._client._data.setdefault(self._name, {})
-        return [
-            FakeDocumentSnapshot(self._name, doc_id, dict(data), self._client)
-            for doc_id, data in bucket.items()
-        ]
-
-    def stream(self):  # pragma: no cover - simple iterator
-        docs = self._all_snapshots()
-        self._record_query([], len(docs))
-        for snapshot in docs:
-            yield snapshot
-
-    def order_by(self, field_path: str, direction=firestore.Query.ASCENDING):
-        return FakeQuery(self).order_by(field_path, direction)
-
-    def where(self, field_path: str, op_string: str, value: Any):
-        return FakeQuery(self).where(field_path, op_string, value)
-
-    def count(self, alias: str | None = None) -> "FakeAggregationQuery":
-        self._count_calls += 1
-        return FakeAggregationQuery(FakeQuery(self), alias or "count")
-
-    @property
-    def count_calls(self) -> int:
-        return self._count_calls
-
-    def _record_query(
-        self, filters: list[tuple[str, str, Any]], size: int
-    ) -> None:  # pragma: no cover - bookkeeping helper
-        self._query_log.append({"filters": list(filters), "size": size})
-
-    def reset_query_log(self) -> None:
-        self._query_log.clear()
-
-    @property
-    def query_log(self) -> list[dict[str, Any]]:
-        return list(self._query_log)
-
-
-class FakeQuery:
-    def __init__(
-        self,
-        collection: FakeCollectionReference,
-        *,
-        orderings: list[tuple[str, bool]] | None = None,
-        filters: list[tuple[str, str, Any]] | None = None,
-        limit: int | None = None,
-        offset: int = 0,
-        start_after_id: str | None = None,
-    ) -> None:
-        self._collection = collection
-        self._orderings: list[tuple[str, bool]] = list(orderings or [])
-        self._filters: list[tuple[str, str, Any]] = list(filters or [])
-        self._limit: int | None = limit
-        self._offset = offset
-        self._start_after_id = start_after_id
-
-    def _clone(self, **kwargs: Any) -> "FakeQuery":
-        """Return a shallow copy with updated attributes."""
-
-        params = {
-            "collection": self._collection,
-            "orderings": kwargs.pop("orderings", self._orderings),
-            "filters": kwargs.pop("filters", self._filters),
-            "limit": kwargs.pop("limit", self._limit),
-            "offset": kwargs.pop("offset", self._offset),
-            "start_after_id": kwargs.pop("start_after_id", self._start_after_id),
-        }
-        params.update(kwargs)
-        return FakeQuery(**params)
-
-    def order_by(self, field_path: str, direction=firestore.Query.ASCENDING) -> "FakeQuery":
-        updated = list(self._orderings)
-        updated.append((field_path, direction == firestore.Query.DESCENDING))
-        return self._clone(orderings=updated)
-
-    def where(self, field_path: str, op_string: str, value: Any) -> "FakeQuery":
-        updated = list(self._filters)
-        updated.append((field_path, op_string, value))
-        return self._clone(filters=updated)
-
-    def limit(self, value: int) -> "FakeQuery":
-        return self._clone(limit=max(0, int(value)))
-
-    def offset(self, value: int) -> "FakeQuery":
-        return self._clone(offset=max(0, int(value)))
-
-    def start_after(self, snapshot: FakeDocumentSnapshot) -> "FakeQuery":
-        return self._clone(start_after_id=snapshot.id)
-
-    def _matching_snapshots(self) -> list[FakeDocumentSnapshot]:
-        docs = self._collection._all_snapshots()
-        for field_path, op_string, expected in self._filters:
-            docs = [
-                doc
-                for doc in docs
-                if self._matches_filter(doc, field_path, op_string, expected)
-            ]
-        for field_path, descending in reversed(self._orderings):
-            docs.sort(
-                key=lambda snap, fp=field_path: self._order_value(snap, fp),
-                reverse=descending,
-            )
-        if self._start_after_id:
-            ids = [snap.id for snap in docs]
-            if self._start_after_id in ids:
-                start_index = ids.index(self._start_after_id) + 1
-                docs = docs[start_index:]
-        if self._offset:
-            docs = docs[self._offset :]
-        if self._limit is not None:
-            docs = docs[: self._limit]
-        return docs
-
-    def stream(self):  # pragma: no cover - passthrough iterator
-        results = self._matching_snapshots()
-        self._collection._record_query(self._filters, len(results))
-        for snapshot in results:
-            yield snapshot
-
-    def count(self, alias: str | None = None) -> "FakeAggregationQuery":
-        self._collection._count_calls += 1
-        return FakeAggregationQuery(self, alias or "count")
-
-    def _matches_filter(
-        self,
-        snapshot: FakeDocumentSnapshot,
-        field_path: str,
-        op_string: str,
-        expected: Any,
-    ) -> bool:
-        data = snapshot.to_dict() or {}
-        actual = data.get(field_path)
-        if op_string == "==":
-            return actual == expected
-        if op_string == "array_contains":
-            return isinstance(actual, list) and expected in actual
-        if op_string == ">=":
-            return actual >= expected
-        if op_string == "<=":
-            return actual <= expected
-        if op_string == ">":
-            return actual > expected
-        if op_string == "<":
-            return actual < expected
-        raise NotImplementedError(f"unsupported operator: {op_string}")
-
-    def _order_value(self, snapshot: FakeDocumentSnapshot, field_path: str) -> Any:
-        data = snapshot.to_dict() or {}
-        if field_path == "__name__":
-            return snapshot.id
-        value = data.get(field_path)
-        if isinstance(value, (int, float)):
-            return value
-        return str(value or "")
-
-
-class FakeAggregationQuery:
-    def __init__(self, query: FakeQuery, alias: str) -> None:
-        self._query = query
-        self._alias = alias
-
-    def stream(self, *args: Any, **kwargs: Any):  # pragma: no cover - simple iterator
-        total = len(self._query._matching_snapshots())
-        yield FakeAggregationResult(self._alias, total)
-
-    def get(self, *args: Any, **kwargs: Any) -> list["FakeAggregationResult"]:
-        return list(self.stream(*args, **kwargs))
-
-
-class FakeAggregationResult:
-    def __init__(self, alias: str, value: int) -> None:
-        self.alias = alias
-        self.value = value
-        self.aggregate_fields = {alias: value}
-
-    def __getitem__(self, key: str) -> int:
-        return self.aggregate_fields[key]
-
-
-class FakeTransaction:
-    def __init__(self, client: "FakeFirestoreClient") -> None:
-        self._client = client
-
-    def get(self, doc_ref: FakeDocumentReference) -> FakeDocumentSnapshot:
-        return doc_ref.get()
-
-    def set(self, doc_ref: FakeDocumentReference, data: dict[str, Any], merge: bool = False) -> None:
-        doc_ref.set(data, merge=merge)
-
-    def update(self, doc_ref: FakeDocumentReference, data: dict[str, Any]) -> None:
-        doc_ref.update(data)
-
-    def commit(self) -> None:  # pragma: no cover - no-op
-        return None
-
-
-class FakeFirestoreClient:
-    def __init__(self) -> None:
-        self._data: dict[str, dict[str, dict[str, Any]]] = {}
-
-    def collection(self, name: str) -> FakeCollectionReference:
-        return FakeCollectionReference(self, name)
-
-    def transaction(self) -> FakeTransaction:
-        return FakeTransaction(self)
-
+AppFirestoreStore = firestore_module.AppFirestoreStore
 
 @pytest.fixture()
 def firestore_store() -> AppFirestoreStore:
@@ -367,7 +113,7 @@ def test_list_word_packs_paginates_via_firestore_query(
             "2024-01-01T00:00:03+00:00",
         ]
     )
-    monkeypatch.setattr("backend.store.firestore_store._now_iso", lambda: next(timestamps))
+    monkeypatch.setattr(firestore_module, "_now_iso", lambda: next(timestamps))
 
     for idx, lemma in enumerate(["Alpha", "Beta", "Gamma"], start=1):
         firestore_store.save_word_pack(
@@ -399,6 +145,80 @@ def test_count_word_packs_uses_server_side_aggregation(
     total = firestore_store.count_word_packs()
     assert total == 2
     assert firestore_store.wordpacks._word_packs.count_calls == 1
+
+
+def test_find_word_pack_lookup_uses_filtered_query(
+    firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """lemma 検索が limit(1) 付きのフィルタクエリになることを確認する。"""
+
+    timestamps = iter(
+        [
+            "2024-05-01T10:00:00+00:00",
+            "2024-05-02T11:00:00+00:00",
+        ]
+    )
+    monkeypatch.setattr(firestore_module, "_now_iso", lambda: next(timestamps))
+
+    payload = {"lemma": "LemmaX", "sense_title": "x", "examples": {}}
+    firestore_store.save_word_pack(
+        "wp-old", payload["lemma"], json.dumps(payload, ensure_ascii=False)
+    )
+
+    payload_new = {"lemma": "lemmax", "sense_title": "new", "examples": {}}
+    firestore_store.save_word_pack(
+        "wp-new", payload_new["lemma"], json.dumps(payload_new, ensure_ascii=False)
+    )
+
+    collection = firestore_store.wordpacks._word_packs
+    collection.reset_query_log()
+
+    result = firestore_store.find_word_pack_id_by_lemma("  LEMMAX  ")
+
+    assert result == "wp-new"
+    log = collection.query_log
+    assert len(log) == 1
+    assert ("lemma_label_lower", "==", "lemmax") in log[0]["filters"]
+    assert log[0]["limit"] == 1
+    assert log[0]["size"] == 1
+
+
+def test_find_word_pack_with_metadata_uses_filtered_query(
+    firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """find_word_pack_by_lemma_ci もフィルタ + limit で絞り込むことを検証する。"""
+
+    timestamps = iter(
+        [
+            "2024-06-01T09:00:00+00:00",
+            "2024-06-02T10:00:00+00:00",
+        ]
+    )
+    monkeypatch.setattr(firestore_module, "_now_iso", lambda: next(timestamps))
+
+    payload = {"lemma": "Resilient", "sense_title": "old", "examples": {}}
+    firestore_store.save_word_pack(
+        "wp-first", payload["lemma"], json.dumps(payload, ensure_ascii=False)
+    )
+
+    payload_new = {"lemma": "resilient", "sense_title": "latest", "examples": {}}
+    firestore_store.save_word_pack(
+        "wp-second", payload_new["lemma"], json.dumps(payload_new, ensure_ascii=False)
+    )
+
+    collection = firestore_store.wordpacks._word_packs
+    collection.reset_query_log()
+
+    found = firestore_store.find_word_pack_by_lemma_ci("resilient")
+
+    assert found is not None
+    assert found[0] == "wp-second"
+    assert found[1].lower() == "resilient"
+    assert len(collection.query_log) == 1
+    entry = collection.query_log[0]
+    assert ("lemma_label_lower", "==", "resilient") in entry["filters"]
+    assert entry["limit"] == 1
+    assert entry["size"] == 1
 
 
 def test_store_factory_switches_to_firestore(monkeypatch: pytest.MonkeyPatch) -> None:
