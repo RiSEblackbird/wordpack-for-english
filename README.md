@@ -84,7 +84,7 @@ npm run prepare:frontend-env  # apps/frontend/.env が無い場合に .env.examp
 `ENVIRONMENT=production` のときバックエンドは Cloud Firestore へ永続化します。Google Cloud のサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を必ず設定し、Firestore プロジェクトで `users` / `word_packs` / `examples` などのコレクション作成権限を付与してください。その他の環境では従来どおりローカル SQLite ファイル（`WORDPACK_DB_PATH`）が利用されます。
 
 #### Firestore のインデックス要件
-Firestore に保存する主要コレクションは `firestore.indexes.json` で複合インデックスを一括管理しています。`word_packs`（`created_at` 降順 + `__name__`）、`examples`（`word_pack_id`/`category` フィルタ + `position` / `example_id` の組み合わせ）を固定することで、バックエンドのページネーションと `Aggregation Query` の `count()` が常に安定します。JSON ファイルはそのまま Cloud Firestore / エミュレータ / Firebase CLI で流用できるようにしてあるため、手作業で Web Console に登録する必要はありません。
+Firestore に保存する主要コレクションは `firestore.indexes.json` で複合インデックスを一括管理しています。`word_packs`（`created_at` 降順 + `__name__`）、`examples`（`word_pack_id`/`category` フィルタ + `position` / `example_id` の組み合わせ）を固定することで、バックエンドのページネーションと `Aggregation Query` の `count()` が常に安定します。`lemma_label_lower` への等価フィルタと `updated_at` 降順の `order_by` を組み合わせるクエリ用のインデックスも追加済みで、lemma 重複チェック時に最新 1 件だけを取得します。JSON ファイルはそのまま Cloud Firestore / エミュレータ / Firebase CLI で流用できるようにしてあるため、手作業で Web Console に登録する必要はありません。
 `examples` ではページングと検索のために `created_at` / `pack_updated_at` / `search_en` / `search_en_reversed` / `search_terms` を組み合わせた追加インデックスを定義し、`order_by` + `start_after` + `limit` の組み合わせで常に 50 件までしか読み出さないようにしています（`offset` はカーソル取得のみに使用）。`search_en` は小文字化、`search_en_reversed` は逆順文字列、`search_terms` は 1〜3 文字の N-gram とトークン配列で、`prefix`/`suffix`/`contains` の各検索モードをサーバー側で絞り込みます。
 
 | 操作 | コマンド | 補足 |

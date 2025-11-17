@@ -315,22 +315,31 @@ class FirestoreWordPackStore(FirestoreBaseStore):
 
     def find_word_pack_id_by_lemma(self, lemma: str) -> str | None:
         target = str(lemma or "").strip().lower()
-        docs = list(self._word_packs.stream())
-        docs.sort(key=lambda d: str((d.to_dict() or {}).get("updated_at") or ""), reverse=True)
-        for doc in docs:
-            data = doc.to_dict() or {}
-            if str(data.get("lemma_label_lower") or "").lower() == target:
-                return doc.id
+        # lemma_label_lower の等価フィルタと更新日時降順の複合クエリで最新1件のみを取得し、全件走査を避ける。
+        query = (
+            self._word_packs.where("lemma_label_lower", "==", target)
+            .order_by("updated_at", direction=firestore.Query.DESCENDING)
+            .limit(1)
+        )
+        for doc in query.stream():
+            return doc.id
         return None
 
     def find_word_pack_by_lemma_ci(self, lemma: str) -> tuple[str, str, str] | None:
         target = str(lemma or "").strip().lower()
-        docs = list(self._word_packs.stream())
-        docs.sort(key=lambda d: str((d.to_dict() or {}).get("updated_at") or ""), reverse=True)
-        for doc in docs:
+        # 最新の WordPack を 1 件だけ取得するため、Firestore 側の order_by + limit で走査量を抑える。
+        query = (
+            self._word_packs.where("lemma_label_lower", "==", target)
+            .order_by("updated_at", direction=firestore.Query.DESCENDING)
+            .limit(1)
+        )
+        for doc in query.stream():
             data = doc.to_dict() or {}
-            if str(data.get("lemma_label_lower") or "").lower() == target:
-                return (doc.id, str(data.get("lemma_label") or ""), str(data.get("sense_title") or ""))
+            return (
+                doc.id,
+                str(data.get("lemma_label") or ""),
+                str(data.get("sense_title") or ""),
+            )
         return None
 
     def reserve_example_ids(self, count: int) -> list[int]:
