@@ -303,6 +303,7 @@ npm run test
 
 ## REST API（抜粋）
 - `POST /api/word/pack` … WordPack を生成して語義タイトル・語義・例文・語源・学習カード要点を返却
+- `GET /api/word?lemma=...` … lemma を指定して最新の WordPack から定義と例文を返却（見つからなければ自動生成）
 - `POST /api/word/examples/bulk-delete` … 例文IDの配列を受け取り一括削除
 - `POST /api/word/examples/{id}/transcription-typing` … 指定IDの例文について、文字起こし練習で入力した文字数を検証・加算
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts で読み上げた音声（audio/mpeg）をストリーミング返却

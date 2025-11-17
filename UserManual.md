@@ -264,6 +264,7 @@
 
 ### B-3. API 一覧（現状）
 - `POST /api/word/pack` … WordPack 生成（語義/共起/対比/例文/語源/学習カード要点/発音RP + `citations`/`confidence`、`pronunciation_enabled`,`regenerate_scope` 対応）
+- `GET /api/word?lemma=...` … lemma から保存済み WordPack を検索し、定義と例文を返却（未存在時は生成して保存）
 - 追加（保存済み WordPack 関連）:
   - `DELETE /api/word/packs/{id}/examples/{category}/{index}` … 例文の個別削除
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts を使い、`text`/`voice` を受け取って `audio/mpeg` ストリームを返却
