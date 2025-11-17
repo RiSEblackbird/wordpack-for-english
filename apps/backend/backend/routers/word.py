@@ -1,5 +1,4 @@
 import json
-import uuid
 from datetime import datetime
 """Word エンドポイント。backend.providers パッケージ経由で LLM を取得する。"""
 
@@ -12,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from ..config import settings
 from ..flows.word_pack import WordPackFlow
+from ..id_factory import generate_word_pack_id
 from ..providers import get_llm_provider
 from ..logging import logger
 from ..models.word import (
@@ -269,7 +269,7 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
 
     - スキーマに適合する空のWordPack JSONを構築して保存
     - sense_title は日本語の短い見出しを優先（LLM）。失敗時のフォールバックは choose_sense_title。
-    - 保存ID（wp:{lemma}:{短縮uuid}）を返す
+    - 保存ID（wp:{32桁uuid}。旧形式のIDもそのまま利用可能）を返す
     """
     lemma = req.lemma.strip()
     if not lemma:
@@ -337,7 +337,7 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
         confidence="low",
     )
 
-    word_pack_id = f"wp:{lemma}:{uuid.uuid4().hex[:8]}"
+    word_pack_id = generate_word_pack_id()
     store.save_word_pack(word_pack_id, lemma, empty_word_pack.model_dump_json())
 
     return {"id": word_pack_id}
@@ -392,7 +392,7 @@ async def generate_word_pack(req: WordPackRequest) -> WordPack:
         )
 
         # WordPackをデータベースに保存
-        word_pack_id = f"wp:{req.lemma}:{uuid.uuid4().hex[:8]}"
+        word_pack_id = generate_word_pack_id()
         word_pack_data = word_pack.model_dump_json()
         store.save_word_pack(word_pack_id, req.lemma, word_pack_data)
 

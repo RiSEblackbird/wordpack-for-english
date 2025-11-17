@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-import uuid
 from typing import Any, Optional
 
 from fastapi import HTTPException
 
 from ..flows.article_import import ArticleImportFlow
 from ..flows.word_pack import WordPackFlow
+from ..id_factory import generate_word_pack_id
 from ..logging import logger
 from ..models.article import ArticleImportRequest
 from ..models.word import ExampleCategory, WordPack
@@ -218,7 +218,7 @@ class CategoryGenerateAndImportFlow:
             citations=[],
             confidence="low",
         )
-        wp_id = f"wp:{lemma}:{uuid.uuid4().hex[:8]}"
+        wp_id = generate_word_pack_id()
         with span(
             trace=None, name="category.ensure_wordpack.create", input={"lemma": lemma}
         ):

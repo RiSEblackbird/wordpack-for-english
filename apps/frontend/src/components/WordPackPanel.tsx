@@ -90,6 +90,9 @@ interface LemmaExplorerState {
   width: number;
 }
 
+const LEMMA_PATTERN = /^[A-Za-z0-9-' ]+$/;
+const LEMMA_MAX_LENGTH = 64;
+
 
 export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta, onStudyProgressRecorded }) => {
   const { settings, setSettings } = useSettings();
@@ -129,6 +132,29 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     keyHandler?: (ev: KeyboardEvent) => void;
     blockHandler?: (ev: Event) => void;
   } | null>(null);
+  const normalizedLemma = useMemo(() => lemma.trim(), [lemma]);
+  const lemmaValidation = useMemo(() => {
+    if (!normalizedLemma) {
+      return { valid: false, message: '見出し語を入力してください（英数字・ハイフン・アポストロフィ・半角スペースのみ）' };
+    }
+    if (normalizedLemma.length > LEMMA_MAX_LENGTH) {
+      return {
+        valid: false,
+        message: `見出し語は最大${LEMMA_MAX_LENGTH}文字までです（英数字・半角スペース・ハイフン・アポストロフィのみ）`,
+      };
+    }
+    if (!LEMMA_PATTERN.test(normalizedLemma)) {
+      return {
+        valid: false,
+        message: '英数字と半角スペース、ハイフン、アポストロフィのみ利用できます',
+      };
+    }
+    return {
+      valid: true,
+      message: '英数字・半角スペース・ハイフン・アポストロフィのみ（最大64文字）',
+    };
+  }, [normalizedLemma]);
+  const isLemmaValid = lemmaValidation.valid;
 
   const applyModelRequestFields = useCallback(
     (base: Record<string, unknown> = {}) => ({
@@ -481,12 +507,16 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   }, [lemmaExplorer, exampleCategories]);
 
   const generate = async () => {
+    if (!lemmaValidation.valid) {
+      setMsg({ kind: 'alert', text: lemmaValidation.message });
+      return;
+    }
     // 直前のフォアグラウンド処理は中断するが、生成処理自体はバックグラウンド継続を許可する
     // （タブ移動/アンマウントしても通知を完了に更新できるように、abortRef には紐付けない）
     abortRef.current?.abort();
     const ctrl = new AbortController();
     setLoading(true);
-    const l = lemma.trim();
+    const l = normalizedLemma;
     // 生成開始時に入力をクリアし、次の入力がすぐできるようにフォーカスを戻す
     setLemma('');
     try { focusRef.current?.focus(); } catch {}
@@ -532,11 +562,15 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   };
 
   const createEmpty = async () => {
+    if (!lemmaValidation.valid) {
+      setMsg({ kind: 'alert', text: lemmaValidation.message });
+      return;
+    }
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setLoading(true);
-    const l2 = lemma.trim();
+    const l2 = normalizedLemma;
     const notifId = addNotification({ title: `【${l2}】の生成処理中...`, message: '空のWordPackを作成しています', status: 'progress' });
     setMsg(null);
     try {
@@ -1464,18 +1498,21 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 ref={focusRef as React.RefObject<HTMLInputElement>}
                 value={lemma}
                 onChange={(e) => setLemma(e.target.value)}
-                placeholder="見出し語を入力"
+                placeholder="見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）"
                 disabled={loading}
               />
+              <p aria-live="polite" className="sidebar-help" style={{ color: isLemmaValid ? '#666' : '#d32f2f' }}>
+                {lemmaValidation.message}
+              </p>
             </div>
             <div className="sidebar-actions">
-              <button type="button" onClick={generate} disabled={!lemma.trim() || loading}>
+              <button type="button" onClick={generate} disabled={!isLemmaValid || loading}>
                 生成
               </button>
               <button
                 type="button"
                 onClick={createEmpty}
-                disabled={!lemma.trim() || loading}
+                disabled={!isLemmaValid || loading}
                 title="内容の生成を行わず、空のWordPackのみ保存"
               >
                 WordPackのみ作成

@@ -5,6 +5,8 @@ from pathlib import Path
 import sys
 from typing import Any
 
+import uuid
+
 import pytest
 from google.cloud import firestore
 
@@ -52,6 +54,20 @@ def test_firestore_word_pack_roundtrip(firestore_store: AppFirestoreStore) -> No
     data = json.loads(data_json)
     assert data["examples"]["Dev"][0]["en"] == "Converge the commits"
     assert data["examples"]["Dev"][0]["checked_only_count"] == 2
+
+
+def test_firestore_word_pack_accepts_uuid_style_ids(
+    firestore_store: AppFirestoreStore,
+) -> None:
+    payload = {"lemma": "UuidCase", "examples": {"Dev": []}}
+    wp_id = f"wp:{uuid.uuid4().hex}"
+
+    firestore_store.save_word_pack(wp_id, payload["lemma"], json.dumps(payload, ensure_ascii=False))
+
+    stored = firestore_store.get_word_pack(wp_id)
+    assert stored is not None
+    lemma, _, _, _ = stored
+    assert lemma == payload["lemma"]
 
 
 def test_firestore_example_progress_and_deletion(firestore_store: AppFirestoreStore) -> None:

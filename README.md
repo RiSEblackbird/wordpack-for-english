@@ -305,6 +305,11 @@ npm run test
 - `POST /api/word/examples/{id}/transcription-typing` … 指定IDの例文について、文字起こし練習で入力した文字数を検証・加算
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts で読み上げた音声（audio/mpeg）をストリーミング返却
 
+### WordPack 生成時の入力制約
+- 見出し語（`lemma`）は **英数字・半角スペース・ハイフン・アポストロフィのみ** で、1〜64文字。
+- Firestore のパス制約に抵触する記号（`/` や制御文字など）が含まれると、FastAPI が 422 Unprocessable Entity を返却します。エラー詳細の `loc` が `lemma` を指すことを確認してください。
+- WordPack の保存IDは `wp:{32桁の16進UUID}` 形式です（旧形式のIDもそのまま利用可能です）。
+
 ## ディレクトリ
 ```
 apps/backend/backend/   # FastAPI アプリ

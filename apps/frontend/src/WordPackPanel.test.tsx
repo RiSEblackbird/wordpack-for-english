@@ -36,25 +36,30 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
 
   function setupFetchMocks() {
     const generated = new Set<string>();
+    const lemmaById = new Map<string, string>();
+    let idSeq = 0;
+    const nextWordPackId = () => `wp:${(idSeq++).toString(16).padStart(32, '0')}`;
     const mock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
       if (url.includes('/api/word/lemma/Paths')) {
         return new Response(
-          JSON.stringify({ found: true, id: 'wp:Paths:lemma', lemma: 'Paths', sense_title: '語義タイトルなし' }),
+          JSON.stringify({ found: true, id: 'wp:11111111111111111111111111111111', lemma: 'Paths', sense_title: '語義タイトルなし' }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
       if (url.endsWith('/api/word/packs') && init?.method === 'POST') {
         const body = init?.body ? JSON.parse(init.body as string) : {};
         const lemma = body.lemma || 'test';
+        const id = nextWordPackId();
+        lemmaById.set(id, lemma);
         return new Response(
-          JSON.stringify({ id: `wp:${lemma}:abcd1234` }),
+          JSON.stringify({ id }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
       if (url.startsWith('/api/word/packs/wp:') && (!init || (init && (!init.method || init.method === 'GET')))) {
         const idPart = url.split('/').pop() || '';
-        const lemma = idPart.split(':')[1] || 'test';
+        const lemma = lemmaById.get(idPart) || 'test';
         return new Response(
           JSON.stringify({
             lemma,
@@ -170,7 +175,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.keyboard('{Alt>}{1}{/Alt}');
     });
 
-    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
     expect(input).toBeInTheDocument();
     // モデルドロップダウンが表示されている
     expect(screen.getByLabelText('モデル')).toBeInTheDocument();
@@ -202,7 +207,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     const user2 = userEvent.setup();
     await act(async () => {
       await user2.selectOptions(screen.getByLabelText('モデル'), 'gpt-5-mini');
-      const lemmaInput = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+      const lemmaInput = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
       lemmaInput.value = '';
       await user2.type(lemmaInput, 'alpha');
       await user2.click(screen.getByRole('button', { name: '生成' }));
@@ -216,7 +221,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     const user3 = userEvent.setup();
     await act(async () => {
       await user3.selectOptions(screen.getByLabelText('モデル'), 'gpt-5-nano');
-      const lemmaInput2 = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+      const lemmaInput2 = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
       lemmaInput2.value = '';
       await user3.type(lemmaInput2, 'beta');
       await user3.click(screen.getByRole('button', { name: '生成' }));
@@ -240,7 +245,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.keyboard('{Alt>}{1}{/Alt}');
     });
 
-    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
     await act(async () => {
       await user.clear(input);
       await user.type(input, 'epsilon');
@@ -254,7 +259,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     const urls = fetchMock.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));
     expect(urls.some((u) => u.endsWith('/api/word/packs'))).toBe(true);
     // 直後に詳細取得が走る
-    expect(urls.some((u) => /\/api\/word\/packs\/wp:epsilon:/.test(u))).toBe(true);
+    expect(urls.some((u) => /\/api\/word\/packs\/wp:[0-9a-f]{32}$/.test(u))).toBe(true);
   });
 
   it('warms lemma cache on hover and opens/minimizes/restores the lemma window', async () => {
@@ -270,7 +275,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.keyboard('{Alt>}{1}{/Alt}');
     });
 
-    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
     await act(async () => {
       await user.clear(input);
       await user.type(input, 'theta');
@@ -329,7 +334,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.keyboard('{Alt>}{1}{/Alt}');
     });
 
-    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
     await act(async () => {
       await user.clear(input);
       await user.type(input, 'theta');
@@ -388,7 +393,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.keyboard('{Alt>}{1}{/Alt}');
     });
 
-    const input = screen.getByPlaceholderText('見出し語を入力') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
     await act(async () => {
       await user.clear(input);
       await user.type(input, 'theta');

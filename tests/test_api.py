@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 import types
 from datetime import UTC, datetime
@@ -117,6 +118,23 @@ def test_word_pack(client):
     assert "citations" in body and "confidence" in body
     assert body.get("checked_only_count") == 0
     assert body.get("learned_count") == 0
+
+
+@pytest.mark.parametrize(
+    "endpoint,payload",
+    [
+        ("/api/word/pack", {"lemma": "slash/test"}),
+        ("/api/word/pack", {"lemma": "control\u0000char"}),
+        ("/api/word/packs", {"lemma": "backslash\\test"}),
+    ],
+)
+def test_word_pack_rejects_forbidden_lemma_characters(
+    client: TestClient, endpoint: str, payload: dict
+):
+    resp = client.post(endpoint, json=payload)
+    assert resp.status_code == 422
+    detail = resp.json().get("detail") or []
+    assert any((entry.get("loc") or [])[-1] == "lemma" for entry in detail)
 def test_create_empty_word_pack_generates_japanese_sense_title(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "empty_pack_llm.sqlite3")
     from fastapi.testclient import TestClient
@@ -134,7 +152,7 @@ def test_create_empty_word_pack_generates_japanese_sense_title(monkeypatch: pyte
     r = client.post("/api/word/packs", json={"lemma": "throughput"})
     assert r.status_code == 200
     pack_id = r.json().get("id")
-    assert isinstance(pack_id, str) and pack_id.startswith("wp:")
+    assert isinstance(pack_id, str) and re.fullmatch(r"wp:[0-9a-f]{32}", pack_id)
 
     rlist = client.get("/api/word/packs")
     assert rlist.status_code == 200
@@ -958,7 +976,9 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
     body = r.json()
     assert body["lemma"] == "cache"
     assert body["generated_examples"] >= 2
-    assert isinstance(body.get("word_pack_id"), str) and body["word_pack_id"].startswith("wp:")
+    assert isinstance(body.get("word_pack_id"), str) and re.fullmatch(
+        r"wp:[0-9a-f]{32}", body["word_pack_id"]
+    )
     assert isinstance(body.get("article_ids"), list) and len(body["article_ids"]) >= 1
 
     # 記事が取得できること
@@ -1034,7 +1054,9 @@ def test_category_generate_import_fallback_on_duplicate(client, monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["lemma"] != "dupword"
-    assert isinstance(body.get("word_pack_id"), str) and body["word_pack_id"].startswith("wp:")
+    assert isinstance(body.get("word_pack_id"), str) and re.fullmatch(
+        r"wp:[0-9a-f]{32}", body["word_pack_id"]
+    )
     assert body.get("generated_examples", 0) >= 2
 
 
