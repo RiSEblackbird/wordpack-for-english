@@ -39,6 +39,12 @@ class FakeDocumentReference:
         else:
             bucket[self.id] = dict(data)
 
+    def create(self, data: dict[str, Any]) -> None:
+        bucket = self._client._data.setdefault(self._collection, {})
+        if self.id in bucket:
+            raise RuntimeError(f"document {self._collection}/{self.id} already exists")
+        bucket[self.id] = dict(data)
+
     def update(self, data: dict[str, Any]) -> None:
         bucket = self._client._data.setdefault(self._collection, {})
         if self.id not in bucket:
@@ -255,6 +261,9 @@ class FakeTransaction:
 
     def get(self, doc_ref: FakeDocumentReference) -> FakeDocumentSnapshot:
         return doc_ref.get()
+
+    def create(self, doc_ref: FakeDocumentReference, data: dict[str, Any]) -> None:
+        doc_ref.create(data)
 
     def set(self, doc_ref: FakeDocumentReference, data: dict[str, Any], merge: bool = False) -> None:
         doc_ref.set(data, merge=merge)

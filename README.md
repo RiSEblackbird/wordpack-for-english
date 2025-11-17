@@ -311,6 +311,7 @@ npm run test
 - 見出し語（`lemma`）は **英数字・半角スペース・ハイフン・アポストロフィのみ** で、1〜64文字。
 - Firestore のパス制約に抵触する記号（`/` や制御文字など）が含まれると、FastAPI が 422 Unprocessable Entity を返却します。エラー詳細の `loc` が `lemma` を指すことを確認してください。
 - WordPack の保存IDは `wp:{32桁の16進UUID}` 形式です（旧形式のIDもそのまま利用可能です）。
+- lemma 保存時は正規化（小文字化）したラベルを Firestore のドキュメントIDとして採用し、`normalized_label` の単一フィールドインデックスによって O(1) 参照を維持しています。旧形式の lemma ID も `normalized_label` で1件だけを引くクエリで互換運用し、同じ lemma を同時に保存しようとした場合でも create/exists チェック付きで重複作成を防ぎます。
 
 ## ディレクトリ
 ```

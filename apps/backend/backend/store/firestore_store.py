@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import uuid
+from threading import Lock
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore
 
 from ..sense_title import choose_sense_title
@@ -148,6 +150,8 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         self._word_packs = client.collection("word_packs")
         self._examples = client.collection("examples")
         self._metadata = client.collection("metadata")
+        # lemma upsert の局所衝突を避けるための簡易ロック
+        self._lemma_write_lock = Lock()
 
     def _ordered_word_pack_query(self) -> firestore.Query:
         """Builds a deterministic descending query for word_packs collection."""
@@ -549,15 +553,24 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         llm_params: str | None,
         now: str,
     ) -> str:
+        """正規化済みの lemma を単一ドキュメントへ upsert する。
+
+        - 正規化ラベル（小文字化）を Firestore ドキュメントIDとして優先採用し、
+          lookup を O(1) 化する。
+        - 既存データ（旧ID形式）は normalized_label インデックスを用いた単一件
+          クエリで探し、互換性を維持する。
+        - create + exists チェックで同時書き込みによる重複作成を防ぎ、
+          競合時は既存ドキュメントを再利用する。
+        """
         original_label = str(label or "").strip()
         if not original_label:
             raise ValueError("lemma label must not be empty")
         normalized = original_label.lower()
-        for snapshot in self._lemmas.stream():
+        normalized_ref = self._lemmas.document(normalized)
+        normalized_snapshot = normalized_ref.get()
+
+        def _update_existing(snapshot: firestore.DocumentSnapshot) -> str:
             data = snapshot.to_dict() or {}
-            if str(data.get("normalized_label") or "") != normalized:
-                continue
-            lemma_id = snapshot.id
             stored_label = str(data.get("label") or "")
             new_label = (
                 stored_label
@@ -569,27 +582,81 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             new_sense = stored_sense or stripped_sense
             new_llm_model = llm_model if llm_model is not None else data.get("llm_model")
             new_llm_params = llm_params if llm_params is not None else data.get("llm_params")
-            snapshot.reference.update(
+            # normalized_label を確実に維持するため merge で更新する
+            snapshot.reference.set(
                 {
                     "label": new_label,
+                    "normalized_label": normalized,
                     "sense_title": new_sense,
                     "llm_model": new_llm_model,
                     "llm_params": new_llm_params,
-                }
+                },
+                merge=True,
             )
-            return lemma_id
-        lemma_id = f"lm:{normalized}:{uuid.uuid4().hex[:8]}"
-        self._lemmas.document(lemma_id).set(
-            {
-                "label": original_label,
-                "normalized_label": normalized,
-                "sense_title": sense_title or "",
-                "llm_model": llm_model,
-                "llm_params": llm_params,
-                "created_at": now,
-            }
+            return snapshot.id
+
+        if normalized_snapshot.exists:
+            return _update_existing(normalized_snapshot)
+
+        existing_snapshot = next(
+            iter(
+                self._lemmas.where("normalized_label", "==", normalized)
+                .limit(1)
+                .stream()
+            ),
+            None,
         )
-        return lemma_id
+        if existing_snapshot is not None:
+            return _update_existing(existing_snapshot)
+
+        payload = {
+            "label": original_label,
+            "normalized_label": normalized,
+            "sense_title": sense_title or "",
+            "llm_model": llm_model,
+            "llm_params": llm_params,
+            "created_at": now,
+        }
+        try:
+            transaction = self._client.transaction()
+        except AttributeError:  # pragma: no cover - defensive fallback
+            transaction = None
+
+        if transaction is not None:
+            with self._lemma_write_lock:
+                snapshot = transaction.get(normalized_ref)
+                if snapshot.exists:
+                    return _update_existing(snapshot)
+                try:
+                    transaction.create(normalized_ref, payload)
+                except AlreadyExists:
+                    existing = normalized_ref.get()
+                    if existing.exists:
+                        return _update_existing(existing)
+                transaction.commit()
+                return normalized_ref.id
+
+        try:
+            normalized_ref.create(payload)
+            return normalized_ref.id
+        except AlreadyExists:
+            fallback_snapshot = normalized_ref.get()
+            if fallback_snapshot.exists:
+                return _update_existing(fallback_snapshot)
+            legacy_snapshot = next(
+                iter(
+                    self._lemmas.where("normalized_label", "==", normalized)
+                    .limit(1)
+                    .stream()
+                ),
+                None,
+            )
+            if legacy_snapshot is not None:
+                return _update_existing(legacy_snapshot)
+            # create が競合し、かつ再取得でも無い場合は新IDで再生成しておく
+            lemma_id = f"lm:{normalized}:{uuid.uuid4().hex[:8]}"
+            self._lemmas.document(lemma_id).set(payload)
+            return lemma_id
 
 
 class FirestoreExampleStore(FirestoreBaseStore):
