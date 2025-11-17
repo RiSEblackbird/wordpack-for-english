@@ -340,17 +340,20 @@ class WordPackStore:
     def find_word_pack_id_by_lemma(self, lemma: str) -> str | None:
         """見出し語に対応する最新 WordPack ID を返す。"""
 
+        normalized_lemma = str(lemma or "").strip()
+        # SQLite 側でも Firestore 側と同様に大文字小文字を無視した検索を行うため、
+        # 正規化した見出し語を lower 比較に揃えて検索する。
         with self._conn_provider() as conn:
             cur = conn.execute(
                 """
                 SELECT wp.id
                 FROM word_packs AS wp
                 JOIN lemmas AS lm ON lm.id = wp.lemma_id
-                WHERE lm.label = ?
+                WHERE lower(lm.label) = lower(?)
                 ORDER BY wp.updated_at DESC
                 LIMIT 1;
                 """,
-                (lemma,),
+                (normalized_lemma,),
             )
             row = cur.fetchone()
             return row["id"] if row is not None else None
