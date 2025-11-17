@@ -42,6 +42,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     const mock = vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
       if (url.includes('/api/word/lemma/Paths')) {
+        lemmaById.set('wp:11111111111111111111111111111111', 'Paths');
         return new Response(
           JSON.stringify({ found: true, id: 'wp:11111111111111111111111111111111', lemma: 'Paths', sense_title: '語義タイトルなし' }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
