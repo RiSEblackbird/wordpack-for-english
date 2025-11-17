@@ -882,6 +882,7 @@ def test_word_pack_persistence(client):
     assert "senses" in retrieved_pack
     assert "citations" in retrieved_pack
     assert "confidence" in retrieved_pack
+    assert retrieved_pack.get("etymology", {}).get("note")
     
     # 4. WordPackを再生成
     resp = client.post(f"/api/word/packs/{pack_id}/regenerate", json={
