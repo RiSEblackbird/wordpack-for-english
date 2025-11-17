@@ -314,7 +314,7 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         return next_checked, next_learned
 
     def find_word_pack_id_by_lemma(self, lemma: str) -> str | None:
-        target = lemma.lower()
+        target = str(lemma or "").strip().lower()
         docs = list(self._word_packs.stream())
         docs.sort(key=lambda d: str((d.to_dict() or {}).get("updated_at") or ""), reverse=True)
         for doc in docs:
@@ -324,7 +324,7 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         return None
 
     def find_word_pack_by_lemma_ci(self, lemma: str) -> tuple[str, str, str] | None:
-        target = lemma.lower()
+        target = str(lemma or "").strip().lower()
         docs = list(self._word_packs.stream())
         docs.sort(key=lambda d: str((d.to_dict() or {}).get("updated_at") or ""), reverse=True)
         for doc in docs:
