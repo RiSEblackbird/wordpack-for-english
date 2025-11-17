@@ -23,6 +23,7 @@ from tests.firestore_fakes import (
     FakeDocumentSnapshot,
     FakeFirestoreClient,
     FakeQuery,
+    FakeWriteBatch,
     FakeTransaction,
 )
 
@@ -326,3 +327,110 @@ def test_list_examples_paginates_on_server_side(
     assert len(collection.query_log) == 2
     assert max(entry["size"] for entry in collection.query_log) <= 50
     assert sum(entry["size"] for entry in collection.query_log) <= 100
+
+
+def test_delete_examples_uses_paged_batching(
+    firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wordpack_store = firestore_store.wordpacks
+    monkeypatch.setattr(wordpack_store, "_EXAMPLE_DELETE_BATCH_SIZE", 5)
+
+    payload = {
+        "lemma": "BulkDelete",
+        "examples": {
+            "Dev": [
+                {"en": f"Example {idx}", "ja": f"例文 {idx}"} for idx in range(12)
+            ]
+        },
+    }
+    wordpack_store.save_word_pack(
+        "bulk-pack", payload["lemma"], json.dumps(payload, ensure_ascii=False)
+    )
+
+    payload_other = {
+        "lemma": "KeepMe",
+        "examples": {"Dev": [{"en": "keep", "ja": "残す"}]},
+    }
+    wordpack_store.save_word_pack(
+        "other-pack", payload_other["lemma"], json.dumps(payload_other, ensure_ascii=False)
+    )
+
+    collection = wordpack_store._examples
+    collection.reset_query_log()
+
+    wordpack_store._delete_examples("bulk-pack")
+
+    log = collection.query_log
+    assert len(log) == 3
+    assert all(("word_pack_id", "==", "bulk-pack") in entry["filters"] for entry in log)
+    assert max(entry["size"] for entry in log) <= 5
+
+    remaining_examples = [
+        snap
+        for snap in collection._all_snapshots()
+        if (snap.to_dict() or {}).get("word_pack_id") == "bulk-pack"
+    ]
+    assert not remaining_examples
+
+    other_examples = [
+        snap
+        for snap in collection._all_snapshots()
+        if (snap.to_dict() or {}).get("word_pack_id") == "other-pack"
+    ]
+    assert len(other_examples) == 1
+
+
+def test_delete_word_pack_skips_scan_when_no_examples(
+    firestore_store: AppFirestoreStore,
+) -> None:
+    pack_id = "empty-pack"
+    payload = {"lemma": "Empty", "examples": {}}
+    firestore_store.save_word_pack(pack_id, payload["lemma"], json.dumps(payload))
+
+    collection = firestore_store.wordpacks._examples
+    collection.reset_query_log()
+
+    deleted = firestore_store.delete_word_pack(pack_id)
+
+    assert deleted is True
+    assert collection.query_log == []
+    assert firestore_store.wordpacks.get_word_pack_metadata(pack_id) is None
+
+
+def test_delete_examples_can_be_retried_after_batch_failure(
+    firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wordpack_store = firestore_store.wordpacks
+    payload = {
+        "lemma": "Retryable",
+        "examples": {"Dev": [{"en": "a", "ja": "b"}, {"en": "c", "ja": "d"}]},
+    }
+    wordpack_store.save_word_pack(
+        "retry-pack", payload["lemma"], json.dumps(payload, ensure_ascii=False)
+    )
+
+    class FailingBatch(FakeWriteBatch):
+        def commit(self) -> None:  # type: ignore[override]
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(wordpack_store._client, "batch", lambda: FailingBatch(wordpack_store._client))
+
+    with pytest.raises(RuntimeError):
+        wordpack_store._delete_examples("retry-pack")
+
+    remaining_after_failure = [
+        snap
+        for snap in wordpack_store._examples._all_snapshots()
+        if (snap.to_dict() or {}).get("word_pack_id") == "retry-pack"
+    ]
+    assert len(remaining_after_failure) == 2
+
+    monkeypatch.setattr(wordpack_store._client, "batch", lambda: FakeWriteBatch(wordpack_store._client))
+    wordpack_store._delete_examples("retry-pack")
+
+    remaining_after_retry = [
+        snap
+        for snap in wordpack_store._examples._all_snapshots()
+        if (snap.to_dict() or {}).get("word_pack_id") == "retry-pack"
+    ]
+    assert not remaining_after_retry
