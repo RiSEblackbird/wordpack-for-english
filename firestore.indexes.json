@@ -85,5 +85,15 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "lemmas",
+      "fieldPath": "normalized_label",
+      "indexes": [
+        {
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ]
 }
