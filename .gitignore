@@ -24,6 +24,7 @@ bin-release/
 # ローカル仮想環境や Firebase デバッグログは資格情報を含みうるため除外
 .venv/
 .firebase/
+firestore-emulator-data/
 firebase-debug.log
 # Cloud Run デプロイ用の秘密情報は必ずローカルファイル (.env.deploy など) に閉じ込める
 .env.deploy

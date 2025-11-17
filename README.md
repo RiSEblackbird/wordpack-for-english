@@ -95,6 +95,8 @@ Firestore に保存する主要コレクションは `firestore.indexes.json` �
 
 `firebase emulators:start` を起動したターミナルには「Loaded indexes from firestore.indexes.json」のように読み込みログが表示されます。エミュレーターを止める際は `Ctrl+C` で終了し、`pytest tests/backend/test_firestore_store.py` などの Firestore ストア向けテストを再実行して差分がないことを確認してください。
 
+`examples` の大量削除は `word_pack_id` で絞り込んだクエリに `limit` を付け、`WriteBatch`（もしくは Firebase CLI の `--recursive` オプション）でページングしながら消していくと、1 回あたり 500 件までに抑えつつ孤児ドキュメントを残さずに済みます。`AppFirestoreStore` も同じ手順で `examples` を削除するため、Cloud Console で手動クリーンアップする場合も同条件のクエリか `firebase firestore:delete --recursive` を用いると安全です。
+
 特定の Google アカウントだけに利用者を絞り込みたい場合は、カンマ区切りでメールアドレスを列挙した `ADMIN_EMAIL_ALLOWLIST` を設定してください。値は小文字に正規化され、完全一致したアドレスのみが `/api/auth/google` の認証を通過します（未設定または空文字の場合は従来どおり全アカウントを許可します）。
 
 `SESSION_SECRET_KEY` は 32 文字以上の十分に乱数性を持つ文字列を必ず指定してください。`change-me` など既知のプレースホルダーや短い値を設定すると、アプリケーション起動時に検証エラーとなり実行が停止します。外部に公開する環境では `openssl rand -base64 48 | tr -d '\n'` などで生成した値を `.env` へ保存し、リポジトリへコミットしない運用を徹底してください。過去にドキュメントへ掲載したサンプル値もハッシュ照合で拒否されるため、再利用は避けてください。

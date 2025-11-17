@@ -72,6 +72,21 @@ def _build_search_payload(en: str) -> dict[str, Any]:
     }
 
 
+def _extract_example_total(
+    metadata: Mapping[str, Any] | None,
+) -> tuple[int, bool]:
+    """examples_category_counts から合計件数を抽出し、信頼性の有無を返す。"""
+
+    raw_counts = (metadata or {}).get("examples_category_counts")
+    if not isinstance(raw_counts, Mapping):
+        return 0, False
+    try:
+        total = sum(int(raw_counts.get(cat, 0) or 0) for cat in EXAMPLE_CATEGORIES)
+    except Exception:
+        return 0, False
+    return max(0, total), True
+
+
 class FirestoreBaseStore:
     """Firestore クライアント共通のヘルパー。"""
 
@@ -124,6 +139,8 @@ class FirestoreUserStore(FirestoreBaseStore):
 
 class FirestoreWordPackStore(FirestoreBaseStore):
     """WordPack 本体と lemma 情報を Firestore で管理する。"""
+
+    _EXAMPLE_DELETE_BATCH_SIZE = 450
 
     def __init__(self, client: firestore.Client):
         super().__init__(client)
@@ -179,13 +196,19 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         )
         pack_ref = self._word_packs.document(word_pack_id)
         existing = pack_ref.get()
-        created_at = str((existing.to_dict() or {}).get("created_at") or now) if existing.exists else now
+        existing_data = existing.to_dict() or {}
+        existing_examples_total, counts_confident = _extract_example_total(existing_data)
+        created_at = (
+            str(existing_data.get("created_at") or now) if existing.exists else now
+        )
         category_counts = self._replace_examples(
             word_pack_id,
             lemma=lemma,
             sense_title=sense_title,
             examples=examples,
             updated_at=now,
+            existing_example_total=existing_examples_total,
+            is_total_confident=counts_confident,
         )
         pack_ref.set(
             {
@@ -287,8 +310,14 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         snapshot = doc_ref.get()
         if not snapshot.exists:
             return False
+        data = snapshot.to_dict() or {}
+        existing_total, is_confident = _extract_example_total(data)
+        should_delete_examples = not is_confident or existing_total > 0
+        if should_delete_examples:
+            self._delete_examples(
+                word_pack_id, expected_count=existing_total if is_confident else None
+            )
         doc_ref.delete()
-        self._delete_examples(word_pack_id)
         return True
 
     def update_word_pack_study_progress(
@@ -345,11 +374,37 @@ class FirestoreWordPackStore(FirestoreBaseStore):
     def reserve_example_ids(self, count: int) -> list[int]:
         return self._allocate_example_ids(count)
 
-    def _delete_examples(self, word_pack_id: str) -> None:
-        for snapshot in list(self._examples.stream()):
-            data = snapshot.to_dict() or {}
-            if data.get("word_pack_id") == word_pack_id:
-                snapshot.reference.delete()
+    def _delete_examples(self, word_pack_id: str, *, expected_count: int | None = None) -> None:
+        """対象 WordPack の例文だけをページングしながら削除する。
+
+        Firestore のバッチ上限（500件）に合わせて limit 付きクエリを繰り返し、
+        1 回のコミットで触るドキュメント数を O(k) に抑える。expected_count が
+        0 の場合はクエリ自体を発行しないことで無駄な読み出しを避ける。
+        """
+
+        if expected_count is not None and max(0, int(expected_count)) == 0:
+            return
+
+        batch_size = max(1, int(self._EXAMPLE_DELETE_BATCH_SIZE))
+        base_query = (
+            self._examples.where("word_pack_id", "==", word_pack_id)
+            .order_by("__name__")
+        )
+        query = base_query.limit(batch_size)
+
+        while True:
+            snapshots = list(query.stream())
+            if not snapshots:
+                break
+
+            batch = self._client.batch()
+            for snapshot in snapshots:
+                batch.delete(snapshot.reference)
+            batch.commit()
+
+            if len(snapshots) < batch_size:
+                break
+            query = base_query.start_after(snapshots[-1]).limit(batch_size)
 
     def _replace_examples(
         self,
@@ -359,8 +414,16 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         sense_title: str,
         examples: Mapping[str, Any] | None,
         updated_at: str,
+        existing_example_total: int | None = None,
+        is_total_confident: bool = False,
     ) -> dict[str, int]:
-        self._delete_examples(word_pack_id)
+        # 例文数が 0 だと確実に分かっている場合のみ削除クエリを省略し、それ以外では安全側に倒す。
+        should_delete_existing = not is_total_confident or existing_example_total not in (None, 0)
+        if should_delete_existing:
+            self._delete_examples(
+                word_pack_id,
+                expected_count=existing_example_total if is_total_confident else None,
+            )
         counts = {cat: 0 for cat in EXAMPLE_CATEGORIES}
         if not isinstance(examples, Mapping):
             return counts

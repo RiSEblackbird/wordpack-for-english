@@ -266,6 +266,35 @@ class FakeTransaction:
         return None
 
 
+class FakeWriteBatch:
+    """Firestore の WriteBatch API を模した簡易フェイク。"""
+
+    def __init__(self, client: "FakeFirestoreClient") -> None:
+        self._client = client
+        self._operations: list[tuple[str, Any]] = []
+
+    def delete(self, doc_ref: FakeDocumentReference) -> None:
+        self._operations.append(("delete", doc_ref))
+
+    def set(self, doc_ref: FakeDocumentReference, data: dict[str, Any]) -> None:
+        self._operations.append(("set", (doc_ref, data)))
+
+    def update(self, doc_ref: FakeDocumentReference, data: dict[str, Any]) -> None:
+        self._operations.append(("update", (doc_ref, data)))
+
+    def commit(self) -> None:
+        for action, payload in list(self._operations):
+            if action == "delete":
+                ref: FakeDocumentReference = payload  # type: ignore[assignment]
+                ref.delete()
+            elif action == "set":
+                ref, data = payload  # type: ignore[misc]
+                ref.set(data)
+            elif action == "update":
+                ref, data = payload  # type: ignore[misc]
+                ref.update(data)
+
+
 class FakeFirestoreClient:
     def __init__(self) -> None:
         self._data: dict[str, dict[str, dict[str, Any]]] = {}
@@ -275,3 +304,6 @@ class FakeFirestoreClient:
 
     def transaction(self) -> FakeTransaction:
         return FakeTransaction(self)
+
+    def batch(self) -> FakeWriteBatch:
+        return FakeWriteBatch(self)
