@@ -112,28 +112,55 @@ class FakeCollectionReference:
 
 
 class FakeQuery:
-    def __init__(self, collection: FakeCollectionReference) -> None:
+    def __init__(
+        self,
+        collection: FakeCollectionReference,
+        *,
+        orderings: list[tuple[str, bool]] | None = None,
+        filters: list[tuple[str, str, Any]] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        start_after_id: str | None = None,
+    ) -> None:
         self._collection = collection
-        self._orderings: list[tuple[str, bool]] = []
-        self._filters: list[tuple[str, str, Any]] = []
-        self._limit: int | None = None
-        self._offset = 0
+        self._orderings: list[tuple[str, bool]] = list(orderings or [])
+        self._filters: list[tuple[str, str, Any]] = list(filters or [])
+        self._limit: int | None = limit
+        self._offset = offset
+        self._start_after_id = start_after_id
+
+    def _clone(self, **kwargs: Any) -> "FakeQuery":
+        """Return a shallow copy with updated attributes."""
+
+        params = {
+            "collection": self._collection,
+            "orderings": kwargs.pop("orderings", self._orderings),
+            "filters": kwargs.pop("filters", self._filters),
+            "limit": kwargs.pop("limit", self._limit),
+            "offset": kwargs.pop("offset", self._offset),
+            "start_after_id": kwargs.pop("start_after_id", self._start_after_id),
+        }
+        params.update(kwargs)
+        return FakeQuery(**params)
 
     def order_by(self, field_path: str, direction=firestore.Query.ASCENDING) -> "FakeQuery":
-        self._orderings.append((field_path, direction == firestore.Query.DESCENDING))
-        return self
+        updated = list(self._orderings)
+        updated.append((field_path, direction == firestore.Query.DESCENDING))
+        return self._clone(orderings=updated)
 
     def where(self, field_path: str, op_string: str, value: Any) -> "FakeQuery":
-        self._filters.append((field_path, op_string, value))
-        return self
+        updated = list(self._filters)
+        updated.append((field_path, op_string, value))
+        return self._clone(filters=updated)
 
     def limit(self, value: int) -> "FakeQuery":
-        self._limit = max(0, int(value))
-        return self
+        return self._clone(limit=max(0, int(value)))
 
     def offset(self, value: int) -> "FakeQuery":
-        self._offset = max(0, int(value))
-        return self
+        return self._clone(offset=max(0, int(value)))
+
+    def start_after(self, snapshot: FakeDocumentSnapshot) -> "FakeQuery":
+        return self._clone(start_after_id=snapshot.id)
 
     def _matching_snapshots(self) -> list[FakeDocumentSnapshot]:
         docs = self._collection._all_snapshots()
@@ -148,6 +175,11 @@ class FakeQuery:
                 key=lambda snap, fp=field_path: self._order_value(snap, fp),
                 reverse=descending,
             )
+        if self._start_after_id:
+            ids = [snap.id for snap in docs]
+            if self._start_after_id in ids:
+                start_index = ids.index(self._start_after_id) + 1
+                docs = docs[start_index:]
         if self._offset:
             docs = docs[self._offset :]
         if self._limit is not None:
@@ -175,6 +207,8 @@ class FakeQuery:
         actual = data.get(field_path)
         if op_string == "==":
             return actual == expected
+        if op_string == "array_contains":
+            return isinstance(actual, list) and expected in actual
         if op_string == ">=":
             return actual >= expected
         if op_string == "<=":
@@ -187,6 +221,8 @@ class FakeQuery:
 
     def _order_value(self, snapshot: FakeDocumentSnapshot, field_path: str) -> Any:
         data = snapshot.to_dict() or {}
+        if field_path == "__name__":
+            return snapshot.id
         value = data.get(field_path)
         if isinstance(value, (int, float)):
             return value
@@ -299,6 +335,28 @@ def test_firestore_example_progress_and_deletion(firestore_store: AppFirestoreSt
     assert counts["CS"] == 1
 
 
+def test_contains_search_prefers_specific_term(
+    firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = {
+        "lemma": "Chunk",
+        "examples": {
+            "Dev": [
+                {"en": "Analyze xyz value", "ja": "xyzの値を分析する"},
+            ]
+        },
+    }
+    firestore_store.save_word_pack(
+        "wp-search", payload["lemma"], json.dumps(payload, ensure_ascii=False)
+    )
+
+    firestore_store.examples._examples.reset_query_log()
+    firestore_store.list_examples(search="yz", search_mode="contains")
+
+    filters = firestore_store.examples._examples.query_log[0]["filters"]
+    assert ("search_terms", "array_contains", "yz") in filters
+
+
 def test_list_word_packs_paginates_via_firestore_query(
     firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -400,3 +458,35 @@ def test_example_queries_limit_scanned_documents(
     assert all(f[0] != "category" for f in third["filters"])
     total_examples_in_pack = per_category * len(categories) - 1
     assert third["size"] == total_examples_in_pack
+
+
+def test_list_examples_paginates_on_server_side(
+    firestore_store: AppFirestoreStore,
+) -> None:
+    """例文一覧のページングが Firestore クエリの limit/start_after に収まることを検証する。"""
+
+    pack_id = "paging-pack"
+    total_examples = 120
+    payload = {
+        "lemma": "Paginate",
+        "examples": {
+            "Dev": [
+                {"en": f"Example {idx}", "ja": f"例文 {idx}"}
+                for idx in range(total_examples)
+            ]
+        },
+    }
+    firestore_store.save_word_pack(
+        pack_id, payload["lemma"], json.dumps(payload, ensure_ascii=False)
+    )
+
+    collection = firestore_store.examples._examples
+    collection.reset_query_log()
+
+    page = firestore_store.list_examples(limit=50, offset=50)
+
+    assert len(page) == 50
+    assert collection.query_log, "expected queries to be recorded"
+    assert len(collection.query_log) == 2
+    assert max(entry["size"] for entry in collection.query_log) <= 50
+    assert sum(entry["size"] for entry in collection.query_log) <= 100

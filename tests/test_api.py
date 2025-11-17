@@ -547,6 +547,43 @@ def test_update_example_transcription_typing_rejects_out_of_range(client):
     assert r_invalid.status_code == 422
 
 
+def test_examples_list_respects_limit_and_offset(client):
+    """例文一覧 API が常に 50 件ページングし、オフセットが反映されることを検証する。"""
+
+    from backend.store import store as backend_store
+
+    pack_id = "paginate-api"
+    lemma = "paginate-api"
+    payload = {"lemma": lemma, "examples": {}}
+    backend_store.save_word_pack(pack_id, lemma, json.dumps(payload, ensure_ascii=False))
+
+    items = [
+        {"en": f"Batch example {idx}", "ja": f"バッチ例文 {idx}"}
+        for idx in range(80)
+    ]
+    backend_store.append_examples(pack_id, "Dev", items)
+
+    first_page = client.get(
+        "/api/word/examples?limit=50&offset=0&order_by=created_at&order_dir=desc"
+    )
+    assert first_page.status_code == 200
+    body = first_page.json()
+    assert body["limit"] == 50
+    assert body["total"] == 80
+    assert len(body["items"]) == 50
+
+    seen_ids = {item["id"] for item in body["items"]}
+
+    second_page = client.get(
+        "/api/word/examples?limit=50&offset=50&order_by=created_at&order_dir=desc"
+    )
+    assert second_page.status_code == 200
+    body2 = second_page.json()
+    assert body2["offset"] == 50
+    assert len(body2["items"]) == 30
+    assert not seen_ids.intersection({item["id"] for item in body2["items"]})
+
+
 def test_sentence_check_removed(client):
     resp = client.post("/api/sentence/check", json={"sentence": "Hello"})
     assert resp.status_code in (404, 405)

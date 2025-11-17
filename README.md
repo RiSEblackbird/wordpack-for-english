@@ -85,6 +85,7 @@ npm run prepare:frontend-env  # apps/frontend/.env が無い場合に .env.examp
 
 #### Firestore のインデックス要件
 Firestore に保存する主要コレクションは `firestore.indexes.json` で複合インデックスを一括管理しています。`word_packs`（`created_at` 降順 + `__name__`）、`examples`（`word_pack_id`/`category` フィルタ + `position` / `example_id` の組み合わせ）を固定することで、バックエンドのページネーションと `Aggregation Query` の `count()` が常に安定します。JSON ファイルはそのまま Cloud Firestore / エミュレータ / Firebase CLI で流用できるようにしてあるため、手作業で Web Console に登録する必要はありません。
+`examples` ではページングと検索のために `created_at` / `pack_updated_at` / `search_en` / `search_en_reversed` / `search_terms` を組み合わせた追加インデックスを定義し、`order_by` + `start_after` + `limit` の組み合わせで常に 50 件までしか読み出さないようにしています（`offset` はカーソル取得のみに使用）。`search_en` は小文字化、`search_en_reversed` は逆順文字列、`search_terms` は 1〜3 文字の N-gram とトークン配列で、`prefix`/`suffix`/`contains` の各検索モードをサーバー側で絞り込みます。
 
 | 操作 | コマンド | 補足 |
 | --- | --- | --- |
