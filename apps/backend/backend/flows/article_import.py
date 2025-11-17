@@ -10,6 +10,7 @@ from fastapi import HTTPException
 
 from ..config import settings
 from ..flows.word_pack import WordPackFlow
+from ..id_factory import generate_word_pack_id
 from ..logging import logger
 from ..models.article import (
     ArticleDetailResponse,
@@ -803,7 +804,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                                 citations=[],
                                 confidence="low",
                             )
-                            wp_id = f"wp:{lemma}:{uuid.uuid4().hex[:8]}"
+                            wp_id = generate_word_pack_id()
                             store.save_word_pack(
                                 wp_id, lemma, empty_word_pack.model_dump_json()
                             )

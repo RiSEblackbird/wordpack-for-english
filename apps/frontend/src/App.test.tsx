@@ -122,7 +122,7 @@ const completeLogin = async (
   await act(async () => {
     await user.click(loginButton);
   });
-  await screen.findByPlaceholderText('見出し語を入力');
+  await screen.findByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）');
 };
 
 let fetchMock: FetchMock;
@@ -352,7 +352,7 @@ describe('App navigation', () => {
     });
 
     await completeLogin(fetchMock, user);
-    expect(await screen.findByPlaceholderText('見出し語を入力')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）')).toBeInTheDocument();
   });
 
   it('automatically retries syncing settings when the backend becomes available', async () => {
@@ -418,7 +418,7 @@ describe('App navigation', () => {
 
       const user = userEvent.setup();
       await completeLogin(fetchMock, user);
-      expect(await screen.findByPlaceholderText('見出し語を入力')).toBeInTheDocument();
+      expect(await screen.findByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）')).toBeInTheDocument();
     } finally {
       setTimeoutSpy.mockRestore();
     }
@@ -431,7 +431,7 @@ describe('App navigation', () => {
     const user = userEvent.setup();
     await completeLogin(fetchMock, user);
 
-    expect(await screen.findByPlaceholderText('見出し語を入力')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）')).toBeInTheDocument();
 
     await act(async () => {
       await user.keyboard('{Alt>}{2}{/Alt}');

@@ -3,9 +3,30 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+import re
 
 from .common import Citation, ConfidenceLevel
+
+
+LEMMA_ALLOWED_PATTERN = re.compile(r"^[A-Za-z0-9\-\' ]+$")
+
+
+def _validate_lemma(value: str) -> str:
+    """Firestore に安全な見出し語だけを受け付ける。
+
+    Firestore の document ID は `/` や制御文字を含められないため、
+    lemma の許可文字を正規表現で固定し、制御文字も拒否する。
+    """
+
+    if not LEMMA_ALLOWED_PATTERN.match(value):
+        raise ValueError(
+            "lemma must match ^[A-Za-z0-9\\-\\' ]+$ (英数字・半角スペース・ハイフン・アポストロフィのみ)"
+        )
+    if any(ord(ch) < 0x20 for ch in value):
+        raise ValueError("lemma must not contain control characters")
+    return value
 
 
 class RegenerateScope(str, Enum):
@@ -20,7 +41,16 @@ class WordPackCreateRequest(BaseModel):
     生成を行わず、空の各情報を持つ WordPack を保存するための最小入力。
     """
 
-    lemma: str = Field(min_length=1, max_length=64, description="見出し語（1..64文字）")
+    lemma: str = Field(
+        min_length=1,
+        max_length=64,
+        description="見出し語（1..64文字、英数字・半角スペース・ハイフン・アポストロフィのみ）",
+    )
+
+    @field_validator("lemma")
+    @classmethod
+    def ensure_lemma_safe(cls, value: str) -> str:
+        return _validate_lemma(value)
 
 
 class WordPackRequest(BaseModel):
@@ -57,7 +87,11 @@ class WordPackRequest(BaseModel):
         }
     )
 
-    lemma: str = Field(min_length=1, max_length=64, description="見出し語（1..64文字）")
+    lemma: str = Field(
+        min_length=1,
+        max_length=64,
+        description="見出し語（1..64文字、英数字・半角スペース・ハイフン・アポストロフィのみ）",
+    )
     pos: str | None = None
     pronunciation_enabled: bool = True
     regenerate_scope: RegenerateScope = Field(
@@ -86,6 +120,11 @@ class WordPackRequest(BaseModel):
     text: dict | None = Field(
         default=None, description="text オプション（例: {verbosity: low|medium|high}）"
     )
+
+    @field_validator("lemma")
+    @classmethod
+    def ensure_lemma_safe(cls, value: str) -> str:
+        return _validate_lemma(value)
 
 
 class Sense(BaseModel):
