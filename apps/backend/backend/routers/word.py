@@ -31,11 +31,35 @@ from ..models.word import (
     StudyProgressRequest,
     WordPackStudyProgressResponse,
     ExampleStudyProgressResponse,
+    _validate_lemma,
 )
 from ..store import store
 from ..sense_title import choose_sense_title
 
 router = APIRouter(tags=["word"])
+
+
+class WordLookupExample(BaseModel):
+    """WordPack 内の例文をレスポンス用に整形するモデル。"""
+
+    en: str
+    ja: str
+    grammar_ja: str | None = None
+    category: ExampleCategory
+
+
+class WordLookupResponse(BaseModel):
+    """`GET /api/word` の返却スキーマ。"""
+
+    lemma: str
+    sense_title: str | None
+    definition: str | None
+    word_pack_id: str | None = None
+    examples: list[WordLookupExample] = Field(default_factory=list)
+    llm_model: str | None = None
+    llm_params: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 def _get_override_value(source: object, key: str) -> Any:
@@ -104,6 +128,51 @@ def _resolve_http_exception(
             error=str(exc),
         )
         return None
+
+
+def _extract_definition_from_senses(data: Mapping[str, Any]) -> str | None:
+    """語義配列から定義/グロスを優先順に抽出する。"""
+
+    senses = data.get("senses") or []
+    for sense in senses if isinstance(senses, list) else []:
+        if not isinstance(sense, Mapping):
+            continue
+        definition = str(sense.get("definition_ja") or "").strip()
+        if definition:
+            return definition
+        gloss = str(sense.get("gloss_ja") or "").strip()
+        if gloss:
+            return gloss
+    return None
+
+
+def _collect_examples_for_lookup(data: Mapping[str, Any]) -> list[WordLookupExample]:
+    """WordPack の例文をカテゴリ付きで平坦化する。"""
+
+    examples: list[WordLookupExample] = []
+    raw_examples = data.get("examples") or {}
+    if not isinstance(raw_examples, Mapping):
+        return examples
+
+    for category, items in raw_examples.items():
+        if not isinstance(items, list):
+            continue
+        try:
+            cat_enum = ExampleCategory(category)
+        except ValueError:
+            continue
+        for item in items:
+            if not isinstance(item, Mapping):
+                continue
+            examples.append(
+                WordLookupExample(
+                    en=str(item.get("en") or ""),
+                    ja=str(item.get("ja") or ""),
+                    grammar_ja=(item.get("grammar_ja") or None),
+                    category=cat_enum,
+                )
+            )
+    return examples
 
 
 def _handle_flow_runtime_error(
@@ -243,19 +312,147 @@ async def run_wordpack_flow(
         pass
     return word_pack, llm_info
 
-@router.get("/")
-async def lookup_word() -> dict[str, object]:
-    """暫定の語義参照（プレースホルダ）。
+def _build_lookup_response(
+    *,
+    lemma: str,
+    sense_title: str | None,
+    word_pack_id: str | None,
+    word_pack_data: Mapping[str, Any],
+    created_at: str | None,
+    updated_at: str | None,
+) -> WordLookupResponse:
+    """語義と例文をレスポンススキーマへ整形する共通ユーティリティ。"""
 
-    strict_mode の場合は未実装として 501 を返す。テスト互換のため非 strict では固定応答。
-    """
-    from ..config import settings
+    definition = _extract_definition_from_senses(word_pack_data)
+    examples = _collect_examples_for_lookup(word_pack_data)
+    return WordLookupResponse(
+        lemma=lemma,
+        sense_title=str(sense_title or word_pack_data.get("sense_title") or "") or None,
+        definition=definition,
+        word_pack_id=word_pack_id,
+        examples=examples,
+        llm_model=word_pack_data.get("llm_model"),
+        llm_params=word_pack_data.get("llm_params"),
+        created_at=created_at,
+        updated_at=updated_at,
+    )
 
-    if settings.strict_mode:
-        raise HTTPException(
-            status_code=501, detail="Not Implemented: /api/word in strict mode"
+
+@router.get("/", response_model=WordLookupResponse, response_model_exclude_none=True)
+async def lookup_word(lemma: str = Query(..., description="見出し語")) -> WordLookupResponse:
+    """WordPack を lemma で取得し、定義と例文を返す。"""
+
+    normalized_lemma = str(lemma or "").strip()
+    if not normalized_lemma:
+        raise HTTPException(status_code=400, detail="lemma is required")
+    try:
+        _validate_lemma(normalized_lemma)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid lemma: {exc}") from exc
+
+    # 1) 既存データをストアから検索
+    stored = store.find_word_pack_by_lemma_ci(normalized_lemma)
+    if stored:
+        word_pack_id, stored_lemma, stored_sense_title = stored
+        packed = store.get_word_pack(word_pack_id)
+        if packed is None:
+            raise HTTPException(status_code=404, detail="word pack not found")
+
+        lemma_from_store, data_json, created_at, updated_at = packed
+        try:
+            data_dict = json.loads(data_json) if data_json else {}
+        except json.JSONDecodeError:
+            data_dict = {}
+        return _build_lookup_response(
+            lemma=lemma_from_store,
+            sense_title=stored_sense_title,
+            word_pack_id=word_pack_id,
+            word_pack_data=data_dict,
+            created_at=created_at,
+            updated_at=updated_at,
         )
-    return {"definition": None, "examples": []}
+
+    # 2) 未保存なら Flow で生成（strict_mode でも例外マップを適用）
+    try:
+        req_opts = WordPackRequest(lemma=normalized_lemma)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"invalid lemma: {exc}") from exc
+
+    try:
+        word_pack, _ = await run_wordpack_flow(
+            lemma=normalized_lemma,
+            req_opts=req_opts,
+            scope=req_opts.regenerate_scope,
+            http_error_mapping={
+                "llm_json_parse": lambda *, lemma, **__: HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "LLM output JSON parse failed (strict mode)",
+                        "reason_code": "LLM_JSON_PARSE",
+                        "diagnostics": {"lemma": lemma},
+                        "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
+                    },
+                ),
+                "empty_content": lambda *, lemma, diagnostics, **__: HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "WordPack generation returned empty content (no senses/examples)",
+                        "reason_code": "EMPTY_CONTENT",
+                        "diagnostics": diagnostics or {},
+                        "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
+                    },
+                ),
+            },
+        )
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        _handle_flow_runtime_error(
+            exc,
+            lemma=normalized_lemma,
+            http_error_mapping={
+                "llm_json_parse": lambda *, lemma, **__: HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "LLM output JSON parse failed (strict mode)",
+                        "reason_code": "LLM_JSON_PARSE",
+                        "diagnostics": {"lemma": lemma},
+                        "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
+                    },
+                ),
+                "empty_content": lambda *, lemma, diagnostics, **__: HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "WordPack generation returned empty content (no senses/examples)",
+                        "reason_code": "EMPTY_CONTENT",
+                        "diagnostics": diagnostics or {},
+                        "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
+                    },
+                ),
+            },
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "message": "WordPack lookup failed", "reason_code": "LOOKUP_FAILED"
+            },
+        ) from exc
+    except Exception as exc:  # 想定外の例外も安全に HTTP へ変換
+        logger.exception(
+            "wordpack_lookup_unexpected_error", lemma=normalized_lemma, error=str(exc)
+        )
+        raise HTTPException(status_code=500, detail="unexpected error") from exc
+
+    word_pack_id = generate_word_pack_id()
+    store.save_word_pack(word_pack_id, normalized_lemma, word_pack.model_dump_json())
+    return _build_lookup_response(
+        lemma=word_pack.lemma,
+        sense_title=word_pack.sense_title,
+        word_pack_id=word_pack_id,
+        word_pack_data=word_pack.model_dump(),
+        created_at=None,
+        updated_at=None,
+    )
 
 
 @router.post(

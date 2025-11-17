@@ -1,4 +1,5 @@
 import json
+import json
 import re
 import sys
 import types
@@ -135,6 +136,132 @@ def test_word_pack_rejects_forbidden_lemma_characters(
     assert resp.status_code == 422
     detail = resp.json().get("detail") or []
     assert any((entry.get("loc") or [])[-1] == "lemma" for entry in detail)
+
+
+def test_lookup_word_returns_saved_pack(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    """保存済み WordPack を lemma で検索し、スキーマに沿って返すことを検証。"""
+
+    from backend.store import store as backend_store
+
+    lemma = "Paths"
+    pack_id = "wp:test:lookup"
+    payload = {
+        "sense_title": "通り道",
+        "senses": [
+            {
+                "id": "s1",
+                "gloss_ja": "経路の集まり",
+                "definition_ja": "複数の経路や筋道のこと。",
+            }
+        ],
+        "examples": {
+            "Dev": [
+                {
+                    "en": "Paths converge at the gateway.",
+                    "ja": "経路はゲートウェイで交わる。",
+                    "grammar_ja": "SVC",
+                }
+            ],
+            "CS": [],
+            "LLM": [],
+            "Business": [],
+            "Common": [],
+        },
+    }
+    backend_store.save_word_pack(pack_id, lemma, json.dumps(payload, ensure_ascii=False))
+
+    resp = client.get("/api/word", params={"lemma": "paths"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["lemma"] == lemma
+    assert body["sense_title"] == "通り道"
+    assert body["definition"] == "複数の経路や筋道のこと。"
+    assert body["word_pack_id"] == pack_id
+    assert body.get("examples") and body["examples"][0]["category"] == "Dev"
+
+
+def test_lookup_word_generates_when_not_found(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """未保存の lemma でも Flow を使って生成・保存して返すことを確認。"""
+
+    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "lookup_flow.sqlite3")
+    from fastapi.testclient import TestClient
+    from backend.models.word import WordPack
+    from backend.store import store as backend_store
+    from backend.routers import word as word_router
+
+    generated_pack = WordPack(
+        lemma="novel",
+        sense_title="新しい",
+        pronunciation={"ipa_GA": None, "ipa_RP": None, "syllables": None, "stress_index": None, "linking_notes": []},
+        senses=[{"id": "s1", "gloss_ja": "新規性", "definition_ja": "新しく独自であること。"}],
+        collocations={
+            "general": {"verb_object": [], "adj_noun": [], "prep_noun": []},
+            "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []},
+        },
+        contrast=[],
+        examples={
+            "Dev": [],
+            "CS": [],
+            "LLM": [],
+            "Business": [],
+            "Common": [
+                {"en": "That idea is novel.", "ja": "そのアイデアは新しい。", "grammar_ja": "SVC"}
+            ],
+        },
+        etymology={"note": "", "confidence": "low"},
+        study_card="",
+        citations=[],
+        confidence="low",
+    )
+
+    async def _fake_flow(**_: object):
+        return generated_pack, {"model": "stub-model", "params": "t=0"}
+
+    monkeypatch.setattr(word_router, "run_wordpack_flow", _fake_flow)
+    monkeypatch.setattr(word_router, "generate_word_pack_id", lambda: "wp:lookup:generated")
+
+    client = TestClient(backend_main.app)
+    resp = client.get("/api/word", params={"lemma": "novel"})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["lemma"] == "novel"
+    assert body["word_pack_id"] == "wp:lookup:generated"
+    assert body["definition"] == "新しく独自であること。"
+    assert any(it["category"] == "Common" for it in body.get("examples", []))
+
+    # 保存された ID が取得できることを確認（ストアに永続化されている証拠）
+    assert backend_store.find_word_pack_id_by_lemma("novel") == "wp:lookup:generated"
+
+
+def test_lookup_word_rejects_invalid_lemma(client: TestClient):
+    """クエリの lemma が不正な場合は 400 を返す。"""
+
+    resp = client.get("/api/word", params={"lemma": "invalid/lemma"})
+
+    assert resp.status_code == 400
+    body = resp.json()
+    assert "lemma" in body.get("detail", "")
+
+
+def test_lookup_word_strict_flow_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """strict_mode でも Flow 例外を HTTP 502 にマッピングして返す。"""
+
+    backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=tmp_path / "lookup_strict.sqlite3")
+    from fastapi.testclient import TestClient
+    from backend.routers import word as word_router
+
+    async def _failing_flow(**_: object):
+        raise RuntimeError("failed to parse llm json")
+
+    monkeypatch.setattr(word_router, "run_wordpack_flow", _failing_flow)
+
+    client = TestClient(backend_main.app, raise_server_exceptions=False)
+    resp = client.get("/api/word", params={"lemma": "stable"})
+
+    assert resp.status_code == 502
+    assert resp.json().get("detail", {}).get("reason_code") == "LLM_JSON_PARSE"
 def test_create_empty_word_pack_generates_japanese_sense_title(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "empty_pack_llm.sqlite3")
     from fastapi.testclient import TestClient
@@ -371,10 +498,45 @@ def test_generate_examples_uses_llm_meta(client, monkeypatch):
     assert examples[-1]["llm_model"] == "gpt-example-mini"
     assert "temperature=0.25" in examples[-1]["llm_params"]
     assert examples[-1]["transcription_typing_count"] == 0
-def test_word_lookup(client):
-    resp = client.get("/api/word")
+def test_word_lookup(client: TestClient, monkeypatch: pytest.MonkeyPatch):
+    from backend.models.word import WordPack
+    from backend.routers import word as word_router
+
+    generated_pack = WordPack(
+        lemma="alpha",
+        sense_title="先頭",
+        pronunciation={"ipa_GA": None, "ipa_RP": None, "syllables": None, "stress_index": None, "linking_notes": []},
+        senses=[{"id": "s1", "gloss_ja": "最初", "definition_ja": "最初の要素。"}],
+        collocations={
+            "general": {"verb_object": [], "adj_noun": [], "prep_noun": []},
+            "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []},
+        },
+        contrast=[],
+        examples={
+            "Dev": [],
+            "CS": [],
+            "LLM": [],
+            "Business": [],
+            "Common": [{"en": "Alpha value matters.", "ja": "アルファ値は重要だ。", "grammar_ja": "SVC"}],
+        },
+        etymology={"note": "", "confidence": "low"},
+        study_card="",
+        citations=[],
+        confidence="low",
+    )
+
+    async def _fake_flow(**_: object):
+        return generated_pack, {"model": "stub", "params": "p"}
+
+    monkeypatch.setattr(word_router, "run_wordpack_flow", _fake_flow)
+    monkeypatch.setattr(word_router, "generate_word_pack_id", lambda: "wp:lookup:default")
+
+    resp = client.get("/api/word", params={"lemma": "alpha"})
     assert resp.status_code == 200
-    assert resp.json() == {"definition": None, "examples": []}
+    payload = resp.json()
+    assert payload["lemma"] == "alpha"
+    assert payload["definition"] == "最初の要素。"
+    assert payload.get("examples")
 
 
 def test_word_pack_study_progress_endpoint(client):
@@ -640,7 +802,7 @@ def test_word_pack_strict_llm_json_parse_failure_to_502(monkeypatch: pytest.Monk
     providers_mod._LLM_INSTANCE = _StubLLM()
 
     client = TestClient(backend_main.app, raise_server_exceptions=False)
-    r = client.post("/api/word/pack", json={"lemma": "no_data"})
+    r = client.post("/api/word/pack", json={"lemma": "no-data"})
     assert r.status_code == 502
 
 
@@ -687,10 +849,10 @@ def test_review_card_by_lemma_removed(client):
 def test_word_pack_persistence(client):
     """WordPack永続化機能のテスト"""
     # 1. 新しいWordPackを生成（自動保存される）
-    resp = client.post("/api/word/pack", json={"lemma": "persistence_test"})
+    resp = client.post("/api/word/pack", json={"lemma": "persistence-test"})
     assert resp.status_code == 200
     word_pack = resp.json()
-    assert word_pack["lemma"] == "persistence_test"
+    assert word_pack["lemma"] == "persistence-test"
     
     # 2. 保存済みWordPack一覧を取得
     resp = client.get("/api/word/packs")
@@ -752,7 +914,7 @@ def test_word_pack_persistence(client):
 
 def test_delete_example_from_word_pack(client):
     # 1) Pack を生成
-    r1 = client.post("/api/word/pack", json={"lemma": "delete_example_test"})
+    r1 = client.post("/api/word/pack", json={"lemma": "delete-example-test"})
     assert r1.status_code == 200
     # 2) 保存済み一覧からID取得
     rlist = client.get("/api/word/packs")
@@ -843,7 +1005,7 @@ def test_word_pack_list_pagination(client):
     """WordPack一覧のページネーション機能のテスト"""
     # 複数のWordPackを生成
     for i in range(3):
-        resp = client.post("/api/word/pack", json={"lemma": f"pagination_test_{i}"})
+        resp = client.post("/api/word/pack", json={"lemma": f"pagination-test-{i}"})
         assert resp.status_code == 200
     
     # ページネーションパラメータをテスト
@@ -880,7 +1042,7 @@ def test_word_pack_strict_empty_llm(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     providers_mod._LLM_INSTANCE = _StubLLM()
 
     client = TestClient(backend_main.app, raise_server_exceptions=False)
-    r = client.post("/api/word/pack", json={"lemma": "no_data"})
+    r = client.post("/api/word/pack", json={"lemma": "no-data"})
     assert 500 <= r.status_code < 600
 
 
