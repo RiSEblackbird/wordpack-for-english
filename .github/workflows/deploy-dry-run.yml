@@ -13,6 +13,8 @@ concurrency:
 jobs:
   dry-run-release:
     name: Validate Cloud Run release via dry-run
+    # Secrets are unavailable on pull_requests from forks, so skip this job in that case
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     env:
       CLOUD_RUN_PROJECT_ID: ci-placeholder-project
