@@ -20,6 +20,7 @@ jobs:
       CLOUD_RUN_PROJECT_ID: ci-placeholder-project
       CLOUD_RUN_REGION: asia-northeast1
       CLOUD_RUN_ENV_FILE: configs/cloud-run/ci.env
+      GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,12 +33,26 @@ jobs:
 
       - name: Authenticate to Google Cloud
         # サービスアカウントキーはリポジトリシークレット GCP_SA_KEY から取得し、ADC として利用します。
+        if: env.GCP_SA_KEY != ''
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ env.GCP_SA_KEY }}
+
+      - name: Skip auth when credentials are unavailable
+        if: env.GCP_SA_KEY == ''
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          echo "GCP_SA_KEY is not available for this run (likely due to forked PRs). Skipping authentication and downstream steps."
+          exit 0
 
       - name: Set up gcloud SDK
         # gcloud CLI を明示的に導入し、プロジェクトとリージョンのコンテキストを合わせます。
+        if: env.GCP_SA_KEY != ''
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.CLOUD_RUN_PROJECT_ID }}
@@ -45,6 +60,9 @@ jobs:
 
       - name: Run release-cloud-run in dry-run mode
         # Firestore インデックス同期は CI では省略し、Cloud Run デプロイフローの設定検証のみを実施します。
+        if: env.GCP_SA_KEY != ''
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
           make release-cloud-run \
             PROJECT_ID=${{ env.CLOUD_RUN_PROJECT_ID }} \
