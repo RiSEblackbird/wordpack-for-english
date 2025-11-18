@@ -78,7 +78,7 @@ jobs:
       - name: Run security headers pytest suite
         env:
           PYTHONPATH: apps/backend
-        run: pytest -q tests/test_security_headers.py
+        run: pytest -q --no-cov tests/test_security_headers.py
 
   frontend:
     name: Frontend tests (vitest)
