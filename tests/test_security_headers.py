@@ -4,12 +4,61 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 import sys
+from types import ModuleType, SimpleNamespace
+from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1] / "apps" / "backend"
 if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
+
+# CI 環境では Firestore/Google 認証用のデフォルト資格情報がないため、
+# backend モジュールを読み込む前に認証系パッケージをモックし、
+# Import 時の資格情報検出をスキップする。
+google_module = ModuleType("google")
+sys.modules["google"] = google_module
+
+google_auth_module = ModuleType("google.auth")
+google_auth_module._default = MagicMock()
+sys.modules["google.auth"] = google_auth_module
+
+google_auth_exceptions = ModuleType("google.auth.exceptions")
+google_auth_exceptions.DefaultCredentialsError = Exception
+sys.modules["google.auth.exceptions"] = google_auth_exceptions
+
+google_auth_transport = ModuleType("google.auth.transport")
+sys.modules["google.auth.transport"] = google_auth_transport
+google_auth_transport_requests = ModuleType("google.auth.transport.requests")
+google_auth_transport_requests.Request = MagicMock()
+sys.modules["google.auth.transport.requests"] = google_auth_transport_requests
+google_auth_transport.requests = google_auth_transport_requests
+google_auth_module.transport = google_auth_transport
+google_auth_module.exceptions = google_auth_exceptions
+
+firestore_mock = MagicMock()
+firestore_mock.Client.return_value = MagicMock()
+google_cloud_module = ModuleType("google.cloud")
+google_cloud_module.firestore = firestore_mock
+sys.modules["google.cloud"] = google_cloud_module
+sys.modules["google.cloud.firestore"] = firestore_mock
+google_module.auth = google_auth_module
+google_module.cloud = google_cloud_module
+
+google_oauth2_module = ModuleType("google.oauth2")
+google_oauth2_id_token = ModuleType("google.oauth2.id_token")
+google_oauth2_id_token.verify_oauth2_token = MagicMock(return_value={})
+google_oauth2_id_token.verify_token = MagicMock(return_value={})
+sys.modules["google.oauth2"] = google_oauth2_module
+sys.modules["google.oauth2.id_token"] = google_oauth2_id_token
+google_oauth2_module.id_token = google_oauth2_id_token
+google_module.oauth2 = google_oauth2_module
+
+api_core_exceptions = SimpleNamespace(AlreadyExists=Exception)
+api_core_module = ModuleType("google.api_core")
+api_core_module.exceptions = api_core_exceptions
+sys.modules["google.api_core"] = api_core_module
+sys.modules["google.api_core.exceptions"] = api_core_exceptions
 
 from backend.config import settings
 from backend.main import create_app
