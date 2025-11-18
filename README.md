@@ -200,6 +200,8 @@ OPENAI_API_KEY=sk-xxxxx
 
 `make release-cloud-run` は Firestore インデックスの同期 → Cloud Run 用 dry-run → 本番デプロイの順序を固定し、`.env.deploy`（もしくは `ENV_FILE` で指定したファイル）が見つからない場合は即座に停止します。Dry-run で Pydantic 設定を検証してから Cloud Build/Run を実行するため、GitHub Actions でも設定ミスの検知が容易です。
 
+GitHub Actions では `deploy-dry-run.yml` が pull_request と main ブランチへの push で `make release-cloud-run` を `SKIP_FIRESTORE_INDEX_SYNC=true` / `DRY_RUN=true` 付きで実行し、`configs/cloud-run/ci.env` を用いた設定検証を自動化します。GCP のサービスアカウントキーはリポジトリシークレット `GCP_SA_KEY` に保存し、`google-github-actions/auth` で ADC として読み込んでから `setup-gcloud` に引き渡してください。
+
 - 前提条件
   - `PROJECT_ID` と `REGION` を Make 実行時に必ず指定する（gcloud の既定値には依存しません）。
   - Firestore Admin / Cloud Run Admin / Artifact Registry Writer 権限を持つサービスアカウントで `gcloud auth login` または `gcloud auth activate-service-account` を済ませ、`gcloud auth configure-docker` も完了させておく。

@@ -70,6 +70,9 @@ __pycache__/
 *.sqlite3
 *.db
 
+# ローカルの gcloud 設定ディレクトリ（資格情報を含むため必ず除外）
+.config/gcloud/
+
 # Vector DB (Chroma) persistence - do not commit generated index data
 .chroma/
 
