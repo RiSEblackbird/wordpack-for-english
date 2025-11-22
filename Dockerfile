@@ -20,9 +20,5 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # そのまま uvicorn を起動できるようにする。
 COPY . .
 
-EXPOSE 8000
-
-# Fallback command (overridden by compose during development)
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "apps/backend"]
-
-
+EXPOSE 8080
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8080", "--app-dir", "apps/backend"]
