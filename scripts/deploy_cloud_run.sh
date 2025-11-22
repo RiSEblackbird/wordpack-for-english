@@ -291,7 +291,9 @@ fi
 ensure_gcloud
 
 log "Submitting build to Cloud Build: $IMAGE_URI"
-BUILD_CMD=(gcloud builds submit --project "$PROJECT_ID" --tag "$IMAGE_URI" --file Dockerfile.backend --machine-type="$MACHINE_TYPE" --timeout="$BUILD_TIMEOUT")
+# gcloud builds submit は Dockerfile パス指定用の --file を受け付けないため、
+# リポジトリルートの Dockerfile（Dockerfile.backend へのシンボリックリンク）を利用する。
+BUILD_CMD=(gcloud builds submit --project "$PROJECT_ID" --tag "$IMAGE_URI" --machine-type="$MACHINE_TYPE" --timeout="$BUILD_TIMEOUT")
 if [[ ${#EXTRA_BUILD_ARGS[@]} -gt 0 ]]; then
   for build_arg in "${EXTRA_BUILD_ARGS[@]}"; do
     BUILD_CMD+=(--build-arg "$build_arg")
