@@ -309,6 +309,9 @@ npm run test
 - `POST /api/word/examples/bulk-delete` … 例文IDの配列を受け取り一括削除
 - `POST /api/word/examples/{id}/transcription-typing` … 指定IDの例文について、文字起こし練習で入力した文字数を検証・加算
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts で読み上げた音声（audio/mpeg）をストリーミング返却
+- `GET /_debug/headers` … デバッグ用: FastAPI が受信した Host / X-Forwarded-* / URL / クライアント IP をそのまま JSON で返却。Firebase Hosting → Cloud Run 経由のヘッダ付け替え確認や、リバースプロキシ配下の疎通検証に利用できる（運用環境でも有効だが目立たないパスとして公開）。
+
+ローカルで `/api/config` と同じアプリに統合されていることを確認する場合は、`uvicorn backend.main:app --app-dir apps/backend --reload` で起動し、別ターミナルから `curl -H "Host: backend.internal" -H "X-Forwarded-Host: public.example.com" -H "X-Forwarded-Proto: https" http://127.0.0.1:8000/_debug/headers` を実行するとレスポンスに受信ヘッダが反映されます。
 
 ### WordPack 生成時の入力制約
 - 見出し語（`lemma`）は **英数字・半角スペース・ハイフン・アポストロフィのみ** で、1〜64文字。
