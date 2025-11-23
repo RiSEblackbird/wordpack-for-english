@@ -32,6 +32,15 @@ def _use_fake_settings() -> object:
         rate_limit_per_min_user = 120
         llm_timeout_ms = 1000
         disable_session_auth = True
+        environment = "development"
+        session_cookie_name = "wp_session"
+        session_cookie_secure = False
+        session_max_age_seconds = 60 * 60 * 24 * 14
+        security_hsts_max_age_seconds = 63072000
+        security_hsts_include_subdomains = True
+        security_hsts_preload = False
+        security_csp_default_src = ("'self'",)
+        security_csp_connect_src = ()
         langfuse_enabled = False
         langfuse_exclude_paths = []
         allowed_cors_origins = ()
@@ -127,5 +136,38 @@ def test_request_complete_log_contains_request_id() -> None:
 
     data = json.loads(request_lines[-1])
     assert data.get("request_id"), data
+
+
+def test_sensitive_values_are_masked_in_logs() -> None:
+    # Arrange
+    buf_out = io.StringIO()
+    buf_err = io.StringIO()
+    secret = "sk-proj-1234567890"
+
+    with redirect_stdout(buf_out), redirect_stderr(buf_err):
+        with _use_fake_settings() as fake_settings:
+            fake_settings.openai_api_key = secret
+
+            from backend.logging import configure_logging, logger
+
+            configure_logging()
+            logger.info(
+                "config_dump",
+                openai_api_key=secret,
+                nested={"api_key": secret, "note": f"using {secret} now"},
+            )
+
+    raw = buf_err.getvalue().strip() or buf_out.getvalue().strip()
+    lines = [ln for ln in raw.splitlines() if ln.strip()]
+    message_text = lines[-1] if lines else ""
+
+    assert message_text, "log output missing"
+    assert secret not in message_text
+
+    data = json.loads(message_text)
+    assert data.get("openai_api_key") != secret
+    assert data.get("nested", {}).get("api_key") != secret
+    masked_note = data.get("nested", {}).get("note", "")
+    assert secret not in masked_note
 
 
