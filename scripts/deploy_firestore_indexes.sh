@@ -55,6 +55,7 @@ if [[ ! -f "$INDEX_FILE" ]]; then
   exit 1
 fi
 
+# 利用するCLIに応じて適切なデプロイ手順を分岐させる。
 case "$TOOL" in
   gcloud)
     if ! command -v gcloud >/dev/null 2>&1; then
@@ -168,4 +169,4 @@ PY
     echo "[${SCRIPT_NAME}] --tool には gcloud または firebase を指定してください" >&2
     exit 1
     ;;
-endcase
+esac
