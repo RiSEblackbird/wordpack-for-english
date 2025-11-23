@@ -12,9 +12,20 @@ from itsdangerous import BadSignature, SignatureExpired
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
-from .auth import verify_session_token
-from .config import settings
-from .logging import logger
+from ..auth import verify_session_token
+from ..config import settings
+from ..logging import logger
+
+# Forwarded host validation middleware lives in a dedicated module to keep
+# host header handling isolated from other cross-cutting middleware concerns.
+from .host import ForwardedHostTrustedHostMiddleware
+
+__all__ = [
+    "ForwardedHostTrustedHostMiddleware",
+    "SecurityHeadersMiddleware",
+    "RequestIDMiddleware",
+    "RateLimitMiddleware",
+]
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

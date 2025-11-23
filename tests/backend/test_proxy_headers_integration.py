@@ -102,3 +102,70 @@ def test_request_client_host_reflects_forwarded_for(proxy_app_factory) -> None:
 
     assert response.status_code == 200
     assert response.json().get("client_ip") == forwarded_ip
+
+
+def test_forwarded_host_respected_for_trusted_proxy(proxy_app_factory) -> None:
+    app = proxy_app_factory(
+        trusted_proxy_ips=("203.0.113.0/24",),
+        allowed_hosts=("forwarded.example.com",),
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/healthz",
+            headers={
+                "Host": "testserver",  # not in allowed_hosts
+                "X-Forwarded-For": "203.0.113.42",
+                "X-Forwarded-Host": "forwarded.example.com:8443",
+            },
+        )
+
+    assert response.status_code == 200
+
+
+def test_forwarded_host_ignored_for_untrusted_proxy(proxy_app_factory) -> None:
+    app = proxy_app_factory(
+        trusted_proxy_ips=("198.51.100.0/24",),
+        allowed_hosts=("example.com",),
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/healthz",
+            headers={
+                "Host": "example.com:8080",
+                "X-Forwarded-For": "203.0.113.10",  # outside trusted range
+                "X-Forwarded-Host": "malicious.example.net",
+            },
+        )
+
+    assert response.status_code == 200
+
+
+def test_unlisted_host_rejected_with_warning(
+    proxy_app_factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed: list[dict[str, object]] = []
+
+    def capture(event: str, **kwargs: object) -> None:
+        observed.append({"event": event, **kwargs})
+
+    monkeypatch.setattr("backend.middleware.host.logger.warning", capture, raising=False)
+
+    app = proxy_app_factory(
+        trusted_proxy_ips=("10.0.0.0/8",),
+        allowed_hosts=("allowed.example.com",),
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/healthz",
+            headers={
+                "Host": "forbidden.example.com",
+                "X-Forwarded-For": "203.0.113.10",
+            },
+        )
+
+    assert response.status_code == 400
+    assert any(entry.get("event") == "host_not_allowed" for entry in observed)
+    assert any(entry.get("host") == "forbidden.example.com" for entry in observed)
