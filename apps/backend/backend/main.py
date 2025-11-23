@@ -10,7 +10,6 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import Response
 from starlette.types import ASGIApp
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
@@ -31,6 +30,7 @@ from .indexing import seed_domain_terms, seed_from_jsonl, seed_word_snippets
 from .logging import configure_logging, logger
 from .metrics import registry
 from .middleware import RateLimitMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware
+from .middleware.host import ForwardedHostTrustedHostMiddleware
 from .observability import request_trace
 from .providers import ChromaClientFactory, shutdown_providers
 from .routers import article as article_router
@@ -215,16 +215,17 @@ def create_app() -> FastAPI:
     _maybe_add_timeout_middleware(app)
     app.add_middleware(RequestIDMiddleware)
     # Middleware stack (inner → outer):
-    #   RequestID → AccessLog → RateLimit → TrustedHost → SecurityHeaders → ProxyHeaders
+    #   RequestID → AccessLog → RateLimit → ForwardedHostTrustedHost → SecurityHeaders → ProxyHeaders
     #   （Timeout →）CORSMiddleware がさらに内側に位置する。
     # Starlette では後から追加したミドルウェアが外側で実行される。RequestID で
     # `request_id` を採番し、AccessLog 側で構造化ログとメトリクスを記録する。レート
     # 制限は署名付きセッションクッキーを検証して 429 を返すため外側に配置する。
-    # TrustedHost は Host ヘッダ偽装をアプリケーション処理よりも前に拒否し、
-    # SecurityHeaders をその外側に配置することで RateLimit や FastAPI の自動レスポンス
-    # にも HSTS/CSP を付与する。最外周の ProxyHeaders で信頼済みプロキシが付与する
-    # X-Forwarded-For/X-Forwarded-Proto を読み替え、AccessLog や RateLimit が実際のクライア
-    # ント IP を参照できるようにしている。
+    # ForwardedHostTrustedHostMiddleware で信頼済みプロキシからの X-Forwarded-Host を
+    # 照合し、Host 偽装をアプリケーション処理より前に拒否する。SecurityHeaders を
+    # その外側に配置することで RateLimit や FastAPI の自動レスポンスにも HSTS/CSP を
+    # 付与する。最外周の ProxyHeaders で信頼済みプロキシが付与する X-Forwarded-For/
+    # X-Forwarded-Proto を読み替え、AccessLog や RateLimit が実際のクライアント IP を
+    # 参照できるようにしている。
     app.add_middleware(AccessLogAndMetricsMiddleware)
     app.add_middleware(
         RateLimitMiddleware,
@@ -232,8 +233,9 @@ def create_app() -> FastAPI:
         user_capacity_per_minute=settings.rate_limit_per_min_user,
     )
     app.add_middleware(
-        TrustedHostMiddleware,
+        ForwardedHostTrustedHostMiddleware,
         allowed_hosts=configured_hosts,
+        trusted_proxy_ips=configured_proxies,
     )
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
