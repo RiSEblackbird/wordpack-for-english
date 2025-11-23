@@ -32,7 +32,8 @@ release-cloud-run: ENV_FILE ?= .env.deploy
 # release-cloud-run: Firestore インデックス同期 → Cloud Run dry-run → 本番デプロイを一括で行い、
 # `.env.deploy` などの env ファイル存在チェックと dry-run 成功を必須条件にしています。
 release-cloud-run:
-@set -euo pipefail; \
+	@set -euo pipefail; \
+	# 一連のリリース処理で必須パラメータや前提ファイルの欠落を早期に検出する。
 	PROJECT_ID_VALUE="$(PROJECT_ID)"; \
 	REGION_VALUE="$(REGION)"; \
 	ENV_FILE_PATH="$(ENV_FILE)"; \
