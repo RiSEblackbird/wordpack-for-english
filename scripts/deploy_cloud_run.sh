@@ -78,20 +78,22 @@ get_gcloud_config_value() {
   printf '%s' "$value"
 }
 
-# escape_env_value: --set-env-vars へ安全に渡すため、改行やカンマを除去・エスケープします。
-escape_env_value() {
-  local raw trimmed
-  raw="$(printf '%s' "$1" | tr -d '\r\n')"
-  trimmed="${raw//\\/\\\\}"
-  trimmed="${trimmed//,/\\,}"
-  printf '%s' "$trimmed"
-}
-
 # add_env_key: Cloud Run へ渡す環境変数リストを重複なく蓄積します。
 add_env_key() {
   local key="$1"
   [[ -z "$key" ]] && return 0
   DEPLOY_ENV_KEYS["$key"]=1
+}
+
+# escape_yaml_value: Cloud Run の --env-vars-file へ安全に埋め込むため、
+# 文字列中の制御文字や YAML で特別な意味を持つ記号をサニタイズします。
+# " をエスケープし、改行や CR を取り除くことで YAML の一行表現へ正規化します。
+escape_yaml_value() {
+  local raw sanitized
+  raw="$(printf '%s' "$1" | tr -d '\r\n')"
+  sanitized="${raw//\\/\\\\}"
+  sanitized="${sanitized//"/\\"}"
+  printf '%s' "$sanitized"
 }
 
 ENV_FILE=""
@@ -301,29 +303,36 @@ if [[ ${#EXTRA_BUILD_ARGS[@]} -gt 0 ]]; then
 fi
 "${BUILD_CMD[@]}"
 
-log "Preparing --set-env-vars payload"
-ENV_VARS_ARGS=()
-mapfile -t SORTED_DEPLOY_KEYS < <(printf '%s\n' "${!DEPLOY_ENV_KEYS[@]}" | sort)
-for key in "${SORTED_DEPLOY_KEYS[@]}"; do
-  value="${!key-}"
-  [[ -z "$value" ]] && continue
-  escaped="$(escape_env_value "$value")"
-  ENV_VARS_ARGS+=("${key}=${escaped}")
-done
+log "Preparing environment variable file for Cloud Run"
+# Cloud Run では `--set-env-vars KEY=...` がカンマで分割されるため、YAML ファイル経由で一括投入する。
+# mktemp で生成した一時ファイルは trap により終了時に必ず削除し、機密情報がリポジトリへ残らないようにする。
+ENV_VARS_FILE="$(mktemp "${REPO_ROOT}/.cloudrun.env.XXXXXX")"
+cleanup_env_file() {
+  [[ -f "$ENV_VARS_FILE" ]] && rm -f "$ENV_VARS_FILE"
+}
+trap cleanup_env_file EXIT
 
-if [[ ${#ENV_VARS_ARGS[@]} -eq 0 ]]; then
+mapfile -t SORTED_DEPLOY_KEYS < <(printf '%s\n' "${!DEPLOY_ENV_KEYS[@]}" | sort)
+{
+  for key in "${SORTED_DEPLOY_KEYS[@]}"; do
+    value="${!key-}"
+    [[ -z "$value" ]] && continue
+    escaped="$(escape_yaml_value "$value")"
+    printf '%s: "%s"\n' "$key" "$escaped"
+  done
+} >"$ENV_VARS_FILE"
+
+if [[ ! -s "$ENV_VARS_FILE" ]]; then
   err "No environment variables collected for deployment"
   exit 1
 fi
 
-ENV_VARS_STRING=$(IFS=','; printf '%s' "${ENV_VARS_ARGS[*]}")
-
-log "Deploying service ${SERVICE_NAME} to region ${REGION}"
+log "Deploying service ${SERVICE_NAME} to region ${REGION} with env file ${ENV_VARS_FILE}"
 gcloud run deploy "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --image "$IMAGE_URI" \
   --region "$REGION" \
   --allow-unauthenticated \
-  --set-env-vars "$ENV_VARS_STRING"
+  --env-vars-file "$ENV_VARS_FILE"
 
 log "Deployment completed"
