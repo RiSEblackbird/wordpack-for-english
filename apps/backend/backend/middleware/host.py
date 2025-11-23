@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import logging
 from typing import Iterable, Sequence
 from urllib.parse import urlsplit
 
@@ -9,7 +10,6 @@ from starlette.responses import PlainTextResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ..config import settings
-from ..logging import logger
 
 
 class ForwardedHostTrustedHostMiddleware:
@@ -22,6 +22,8 @@ class ForwardedHostTrustedHostMiddleware:
     リバースプロキシ配下でも柔軟に動作させる。
     """
 
+    logger = logging.getLogger("host-check")
+
     def __init__(
         self,
         app: ASGIApp,
@@ -33,7 +35,6 @@ class ForwardedHostTrustedHostMiddleware:
         self._allowed_hosts = self._parse_allowed_hosts(allowed_hosts)
         self._trusted_proxies = self._parse_trusted_proxies(trusted_proxy_ips)
         self._trust_all_proxies = any(entry == "*" for entry in self._trusted_proxies)
-        self._logger = logger
         self._environment = settings.environment
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -46,6 +47,19 @@ class ForwardedHostTrustedHostMiddleware:
         forwarded_host_header = headers.get("x-forwarded-host", "")
         forwarded_for_header = headers.get("x-forwarded-for", "")
         client_ip = scope.get("client", (None, None))[0]
+
+        # 許可判定前に受信ヘッダーの観測ログを残し、トラブルシュート時の手掛かりとする。
+        log_context = {
+            "path": scope.get("path", ""),
+            "raw_host": raw_host_header,
+            "x_forwarded_host": forwarded_host_header,
+            "x_forwarded_for": forwarded_for_header,
+            "client_ip": client_ip,
+            "allowed_hosts": list(self._allowed_hosts),
+        }
+        self.logger.info(
+            "host_check_request context=%s", log_context, extra={"context": log_context}
+        )
 
         # 信頼できるプロキシが先頭に並んでいる場合のみ、転送元のホストを有効とする。
         selected_host = self._select_host(
@@ -113,17 +127,19 @@ class ForwardedHostTrustedHostMiddleware:
     ) -> None:
         """Log the mismatch context and send a 400 response."""
 
-        self._logger.warning(
-            "host_not_allowed",
-            logger="host-check",
-            host=host,
-            raw_host=raw_host,
-            x_forwarded_host=x_forwarded_host,
-            x_forwarded_for=x_forwarded_for,
-            client_ip=client_ip,
-            allowed_hosts=self._allowed_hosts,
-            path=path,
-            environment=self._environment,
+        rejection_context = {
+            "path": path,
+            "selected_host": host,
+            "raw_host": raw_host,
+            "x_forwarded_host": x_forwarded_host,
+            "x_forwarded_for": x_forwarded_for,
+            "client_ip": client_ip,
+            "allowed_hosts": self._allowed_hosts,
+            "environment": self._environment,
+        }
+        # 拒否理由を構造化して残し、調査時に HTTP 経路やヘッダーの差異を追跡しやすくする。
+        self.logger.warning(
+            "host_not_allowed context=%s", rejection_context, extra={"context": rejection_context}
         )
         response = PlainTextResponse("Invalid host header", status_code=400)
         await response(scope, receive, send)
