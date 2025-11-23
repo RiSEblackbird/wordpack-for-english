@@ -163,7 +163,7 @@ cp env.deploy.example .env.deploy
 # コピー後に PROJECT_ID などを本番値へ置き換える
 ```
 
-`.env.deploy`（もしくは `--env-file` で指定したファイル）に本番環境の設定をまとめ、`SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず明示します。`SESSION_SECRET_KEY` は `./scripts/deploy_cloud_run.sh --generate-secret` を付けて実行すると不足時に `openssl rand -base64 <length>` で安全な値へ自動補完できます。
+`.env.deploy`（もしくは `--env-file` で指定したファイル）に本番環境の設定をまとめ、`SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず明示します。複数のホストやオリジンはカンマ区切りで並べるだけで構いません（デプロイスクリプトが `--env-vars-file` 形式へ変換するため追加エスケープ不要）。`SESSION_SECRET_KEY` は `./scripts/deploy_cloud_run.sh --generate-secret` を付けて実行すると不足時に `openssl rand -base64 <length>` で安全な値へ自動補完できます。
 
 ```env
 # .env.deploy の例
