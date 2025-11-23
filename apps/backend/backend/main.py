@@ -36,7 +36,7 @@ from .providers import ChromaClientFactory, shutdown_providers
 from .routers import article as article_router
 from .routers import auth as auth_router
 from .routers import config as cfg
-from .routers import diagnostics, health, tts, word
+from .routers import debug, diagnostics, health, tts, word
 
 
 _PROXY_MIDDLEWARE_PARAM = (
@@ -256,6 +256,7 @@ def create_app() -> FastAPI:
         prefix="/api/article",
         dependencies=protected_dependency,
     )
+    app.include_router(debug.router)
     app.include_router(diagnostics.router)
     app.include_router(health.router)
     app.include_router(cfg.router, prefix="/api")
