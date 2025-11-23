@@ -184,6 +184,11 @@ def _maybe_add_timeout_middleware(app: FastAPI) -> None:
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application instance."""
     configure_logging()
+    logger.info(
+        "ALLOWED_HOSTS init raw=%r parsed=%r",
+        settings.allowed_hosts_raw,
+        settings.allowed_hosts,
+    )
     app = FastAPI(title="WordPack API", version="0.3.1")
 
     configured_proxies = [value for value in settings.trusted_proxy_ips if value]

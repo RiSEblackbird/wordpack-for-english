@@ -1,7 +1,7 @@
 import hashlib
 from typing import Annotated
 
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources.types import NoDecode
 
@@ -264,16 +264,19 @@ class Settings(BaseSettings):
             "forwarded_allow_ips",
         ),
     )
-    allowed_hosts: Annotated[tuple[str, ...], NoDecode] = Field(
-        default=("*",),
+    allowed_hosts_raw: str = Field(
+        default="*",
         description=(
-            "Allowed hosts for TrustedHostMiddleware / TrustedHostMiddleware で許可するホスト名"
+            "Comma separated allowed hosts for TrustedHostMiddleware / "
+            "TrustedHostMiddleware で許可するホスト名（カンマ区切り）"
         ),
         validation_alias=AliasChoices(
             "allowed_hosts",
             "trusted_hosts",
         ),
     )
+
+    _allowed_hosts_values: tuple[str, ...] = PrivateAttr(default_factory=tuple)
 
     # --- Strict mode ---
     strict_mode: bool = Field(
@@ -438,40 +441,36 @@ class Settings(BaseSettings):
 
         return tuple(normalised)
 
-    @field_validator("allowed_hosts", mode="before")
-    @classmethod
-    def _normalise_allowed_hosts(
-        cls, raw_hosts: object
-    ) -> tuple[str, ...] | object:  # pragma: no cover - pydantic handles typing
-        """Normalise allowed hostnames/patterns before TrustedHostMiddleware consumes them.
+    @property
+    def allowed_hosts(self) -> list[str]:
+        """Return a parsed list of allowed hosts for middleware consumption.
 
-        なぜ: TrustedHostMiddleware の許可リストに空白や重複を残すと、
-        想定外のホストヘッダを許可したり、必要なドメインを拒否する恐れがある。
-        あらかじめトリムと重複排除を行い、安全なホスト配列を構成する。
+        なぜ: 設定入力は文字列として受け取りつつ、ミドルウェアではリストを
+        要求するため、初期化時に正規化したリストを公開し、外部からの利用者に
+        型の差異を意識させない。
+        """
+
+        return list(self._allowed_hosts_values)
+
+    @field_validator("allowed_hosts_raw", mode="before")
+    @classmethod
+    def _coerce_allowed_hosts_raw(cls, raw_hosts: object) -> str | object:
+        """Accept sequences for allowed hosts and normalise to comma strings.
+
+        なぜ: 既存設定との互換性を維持しつつ、環境変数や .env にリスト形式で
+        記述された値も受け付けるため。ミドルウェアでの利用前に文字列へ統一し、
+        予期しない型をそのまま返すことで Pydantic による型検証へ委ねる。
         """
 
         if raw_hosts is None:
-            candidates: list[str] = []
-        elif isinstance(raw_hosts, str):
-            candidates = raw_hosts.split(",")
-        else:
-            try:
-                candidates = list(raw_hosts)
-            except TypeError:
-                return raw_hosts
-
-        normalised: list[str] = []
-        seen: set[str] = set()
-        for candidate in candidates:
-            if not isinstance(candidate, str):
-                continue
-            trimmed = candidate.strip()
-            if not trimmed or trimmed in seen:
-                continue
-            seen.add(trimmed)
-            normalised.append(trimmed)
-
-        return tuple(normalised)
+            return ""
+        if isinstance(raw_hosts, str):
+            return raw_hosts
+        try:
+            candidates = list(raw_hosts)
+        except TypeError:
+            return raw_hosts
+        return ",".join(candidates)
 
     @field_validator(
         "security_csp_default_src",
@@ -513,6 +512,28 @@ class Settings(BaseSettings):
 
         return tuple(normalised)
 
+    @staticmethod
+    def _parse_allowed_hosts(raw_hosts: str) -> tuple[str, ...]:
+        """Parse and deduplicate allowed hosts from comma separated input.
+
+        なぜ: Host ヘッダの許可リストに重複や空要素が混入すると、意図しない
+        ホスト偽装を許してしまう可能性がある。起動時にトリムと重複排除を行い、
+        ミドルウェアへ安全な値を渡す。"""
+
+        if not raw_hosts:
+            return tuple()
+
+        normalised: list[str] = []
+        seen: set[str] = set()
+        for candidate in raw_hosts.split(","):
+            trimmed = candidate.strip()
+            if not trimmed or trimmed in seen:
+                continue
+            seen.add(trimmed)
+            normalised.append(trimmed)
+
+        return tuple(normalised)
+
     @model_validator(mode="after")
     def _apply_environment_sensitive_defaults(self) -> "Settings":
         """Harmonise environment defaults without overriding explicit choices.
@@ -526,6 +547,8 @@ class Settings(BaseSettings):
         """
 
         environment_name = (self.environment or "").lower()
+        parsed_allowed_hosts = self._parse_allowed_hosts(self.allowed_hosts_raw)
+        self._allowed_hosts_values = parsed_allowed_hosts
         is_secure_explicitly_configured = "session_cookie_secure" in self.model_fields_set
         if environment_name == "production" and not is_secure_explicitly_configured:
             self.session_cookie_secure = True
@@ -545,7 +568,7 @@ class Settings(BaseSettings):
                     "TRUSTED_PROXY_IPS must be configured in production (e.g. 35.191.0.0/16,130.211.0.0/22)"
                 )
 
-        allowed_hosts = tuple(self.allowed_hosts or ())
+        allowed_hosts = parsed_allowed_hosts
         # なぜ: Cloud Run 等の本番環境でワイルドカード Host を許可すると、
         #      Host ヘッダ偽装や別ドメインからの CSRF が成立する恐れがある。
         #      既定の `*` から切り替えられていない場合は早期に失敗させ、
