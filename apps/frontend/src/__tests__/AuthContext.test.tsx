@@ -16,12 +16,11 @@ const MissingFlagProbe: React.FC = () => {
   return <span data-testid="client-flag">{missingClientId ? 'missing' : 'ok'}</span>;
 };
 
+// 認証コンテキストが ID トークンを公開していないことを検知するための専用プローブ。
+// hasOwnProperty を直接用いることで、余計な型キャストを避けつつ漏洩有無を判定する。
 const TokenLeakProbe: React.FC = () => {
   const contextValue = useAuth();
-  const hasTokenKey = Object.prototype.hasOwnProperty.call(
-    contextValue as Record<string, unknown>,
-    'token',
-  );
+  const hasTokenKey = Object.prototype.hasOwnProperty.call(contextValue, 'token');
   return <span data-testid="token-leak">{hasTokenKey ? 'leaked' : 'clean'}</span>;
 };
 
