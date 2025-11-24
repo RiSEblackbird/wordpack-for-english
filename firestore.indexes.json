@@ -31,10 +31,10 @@
       "collectionGroup": "examples",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "word_pack_id", "order": "ASCENDING" },
         { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "word_pack_id", "order": "ASCENDING" },
         { "fieldPath": "position", "order": "DESCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
+        { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
     },
     {
