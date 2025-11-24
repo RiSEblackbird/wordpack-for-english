@@ -152,6 +152,36 @@ def test_request_complete_log_contains_request_id() -> None:
     assert data.get("request_id"), data
 
 
+def test_request_complete_log_contains_status_code() -> None:
+    """成功レスポンスのステータスコードをログへ含めることを検証する。"""
+
+    buf_out = io.StringIO()
+    buf_err = io.StringIO()
+
+    with redirect_stdout(buf_out), redirect_stderr(buf_err):
+        with _use_fake_settings():
+            from backend.logging import configure_logging
+
+            configure_logging()
+
+            from fastapi.testclient import TestClient
+
+            from backend.main import app
+
+            with TestClient(app) as client:
+                response = client.get("/healthz")
+
+            assert response.status_code == 200
+
+    raw = buf_err.getvalue().strip() or buf_out.getvalue().strip()
+    request_lines = _extract_request_complete_lines(raw)
+
+    assert request_lines, "request_complete log line not found"
+
+    data = json.loads(request_lines[-1])
+    assert data.get("status_code") == 200
+
+
 def test_sensitive_values_are_masked_in_logs() -> None:
     # Arrange
     buf_out = io.StringIO()
@@ -256,5 +286,41 @@ def test_trace_fields_omitted_without_project_id() -> None:
     assert "trace" not in data
     assert "spanId" not in data
     assert "trace_sampled" not in data
+
+
+def test_request_log_records_error_context() -> None:
+    """失敗リクエストでも構造化ログへエラー要約を残す。"""
+
+    buf_out = io.StringIO()
+    buf_err = io.StringIO()
+
+    with redirect_stdout(buf_out), redirect_stderr(buf_err):
+        with _use_fake_settings():
+            from backend.logging import configure_logging
+
+            configure_logging()
+
+            from fastapi.testclient import TestClient
+
+            from backend.main import app
+
+            @app.get("/boom")
+            async def boom() -> None:  # pragma: no cover - 呼び出し側で検証
+                raise RuntimeError("intentional failure")
+
+            client = TestClient(app, raise_server_exceptions=False)
+            response = client.get("/boom")
+
+            assert response.status_code == 500
+
+    raw = buf_err.getvalue().strip() or buf_out.getvalue().strip()
+    request_lines = _extract_request_complete_lines(raw)
+
+    assert request_lines, "request_complete log line not found"
+
+    data = json.loads(request_lines[-1])
+    assert data.get("status_code") == 500
+    assert data.get("error_type") == "RuntimeError"
+    assert "intentional failure" in data.get("error_message", "")
 
 
