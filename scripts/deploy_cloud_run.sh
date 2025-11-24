@@ -2,21 +2,25 @@
 set -euo pipefail
 
 # このスクリプトは Cloud Run へのデプロイを自動化し、
-# 1) .env/.env.deploy から設定を読み込む
-# 2) Python の設定ローダーでバリデーションする
-# 3) gcloud builds submit → gcloud run deploy を実行する
-# --dry-run を付けると 1) と 2) のみを実行して早期検知ができます。
+# ざっくり次の 3 段階をまとめて実行します。
+#   1) `.env.deploy` などから環境変数を読み込み、欠けている設定がないか確認する
+#   2) Python 側の設定ローダーを呼び出して、値の形式や必須項目をバリデーションする
+#   3) Cloud Build でコンテナイメージをビルドし、Cloud Run へデプロイする
+# `--dry-run` を付けると 1) と 2) だけを実行し、実際のビルド/デプロイは行いません。
+# 「設定だけ先にチェックしたい」ときは dry-run を使う、というイメージです。
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "$REPO_ROOT"
 
-# log: RFC3339 timestamp付きで情報ログを整形します。
+# log: デプロイの進捗を1行ずつ表示するシンプルなロガーです。
+# いつ・どの処理を実行しているかを追いやすくするために使います。
 log() {
   printf '[%s] %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$*"
 }
 
-# err: エラーを stderr へ出力して失敗理由を即座に共有します。
+# err: エラーを標準エラー出力へ出しつつ、分かりやすいメッセージで止めます。
+# 「何が足りないか」を人間がすぐ読めるようにするための小さなヘルパーです。
 err() {
   printf 'Error: %s\n' "$*" >&2
 }
@@ -45,7 +49,9 @@ Options:
 USAGE
 }
 
-# require_cmd: コマンドが存在しない場合は即終了し、失敗を後段へ伝搬させます。
+# require_cmd: 必要なコマンドがインストールされているかを確認します。
+# 例: gcloud / firebase / python / git などが無いと、途中でコケて原因が分かりにくく
+# なるため、最初にチェックして「このコマンドを入れてください」と案内します。
 require_cmd() {
   local cmd="$1"
   if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -54,7 +60,8 @@ require_cmd() {
   fi
 }
 
-# ensure_gcloud: gcloud が必要な処理（フォールバック/本番デプロイ）の前に一度だけ存在を確認します。
+# ensure_gcloud: gcloud を使う前に一度だけ存在確認をします。
+# gcloud を複数回チェックしないよう、フラグで一度きりにしています。
 ensure_gcloud() {
   if [[ "${GCLOUD_CMD_CHECKED:-false}" != true ]]; then
     require_cmd gcloud
@@ -62,7 +69,8 @@ ensure_gcloud() {
   fi
 }
 
-# get_gcloud_config_value: gcloud の設定から値を安全に取得します。未設定時は空文字を返します。
+# get_gcloud_config_value: gcloud の設定から project や region を読み取るヘルパーです。
+# `.env.deploy` に書かれていない場合でも、gcloud の既定値をうまく再利用できます。
 get_gcloud_config_value() {
   local key="$1"
   ensure_gcloud
@@ -78,16 +86,18 @@ get_gcloud_config_value() {
   printf '%s' "$value"
 }
 
-# add_env_key: Cloud Run へ渡す環境変数リストを重複なく蓄積します。
+# add_env_key: Cloud Run に渡す環境変数の「キー一覧」を集める関数です。
+# 実際の値は `.env.deploy` から読み込みますが、ここでは「どのキーを送るか」だけ
+# を覚えておき、あとで YAML 形式の env ファイルを組み立てるときに使います。
 add_env_key() {
   local key="$1"
   [[ -z "$key" ]] && return 0
   DEPLOY_ENV_KEYS["$key"]=1
 }
 
-# escape_yaml_value: Cloud Run の --env-vars-file へ安全に埋め込むため、
-# 文字列中の制御文字や YAML で特別な意味を持つ記号をサニタイズします。
-# " をエスケープし、改行や CR を取り除くことで YAML の一行表現へ正規化します。
+# escape_yaml_value: Cloud Run の `--env-vars-file` へ値を書き込むときに使います。
+# YAML は改行や " に特別な意味があるため、ここで安全な形（1行の文字列）に
+# 変換してからファイルに出力します。
 escape_yaml_value() {
   local raw sanitized
   raw="$(printf '%s' "$1" | tr -d '\r\n')"
@@ -113,6 +123,8 @@ declare -A DEPLOY_ENV_KEYS=()
 declare -a IGNORE_DEPLOY_KEYS=(PROJECT_ID REGION CLOUD_RUN_SERVICE ARTIFACT_REPOSITORY IMAGE_TAG MACHINE_TYPE BUILD_TIMEOUT)
 GCLOUD_CMD_CHECKED=false
 
+# コマンドライン引数のパース。
+# たとえば `--project-id` や `--region` などを受け取って、内部変数へ格納します。
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --project-id)
@@ -175,6 +187,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# どの env ファイルを使うか決める。
+# 明示指定がなければ、まず `.env.deploy`、無ければ `.env` を探します。
 if [[ -z "$ENV_FILE" ]]; then
   if [[ -f ".env.deploy" ]]; then
     ENV_FILE=".env.deploy"
@@ -196,6 +210,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+# ここで env ファイルを読み込み、以降の処理からは通常の環境変数として扱います。
 log "Loading environment variables from $ENV_FILE"
 set -a
 # shellcheck disable=SC1090
@@ -209,6 +224,9 @@ if [[ -z "${ENVIRONMENT:-}" ]]; then
 fi
 export ENVIRONMENT
 
+# セッション用の秘密鍵が空なら、自動生成する。
+# 本番では十分な長さのランダム文字列が必須のため、開発者が入れ忘れても
+# `--generate-secret` かこの自動分岐で安全な値が作られます。
 if [[ "$GENERATE_SECRET" == true || -z "${SESSION_SECRET_KEY:-}" ]]; then
   if [[ "$GENERATE_SECRET" == false ]]; then
     log "SESSION_SECRET_KEY is missing; enabling --generate-secret automatically"
@@ -269,6 +287,8 @@ for ignore_key in "${IGNORE_DEPLOY_KEYS[@]}"; do
   unset "DEPLOY_ENV_KEYS[$ignore_key]"
 done
 
+# ここで「絶対に必要な環境変数」がすべて埋まっているか確認します。
+# 1つでも欠けている場合は、この段階で止めて原因をはっきり出すようにします。
 for required_key in ADMIN_EMAIL_ALLOWLIST SESSION_SECRET_KEY CORS_ALLOWED_ORIGINS TRUSTED_PROXY_IPS ALLOWED_HOSTS; do
   if [[ -z "${!required_key:-}" ]]; then
     err "$required_key must be set in $ENV_FILE or environment"
@@ -276,21 +296,29 @@ for required_key in ADMIN_EMAIL_ALLOWLIST SESSION_SECRET_KEY CORS_ALLOWED_ORIGIN
   fi
 done
 
+# ここから先は、デプロイに必要な Git / Python / gcloud を使っていきます。
 require_cmd git
 IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"
 IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}:${IMAGE_TAG}"
 
+# Python 側の設定（Pydantic モデル）を一度ロードして、値が正しいかチェックします。
+# ここで失敗すれば Cloud Build へ進まないため、「壊れた設定で本番デプロイ」は防げます。
 require_cmd python
 log "Validating backend settings via python -m apps.backend.backend.config"
 PYTHONPATH="$REPO_ROOT" python -m apps.backend.backend.config >/dev/null
 log "Backend configuration validated successfully"
 
+# dry-run モードでは Cloud Build / Cloud Run には触らず、
+# 「設定読み込み〜バリデーション」までを実行して即終了します。
 if [[ "$DRY_RUN" == true ]]; then
   log "Dry run mode: skipping gcloud build/deploy"
   log "Prepared image URI: $IMAGE_URI"
   exit 0
 fi
 
+# Firestore インデックスの同期フェーズ。
+# 既に CI などで同期済みの環境では `SKIP_FIRESTORE_INDEX_SYNC=true` を付けて
+# スキップすることもできます。
 if [[ "${SKIP_FIRESTORE_INDEX_SYNC:-false}" == "true" ]]; then
   log "Skipping Firestore index sync because SKIP_FIRESTORE_INDEX_SYNC=true"
 else
@@ -300,6 +328,8 @@ fi
 
 ensure_gcloud
 
+# Cloud Build にソースコードを送って Docker イメージをビルドします。
+# IMAGE_URI には「リージョン + Artifact Registry + イメージタグ」が入っています。
 log "Submitting build to Cloud Build: $IMAGE_URI"
 # gcloud builds submit は Dockerfile パス指定用の --file を受け付けないため、
 # リポジトリルートの Dockerfile（Dockerfile.backend へのシンボリックリンク）を利用する。
@@ -312,8 +342,10 @@ fi
 "${BUILD_CMD[@]}"
 
 log "Preparing environment variable file for Cloud Run"
-# Cloud Run では `--set-env-vars KEY=...` がカンマで分割されるため、YAML ファイル経由で一括投入する。
-# mktemp で生成した一時ファイルは trap により終了時に必ず削除し、機密情報がリポジトリへ残らないようにする。
+# Cloud Run の `--set-env-vars` はカンマ区切りで扱いが難しいため、
+# 一旦 YAML 形式の一時ファイルを作り、`--env-vars-file` でまとめて適用します。
+# mktemp で生成した一時ファイルは trap により必ず削除し、秘密情報が
+# リポジトリやディスク上に残らないようにします。
 ENV_VARS_FILE="$(mktemp "${REPO_ROOT}/.cloudrun.env.XXXXXX")"
 cleanup_env_file() {
   [[ -f "$ENV_VARS_FILE" ]] && rm -f "$ENV_VARS_FILE"
