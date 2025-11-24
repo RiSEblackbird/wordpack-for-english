@@ -16,10 +16,18 @@ export interface FetchJsonOptions {
   body?: unknown;
   signal?: AbortSignal;
   timeoutMs?: number;
+  credentials?: RequestCredentials;
 }
 
 export async function fetchJson<T = any>(url: string, options: FetchJsonOptions = {}): Promise<T> {
-  const { method = 'GET', headers = {}, body, signal, timeoutMs = 15000 } = options;
+  const {
+    method = 'GET',
+    headers = {},
+    body,
+    signal,
+    timeoutMs = 15000,
+    credentials = 'include',
+  } = options;
 
   const ctrl = new AbortController();
   const onAbort = () => ctrl.abort();
@@ -43,6 +51,7 @@ export async function fetchJson<T = any>(url: string, options: FetchJsonOptions 
         : { 'Cache-Control': 'no-store, no-cache', Pragma: 'no-cache', ...headers },
       // fetch の request キャッシュも無効化
       cache: 'no-store',
+      credentials,
       body: body ? JSON.stringify(body) : undefined,
       signal: ctrl.signal,
     });
