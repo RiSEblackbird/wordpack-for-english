@@ -555,6 +555,141 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 seen.add(key)
         return uniq
 
+    def _link_or_create_wordpacks_state(
+        self, lemmas: list[str]
+    ) -> tuple[list[ArticleWordPackLink], list[str]]:
+        """WordPack 紐付けとフォールバックの実装本体。
+
+        新規メンバーでも追えるように、検索（既存確認）→プレースホルダー作成→
+        is_empty 推定の順で記述する。Firestore 障害時でも例外を外へ漏らさず、
+        構造化ログとユーザー向け警告メッセージを返す。
+        """
+
+        links: list[ArticleWordPackLink] = []
+        warnings: list[str] = []
+
+        for lemma in lemmas:
+            normalized = str(lemma or "").strip()
+            if not normalized:
+                continue
+
+            warning_msg: str | None = None
+            lookup_error = False
+            try:
+                lookup_result = store.find_word_pack_id_by_lemma(
+                    normalized, diagnostics=True
+                )
+                if isinstance(lookup_result, tuple):
+                    wp_id, lookup_error = lookup_result
+                else:
+                    wp_id = lookup_result
+            except Exception as exc:  # pragma: no cover - defensive guard
+                lookup_error = True
+                wp_id = None
+                warning_msg = (
+                    f"{normalized}: 既存の WordPack 検索に失敗したためプレースホルダー"
+                    "を作成しました。ネットワーク復旧後に再確認してください。"
+                )
+                logger.warning(
+                    "article_link_wordpack_lookup_failed",
+                    lemma=normalized,
+                    error=str(exc),
+                    error_class=exc.__class__.__name__,
+                )
+
+            status = "existing"
+            if wp_id is None:
+                empty_word_pack = WordPack(
+                    lemma=normalized,
+                    sense_title=choose_sense_title(None, [], lemma=normalized, limit=20),
+                    pronunciation={
+                        "ipa_GA": None,
+                        "ipa_RP": None,
+                        "syllables": None,
+                        "stress_index": None,
+                        "linking_notes": [],
+                    },
+                    senses=[],
+                    collocations={
+                        "general": {
+                            "verb_object": [],
+                            "adj_noun": [],
+                            "prep_noun": [],
+                        },
+                        "academic": {
+                            "verb_object": [],
+                            "adj_noun": [],
+                            "prep_noun": [],
+                        },
+                    },
+                    contrast=[],
+                    examples={
+                        "Dev": [],
+                        "CS": [],
+                        "LLM": [],
+                        "Business": [],
+                        "Common": [],
+                    },
+                    etymology={"note": "-", "confidence": "low"},
+                    study_card="",
+                    citations=[],
+                    confidence="low",
+                )
+                wp_id = generate_word_pack_id()
+
+                try:
+                    store.save_word_pack(wp_id, normalized, empty_word_pack.model_dump_json())
+                    status = "created"
+                    if lookup_error and warning_msg is None:
+                        warning_msg = (
+                            f"{normalized}: Firestore 検索が不安定だったため、"
+                            "プレースホルダーを生成しました。内容を後で補完してください。"
+                        )
+                except Exception as exc:
+                    warning_msg = (
+                        f"{normalized}: WordPack を作成できなかったためリンクをスキップ"
+                        "しました。再実行または手動登録を検討してください。"
+                    )
+                    logger.error(
+                        "article_link_wordpack_save_failed",
+                        lemma=normalized,
+                        error=str(exc),
+                        error_class=exc.__class__.__name__,
+                    )
+                    warnings.append(warning_msg)
+                    continue
+
+            is_empty = True
+            try:
+                result = store.get_word_pack(wp_id)
+                if result is not None:
+                    _, data_json, _, _ = result
+                    d = json.loads(data_json)
+                    senses_empty = not d.get("senses")
+                    ex = d.get("examples") or {}
+                    examples_empty = all(
+                        not (ex.get(k) or [])
+                        for k in ["Dev", "CS", "LLM", "Business", "Common"]
+                    )
+                    study_empty = not bool((d.get("study_card") or "").strip())
+                    is_empty = bool(senses_empty and examples_empty and study_empty)
+            except Exception:
+                is_empty = True
+
+            links.append(
+                ArticleWordPackLink(
+                    word_pack_id=wp_id,
+                    lemma=normalized,
+                    status=status,
+                    is_empty=is_empty,
+                    warning=warning_msg,
+                )
+            )
+            if warning_msg:
+                warnings.append(warning_msg)
+
+        return links, warnings
+
     def run(self, req: ArticleImportRequest) -> ArticleDetailResponse:
         if not req.text or not req.text.strip():
             logger.info("article_import_empty_text")
@@ -756,94 +891,23 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
 
             def _link_or_create_wordpacks(s: _ArticleState) -> _ArticleState:
                 lemmas = s.get("lemmas", [])
-                links: list[ArticleWordPackLink] = []
                 with span(
                     trace=None,
                     name="article.link_or_create_wordpacks",
                     input={"lemma_count": len(lemmas)},
                 ):
-                    for lemma in lemmas:
-                        wp_id = store.find_word_pack_id_by_lemma(lemma)
-                        status = "existing"
-                        if wp_id is None:
-                            empty_word_pack = WordPack(
-                                lemma=lemma,
-                                sense_title=choose_sense_title(
-                                    None, [], lemma=lemma, limit=20
-                                ),
-                                pronunciation={
-                                    "ipa_GA": None,
-                                    "ipa_RP": None,
-                                    "syllables": None,
-                                    "stress_index": None,
-                                    "linking_notes": [],
-                                },
-                                senses=[],
-                                collocations={
-                                    "general": {
-                                        "verb_object": [],
-                                        "adj_noun": [],
-                                        "prep_noun": [],
-                                    },
-                                    "academic": {
-                                        "verb_object": [],
-                                        "adj_noun": [],
-                                        "prep_noun": [],
-                                    },
-                                },
-                                contrast=[],
-                                examples={
-                                    "Dev": [],
-                                    "CS": [],
-                                    "LLM": [],
-                                    "Business": [],
-                                    "Common": [],
-                                },
-                                etymology={"note": "-", "confidence": "low"},
-                                study_card="",
-                                citations=[],
-                                confidence="low",
-                            )
-                            wp_id = generate_word_pack_id()
-                            store.save_word_pack(
-                                wp_id, lemma, empty_word_pack.model_dump_json()
-                            )
-                            status = "created"
-                        is_empty = True
-                        try:
-                            result = store.get_word_pack(wp_id)
-                            if result is not None:
-                                _, data_json, _, _ = result
-                                d = json.loads(data_json)
-                                senses_empty = not d.get("senses")
-                                ex = d.get("examples") or {}
-                                examples_empty = all(
-                                    not (ex.get(k) or [])
-                                    for k in ["Dev", "CS", "LLM", "Business", "Common"]
-                                )
-                                study_empty = not bool(
-                                    (d.get("study_card") or "").strip()
-                                )
-                                is_empty = bool(
-                                    senses_empty and examples_empty and study_empty
-                                )
-                        except Exception:
-                            is_empty = True
-                        links.append(
-                            ArticleWordPackLink(
-                                word_pack_id=wp_id,
-                                lemma=lemma,
-                                status=status,
-                                is_empty=is_empty,
-                            )
-                        )
+                    links, warnings = self._link_or_create_wordpacks_state(lemmas)
                 s["links"] = links
+                if warnings:
+                    existing = list(s.get("warnings", []))
+                    s["warnings"] = [*existing, *warnings]
                 created = sum(1 for l in links if l.status == "created")
                 logger.info(
                     "article_import_link_or_create_done",
                     total=len(links),
                     created=created,
                     existing=len(links) - created,
+                    warnings=len(warnings),
                 )
                 return s
 
@@ -1156,6 +1220,15 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 ArticleWordPackLink(word_pack_id=wp, lemma=lm, status=st, is_empty=True)
                 for (wp, lm, st) in links
             ]
+            warning_map: dict[str, str] = {}
+            try:
+                warning_map = {
+                    l.word_pack_id: str(l.warning)
+                    for l in s.get("links", [])
+                    if getattr(l, "warning", None)
+                }
+            except Exception:
+                warning_map = {}
             # is_empty はUI用の推定のため簡易再判定
             try:
                 for i, (wp, lm, st) in enumerate(links):
@@ -1178,6 +1251,8 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                     except Exception:
                         is_empty = True
                     link_models[i].is_empty = is_empty
+                    if warning_map.get(wp):
+                        link_models[i].warning = warning_map[wp]
             except Exception:
                 # is_empty の再計算に失敗しても致命ではない
                 pass
@@ -1202,6 +1277,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                     and not isinstance(generation_duration_ms_db, bool)
                     else None
                 ),
+                warnings=list(s.get("warnings", []) or []) or None,
             )
         except HTTPException:
             raise

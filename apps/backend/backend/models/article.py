@@ -43,6 +43,9 @@ class ArticleWordPackLink(BaseModel):
     lemma: str
     status: str = Field(description="existing|created")
     is_empty: bool = Field(default=False, description="WordPackが空かどうか（UI用）")
+    warning: str | None = Field(
+        default=None, description="WordPack 紐付け時の警告やフォールバック理由"
+    )
 
 
 class Article(BaseModel):
@@ -68,6 +71,9 @@ class ArticleDetailResponse(Article):
     id: str
     created_at: str
     updated_at: str
+    warnings: list[str] | None = Field(
+        default=None, description="インポート時に発生した警告メッセージの一覧"
+    )
 
 
 class ArticleListItem(BaseModel):

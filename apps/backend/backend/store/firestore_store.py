@@ -8,9 +8,11 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
+from google.api_core import exceptions as gexc
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore
 
+from ..logging import logger
 from ..sense_title import choose_sense_title
 from .common import normalize_non_negative_int
 from .examples import EXAMPLE_CATEGORIES, iter_example_rows
@@ -143,6 +145,7 @@ class FirestoreWordPackStore(FirestoreBaseStore):
     """WordPack 本体と lemma 情報を Firestore で管理する。"""
 
     _EXAMPLE_DELETE_BATCH_SIZE = 450
+    _WORD_PACK_LOOKUP_RETRIES = 1
 
     def __init__(self, client: firestore.Client):
         super().__init__(client)
@@ -346,17 +349,55 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             )
         return next_checked, next_learned
 
-    def find_word_pack_id_by_lemma(self, lemma: str) -> str | None:
+    def find_word_pack_id_by_lemma(
+        self, lemma: str, *, diagnostics: bool = False
+    ) -> str | None | tuple[str | None, bool]:
+        """大文字小文字を無視した lemma で WordPack ID を検索する。"""
+
         target = str(lemma or "").strip().lower()
-        # lemma_label_lower の等価フィルタと更新日時降順の複合クエリで最新1件のみを取得し、全件走査を避ける。
-        query = (
-            self._word_packs.where("lemma_label_lower", "==", target)
-            .order_by("updated_at", direction=firestore.Query.DESCENDING)
-            .limit(1)
-        )
-        for doc in query.stream():
-            return doc.id
-        return None
+        last_error: Exception | None = None
+
+        for attempt in range(self._WORD_PACK_LOOKUP_RETRIES + 1):
+            try:
+                # lemma_label_lower の等価フィルタと更新日時降順の複合クエリで最新1件のみを取得し、全件走査を避ける。
+                query = (
+                    self._word_packs.where("lemma_label_lower", "==", target)
+                    .order_by("updated_at", direction=firestore.Query.DESCENDING)
+                    .limit(1)
+                )
+                for doc in query.stream():
+                    return (doc.id, last_error is not None) if diagnostics else doc.id
+                return (None, last_error is not None) if diagnostics else None
+            except gexc.GoogleAPIError as exc:
+                last_error = exc
+                logger.warning(
+                    "firestore_wordpack_lookup_retry",
+                    lemma=target,
+                    attempt=attempt + 1,
+                    error=str(exc),
+                    error_class=exc.__class__.__name__,
+                )
+                continue
+            except Exception as exc:  # pragma: no cover - defensive guardrail
+                last_error = exc
+                logger.error(
+                    "firestore_wordpack_lookup_error",
+                    lemma=target,
+                    attempt=attempt + 1,
+                    error=str(exc),
+                    error_class=exc.__class__.__name__,
+                )
+                break
+
+        if last_error is not None:
+            logger.error(
+                "firestore_wordpack_lookup_give_up",
+                lemma=target,
+                attempts=self._WORD_PACK_LOOKUP_RETRIES + 1,
+                error=str(last_error),
+                error_class=last_error.__class__.__name__,
+            )
+        return (None, last_error is not None) if diagnostics else None
 
     def find_word_pack_by_lemma_ci(self, lemma: str) -> tuple[str, str, str] | None:
         target = str(lemma or "").strip().lower()
@@ -1238,8 +1279,12 @@ class AppFirestoreStore:
             word_pack_id, checked_increment, learned_increment
         )
 
-    def find_word_pack_id_by_lemma(self, lemma: str) -> str | None:
-        return self.wordpacks.find_word_pack_id_by_lemma(lemma)
+    def find_word_pack_id_by_lemma(
+        self, lemma: str, *, diagnostics: bool = False
+    ) -> str | None | tuple[str | None, bool]:
+        return self.wordpacks.find_word_pack_id_by_lemma(
+            lemma, diagnostics=diagnostics
+        )
 
     def find_word_pack_by_lemma_ci(self, lemma: str) -> tuple[str, str, str] | None:
         return self.wordpacks.find_word_pack_by_lemma_ci(lemma)
