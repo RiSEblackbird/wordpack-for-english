@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+import uuid
 
 from google.cloud import firestore
 
@@ -255,24 +256,75 @@ class FakeAggregationResult:
         return self.aggregate_fields[key]
 
 
+_TRANSACTION_NOT_IN_PROGRESS = "Transaction not in progress, cannot be used in API requests."
+
+
 class FakeTransaction:
     def __init__(self, client: "FakeFirestoreClient") -> None:
         self._client = client
+        self._in_progress = False
+        self._id: str | None = None
+
+    @property
+    def in_progress(self) -> bool:
+        return self._in_progress
+
+    @property
+    def id(self) -> str | None:
+        return self._id
+
+    def __enter__(self) -> "FakeTransaction":  # pragma: no cover - helper
+        self._begin()
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - helper
+        try:
+            if exc_type is None:
+                self._commit()
+            else:
+                self._rollback()
+        except ValueError:
+            pass
+
+    def _clean_up(self) -> None:
+        self._in_progress = False
+        self._id = None
+
+    def _begin(self) -> None:
+        if self._in_progress:
+            raise ValueError("Transaction already in progress.")
+        self._in_progress = True
+        self._id = f"fake-txn-{uuid.uuid4().hex}"
+
+    def _rollback(self) -> None:
+        if not self._in_progress:
+            raise ValueError(_TRANSACTION_NOT_IN_PROGRESS)
+        self._clean_up()
+
+    def _commit(self) -> None:
+        if not self._in_progress:
+            raise ValueError(_TRANSACTION_NOT_IN_PROGRESS)
+        self._clean_up()
+
+    def _ensure_active(self) -> None:
+        if not self._in_progress:
+            raise ValueError(_TRANSACTION_NOT_IN_PROGRESS)
 
     def get(self, doc_ref: FakeDocumentReference) -> FakeDocumentSnapshot:
+        self._ensure_active()
         return doc_ref.get()
 
     def create(self, doc_ref: FakeDocumentReference, data: dict[str, Any]) -> None:
+        self._ensure_active()
         doc_ref.create(data)
 
     def set(self, doc_ref: FakeDocumentReference, data: dict[str, Any], merge: bool = False) -> None:
+        self._ensure_active()
         doc_ref.set(data, merge=merge)
 
     def update(self, doc_ref: FakeDocumentReference, data: dict[str, Any]) -> None:
+        self._ensure_active()
         doc_ref.update(data)
-
-    def commit(self) -> None:  # pragma: no cover - no-op
-        return None
 
 
 class FakeWriteBatch:

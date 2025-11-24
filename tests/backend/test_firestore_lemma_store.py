@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from google.api_core.exceptions import AlreadyExists
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
 
@@ -244,3 +245,27 @@ def test_upsert_handles_transaction_get_generator():
     assert lemma_id == "resilient"
     stored = client.collection("lemmas")._docs
     assert stored[lemma_id]["label"] == "Resilient"
+
+
+def test_upsert_falls_back_when_transaction_get_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = FakeFirestoreClient()
+    store = FirestoreWordPackStore(client)  # type: ignore[arg-type]
+    now = datetime.now(UTC).isoformat()
+
+    class BrokenTransaction(FakeTransaction):
+        def get(self, reference):  # type: ignore[override]
+            raise ValueError("Transaction not in progress, cannot be used in API requests.")
+
+    monkeypatch.setattr(client, "transaction", lambda: BrokenTransaction(client))
+
+    lemma_id = store._upsert_lemma(  # pylint: disable=protected-access
+        label="Fallback",
+        sense_title="",
+        llm_model=None,
+        llm_params=None,
+        now=now,
+    )
+
+    assert lemma_id == "fallback"
+    stored = client.collection("lemmas")._docs
+    assert lemma_id in stored

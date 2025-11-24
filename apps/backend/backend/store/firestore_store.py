@@ -575,10 +575,27 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             transaction = self._client.transaction()
         except AttributeError:  # pragma: no cover - defensive fallback
             transaction = None
-        except Exception:  # pragma: no cover - best-effort guard
+        except Exception as exc:  # pragma: no cover - best-effort guard
+            logger.warning(
+                "firestore_allocate_ids_transaction_failed",
+                error=str(exc),
+                error_class=exc.__class__.__name__,
+                stage="init",
+            )
             transaction = None
 
         if transaction is None:
+            return _allocate_without_transaction()
+
+        try:
+            transaction._begin()
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logger.warning(
+                "firestore_allocate_ids_transaction_failed",
+                error=str(exc),
+                error_class=exc.__class__.__name__,
+                stage="begin",
+            )
             return _allocate_without_transaction()
 
         try:
@@ -587,21 +604,29 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             current = int(current_payload.get("next_id", 1))
             ids = list(range(current, current + count))
             transaction.set(counter_ref, {"next_id": current + count}, merge=True)
-            transaction.commit()
+            transaction._commit()
             return ids
         except (ValueError, gexc.GoogleAPIError) as exc:
-            # Firebase/Firestore が "Transaction not in progress" を返すケースがあるため
-            # トランザクション経路が失敗した場合はログを残して即座にフォールバックする。
+            try:
+                transaction._rollback()
+            except Exception:  # pragma: no cover - rollback best-effort
+                pass
             logger.warning(
                 "firestore_allocate_ids_transaction_failed",
                 error=str(exc),
                 error_class=exc.__class__.__name__,
+                stage="body",
             )
         except Exception as exc:  # pragma: no cover - defensive guard
+            try:
+                transaction._rollback()
+            except Exception:  # pragma: no cover - rollback best-effort
+                pass
             logger.warning(
                 "firestore_allocate_ids_transaction_failed",
                 error=str(exc),
                 error_class=exc.__class__.__name__,
+                stage="body",
             )
         return _allocate_without_transaction()
 
@@ -704,20 +729,73 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             transaction = self._client.transaction()
         except AttributeError:  # pragma: no cover - defensive fallback
             transaction = None
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logger.warning(
+                "firestore_upsert_lemma_transaction_failed",
+                label=original_label,
+                normalized_label=normalized,
+                error=str(exc),
+                error_class=exc.__class__.__name__,
+                stage="init",
+            )
+            transaction = None
 
         if transaction is not None:
-            with self._lemma_write_lock:
-                snapshot = _coerce_firestore_snapshot(transaction.get(normalized_ref))
-                if snapshot is not None and snapshot.exists:
-                    return _update_existing(snapshot)
-                try:
-                    transaction.create(normalized_ref, payload)
-                except AlreadyExists:
-                    existing = normalized_ref.get()
-                    if existing.exists:
-                        return _update_existing(existing)
-                transaction.commit()
+            try:
+                transaction._begin()
+            except Exception as exc:  # pragma: no cover - defensive guard
+                logger.warning(
+                    "firestore_upsert_lemma_transaction_failed",
+                    label=original_label,
+                    normalized_label=normalized,
+                    error=str(exc),
+                    error_class=exc.__class__.__name__,
+                    stage="begin",
+                )
+                transaction = None
+
+        if transaction is not None:
+            try:
+                with self._lemma_write_lock:
+                    snapshot = _coerce_firestore_snapshot(transaction.get(normalized_ref))
+                    if snapshot is not None and snapshot.exists:
+                        transaction._rollback()
+                        return _update_existing(snapshot)
+                    try:
+                        transaction.create(normalized_ref, payload)
+                    except AlreadyExists:
+                        transaction._rollback()
+                        existing = normalized_ref.get()
+                        if existing.exists:
+                            return _update_existing(existing)
+                transaction._commit()
                 return normalized_ref.id
+            except (ValueError, gexc.GoogleAPIError) as exc:
+                try:
+                    transaction._rollback()
+                except Exception:  # pragma: no cover - rollback best-effort
+                    pass
+                logger.warning(
+                    "firestore_upsert_lemma_transaction_failed",
+                    label=original_label,
+                    normalized_label=normalized,
+                    error=str(exc),
+                    error_class=exc.__class__.__name__,
+                    stage="body",
+                )
+            except Exception as exc:  # pragma: no cover - defensive guard
+                try:
+                    transaction._rollback()
+                except Exception:  # pragma: no cover - rollback best-effort
+                    pass
+                logger.warning(
+                    "firestore_upsert_lemma_transaction_failed",
+                    label=original_label,
+                    normalized_label=normalized,
+                    error=str(exc),
+                    error_class=exc.__class__.__name__,
+                    stage="body",
+                )
 
         try:
             normalized_ref.create(payload)
