@@ -121,8 +121,12 @@ class AppSQLiteStore:
             word_pack_id, checked_increment, learned_increment
         )
 
-    def find_word_pack_id_by_lemma(self, lemma: str) -> str | None:
-        return self.wordpacks.find_word_pack_id_by_lemma(lemma)
+    def find_word_pack_id_by_lemma(
+        self, lemma: str, *, diagnostics: bool = False
+    ) -> str | None | tuple[str | None, bool]:
+        return self.wordpacks.find_word_pack_id_by_lemma(
+            lemma, diagnostics=diagnostics
+        )
 
     def find_word_pack_by_lemma_ci(
         self, lemma: str

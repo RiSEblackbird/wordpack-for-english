@@ -8,7 +8,9 @@ from typing import Any
 import uuid
 
 import pytest
+from google.api_core import exceptions as gexc
 from google.cloud import firestore
+from structlog.testing import capture_logs
 
 # ルート（apps/backend 配下）をテストから直接解決できるようにする。
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -198,6 +200,55 @@ def test_find_word_pack_lookup_uses_filtered_query(
     assert ("lemma_label_lower", "==", "lemmax") in log[0]["filters"]
     assert log[0]["limit"] == 1
     assert log[0]["size"] == 1
+
+
+def test_find_word_pack_lookup_retries_after_google_api_error(
+    firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GoogleAPIError を補足してリトライする挙動を固定する。"""
+
+    payload = {"lemma": "Resilient", "sense_title": "x", "examples": {}}
+    firestore_store.save_word_pack(
+        "wp-stable", payload["lemma"], json.dumps(payload, ensure_ascii=False)
+    )
+
+    original_stream = FakeQuery.stream
+    attempts = {"count": 0}
+
+    def flaky_stream(self):  # type: ignore[override]
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise gexc.GoogleAPIError("transient")
+        return original_stream(self)
+
+    monkeypatch.setattr(FakeQuery, "stream", flaky_stream)
+
+    with capture_logs() as cap:
+        result = firestore_store.find_word_pack_id_by_lemma("resilient")
+
+    assert result == "wp-stable"
+    assert attempts["count"] == 2
+    retry_logs = [entry for entry in cap if entry.get("event") == "firestore_wordpack_lookup_retry"]
+    assert retry_logs
+    assert retry_logs[0].get("attempt") == 1
+
+
+def test_find_word_pack_lookup_returns_none_after_retries(
+    firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GoogleAPIError が連続した場合は None を返してログを残す。"""
+
+    def failing_stream(self):  # type: ignore[override]
+        raise gexc.GoogleAPIError("permanent failure")
+
+    monkeypatch.setattr(firestore_module.FakeQuery, "stream", failing_stream)
+
+    with capture_logs() as cap:
+        result = firestore_store.find_word_pack_id_by_lemma("unstable")
+
+    assert result is None
+    failure_logs = [entry for entry in cap if entry.get("event") == "firestore_wordpack_lookup_give_up"]
+    assert failure_logs
 
 
 def test_find_word_pack_with_metadata_uses_filtered_query(

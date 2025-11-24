@@ -8,6 +8,7 @@ export interface ArticleWordPackLink {
   lemma: string;
   status: 'existing' | 'created';
   is_empty?: boolean;
+  warning?: string | null;
 }
 
 export interface ArticleDetailData {
@@ -21,6 +22,7 @@ export interface ArticleDetailData {
   llm_params?: string | null;
   generation_category?: 'Dev' | 'CS' | 'LLM' | 'Business' | 'Common' | null;
   related_word_packs: ArticleWordPackLink[];
+  warnings?: string[] | null;
   created_at?: string;
   updated_at?: string;
   generation_started_at?: string | null;
@@ -151,6 +153,8 @@ export const ArticleDetailModal: React.FC<Props> = ({
             }
             .ai-card { border: 1px solid var(--color-border); border-radius: 4px; padding: 0.35rem; background: var(--color-surface); }
             .ai-badge { font-size: 0.68em; padding: 0.06rem 0.3rem; border-radius: 999px; border: 1px solid var(--color-border); }
+            .ai-warnings { border: 1px solid #ffe08a; background: #fff8e1; padding: 0.5rem; border-radius: 4px; }
+            .ai-warnings ul { margin: 0.25rem 0 0 1.2rem; padding: 0; }
           `}</style>
           <div
             style={{
@@ -173,6 +177,16 @@ export const ArticleDetailModal: React.FC<Props> = ({
           <div style={{ whiteSpace: 'pre-wrap', margin: '0.5rem 0' }}>{article.body_ja}</div>
           {article.notes_ja ? (
             <div style={{ marginTop: '0.5rem', color: 'var(--color-subtle)' }}>{article.notes_ja}</div>
+          ) : null}
+          {article.warnings && article.warnings.length > 0 ? (
+            <div className="ai-warnings" role="alert" aria-label="import-warnings">
+              <strong>警告</strong>
+              <ul>
+                {article.warnings.map((w, idx) => (
+                  <li key={`warn-${idx}`}>{w}</li>
+                ))}
+              </ul>
+            </div>
           ) : null}
           <h4>関連WordPack</h4>
           <div className="ai-wp-grid">

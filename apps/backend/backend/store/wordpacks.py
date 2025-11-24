@@ -337,7 +337,9 @@ class WordPackStore:
                     )
                 return next_checked, next_learned
 
-    def find_word_pack_id_by_lemma(self, lemma: str) -> str | None:
+    def find_word_pack_id_by_lemma(
+        self, lemma: str, *, diagnostics: bool = False
+    ) -> str | None | tuple[str | None, bool]:
         """見出し語に対応する最新 WordPack ID を返す。"""
 
         normalized_lemma = str(lemma or "").strip()
@@ -356,7 +358,8 @@ class WordPackStore:
                 (normalized_lemma,),
             )
             row = cur.fetchone()
-            return row["id"] if row is not None else None
+            result = row["id"] if row is not None else None
+            return (result, False) if diagnostics else result
 
     def find_word_pack_by_lemma_ci(
         self, lemma: str

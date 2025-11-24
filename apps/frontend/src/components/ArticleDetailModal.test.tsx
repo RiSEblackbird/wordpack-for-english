@@ -18,6 +18,7 @@ describe('ArticleDetailModal', () => {
       generation_started_at: '2024-05-01T10:00:00+09:00',
       generation_completed_at: '2024-05-01T10:01:05+09:00',
       generation_duration_ms: 65_000,
+      warnings: ['Resilient: Firestore 検索が不安定だったためプレースホルダーを生成しました。'],
       related_word_packs: [
         { word_pack_id: 'wp:1', lemma: 'alpha', status: 'existing' },
       ],
@@ -46,6 +47,7 @@ describe('ArticleDetailModal', () => {
     expect(meta).toHaveTextContent('2024/05/01 10:00');
     expect(meta).toHaveTextContent('1分5秒');
     expect(meta).toHaveTextContent('Dev（開発）');
+    expect(screen.getByLabelText('import-warnings')).toHaveTextContent('Resilient');
     const heading = screen.getByRole('heading', { level: 4, name: '関連WordPack' });
     expect(heading).toBeInTheDocument();
     // メタ情報が「関連WordPack」見出しより後に来ることを確認
