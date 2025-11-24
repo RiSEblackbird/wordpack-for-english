@@ -54,13 +54,30 @@ def verify_session_token(token: str) -> dict:
 async def get_current_user(request: Request) -> dict[str, str]:
     """Validate session cookie and attach the authenticated user to the request state."""
 
+    def _session_log_context(reason: str, user_id: str | None) -> dict[str, object]:
+        """Compose structured log context aligned with AccessLog fields.
+
+        なぜ: Cloud Run 上でセッション検証失敗を素早くフィルタできるよう、
+        AccessLog と同一キー（path/client_ip/user_agent/request_id）で
+        失敗理由を記録する。
+        """
+
+        client_ip = request.client.host if request.client else "unknown"
+        return {
+            "user_id": user_id,
+            "reason": reason,
+            "path": request.url.path,
+            "client_ip": client_ip,
+            "user_agent": request.headers.get("user-agent"),
+            "request_id": getattr(request.state, "request_id", None),
+        }
+
     cookie_name = settings.session_cookie_name or "wp_session"
     raw_token = request.cookies.get(cookie_name)
     if not raw_token:
         logger.warning(
             "session_validation_failed",
-            user_id=None,
-            reason="missing_cookie",
+            **_session_log_context(reason="missing_cookie", user_id=None),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -72,8 +89,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
     except SignatureExpired as exc:
         logger.warning(
             "session_validation_failed",
-            user_id=None,
-            reason="expired",
+            **_session_log_context(reason="expired", user_id=None),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -82,8 +98,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
     except BadSignature as exc:
         logger.warning(
             "session_validation_failed",
-            user_id=None,
-            reason="bad_signature",
+            **_session_log_context(reason="bad_signature", user_id=None),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -92,8 +107,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
     except RuntimeError as exc:
         logger.error(
             "session_validation_failed",
-            user_id=None,
-            reason="configuration_error",
+            **_session_log_context(reason="configuration_error", user_id=None),
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -104,8 +118,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
     if not sub:
         logger.warning(
             "session_validation_failed",
-            user_id=None,
-            reason="missing_sub",
+            **_session_log_context(reason="missing_sub", user_id=None),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -116,8 +129,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
     if user is None:
         logger.warning(
             "session_validation_failed",
-            user_id=sub,
-            reason="user_not_found",
+            **_session_log_context(reason="user_not_found", user_id=sub),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
