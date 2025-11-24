@@ -12,7 +12,7 @@ from itsdangerous import BadSignature, SignatureExpired
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
-from ..auth import verify_session_token
+from ..auth import read_session_cookie, verify_session_token
 from ..config import settings
 from ..logging import logger
 
@@ -249,7 +249,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _resolve_user_key(self, request: Request, client_ip: str) -> tuple[str, bool]:
         """Resolve the logical session identifier from the signed cookie."""
 
-        raw_token = request.cookies.get(self._session_cookie_name)
+        raw_token = read_session_cookie(request, self._session_cookie_name)
         if not raw_token:
             logger.debug("rate_limit_session_missing", client_ip=client_ip)
             return self._anon_bucket_key, False

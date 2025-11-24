@@ -155,3 +155,44 @@ def test_logs_bad_signature_context(
     assert payload["client_ip"] == "198.51.100.7"
     assert payload["user_agent"] == "pytest-agent"
     assert payload["request_id"] == "req-123"
+
+
+def test_get_current_user_tolerates_non_rfc_cookie_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """先頭に非RFC準拠Cookieがある場合でもセッションクッキーを取得できる。"""
+
+    # verify_session_token をスタブ化して、渡されたトークンを検証する。
+    observed: dict[str, str] = {}
+
+    def _fake_verify(token: str) -> dict[str, str]:
+        observed["token"] = token
+        # get_current_user は payload["sub"] をユーザーIDとして扱う。
+        return {"sub": "sub-123"}
+
+    monkeypatch.setattr("backend.auth.verify_session_token", _fake_verify)
+
+    # store.get_user_by_google_sub もスタブに差し替え、常にユーザーを返す。
+    import backend.auth as auth_module
+
+    class _DummyStore:
+        def get_user_by_google_sub(self, google_sub: str) -> dict[str, str] | None:
+            return {
+                "google_sub": google_sub,
+                "email": "user@example.com",
+                "display_name": "Example User",
+            }
+
+    monkeypatch.setattr(auth_module, "store", _DummyStore())
+
+    # 先頭に Google Identity Services 由来の g_state 風 Cookie を置き、その後ろに
+    # wp_session を続ける。SimpleCookie がこのヘッダーを解析に失敗しても、
+    # read_session_cookie フォールバックで wp_session を拾えることを検証する。
+    cookie_header = 'g_state={"i_l":0,"i_p":0}; wp_session=session-token-xyz'
+    request = _build_request(cookie_header=cookie_header)
+
+    user = asyncio.run(get_current_user(request))
+    # スタブが返したユーザーがそのまま返却されていること。
+    assert user["google_sub"] == "sub-123"
+    # セッショントークンが正しく抽出されていること。
+    assert observed.get("token") == "session-token-xyz"

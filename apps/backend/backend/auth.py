@@ -51,33 +51,68 @@ def verify_session_token(token: str) -> dict:
     return serializer.loads(token, max_age=_session_max_age())
 
 
+def _session_log_context(
+    request: Request, *, reason: str, user_id: str | None
+) -> dict[str, object]:
+    """Compose structured log context aligned with AccessLog fields.
+
+    なぜ: Cloud Run 上でセッション検証失敗を素早くフィルタできるよう、
+    AccessLog と同一キー（path/client_ip/user_agent/request_id）で
+    失敗理由を記録する。
+    """
+
+    client_ip = request.client.host if request.client else "unknown"
+    return {
+        "user_id": user_id,
+        "reason": reason,
+        "path": request.url.path,
+        "client_ip": client_ip,
+        "user_agent": request.headers.get("user-agent"),
+        "request_id": getattr(request.state, "request_id", None),
+    }
+
+
+def read_session_cookie(request: Request, cookie_name: str) -> str | None:
+    """Robustly read the session cookie even when other cookies are non‑RFC compliant.
+
+    なぜ: Google Identity Services が発行する `g_state` など一部の Cookie は、値に
+    JSON 文字列をそのまま含めるため `Cookie` ヘッダー全体が RFC に厳密ではなくなり、
+    Python 標準の ``SimpleCookie`` パーサが例外を投げて `request.cookies` を空にして
+    しまうケースがある。その場合でもセッションクッキーだけは確実に取得したいので、
+    まず `request.cookies` を試しつつ、失敗時は生のヘッダーを手動で分解して取得する。
+    """
+
+    # 通常ケース: Starlette が正しく Cookie を構築している場合はこちらで十分。
+    try:
+        value = request.cookies.get(cookie_name)  # type: ignore[assignment]
+    except Exception:  # pragma: no cover - defensive guard
+        value = None
+    if value:
+        return value  # type: ignore[return-value]
+
+    # フォールバック: Cookie ヘッダーを手動パース（`;` 区切りの単純な形式を前提）。
+    raw_header = request.headers.get("cookie") or request.headers.get("Cookie")
+    if not raw_header:
+        return None
+    for part in raw_header.split(";"):
+        part = part.strip()
+        if not part or "=" not in part:
+            continue
+        name, raw_value = part.split("=", 1)
+        if name.strip() == cookie_name:
+            return raw_value.strip()
+    return None
+
+
 async def get_current_user(request: Request) -> dict[str, str]:
     """Validate session cookie and attach the authenticated user to the request state."""
 
-    def _session_log_context(reason: str, user_id: str | None) -> dict[str, object]:
-        """Compose structured log context aligned with AccessLog fields.
-
-        なぜ: Cloud Run 上でセッション検証失敗を素早くフィルタできるよう、
-        AccessLog と同一キー（path/client_ip/user_agent/request_id）で
-        失敗理由を記録する。
-        """
-
-        client_ip = request.client.host if request.client else "unknown"
-        return {
-            "user_id": user_id,
-            "reason": reason,
-            "path": request.url.path,
-            "client_ip": client_ip,
-            "user_agent": request.headers.get("user-agent"),
-            "request_id": getattr(request.state, "request_id", None),
-        }
-
     cookie_name = settings.session_cookie_name or "wp_session"
-    raw_token = request.cookies.get(cookie_name)
+    raw_token = read_session_cookie(request, cookie_name)
     if not raw_token:
         logger.warning(
             "session_validation_failed",
-            **_session_log_context(reason="missing_cookie", user_id=None),
+            **_session_log_context(request, reason="missing_cookie", user_id=None),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -89,7 +124,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
     except SignatureExpired as exc:
         logger.warning(
             "session_validation_failed",
-            **_session_log_context(reason="expired", user_id=None),
+            **_session_log_context(request, reason="expired", user_id=None),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -98,7 +133,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
     except BadSignature as exc:
         logger.warning(
             "session_validation_failed",
-            **_session_log_context(reason="bad_signature", user_id=None),
+            **_session_log_context(request, reason="bad_signature", user_id=None),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -107,7 +142,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
     except RuntimeError as exc:
         logger.error(
             "session_validation_failed",
-            **_session_log_context(reason="configuration_error", user_id=None),
+            **_session_log_context(request, reason="configuration_error", user_id=None),
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -118,7 +153,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
     if not sub:
         logger.warning(
             "session_validation_failed",
-            **_session_log_context(reason="missing_sub", user_id=None),
+            **_session_log_context(request, reason="missing_sub", user_id=None),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -129,7 +164,7 @@ async def get_current_user(request: Request) -> dict[str, str]:
     if user is None:
         logger.warning(
             "session_validation_failed",
-            **_session_log_context(reason="user_not_found", user_id=sub),
+            **_session_log_context(request, reason="user_not_found", user_id=sub),
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
