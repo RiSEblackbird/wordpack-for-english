@@ -45,11 +45,13 @@ def _use_fake_settings() -> object:
         langfuse_exclude_paths = []
         allowed_cors_origins = ()
         allowed_hosts = ()
+        allowed_hosts_raw = ""
         strict_mode = False
         wordpack_db_path = ":memory:"
         openai_api_key = None
         voyage_api_key = None
         trusted_proxy_ips = ()
+        gcp_project_id: str | None = None
 
     fake_config.settings = _Settings()
     sys.modules["backend.config"] = fake_config
@@ -65,6 +67,18 @@ def _use_fake_settings() -> object:
             sys.modules.pop("backend.config", None)
         for module in ("backend.logging", "backend.main"):
             sys.modules.pop(module, None)
+
+
+def _extract_request_complete_lines(buffer_text: str) -> list[str]:
+    """Return request_complete log lines from mixed stdout/stderr text."""
+
+    lines = [ln for ln in buffer_text.splitlines() if ln.strip()]
+    return [ln for ln in lines if '"event": "request_complete"' in ln]
+
+
+_TRACE_ID_SAMPLE = "105445aa7843bc8bf206b120001000ab"
+_SPAN_ID_SAMPLE = "123"
+_TRACE_HEADER = f"{_TRACE_ID_SAMPLE}/{_SPAN_ID_SAMPLE};o=1"
 
 
 def test_structlog_outputs_pure_json_without_stdlib_prefix():
@@ -169,5 +183,78 @@ def test_sensitive_values_are_masked_in_logs() -> None:
     assert data.get("nested", {}).get("api_key") != secret
     masked_note = data.get("nested", {}).get("note", "")
     assert secret not in masked_note
+
+
+def test_access_log_includes_trace_fields_from_header() -> None:
+    # Arrange
+    buf_out = io.StringIO()
+    buf_err = io.StringIO()
+
+    with redirect_stdout(buf_out), redirect_stderr(buf_err):
+        with _use_fake_settings() as fake_settings:
+            fake_settings.gcp_project_id = "demo-project"
+
+            from backend.logging import configure_logging
+
+            configure_logging()
+
+            from fastapi.testclient import TestClient
+
+            from backend.main import app
+
+            with TestClient(app) as client:
+                response = client.get(
+                    "/healthz", headers={"X-Cloud-Trace-Context": _TRACE_HEADER}
+                )
+
+            assert response.status_code == 200
+
+    raw = buf_err.getvalue().strip() or buf_out.getvalue().strip()
+    request_lines = _extract_request_complete_lines(raw)
+
+    assert request_lines, "request_complete log line not found"
+
+    data = json.loads(request_lines[-1])
+    assert (
+        data.get("trace")
+        == f"projects/demo-project/traces/{_TRACE_ID_SAMPLE}"
+    )
+    assert data.get("spanId") == _SPAN_ID_SAMPLE
+    assert data.get("trace_sampled") is True
+
+
+def test_trace_fields_omitted_without_project_id() -> None:
+    # Arrange
+    buf_out = io.StringIO()
+    buf_err = io.StringIO()
+
+    with redirect_stdout(buf_out), redirect_stderr(buf_err):
+        with _use_fake_settings() as fake_settings:
+            fake_settings.gcp_project_id = None
+
+            from backend.logging import configure_logging
+
+            configure_logging()
+
+            from fastapi.testclient import TestClient
+
+            from backend.main import app
+
+            with TestClient(app) as client:
+                response = client.get(
+                    "/healthz", headers={"X-Cloud-Trace-Context": _TRACE_HEADER}
+                )
+
+            assert response.status_code == 200
+
+    raw = buf_err.getvalue().strip() or buf_out.getvalue().strip()
+    request_lines = _extract_request_complete_lines(raw)
+
+    assert request_lines, "request_complete log line not found"
+
+    data = json.loads(request_lines[-1])
+    assert "trace" not in data
+    assert "spanId" not in data
+    assert "trace_sampled" not in data
 
 
