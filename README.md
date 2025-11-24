@@ -255,9 +255,19 @@ Cloud Run の API を Firebase Hosting のフロントエンドと同一ドメ�
 }
 ```
 
-1. `npm run build --prefix apps/frontend` で Vite のビルド成果物を生成。
-2. `firebase deploy --only hosting` を実行すると、`/api` 配下は Cloud Run へフォワードされ、それ以外は `index.html` へリライトされます。
-3. 同一オリジンになるため、`CORS_ALLOWED_ORIGINS` に Hosting ドメイン（例: `https://<project>.web.app`）を列挙し、`ALLOWED_HOSTS` にも同じドメインを追加すれば Cookie を安全に共有できます。
+1. `firebase deploy --only hosting`（WSL 上のリポジトリルートで実行）を叩くと、`hosting.predeploy` で `npm --prefix ./apps/frontend run build` が自動実行され、そのまま `/api` 配下のリライト設定と静的ファイルのアップロードまで完了します。
+2. 同一オリジンになるため、`CORS_ALLOWED_ORIGINS` に Hosting ドメイン（例: `https://<project>.web.app`）を列挙し、`ALLOWED_HOSTS` にも同じドメインを追加すれば Cookie を安全に共有できます。
+
+成功例（WSL 内）:
+```bash
+taishi@DESKTOP-GIVL2DT:/mnt/d/Users/mokut/Documents/GitHub/wordpack-for-english$ firebase deploy --only hosting
+```
+
+失敗例（PowerShell 直叩き。WSL で実行しないと `npm --prefix ./apps/frontend run build` が Windows パスを解決できず失敗する）:
+```powershell
+PS D:\Users\mokut\Documents\GitHub\wordpack-for-english> firebase deploy --only hosting
+# → node_modules の検出に失敗するため推奨しない
+```
 
 ### Firestore エミュレータを使ったローカルテスト
 `ENVIRONMENT=production` で起動するとバックエンドは `AppFirestoreStore` を選択します。Firestore エミュレータを併用すれば本番相当のデータフローをローカルで検証できます。

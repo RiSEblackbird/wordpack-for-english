@@ -6,6 +6,9 @@
       "**/.*",
       "**/node_modules/**"
     ],
+    "predeploy": [
+      "npm --prefix ./apps/frontend run build"
+    ],
     "rewrites": [
       {
         "source": "/api/**",
