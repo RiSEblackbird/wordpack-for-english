@@ -298,6 +298,7 @@ Cloud Run や Firebase Hosting へ出荷する前に、上記の手順で Firest
 - **ID トークンが取得できない**: ログイン画面に「ID トークンを取得できませんでした。ブラウザを更新して再試行してください。」と表示された場合は、ブラウザを更新してから再度サインインしてください。それでも解消しない場合は Google OAuth のクライアント ID や承認済みオリジン設定を確認し、バックエンドのターミナルへ出力される `google_login_missing_id_token` ログで `google_client_id` や `error_category` を突き合わせて原因を特定します。テレメトリは `/api/diagnostics/oauth-telemetry` で受信した値をマスクした形で保存されるため、生のトークン値は記録されません。
 - **403 Forbidden が表示される**: `ADMIN_EMAIL_ALLOWLIST` にメールアドレスが登録されていない場合は、Google 認証に成功しても即座に拒否されます。管理者に連絡して対象メールをリストへ追加してもらってください。ログには `google_auth_denied` / `email_not_allowlisted` とハッシュ化されたメールアドレスが出力されます。
 - **403 Forbidden（メール未確認）**: 利用者の Google アカウントで「メールアドレスの確認」が完了していない場合、ID トークンの `email_verified` が `false`（または欠落）となり 403 が返ります。Google アカウントのセキュリティ設定からメール確認を済ませたうえで再試行してください。構造化ログには `google_auth_denied` / `email_unverified` が記録されます。
+- **生成＆インポートが成功通知なのに記事/WordPackが増えない**: `/api/article/generate_and_import` は内部で例文2件を記事化しますが、両方のインポートが失敗すると 502 / `reason_code=CATEGORY_IMPORT_FAILED_ALL` を返すようになりました。Cloud Logging には `category_example_import_failed` と `category_generate_import_failed_all` が連続して出力されるため、失敗した例文インデックスと例外クラスを確認してから WordPack 側の例文を手動でインポートするか、設定（LLMモデル/temperatureなど）を見直して再実行してください。1件でも記事化できた場合は 200 を返しつつ `category_generate_import_partial_success` を警告ログに残すので、成功数と失敗数をログで把握できます。
 
 #### Google 認証失敗時のログキー
 - `event`: 常に `google_auth_failed` または `google_auth_denied` が設定されます。

@@ -1173,6 +1173,62 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
     assert isinstance(wp.get("sense_title"), str)
 
 
+def test_category_generate_import_returns_502_when_article_import_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    """記事インポートが全件失敗した場合に 502 + reason_code を返すことを検証する。"""
+
+    backend_main = _reload_backend_app(
+        monkeypatch, strict=False, db_path=tmp_path / "cat_import_fail.sqlite3"
+    )
+    from fastapi.testclient import TestClient
+    import backend.providers as providers_mod
+    import backend.flows.category_generate_import as cat_flow_module
+
+    class _StubLLM:
+        def complete(self, prompt: str) -> str:
+            text = prompt or ""
+            if '"examples"' in text and "スキーマ" in text:
+                return json.dumps(
+                    {
+                        "examples": [
+                            {
+                                "en": "Thread pools keep latency predictable.",
+                                "ja": "スレッドプールでレイテンシを安定させる。",
+                                "grammar_ja": "SVO",
+                            },
+                            {
+                                "en": "Backpressure protects databases under burst traffic.",
+                                "ja": "混雑時もバックプレッシャーでDBを保護する。",
+                                "grammar_ja": "SVO",
+                            },
+                        ]
+                    }
+                )
+            if "例文生成のためにカテゴリに密接に関連する英語の lemma" in text:
+                return '{"lemma":"backpressure"}'
+            if "JSON 配列" in text and "lemmas" in text:
+                return '{"lemmas": ["backpressure", "latency"]}'
+            return "ok"
+
+    class _FailingArticleImportFlow:
+        def __init__(self, *args, **kwargs) -> None:  # pragma: no cover - simple stub
+            pass
+
+        def run(self, req):
+            raise RuntimeError("article import boom")
+
+    providers_mod._LLM_INSTANCE = _StubLLM()
+    monkeypatch.setattr(cat_flow_module, "ArticleImportFlow", _FailingArticleImportFlow)
+
+    client = TestClient(backend_main.app, raise_server_exceptions=False)
+    resp = client.post("/api/article/generate_and_import", json={"category": "Dev"})
+    assert resp.status_code == 502
+    detail = resp.json().get("detail", {})
+    assert detail.get("reason_code") == "CATEGORY_IMPORT_FAILED_ALL"
+    assert detail.get("generated_examples") == 2
+    assert detail.get("failed_examples") == 2
+
 def test_category_generate_import_fallback_on_duplicate(client, monkeypatch):
     """LLM が既存の lemma を繰り返し提案しても、重複回避で成功すること。
 

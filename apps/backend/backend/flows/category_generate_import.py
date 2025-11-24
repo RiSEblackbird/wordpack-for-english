@@ -271,8 +271,9 @@ class CategoryGenerateAndImportFlow:
 
         # Import each example as an article
         article_ids: list[str] = []
+        failures: list[dict[str, Any]] = []
         art_flow = ArticleImportFlow()
-        for ex in items:
+        for idx, ex in enumerate(items):
             try:
                 with span(
                     trace=None,
@@ -294,17 +295,59 @@ class CategoryGenerateAndImportFlow:
                     )
                     res = art_flow.run(req_payload)
                 article_ids.append(res.id)
-            except Exception:
-                # Skip failed imports but continue
-                logger.info(
+            except Exception as exc:  # pragma: no cover - error path validated via tests
+                error_class = exc.__class__.__name__
+                logger.warning(
                     "category_example_import_failed",
                     lemma=lemma,
                     category=category.value,
+                    example_index=idx,
+                    error=str(exc),
+                    error_class=error_class,
                 )
-        return {
+                failures.append(
+                    {
+                        "example_index": idx,
+                        "error": str(exc),
+                        "error_class": error_class,
+                    }
+                )
+        success_count = len(article_ids)
+        failed_count = len(failures)
+        total_examples = len(items)
+        if success_count == 0 and total_examples > 0:
+            logger.error(
+                "category_generate_import_failed_all",
+                lemma=lemma,
+                category=category.value,
+                generated_examples=total_examples,
+                failed_examples=failed_count,
+            )
+            detail: dict[str, Any] = {
+                "message": "Failed to import every generated example as an article",
+                "reason_code": "CATEGORY_IMPORT_FAILED_ALL",
+                "generated_examples": total_examples,
+                "failed_examples": failed_count,
+            }
+            if failures:
+                detail["failures"] = failures[:3]
+            raise HTTPException(status_code=502, detail=detail)
+        if failed_count:
+            logger.warning(
+                "category_generate_import_partial_success",
+                lemma=lemma,
+                category=category.value,
+                generated_examples=total_examples,
+                imported_articles=success_count,
+                failed_examples=failed_count,
+            )
+        response: dict[str, Any] = {
             "lemma": lemma,
             "word_pack_id": wp_id,
             "category": category.value,
-            "generated_examples": len(items),
+            "generated_examples": total_examples,
             "article_ids": article_ids,
         }
+        if failed_count:
+            response["failed_examples"] = failed_count
+        return response
