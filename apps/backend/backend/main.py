@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import string
 import time
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import Response
 from starlette.types import ASGIApp
+from structlog import contextvars as structlog_contextvars
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 try:  # FastAPI/Starlette のバージョンにより存在しない場合がある
@@ -46,6 +48,51 @@ _PROXY_MIDDLEWARE_PARAM = (
     else "trusted_hosts"
 )
 
+
+def _parse_cloud_trace_header(raw_header: str | None) -> dict[str, object]:
+    """Parse `X-Cloud-Trace-Context` and shape it for Cloud Logging.
+
+    なぜ: Cloud Run のリクエストログとアプリケーションログを関連付けるためには、
+    `trace`/`spanId`/`trace_sampled` をログに含める必要がある。本関数でヘッダーを
+    安全に解析し、形式に沿ったフィールドを返す。
+    """
+
+    if not raw_header or not settings.gcp_project_id:
+        return {}
+
+    trace_span_part, _, option_part = raw_header.partition(";")
+    trace_id, separator, span_part = trace_span_part.partition("/")
+    if not separator or not trace_id:
+        return {}
+
+    trace_id = trace_id.strip()
+    if len(trace_id) != 32 or any(ch not in string.hexdigits for ch in trace_id):
+        return {}
+
+    span_id: str | None = None
+    cleaned_span = span_part.strip()
+    if cleaned_span:
+        try:
+            # Cloud Trace の spanId は 64bit 整数。桁あふれや文字列混入を避ける。
+            span_int = int(cleaned_span, 10)
+            if 0 <= span_int < 2**64:
+                span_id = str(span_int)
+        except ValueError:
+            span_id = None
+
+    trace_sampled = False
+    if option_part:
+        for opt in option_part.split(";"):
+            key, _, value = opt.partition("=")
+            if key.strip() == "o":
+                trace_sampled = value.strip() == "1"
+
+    trace_field = f"projects/{settings.gcp_project_id}/traces/{trace_id}"
+    trace_context: dict[str, object] = {"trace": trace_field, "trace_sampled": trace_sampled}
+    if span_id is not None:
+        trace_context["spanId"] = span_id
+    return trace_context
+
 class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
     """Emit structured request logs and capture latency/metrics for each call.
 
@@ -67,6 +114,13 @@ class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
         if not request_id:
             request_id = uuid4().hex
             request.state.request_id = request_id
+        trace_log_fields = _parse_cloud_trace_header(
+            request.headers.get("x-cloud-trace-context")
+        )
+        if trace_log_fields:
+            # なぜ: Cloud Run リクエストログとアプリログを突合できるように、
+            # トレース関連フィールドを ContextVar として紐付ける。
+            structlog_contextvars.bind_contextvars(**trace_log_fields)
         client_ip = request.client.host if request.client else "unknown"
         ua = request.headers.get("user-agent", "-")
         is_error = False
@@ -131,7 +185,10 @@ class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
                     request_id=request_id,
                     client_ip=client_ip,
                     user_agent=ua,
+                    **trace_log_fields,
                 )
+                if trace_log_fields:
+                    structlog_contextvars.unbind_contextvars(*trace_log_fields.keys())
 
 
 async def _on_shutdown() -> None:

@@ -1,4 +1,3 @@
-import logging
 """Logging utilities and sanitisation helpers.
 
 構造化ログの初期化と、機密情報を含むイベントを安全にマスクする
@@ -7,15 +6,17 @@ API キーが出力されるとログ閲覧者にシークレットが露出す�
 ここで一元的にフィルタリングする。
 """
 
-import logging
 from typing import Any
 
+import logging
 import structlog
+from structlog import contextvars as structlog_contextvars
 from .config import settings
 
 
 _SENSITIVE_KEYWORDS = ("api_key", "token", "secret", "authorization", "password", "key")
 _MASK_PLACEHOLDER = "***"
+_TRACE_CONTEXT_KEYS = ("trace", "spanId", "trace_sampled")
 
 
 def _mask_secret_value(raw: object) -> str:
@@ -96,6 +97,25 @@ def _sanitize_event_dict(
     return event_dict
 
 
+def _merge_trace_context(
+    _logger: structlog.types.WrappedLogger,
+    _method_name: str,
+    event_dict: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge Cloud Trace contextvars into the log payload if available.
+
+    なぜ: Cloud Run が出力するリクエストログとアプリケーションログを突合するため、
+    `trace`/`spanId`/`trace_sampled` を全ログへ自動付与する。ContextVar に保存済みの
+    値のみを取り出すことで、他のスレッド/リクエストに漏洩しないようにしている。
+    """
+
+    context = structlog_contextvars.get_contextvars()
+    for key in _TRACE_CONTEXT_KEYS:
+        if key in context and key not in event_dict:
+            event_dict[key] = context[key]
+    return event_dict
+
+
 def configure_logging() -> None:
     """Configure structlog for application-wide logging.
 
@@ -116,6 +136,8 @@ def configure_logging() -> None:
         processors=[
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.add_log_level,
+            structlog_contextvars.merge_contextvars,
+            _merge_trace_context,
             _sanitize_event_dict,
             structlog.processors.StackInfoRenderer(),
             structlog.processors.format_exc_info,

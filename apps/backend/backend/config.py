@@ -57,6 +57,19 @@ class Settings(BaseSettings):
         default="development",
         description="Runtime environment / 実行環境",
     )
+    gcp_project_id: str | None = Field(
+        default=None,
+        description=(
+            "Google Cloud project ID used for trace correlation / "
+            "Cloud Logging のトレース関連付けに利用する GCP プロジェクト ID"
+        ),
+        validation_alias=AliasChoices(
+            "gcp_project_id",
+            "GCP_PROJECT_ID",
+            "GOOGLE_CLOUD_PROJECT",
+            "PROJECT_ID",
+        ),
+    )
     google_client_id: str = Field(
         default="",
         description="Google OAuth client ID / Googleサインイン用クライアントID",
