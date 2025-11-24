@@ -29,11 +29,12 @@ def _make_request(
     cookie_token: str | None = None,
     header_user: str | None = None,
     client_ip: str = "198.51.100.10",
+    cookie_name: str | None = None,
 ) -> Request:
-    cookie_name = settings.session_cookie_name or "wp_session"
+    resolved_cookie_name = cookie_name or settings.session_cookie_name or "wp_session"
     headers: list[tuple[bytes, bytes]] = []
     if cookie_token is not None:
-        cookie_value = f"{cookie_name}={cookie_token}"
+        cookie_value = f"{resolved_cookie_name}={cookie_token}"
         headers.append((b"cookie", cookie_value.encode("latin-1")))
     if header_user is not None:
         headers.append((b"x-user-id", header_user.encode("latin-1")))
@@ -150,3 +151,29 @@ def test_rate_limit_prunes_stale_user_buckets(monkeypatch: pytest.MonkeyPatch) -
     assert "user-A" not in middleware._user_buckets
     assert len(middleware._user_buckets) <= 2
     assert "user-C" in middleware._user_buckets
+
+
+def test_rate_limit_accepts_firebase_session_cookie_alias(monkeypatch: pytest.MonkeyPatch) -> None:
+    """__session しか届かない経路でもユーザー単位のバケットを活用できる。"""
+
+    observed: list[str] = []
+
+    def fake_verify(token: str) -> dict[str, str]:
+        observed.append(token)
+        return {"sub": f"user-{token}"}
+
+    monkeypatch.setattr(middleware_module, "verify_session_token", fake_verify)
+
+    middleware = RateLimitMiddleware(
+        app=lambda scope, receive, send: None,
+        ip_capacity_per_minute=10,
+        user_capacity_per_minute=5,
+        user_bucket_ttl_seconds=60,
+        max_user_buckets=4,
+    )
+
+    request = _make_request(cookie_token="firebase", cookie_name="__session")
+    response = _dispatch(middleware, request)
+
+    assert response.status_code == 200
+    assert observed == ["firebase"]

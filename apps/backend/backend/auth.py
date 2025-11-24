@@ -11,6 +11,7 @@ from .logging import logger
 from .store import store
 
 _SESSION_SALT = "wordpack.session"
+_FIREBASE_SESSION_COOKIE = "__session"
 
 
 def _build_serializer() -> URLSafeTimedSerializer:
@@ -104,11 +105,36 @@ def read_session_cookie(request: Request, cookie_name: str) -> str | None:
     return None
 
 
+def session_cookie_names() -> tuple[str, ...]:
+    """Return ordered cookie names that should carry the session token.
+
+    なぜ: Firebase Hosting は `__session` 以外の Cookie を Cloud Run へ転送しないため、
+    既定名（wp_session など）に加えて __session も必ずミラーする。
+    """
+
+    configured = (settings.session_cookie_name or "wp_session").strip()
+    primary = configured or "wp_session"
+    names = [primary]
+    if _FIREBASE_SESSION_COOKIE not in names:
+        names.append(_FIREBASE_SESSION_COOKIE)
+    # dict.fromkeys preserves insertion order while removing duplicates.
+    return tuple(dict.fromkeys(names))
+
+
+def resolve_session_cookie(request: Request) -> tuple[str | None, str | None]:
+    """Return the first available session cookie value along with its name."""
+
+    for cookie_name in session_cookie_names():
+        token = read_session_cookie(request, cookie_name)
+        if token:
+            return cookie_name, token
+    return None, None
+
+
 async def get_current_user(request: Request) -> dict[str, str]:
     """Validate session cookie and attach the authenticated user to the request state."""
 
-    cookie_name = settings.session_cookie_name or "wp_session"
-    raw_token = read_session_cookie(request, cookie_name)
+    _cookie_name, raw_token = resolve_session_cookie(request)
     if not raw_token:
         logger.warning(
             "session_validation_failed",

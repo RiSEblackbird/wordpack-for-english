@@ -68,7 +68,7 @@ cp env.example .env
 # TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22
 # ALLOWED_HOSTS=app-1234567890-uc.a.run.app,api.example.com
 # SESSION_SECRET_KEY=<paste a 32+ char random string generated via `openssl rand -base64 48 | tr -d '\n'`>
-# SESSION_COOKIE_NAME=wp_session
+# SESSION_COOKIE_NAME=wp_session  # Firebase Hosting rewrite 経由でも __session に自動ミラーされます
 # SESSION_COOKIE_SECURE=true  # 本番(HTTPS)のみ true。開発(HTTP)は既定で false なので設定不要
 # SECURITY_HSTS_MAX_AGE_SECONDS=63072000  # HSTS の max-age（秒）
 # SECURITY_CSP_DEFAULT_SRC='self',https://cdn.jsdelivr.net  # CSP の default-src 許可リスト
@@ -79,10 +79,10 @@ cp env.example .env
 npm run prepare:frontend-env  # apps/frontend/.env が無い場合に .env.example をコピー
 # または `cp apps/frontend/.env.example apps/frontend/.env`
 # VITE_GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com
-# VITE_SESSION_COOKIE_NAME=wp_session
+# VITE_SESSION_COOKIE_NAME=wp_session  # バックエンドを変更しない場合は既定値のままでOK
 ```
 
-ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。
+ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。Firebase Hosting から Cloud Run へリライティングする構成では、`wp_session` に加えて `__session` も同じトークンで自動配信されるため、Hosting の `__session` 制約を意識せずに認証を維持できます。
 
 `ENVIRONMENT=production` のときバックエンドは Cloud Firestore へ永続化します。Google Cloud のサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を必ず設定し、Firestore プロジェクトで `users` / `word_packs` / `examples` などのコレクション作成権限を付与してください。その他の環境では従来どおりローカル SQLite ファイル（`WORDPACK_DB_PATH`）が利用されます。
 
@@ -121,9 +121,9 @@ npm run prepare:frontend-env
 # 既に .env がある場合や手動で書き換える場合は apps/frontend/.env.example を直接編集してください
 ```
 
-`VITE_GOOGLE_CLIENT_ID` はバックエンドの `GOOGLE_CLIENT_ID` と一致している必要があります。Google Console で発行した OAuth 2.0 Web クライアント ID を指定してください。`AuthContext.tsx` では `VITE_SESSION_COOKIE_NAME` も参照するため、FastAPI 側の `SESSION_COOKIE_NAME` を変更した場合はフロントエンドの `.env` も合わせて更新します。
+`VITE_GOOGLE_CLIENT_ID` はバックエンドの `GOOGLE_CLIENT_ID` と一致している必要があります。Google Console で発行した OAuth 2.0 Web クライアント ID を指定してください。`AuthContext.tsx` は `VITE_SESSION_COOKIE_NAME` が未設定でも `wp_session`/`__session` の両方をフォールバックで削除するため、FastAPI 側の `SESSION_COOKIE_NAME` をカスタマイズしたときだけ `.env` を更新すれば十分です。
 
-バックエンド・フロントエンドのどちらも起動前に `.env` と `apps/frontend/.env` を用意し、`GOOGLE_CLIENT_ID`（必要に応じて `GOOGLE_ALLOWED_HD` や `ADMIN_EMAIL_ALLOWLIST`）、`SESSION_SECRET_KEY`、`VITE_GOOGLE_CLIENT_ID`、`VITE_SESSION_COOKIE_NAME` を設定しておくと、初回起動から Google ログインが有効になります。
+バックエンド・フロントエンドのどちらも起動前に `.env` と `apps/frontend/.env` を用意し、`GOOGLE_CLIENT_ID`（必要に応じて `GOOGLE_ALLOWED_HD` や `ADMIN_EMAIL_ALLOWLIST`）、`SESSION_SECRET_KEY`、`VITE_GOOGLE_CLIENT_ID`、（必要なら）`VITE_SESSION_COOKIE_NAME` を設定しておくと、初回起動から Google ログインが有効になります。
 
 補足（時計ずれの吸収）  
 `GOOGLE_CLOCK_SKEW_SECONDS` を指定すると、Google の ID トークン検証で `iat`/`nbf`/`exp` の境界に対して指定秒数のゆとりを持たせます。既定は 60 秒で、Docker/WSL などの軽微な時計ずれによる “Token used too early” を回避できます（セキュリティ上の影響は軽微ですが、必要最小限の値にしてください）。

@@ -33,7 +33,7 @@ def _use_fake_settings() -> object:
         llm_timeout_ms = 1000
         disable_session_auth = True
         environment = "development"
-        session_cookie_name = "wp_session"
+        session_cookie_name = "__session"
         session_cookie_secure = False
         session_max_age_seconds = 60 * 60 * 24 * 14
         security_hsts_max_age_seconds = 63072000

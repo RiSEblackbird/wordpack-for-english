@@ -129,6 +129,43 @@ def test_google_auth_success_flow(
     assert "display_name" not in latest
 
 
+def test_google_auth_sets_firebase_session_cookie_alias(
+    test_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """セッション Cookie を __session にもミラーし、Firebase Hosting 経由でも認証できる。"""
+
+    _stub_verifier(
+        monkeypatch,
+        lambda: {
+            "sub": "sub-alias",
+            "email": "user@example.com",
+            "name": "Alias User",
+            "hd": "example.com",
+            "email_verified": True,
+        },
+    )
+
+    login_response = test_client.post("/api/auth/google", json={"id_token": "valid"})
+    assert login_response.status_code == 200
+
+    primary_name = settings.session_cookie_name or "wp_session"
+    primary_cookie = test_client.cookies.get(primary_name)
+    alias_cookie = test_client.cookies.get("__session")
+
+    assert primary_cookie, "primary session cookie must be issued"
+    assert alias_cookie, "__session cookie must mirror the session token"
+
+    # Firebase Hosting は __session 以外の Cookie をバックエンドへ転送しないため、
+    # wp_session が欠落しても __session のみでアクセスできることを検証する。
+    if primary_name in test_client.cookies:
+        del test_client.cookies[primary_name]
+
+    protected = test_client.get("/api/word/")
+    assert protected.status_code in {200, 422, 501}
+    assert protected.status_code != 401
+
+
 def test_google_auth_rejects_wrong_domain(
     test_client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -285,7 +322,7 @@ def test_protected_endpoint_requires_cookie(test_client: TestClient) -> None:
 def test_http_session_cookie_visible_for_document_cookie(
     test_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """HTTP ローカル環境でも document.cookie から wp_session を参照できることを保証する。"""
+    """HTTP ローカル環境でも document.cookie からセッションクッキーを参照できることを保証する。"""
 
     _stub_verifier(
         monkeypatch,

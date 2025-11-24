@@ -80,6 +80,9 @@ def test_logout_deletes_session_cookie(test_client, monkeypatch):
 
     login_response = test_client.post("/api/auth/google", json={"id_token": "valid"})
     assert login_response.status_code == HTTPStatus.OK
+    primary_cookie_name = settings.session_cookie_name or "wp_session"
+    assert test_client.cookies.get(primary_cookie_name)
+    assert test_client.cookies.get("__session")
 
     logout_response = test_client.post("/api/auth/logout")
     assert logout_response.status_code == HTTPStatus.NO_CONTENT
@@ -89,12 +92,14 @@ def test_logout_deletes_session_cookie(test_client, monkeypatch):
 
     cookie = SimpleCookie()
     cookie.load(header)
-    cookie_name = settings.session_cookie_name or "wp_session"
-    assert cookie_name in cookie
-    morsel = cookie[cookie_name]
+    morsel = cookie[primary_cookie_name]
     assert morsel.value == ""
     assert morsel["max-age"] == "0"
     assert str(morsel["httponly"]).lower() == "true"
+
+    # Requests の CookieJar も削除指示を反映していることを確認する。
+    assert test_client.cookies.get(primary_cookie_name) is None
+    assert test_client.cookies.get("__session") is None
 
     protected_response = test_client.get("/api/word/")
     assert protected_response.status_code == HTTPStatus.UNAUTHORIZED
