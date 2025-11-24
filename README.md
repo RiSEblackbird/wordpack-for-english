@@ -199,6 +199,7 @@ OPENAI_API_KEY=sk-xxxxx
 - `--dry-run` を指定すると gcloud コマンドを実行せずに設定のみ検証します。CI では `configs/cloud-run/ci.env` を使ってこのモードを呼び出し、欠落した環境変数を早期検知しています。
 - `--image-tag`（既定: `git rev-parse --short HEAD`）、`--build-arg KEY=VALUE`、`--machine-type`、`--timeout` で Cloud Build の詳細を調整できます。Artifact Registry のリポジトリパスは `--artifact-repo` で差し替えられます。
 - `make deploy-cloud-run PROJECT_ID=... REGION=...` を実行すると同じスクリプトが呼び出されます。`gcloud config set project ...` / `gcloud config set run/region ...` を済ませていれば、Makefile 実行時の `PROJECT_ID` / `REGION` も省略できます。CI/CD では `gcloud auth login` / `gcloud auth configure-docker` の完了を前提としてください。
+- デプロイスクリプトは Cloud Build を実行する前に `scripts/deploy_firestore_indexes.sh --tool firebase --project <PROJECT_ID>` を自動で叩き、`firestore.indexes.json` の内容を Firebase CLI 経由で本番プロジェクトへ反映します。`firebase-tools` が未インストールだとこの段階で停止するため、事前に導入しておくか、CI 等で同期済みの場合は `SKIP_FIRESTORE_INDEX_SYNC=true ./scripts/deploy_cloud_run.sh ...` のように環境変数を付けて同期フェーズをスキップしてください。
 
 #### release-cloud-run（Firestore インデックス同期 + Cloud Run デプロイ）
 
@@ -228,6 +229,7 @@ make release-cloud-run \
 ```
 
 - `SKIP_FIRESTORE_INDEX_SYNC=true` を付けると Firestore 側を更新せず Cloud Run デプロイのみを実行します（既にインデックスを同期済みの CI/CD 環境向け）。
+- release-cloud-run は先に `make deploy-firestore-indexes` を呼び出してから `SKIP_FIRESTORE_INDEX_SYNC=true` を付けて `scripts/deploy_cloud_run.sh` を実行します。CI などでインデックス同期自体を省略したい場合は `SKIP_FIRESTORE_INDEX_SYNC=true make release-cloud-run PROJECT_ID=... REGION=...` のように指定してください。
 - Dry-run (`scripts/deploy_cloud_run.sh --dry-run`) は必ず本番デプロイの直前に走るため、設定エラーは gcloud コマンドの前で検知されます。
 - `ENV_FILE` を省略した場合でも `.env.deploy` の存在確認を行い、欠落しているとターゲットが失敗します。
 

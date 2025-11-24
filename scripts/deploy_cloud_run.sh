@@ -291,6 +291,13 @@ if [[ "$DRY_RUN" == true ]]; then
   exit 0
 fi
 
+if [[ "${SKIP_FIRESTORE_INDEX_SYNC:-false}" == "true" ]]; then
+  log "Skipping Firestore index sync because SKIP_FIRESTORE_INDEX_SYNC=true"
+else
+  log "Syncing Firestore indexes via Firebase CLI before deployment"
+  "${SCRIPT_DIR}/deploy_firestore_indexes.sh" --tool firebase --project "$PROJECT_ID"
+fi
+
 ensure_gcloud
 
 log "Submitting build to Cloud Build: $IMAGE_URI"

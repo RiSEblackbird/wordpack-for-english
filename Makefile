@@ -62,6 +62,6 @@ release-cloud-run:
 	echo "[release-cloud-run] Skipping Firestore index sync because SKIP_FIRESTORE_INDEX_SYNC=true"; \
 	fi; \
 	echo "[release-cloud-run] Validating Cloud Run configuration via dry-run"; \
-	$(CLOUD_RUN_SCRIPT) $(DEPLOY_CLOUD_RUN_ARGS) --dry-run; \
+	SKIP_FIRESTORE_INDEX_SYNC=true $(CLOUD_RUN_SCRIPT) $(DEPLOY_CLOUD_RUN_ARGS) --dry-run; \
 	echo "[release-cloud-run] Dry-run succeeded. Deploying to Cloud Run"; \
-	$(CLOUD_RUN_SCRIPT) $(DEPLOY_CLOUD_RUN_ARGS)
+	SKIP_FIRESTORE_INDEX_SYNC=true $(CLOUD_RUN_SCRIPT) $(DEPLOY_CLOUD_RUN_ARGS)
