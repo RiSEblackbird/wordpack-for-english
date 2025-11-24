@@ -91,7 +91,8 @@
       "fieldPath": "normalized_label",
       "indexes": [
         {
-          "order": "ASCENDING"
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
         }
       ]
     }
