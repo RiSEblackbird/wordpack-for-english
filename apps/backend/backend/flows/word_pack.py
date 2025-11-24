@@ -698,14 +698,38 @@ class WordPackFlow:
         text = _strip_code_fences(raw or "")
         # 2) 制御文字を \uXXXX に正規化（Invalid control character を回避）
         text = _sanitize_control_chars(text)
-        obj = _json.loads(text)
+        try:
+            obj = _json.loads(text)
+        except _json.JSONDecodeError as exc:
+            # LLM からの出力が JSON として壊れている場合は、上流に 500 を伝播させずに
+            # 「例文ゼロ」として扱う。呼び出し側では len(items) < required で 502 等へ
+            # マッピングされる設計のため、ここではログのみ残して空配列を返す。
+            logger.warning(
+                "wordpack_examples_json_parse_failed",
+                error=str(exc),
+                error_class=exc.__class__.__name__,
+                raw_preview=text[:200],
+            )
+            return []
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logger.warning(
+                "wordpack_examples_json_parse_failed",
+                error=str(exc),
+                error_class=exc.__class__.__name__,
+                raw_preview=text[:200],
+            )
+            return []
         if isinstance(obj, list):
             return [x for x in obj if isinstance(x, dict)]
         if isinstance(obj, dict) and isinstance(obj.get("examples"), list):
             return [x for x in obj.get("examples") if isinstance(x, dict)]
-        raise ValueError(
-            'Invalid LLM JSON shape (expected array or {"examples": [...]})'
+        # 形は不正だが JSON としては読めるケースも、例文ゼロ扱いにフォールバックする。
+        logger.warning(
+            "wordpack_examples_json_invalid_shape",
+            obj_type=type(obj).__name__,
+            raw_preview=text[:200],
         )
+        return []
 
     def generate_examples_for_categories(
         self, lemma: str, plan: dict[ExampleCategory, int]

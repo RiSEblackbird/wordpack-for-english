@@ -55,3 +55,25 @@ def test_generate_examples_with_control_chars_is_not_dropped():
     assert "\n" in items[0].en
 
 
+def test_parse_examples_json_handles_broken_json_gracefully():
+    flow = WordPackFlow(llm=None)
+
+    # 文法的に壊れた JSON（LLM が途中までしか出力しなかった等）
+    raw = "{ \"examples\": [ { \"en\": \"A\", \"ja\": \"あ\" }  INVALID"
+
+    parsed = flow._parse_examples_json(raw)
+    assert isinstance(parsed, list)
+    assert parsed == []
+
+
+def test_parse_examples_json_handles_invalid_shape_gracefully():
+    flow = WordPackFlow(llm=None)
+
+    # JSON としては正しいが期待スキーマと異なるケース
+    raw = "{ \"foo\": 1 }"
+
+    parsed = flow._parse_examples_json(raw)
+    assert isinstance(parsed, list)
+    assert parsed == []
+
+
