@@ -563,23 +563,47 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         if count <= 0:
             return []
         counter_ref = self._metadata.document("example_counters")
-        try:
-            transaction = self._client.transaction()
-        except AttributeError:  # pragma: no cover - defensive fallback
-            transaction = None
-        if transaction is None:
+
+        def _allocate_without_transaction() -> list[int]:
             snapshot = counter_ref.get()
             current = int((snapshot.to_dict() or {}).get("next_id", 1))
             ids = list(range(current, current + count))
             counter_ref.set({"next_id": current + count}, merge=True)
             return ids
-        snapshot = _coerce_firestore_snapshot(transaction.get(counter_ref))
-        current_payload = (snapshot.to_dict() if snapshot is not None else {}) or {}
-        current = int(current_payload.get("next_id", 1))
-        ids = list(range(current, current + count))
-        transaction.set(counter_ref, {"next_id": current + count}, merge=True)
-        transaction.commit()
-        return ids
+
+        try:
+            transaction = self._client.transaction()
+        except AttributeError:  # pragma: no cover - defensive fallback
+            transaction = None
+        except Exception:  # pragma: no cover - best-effort guard
+            transaction = None
+
+        if transaction is None:
+            return _allocate_without_transaction()
+
+        try:
+            snapshot = _coerce_firestore_snapshot(transaction.get(counter_ref))
+            current_payload = (snapshot.to_dict() if snapshot is not None else {}) or {}
+            current = int(current_payload.get("next_id", 1))
+            ids = list(range(current, current + count))
+            transaction.set(counter_ref, {"next_id": current + count}, merge=True)
+            transaction.commit()
+            return ids
+        except (ValueError, gexc.GoogleAPIError) as exc:
+            # Firebase/Firestore が "Transaction not in progress" を返すケースがあるため
+            # トランザクション経路が失敗した場合はログを残して即座にフォールバックする。
+            logger.warning(
+                "firestore_allocate_ids_transaction_failed",
+                error=str(exc),
+                error_class=exc.__class__.__name__,
+            )
+        except Exception as exc:  # pragma: no cover - defensive guard
+            logger.warning(
+                "firestore_allocate_ids_transaction_failed",
+                error=str(exc),
+                error_class=exc.__class__.__name__,
+            )
+        return _allocate_without_transaction()
 
     def update_word_pack_metadata(
         self,

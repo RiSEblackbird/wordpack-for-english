@@ -273,6 +273,28 @@ def test_allocate_example_ids_handles_generator_transaction(monkeypatch: pytest.
     assert ids == [1, 2, 3]
 
 
+def test_allocate_example_ids_falls_back_on_transaction_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Firestore がトランザクションを拒否した場合でも採番が継続することを保証する。"""
+
+    client = FakeFirestoreClient()
+    firestore_store = AppFirestoreStore(client=client)
+
+    class BrokenTransaction(FakeTransaction):
+        def get(self, doc_ref):  # type: ignore[override]
+            raise ValueError("Transaction not in progress, cannot be used in API requests.")
+
+    monkeypatch.setattr(client, "transaction", lambda: BrokenTransaction(client))
+
+    with capture_logs() as cap:
+        ids = firestore_store.wordpacks._allocate_example_ids(2)  # pylint: disable=protected-access
+
+    assert ids == [1, 2]
+    events = [entry.get("event") for entry in cap]
+    assert "firestore_allocate_ids_transaction_failed" in events
+
+
 def test_find_word_pack_with_metadata_uses_filtered_query(
     firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
