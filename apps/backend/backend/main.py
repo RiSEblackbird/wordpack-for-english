@@ -189,7 +189,10 @@ class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
                 request_id = getattr(request.state, "request_id", request_id)
                 latency_ms = (time.time() - start) * 1000
                 registry.record(path, latency_ms, is_error=is_error, is_timeout=is_timeout)
-                logger.info(
+                # Cloud Logging 上で失敗リクエストを確実に拾えるよう、エラー時は
+                # severity=ERROR になる logger.error を使い分ける。
+                log_method = logger.error if is_error else logger.info
+                log_method(
                     "request_complete",
                     path=path,
                     method=method,

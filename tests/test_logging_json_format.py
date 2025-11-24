@@ -116,6 +116,7 @@ def test_structlog_outputs_pure_json_without_stdlib_prefix():
     data = json.loads(message_text)
     assert data.get("event") == "request_complete"
     assert data.get("level") in {"info", "INFO"}
+    assert data.get("severity") == "INFO"
     assert data.get("path") == "/healthz"
     assert data.get("method") == "GET"
     assert "latency_ms" in data
@@ -320,6 +321,7 @@ def test_request_log_records_error_context() -> None:
 
     data = json.loads(request_lines[-1])
     assert data.get("status_code") == 500
+    assert data.get("severity") == "ERROR"
     assert data.get("error_type") == "RuntimeError"
     assert "intentional failure" in data.get("error_message", "")
 

@@ -17,6 +17,16 @@ from .config import settings
 _SENSITIVE_KEYWORDS = ("api_key", "token", "secret", "authorization", "password", "key")
 _MASK_PLACEHOLDER = "***"
 _TRACE_CONTEXT_KEYS = ("trace", "spanId", "trace_sampled")
+_SEVERITY_MAP = {
+    "critical": "CRITICAL",
+    "fatal": "CRITICAL",
+    "error": "ERROR",
+    "warning": "WARNING",
+    "warn": "WARNING",
+    "info": "INFO",
+    "debug": "DEBUG",
+}
+_DEFAULT_SEVERITY = "INFO"
 
 
 def _mask_secret_value(raw: object) -> str:
@@ -116,6 +126,24 @@ def _merge_trace_context(
     return event_dict
 
 
+def _attach_severity(
+    _logger: structlog.types.WrappedLogger,
+    _method_name: str,
+    event_dict: dict[str, Any],
+) -> dict[str, Any]:
+    """Duplicate structlog's `level` into a Cloud Logging friendly severity field.
+
+    Google Cloud Logging treats the `severity` key specially when rendering log
+    entries. FastAPI/structlog は `level` を出力するだけなので、ここで GCP
+    が認識できる大文字の `severity` を追加しておく。
+    """
+
+    level_value = str(event_dict.get("level") or "").lower()
+    severity = _SEVERITY_MAP.get(level_value, level_value.upper())
+    event_dict["severity"] = severity or _DEFAULT_SEVERITY
+    return event_dict
+
+
 def configure_logging() -> None:
     """Configure structlog for application-wide logging.
 
@@ -136,6 +164,7 @@ def configure_logging() -> None:
         processors=[
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.add_log_level,
+            _attach_severity,
             structlog_contextvars.merge_contextvars,
             _merge_trace_context,
             _sanitize_event_dict,
