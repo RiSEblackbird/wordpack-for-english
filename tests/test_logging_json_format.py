@@ -326,3 +326,43 @@ def test_request_log_records_error_context() -> None:
     assert "intentional failure" in data.get("error_message", "")
 
 
+def test_request_log_marks_401_as_error() -> None:
+    """認証エラー(401)も ERROR レベルの request_complete として記録する。"""
+
+    buf_out = io.StringIO()
+    buf_err = io.StringIO()
+
+    with redirect_stdout(buf_out), redirect_stderr(buf_err):
+        with _use_fake_settings():
+            from backend.logging import configure_logging
+
+            configure_logging()
+
+            from fastapi.testclient import TestClient
+            from fastapi import Response as FastAPIResponse
+
+            from backend.main import app
+
+            @app.get("/unauthorized")
+            async def unauthorized() -> FastAPIResponse:  # pragma: no cover - ログ検証専用
+                return FastAPIResponse("unauthorized", status_code=401)
+
+            client = TestClient(app, raise_server_exceptions=False)
+            response = client.get("/unauthorized")
+
+            assert response.status_code == 401
+
+    raw = buf_err.getvalue().strip() or buf_out.getvalue().strip()
+    request_lines = _extract_request_complete_lines(raw)
+
+    assert request_lines, "request_complete log line not found"
+
+    data = json.loads(request_lines[-1])
+    assert data.get("status_code") == 401
+    assert data.get("is_error") is True
+    assert data.get("severity") == "ERROR"
+    # error_type / error_message は補完されていることだけ軽く確認
+    assert data.get("error_type") == "HTTPUnauthorized"
+    assert "401" in (data.get("error_message") or "")
+
+

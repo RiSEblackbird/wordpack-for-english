@@ -244,6 +244,28 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
 
   const clearError = useCallback(() => setError(null), []);
 
+  /**
+   * どのエンドポイントでも 401 が返った場合に、セッション切れとして扱う。
+   * fetchJson は `auth:unauthorized` カスタムイベントを発火するため、ここで
+   * それを監視してクライアント側状態を初期化する。
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ status?: number }>).detail;
+      if (detail && detail.status === 401) {
+        setUser(null);
+        setError('セッションの有効期限が切れました。もう一度ログインしてください。');
+        // サーバ側で Cookie が既に無効なケースに備えて、クライアント側 Cookie も掃除する。
+        clearSessionCookie();
+      }
+    };
+    window.addEventListener('auth:unauthorized', handler as EventListener);
+    return () => {
+      window.removeEventListener('auth:unauthorized', handler as EventListener);
+    };
+  }, [clearSessionCookie]);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user,

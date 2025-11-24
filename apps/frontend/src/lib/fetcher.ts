@@ -63,7 +63,8 @@ export async function fetchJson<T = any>(url: string, options: FetchJsonOptions 
     const data = isJson ? await res.json().catch(() => undefined) : await res.text().catch(() => undefined);
 
     if (!res.ok) {
-      let message = `Request failed: ${res.status}`;
+      const status = res.status;
+      let message = `Request failed: ${status}`;
       // FastAPI の detail は任意型。 {message, hint, reason_code} を優先
       if (data && typeof data === 'object' && 'detail' in (data as any)) {
         const d = (data as any).detail;
@@ -90,7 +91,24 @@ export async function fetchJson<T = any>(url: string, options: FetchJsonOptions 
           message = String(d);
         }
       }
-      throw new ApiError(message, res.status, data);
+      if (status === 401) {
+        try {
+          // グローバルな認証エラーイベントを発火し、AuthContext 側でログアウトや
+          // エラーメッセージ表示などの共通処理を行えるようにする。
+          window.dispatchEvent(
+            new CustomEvent('auth:unauthorized', {
+              detail: {
+                url,
+                status,
+                body: data ?? null,
+              },
+            }),
+          );
+        } catch {
+          // window 未定義などブラウザ外環境では黙って継続する。
+        }
+      }
+      throw new ApiError(message, status, data);
     }
 
     return data as T;

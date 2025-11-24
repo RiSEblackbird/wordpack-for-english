@@ -162,10 +162,29 @@ class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
                         "content_length": response.headers.get("content-length"),
                     }
                     if trace_obj is not None and hasattr(trace_obj, "set_attribute"):
-                        trace_obj.set_attribute("output", str(output_payload)[:40000])  # type: ignore[call-arg]
+                        trace_obj.set_attribute(
+                            "output", str(output_payload)[:40000]
+                        )  # type: ignore[call-arg]
                     elif trace_obj is not None and hasattr(trace_obj, "update"):
                         trace_obj.update(output=output_payload)
                 except Exception:  # pragma: no cover - 出力メタ記録失敗時
+                    pass
+                # FastAPI は HTTPException を内部でレスポンスへ変換するため、
+                # 401 などの認証エラーはここでは例外としては扱われない。
+                # 運用上は 401 を明確なエラーとみなしたいので、ステータスコード
+                # を見て is_error フラグと簡易エラーメッセージを補完する。
+                try:
+                    if (
+                        not is_error
+                        and isinstance(status_code, int)
+                        and status_code == 401
+                    ):
+                        is_error = True
+                        if error_type is None:
+                            error_type = "HTTPUnauthorized"
+                        if error_message is None:
+                            error_message = "HTTP 401 Unauthorized"
+                except Exception:  # pragma: no cover - ログ用補完に失敗しても本処理は継続
                     pass
                 return response
             except Exception as exc:
