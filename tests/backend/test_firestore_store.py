@@ -30,6 +30,8 @@ from tests.firestore_fakes import (
 )
 
 AppFirestoreStore = firestore_module.AppFirestoreStore
+if not hasattr(firestore_module, "FakeQuery"):
+    firestore_module.FakeQuery = FakeQuery  # type: ignore[attr-defined]
 
 @pytest.fixture()
 def firestore_store() -> AppFirestoreStore:
@@ -249,6 +251,26 @@ def test_find_word_pack_lookup_returns_none_after_retries(
     assert result is None
     failure_logs = [entry for entry in cap if entry.get("event") == "firestore_wordpack_lookup_give_up"]
     assert failure_logs
+
+
+def test_allocate_example_ids_handles_generator_transaction(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = FakeFirestoreClient()
+    firestore_store = AppFirestoreStore(client=client)
+
+    class GeneratorTransaction(FakeTransaction):
+        def get(self, doc_ref):  # type: ignore[override]
+            snapshot = super().get(doc_ref)
+
+            def _gen():
+                yield snapshot
+
+            return _gen()
+
+    monkeypatch.setattr(client, "transaction", lambda: GeneratorTransaction(client))
+
+    ids = firestore_store.wordpacks._allocate_example_ids(3)  # pylint: disable=protected-access
+
+    assert ids == [1, 2, 3]
 
 
 def test_find_word_pack_with_metadata_uses_filtered_query(

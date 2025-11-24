@@ -215,3 +215,32 @@ def test_upsert_blocks_duplicate_creation_under_concurrency():
     stored = client.collection("lemmas")._docs
     assert len(stored) == 1
     assert next(iter(stored.values())).get("normalized_label") == "race"
+
+
+def test_upsert_handles_transaction_get_generator():
+    client = FakeFirestoreClient()
+    store = FirestoreWordPackStore(client)  # type: ignore[arg-type]
+    now = datetime.now(UTC).isoformat()
+
+    class GeneratorTransaction(FakeTransaction):
+        def get(self, reference: FakeDocumentReference):  # type: ignore[override]
+            snapshot = super().get(reference)
+
+            def _gen():
+                yield snapshot
+
+            return _gen()
+
+    client.transaction = lambda: GeneratorTransaction(client)  # type: ignore[assignment]
+
+    lemma_id = store._upsert_lemma(  # pylint: disable=protected-access
+        label="Resilient",
+        sense_title="",
+        llm_model=None,
+        llm_params=None,
+        now=now,
+    )
+
+    assert lemma_id == "resilient"
+    stored = client.collection("lemmas")._docs
+    assert stored[lemma_id]["label"] == "Resilient"

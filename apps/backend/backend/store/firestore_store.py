@@ -4,7 +4,7 @@ import json
 import uuid
 from threading import Lock
 from collections import defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -89,6 +89,23 @@ def _extract_example_total(
     except Exception:
         return 0, False
     return max(0, total), True
+
+
+def _coerce_firestore_snapshot(
+    candidate: Any,
+) -> firestore.DocumentSnapshot | None:
+    """Normalize Firestore transaction.get results (snapshot or generator) into a snapshot."""
+
+    if candidate is None:
+        return None
+    if hasattr(candidate, "exists"):
+        return candidate  # type: ignore[return-value]
+    if isinstance(candidate, Iterator):
+        return next(candidate, None)
+    if isinstance(candidate, Iterable) and not isinstance(candidate, (str, bytes, Mapping)):
+        iterator = iter(candidate)
+        return next(iterator, None)
+    return None
 
 
 class FirestoreBaseStore:
@@ -556,8 +573,9 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             ids = list(range(current, current + count))
             counter_ref.set({"next_id": current + count}, merge=True)
             return ids
-        snapshot = transaction.get(counter_ref)
-        current = int((snapshot.to_dict() or {}).get("next_id", 1))
+        snapshot = _coerce_firestore_snapshot(transaction.get(counter_ref))
+        current_payload = (snapshot.to_dict() if snapshot is not None else {}) or {}
+        current = int(current_payload.get("next_id", 1))
         ids = list(range(current, current + count))
         transaction.set(counter_ref, {"next_id": current + count}, merge=True)
         transaction.commit()
@@ -665,8 +683,8 @@ class FirestoreWordPackStore(FirestoreBaseStore):
 
         if transaction is not None:
             with self._lemma_write_lock:
-                snapshot = transaction.get(normalized_ref)
-                if snapshot.exists:
+                snapshot = _coerce_firestore_snapshot(transaction.get(normalized_ref))
+                if snapshot is not None and snapshot.exists:
                     return _update_existing(snapshot)
                 try:
                     transaction.create(normalized_ref, payload)
