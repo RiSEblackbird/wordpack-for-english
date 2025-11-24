@@ -125,6 +125,9 @@ class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
         ua = request.headers.get("user-agent", "-")
         is_error = False
         is_timeout = False
+        status_code: int | None = None
+        error_type: str | None = None
+        error_message: str | None = None
         input_payload: dict[str, Any] = {
             "path": path,
             "method": method,
@@ -151,9 +154,10 @@ class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
                 pass
             try:
                 response = await call_next(request)
+                status_code = getattr(response, "status_code", None)
                 try:
                     output_payload = {
-                        "status": getattr(response, "status_code", None),
+                        "status": status_code,
                         "content_type": response.headers.get("content-type"),
                         "content_length": response.headers.get("content-length"),
                     }
@@ -166,6 +170,16 @@ class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
                 return response
             except Exception as exc:
                 is_error = True
+                status_code = getattr(exc, "status_code", 500) if hasattr(exc, "status_code") else 500
+                error_type = exc.__class__.__name__
+                raw_error_message = str(exc)
+                # なぜ: Cloud Run 上で失敗リクエストを特定しやすくするため、
+                # 例外型と簡潔なメッセージを残しつつログ膨張を防ぐ。
+                error_message = (
+                    raw_error_message
+                    if len(raw_error_message) <= 200
+                    else f"{raw_error_message[:197]}..."
+                )
                 if (
                     TimeoutException is not None and isinstance(exc, TimeoutException)
                 ) or isinstance(exc, asyncio.TimeoutError):
@@ -182,6 +196,9 @@ class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
                     latency_ms=latency_ms,
                     is_error=is_error,
                     is_timeout=is_timeout,
+                    status_code=status_code,
+                    error_type=error_type,
+                    error_message=error_message,
                     request_id=request_id,
                     client_ip=client_ip,
                     user_agent=ua,
