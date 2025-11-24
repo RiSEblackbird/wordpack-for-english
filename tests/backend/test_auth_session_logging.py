@@ -17,6 +17,7 @@ from itsdangerous import BadSignature, SignatureExpired
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
 
 from backend.auth import get_current_user, verify_session_token  # noqa: E402
+from backend.config import settings  # noqa: E402
 from backend.logging import configure_logging  # noqa: E402
 
 
@@ -74,11 +75,12 @@ def _build_request(
     return request
 
 
-def _cookie_header(token: str, cookie_name: str = "wp_session") -> str:
+def _cookie_header(token: str, cookie_name: str | None = None) -> str:
     """URL セーフな Cookie ヘッダー文字列を構築する。"""
 
+    resolved_name = cookie_name or settings.session_cookie_name or "wp_session"
     cookie = SimpleCookie()
-    cookie[cookie_name] = token
+    cookie[resolved_name] = token
     return cookie.output(header="", sep=";").strip()
 
 
@@ -186,9 +188,10 @@ def test_get_current_user_tolerates_non_rfc_cookie_header(
     monkeypatch.setattr(auth_module, "store", _DummyStore())
 
     # 先頭に Google Identity Services 由来の g_state 風 Cookie を置き、その後ろに
-    # wp_session を続ける。SimpleCookie がこのヘッダーを解析に失敗しても、
-    # read_session_cookie フォールバックで wp_session を拾えることを検証する。
-    cookie_header = 'g_state={"i_l":0,"i_p":0}; wp_session=session-token-xyz'
+    # WordPack が利用するセッション Cookie 名（通常は __session）を続ける。
+    # SimpleCookie がこのヘッダーを解析に失敗しても、フォールバックで拾えることを検証する。
+    cookie_name = settings.session_cookie_name or "wp_session"
+    cookie_header = f'g_state={{"i_l":0,"i_p":0}}; {cookie_name}=session-token-xyz'
     request = _build_request(cookie_header=cookie_header)
 
     user = asyncio.run(get_current_user(request))
@@ -196,3 +199,28 @@ def test_get_current_user_tolerates_non_rfc_cookie_header(
     assert user["google_sub"] == "sub-123"
     # セッショントークンが正しく抽出されていること。
     assert observed.get("token") == "session-token-xyz"
+
+
+def test_get_current_user_accepts_firebase_cookie_alias(monkeypatch: pytest.MonkeyPatch) -> None:
+    """__session だけでもユーザー認証できる互換経路を保証する。"""
+
+    observed: dict[str, str] = {}
+
+    def _fake_verify(token: str) -> dict[str, str]:
+        observed["token"] = token
+        return {"sub": "sub-firebase"}
+
+    monkeypatch.setattr("backend.auth.verify_session_token", _fake_verify)
+
+    import backend.auth as auth_module
+
+    class _DummyStore:
+        def get_user_by_google_sub(self, google_sub: str) -> dict[str, str] | None:
+            return {"google_sub": google_sub, "email": "alias@example.com", "display_name": "Alias User"}
+
+    monkeypatch.setattr(auth_module, "store", _DummyStore())
+
+    request = _build_request(cookie_header="__session=session-token-alias")
+    user = asyncio.run(get_current_user(request))
+    assert user["google_sub"] == "sub-firebase"
+    assert observed.get("token") == "session-token-alias"

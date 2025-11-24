@@ -12,7 +12,7 @@ from itsdangerous import BadSignature, SignatureExpired
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
-from ..auth import read_session_cookie, verify_session_token
+from ..auth import resolve_session_cookie, verify_session_token
 from ..config import settings
 from ..logging import logger
 
@@ -200,7 +200,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._ip_buckets: dict[str, _TokenBucket] = {}
         self._user_buckets: OrderedDict[str, _TrackedBucket] = OrderedDict()
         self._lock = threading.Lock()
-        self._session_cookie_name = settings.session_cookie_name or "wp_session"
         self._anon_bucket_key = "anon"
         self._user_bucket_ttl = max(1.0, float(user_bucket_ttl_seconds))
         self._max_user_buckets = max(1, int(max_user_buckets))
@@ -249,7 +248,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _resolve_user_key(self, request: Request, client_ip: str) -> tuple[str, bool]:
         """Resolve the logical session identifier from the signed cookie."""
 
-        raw_token = read_session_cookie(request, self._session_cookie_name)
+        _, raw_token = resolve_session_cookie(request)
         if not raw_token:
             logger.debug("rate_limit_session_missing", client_ip=client_ip)
             return self._anon_bucket_key, False

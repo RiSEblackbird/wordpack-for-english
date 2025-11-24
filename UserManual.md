@@ -26,7 +26,7 @@
 - Google アカウントでメールアドレスの確認が済んでいない場合は 403 エラーになります。ID トークンの `email_verified` が `false` のまま送信されるため、Google アカウント管理画面からメールを確認して再度ログインしてください。
 - 管理者が `ADMIN_EMAIL_ALLOWLIST` を設定している場合、許可リストに載っていないメールアドレスでログインしようとすると「403 Forbidden」と表示されます。別アカウントを利用するか、管理者に連絡してリストへ登録してもらってください。
 - ログアウトしたい場合は画面右上の「ログアウト」ボタンを押すか、「設定」タブ最下部の「ログアウト（Google セッションを終了）」ボタンを押してください。押下するとバックエンドへ `/api/auth/logout` リクエストが送信され、サーバー側で HttpOnly セッション Cookie が失効します。まれにサーバー応答が得られない場合はクライアント側で Cookie を削除するフォールバックが働き、必ずサインイン画面へ戻ります。
-- ブラウザにセッション Cookie が残っている間は、リロード後も自動的にログイン状態が復元されます。Cookie を削除した場合は再度サインインが必要です。
+- ブラウザにセッション Cookie が残っている間は、リロード後も自動的にログイン状態が復元されます。Cookie を削除した場合は再度サインインが必要です。Firebase Hosting を経由する本番環境では `wp_session` と `__session` の 2 種類の HttpOnly Cookie が保存されますが、どちらも同一の署名付きセッショントークンであり、ユーザー操作は変わりません。
 - ログイン時にローカルストレージへ保存されるのは表示用のユーザー情報（メールアドレスや表示名）のみであり、ID トークン自体はブラウザメモリ内に限定されます。HttpOnly なセッション Cookie が無効化されると保存済みユーザー情報も即座に破棄され、再サインインが求められます。
 
 ### A-3. 新機能（保存）
@@ -205,7 +205,7 @@
   - HTTPS 運用で HSTS の寿命を変えたい場合は `SECURITY_HSTS_MAX_AGE_SECONDS` を設定し、サブドメイン除外時は `SECURITY_HSTS_INCLUDE_SUBDOMAINS=false`
   - `SECURITY_CSP_DEFAULT_SRC` と `SECURITY_CSP_CONNECT_SRC` にカンマ区切りで CSP オリジンを記述（`'self'` を含めたい場合は引用符ごと入力）
   - Swagger UI など外部 CDN が必要な場合は `https://cdn.jsdelivr.net` などをリストへ追加する
-- フロントエンド（`apps/frontend`）では `.env` を `apps/frontend/.env.example` からコピーしてください。リポジトリ直下で `npm run prepare:frontend-env` を実行すると、テンプレートが存在する場合のみ `.env` が自動作成され、既存ファイルは上書きされません。`VITE_GOOGLE_CLIENT_ID` と `VITE_SESSION_COOKIE_NAME` をバックエンドと同じ値に調整すると、`AuthContext.tsx` が正しいセッション Cookie を参照します。
+- フロントエンド（`apps/frontend`）では `.env` を `apps/frontend/.env.example` からコピーしてください。リポジトリ直下で `npm run prepare:frontend-env` を実行すると、テンプレートが存在する場合のみ `.env` が自動作成され、既存ファイルは上書きされません。`VITE_GOOGLE_CLIENT_ID` をバックエンドの `GOOGLE_CLIENT_ID` と合わせ、`SESSION_COOKIE_NAME` をカスタマイズした場合のみ `VITE_SESSION_COOKIE_NAME` も更新してください（未設定でも `wp_session` / `__session` の双方をクリアします）。
 
 ### B-1-1. Google OAuth クライアントの作成手順
 1. [Google Cloud Console](https://console.cloud.google.com/) を開き、対象プロジェクトを作成または選択します。

@@ -10,7 +10,7 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from pydantic import BaseModel, Field
 
-from ..auth import get_current_user, issue_session_token
+from ..auth import get_current_user, issue_session_token, session_cookie_names
 from ..config import settings
 from ..logging import logger
 from ..store import store
@@ -157,14 +157,15 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
     session_token = issue_session_token(google_sub)
 
     response = JSONResponse(status_code=HTTPStatus.OK, content={"user": user})
-    response.set_cookie(
-        key=settings.session_cookie_name or "wp_session",
-        value=session_token,
-        httponly=True,
-        secure=settings.session_cookie_secure,
-        samesite="lax",
-        max_age=_session_cookie_max_age(),
-    )
+    for cookie_name in session_cookie_names():
+        response.set_cookie(
+            key=cookie_name,
+            value=session_token,
+            httponly=True,
+            secure=settings.session_cookie_secure,
+            samesite="lax",
+            max_age=_session_cookie_max_age(),
+        )
     request.state.user = user
     request.state.user_id = google_sub
     # 成功ログは個人情報を直接出力しないよう `_log_google_auth_success` へ委譲する。
@@ -180,14 +181,14 @@ async def logout(response: Response, user: dict[str, str] = Depends(get_current_
     HttpOnly Cookie を削除することでセッションを終了させる。追加のクリーンアップが
     必要になった場合もこのハンドラーで一元管理する。"""
 
-    cookie_name = settings.session_cookie_name or "wp_session"
     response.status_code = HTTPStatus.NO_CONTENT
-    response.delete_cookie(
-        key=cookie_name,
-        httponly=True,
-        secure=settings.session_cookie_secure,
-        samesite="lax",
-    )
+    for cookie_name in session_cookie_names():
+        response.delete_cookie(
+            key=cookie_name,
+            httponly=True,
+            secure=settings.session_cookie_secure,
+            samesite="lax",
+        )
     logger.info(
         "logout_completed",
         user_id=user.get("google_sub"),
