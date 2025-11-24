@@ -14,7 +14,7 @@
       "fields": [
         { "fieldPath": "lemma_label_lower", "order": "ASCENDING" },
         { "fieldPath": "updated_at", "order": "DESCENDING" },
-        { "fieldPath": "__name__", "order": "ASCENDING" }
+        { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
     },
     {
