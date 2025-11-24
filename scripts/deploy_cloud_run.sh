@@ -251,6 +251,7 @@ if [[ -z "$REGION" ]]; then
 fi
 
 add_env_key "ENVIRONMENT"
+add_env_key "ADMIN_EMAIL_ALLOWLIST"
 add_env_key "SESSION_SECRET_KEY"
 add_env_key "CORS_ALLOWED_ORIGINS"
 add_env_key "TRUSTED_PROXY_IPS"
@@ -268,7 +269,7 @@ for ignore_key in "${IGNORE_DEPLOY_KEYS[@]}"; do
   unset "DEPLOY_ENV_KEYS[$ignore_key]"
 done
 
-for required_key in SESSION_SECRET_KEY CORS_ALLOWED_ORIGINS TRUSTED_PROXY_IPS ALLOWED_HOSTS; do
+for required_key in ADMIN_EMAIL_ALLOWLIST SESSION_SECRET_KEY CORS_ALLOWED_ORIGINS TRUSTED_PROXY_IPS ALLOWED_HOSTS; do
   if [[ -z "${!required_key:-}" ]]; then
     err "$required_key must be set in $ENV_FILE or environment"
     exit 1

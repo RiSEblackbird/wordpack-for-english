@@ -556,7 +556,9 @@ class Settings(BaseSettings):
         ENVIRONMENT=production のときだけ Secure を既定で有効化し、環境変数や
         テストから明示的に設定された値は上書きしない。また Cloud Run などの
         プロキシを経由する本番環境では、`X-Forwarded-For` を信頼する IP レンジを
-        必ず指定しないと実クライアント単位の監査やレート制御が破綻する。
+        必ず指定しないと実クライアント単位の監査やレート制御が破綻する。加えて、
+        本番運用では管理者許可リストが空だと全ユーザーが通過してしまうため、
+        ADMIN_EMAIL_ALLOWLIST を必須化して意図しない公開を防ぐ。
         """
 
         environment_name = (self.environment or "").lower()
@@ -565,6 +567,11 @@ class Settings(BaseSettings):
         is_secure_explicitly_configured = "session_cookie_secure" in self.model_fields_set
         if environment_name == "production" and not is_secure_explicitly_configured:
             self.session_cookie_secure = True
+
+        if environment_name == "production" and not self.admin_email_allowlist:
+            raise ValueError(
+                "ADMIN_EMAIL_ALLOWLIST must specify allowed admin emails in production"
+            )
 
         is_trusted_proxy_explicit = "trusted_proxy_ips" in self.model_fields_set
         if environment_name == "production":

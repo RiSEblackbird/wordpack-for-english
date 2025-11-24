@@ -290,7 +290,7 @@
 - LLM 機能有効時でも内部スレッドは共有プールで制御（長時間運用でのスレッド増加なし）
 
 #### B-5-1. Cloud Run への自動デプロイ
-- `scripts/deploy_cloud_run.sh` が Cloud Build → Cloud Run Deploy を一括で実行します。最初に `cp env.deploy.example .env.deploy` でテンプレートを複製し、`PROJECT_ID` や `REGION`、ドメイン情報を本番値へ置き換えてください。`.env.deploy`（または `--env-file` で指定するファイル）に `ENVIRONMENT=production` と `SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を記載してください。`PROJECT_ID` / `REGION` を同じファイルに含めるとコマンド引数を短縮できます。`gcloud config set project <id>` と `gcloud config set run/region <region>`（run/region が無ければ `compute/region`）を事前に設定していれば、CLI 引数や env ファイルで空のままでもフォールバックで安全に補完され、採用された値はログで確認できます。
+- `scripts/deploy_cloud_run.sh` が Cloud Build → Cloud Run Deploy を一括で実行します。最初に `cp env.deploy.example .env.deploy` でテンプレートを複製し、`PROJECT_ID` や `REGION`、ドメイン情報を本番値へ置き換えてください。`.env.deploy`（または `--env-file` で指定するファイル）に `ENVIRONMENT=production` と `ADMIN_EMAIL_ALLOWLIST` / `SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を記載してください。開発と同じ許可メールだけがログインできるように、管理者メールアドレスは必ず列挙してください。`PROJECT_ID` / `REGION` を同じファイルに含めるとコマンド引数を短縮できます。`gcloud config set project <id>` と `gcloud config set run/region <region>`（run/region が無ければ `compute/region`）を事前に設定していれば、CLI 引数や env ファイルで空のままでもフォールバックで安全に補完され、採用された値はログで確認できます。
 - 実行例:
   ```bash
   ./scripts/deploy_cloud_run.sh \

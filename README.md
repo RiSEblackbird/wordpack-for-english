@@ -98,6 +98,7 @@ Firestore に保存する主要コレクションは `firestore.indexes.json` �
 `examples` の大量削除は `word_pack_id` で絞り込んだクエリに `limit` を付け、`WriteBatch`（もしくは Firebase CLI の `--recursive` オプション）でページングしながら消していくと、1 回あたり 500 件までに抑えつつ孤児ドキュメントを残さずに済みます。`AppFirestoreStore` も同じ手順で `examples` を削除するため、Cloud Console で手動クリーンアップする場合も同条件のクエリか `firebase firestore:delete --recursive` を用いると安全です。
 
 特定の Google アカウントだけに利用者を絞り込みたい場合は、カンマ区切りでメールアドレスを列挙した `ADMIN_EMAIL_ALLOWLIST` を設定してください。値は小文字に正規化され、完全一致したアドレスのみが `/api/auth/google` の認証を通過します（未設定または空文字の場合は従来どおり全アカウントを許可します）。
+Cloud Run など本番運用では `.env.deploy` に `ADMIN_EMAIL_ALLOWLIST` を必ず設定し、開発環境と同じ利用者だけがログインできるようにしてください。`ENVIRONMENT=production` かつ空のままデプロイすると、設定バリデーションの時点で起動が止まります。
 
 `SESSION_SECRET_KEY` は 32 文字以上の十分に乱数性を持つ文字列を必ず指定してください。`change-me` など既知のプレースホルダーや短い値を設定すると、アプリケーション起動時に検証エラーとなり実行が停止します。外部に公開する環境では `openssl rand -base64 48 | tr -d '\n'` などで生成した値を `.env` へ保存し、リポジトリへコミットしない運用を徹底してください。過去にドキュメントへ掲載したサンプル値もハッシュ照合で拒否されるため、再利用は避けてください。
 
@@ -163,7 +164,7 @@ cp env.deploy.example .env.deploy
 # コピー後に PROJECT_ID などを本番値へ置き換える
 ```
 
-`.env.deploy`（もしくは `--env-file` で指定したファイル）に本番環境の設定をまとめ、`SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず明示します。複数のホストやオリジンはカンマ区切りで並べるだけで構いません（デプロイスクリプトが `--env-vars-file` 形式へ変換するため追加エスケープ不要）。`SESSION_SECRET_KEY` は `./scripts/deploy_cloud_run.sh --generate-secret` を付けて実行すると不足時に `openssl rand -base64 <length>` で安全な値へ自動補完できます。
+`.env.deploy`（もしくは `--env-file` で指定したファイル）に本番環境の設定をまとめ、`ADMIN_EMAIL_ALLOWLIST` / `SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず明示します。複数のホストやオリジンはカンマ区切りで並べるだけで構いません（デプロイスクリプトが `--env-vars-file` 形式へ変換するため追加エスケープ不要）。`SESSION_SECRET_KEY` は `./scripts/deploy_cloud_run.sh --generate-secret` を付けて実行すると不足時に `openssl rand -base64 <length>` で安全な値へ自動補完できます。
 
 ```env
 # .env.deploy の例
@@ -205,7 +206,7 @@ GitHub Actions では `deploy-dry-run.yml` が pull_request と main ブラン�
 - 前提条件
   - `PROJECT_ID` と `REGION` を Make 実行時に必ず指定する（gcloud の既定値には依存しません）。
   - Firestore Admin / Cloud Run Admin / Artifact Registry Writer 権限を持つサービスアカウントで `gcloud auth login` または `gcloud auth activate-service-account` を済ませ、`gcloud auth configure-docker` も完了させておく。
-  - `.env.deploy` など本番用の env ファイルを準備し、`SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず含める（`ENV_FILE` でパスを切り替え可能）。
+- `.env.deploy` など本番用の env ファイルを準備し、`ADMIN_EMAIL_ALLOWLIST` / `SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず含める（`ENV_FILE` でパスを切り替え可能）。開発環境と同じメールアドレスだけが Cloud Run でも認証を通過することを確認してください。
 - 使い方
 
 ```bash
