@@ -85,7 +85,10 @@ class Settings(BaseSettings):
             "Google ID トークン検証時に許容する時計ずれ（秒）"
         ),
     )
-    admin_email_allowlist: tuple[str, ...] = Field(
+    # NoDecode を付与し、カンマ区切りの文字列を JSON と誤解釈しないようにする。
+    # なぜ: Cloud Run などの環境変数では配列を JSON 形式で渡しづらく、
+    #       README でもカンマ区切りで指定する手順を案内しているため。
+    admin_email_allowlist: Annotated[tuple[str, ...], NoDecode] = Field(
         default=(),
         description=(
             "Email addresses allowed to sign in when restrict mode is enabled / "

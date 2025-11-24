@@ -53,3 +53,18 @@ def test_non_production_can_skip_allowlist(environment: str) -> None:
     config = Settings(environment=environment, _env_file=None)
 
     assert config.admin_email_allowlist == ()
+
+
+def test_allowlist_accepts_comma_separated_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """カンマ区切りで指定した環境変数を JSON と誤解釈せずに読み込める。"""
+
+    monkeypatch.setenv("ADMIN_EMAIL_ALLOWLIST", "Admin@example.com,owner@example.com")
+
+    config = Settings(
+        environment="production",
+        allowed_hosts=(_CLOUD_RUN_HOST,),
+        session_secret_key=_SAFE_SECRET,
+        _env_file=None,
+    )
+
+    assert config.admin_email_allowlist == ("admin@example.com", "owner@example.com")
