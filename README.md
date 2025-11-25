@@ -213,6 +213,7 @@ GitHub Actions では `deploy-dry-run.yml` が pull_request と main ブラン�
   - `PROJECT_ID` と `REGION` を Make 実行時に必ず指定する（gcloud の既定値には依存しません）。
   - Firestore Admin / Cloud Run Admin / Artifact Registry Writer 権限を持つサービスアカウントで `gcloud auth login` または `gcloud auth activate-service-account` を済ませ、`gcloud auth configure-docker` も完了させておく。
 - `.env.deploy` など本番用の env ファイルを準備し、`ADMIN_EMAIL_ALLOWLIST` / `SESSION_SECRET_KEY` / `CORS_ALLOWED_ORIGINS` / `TRUSTED_PROXY_IPS` / `ALLOWED_HOSTS` を必ず含める（`ENV_FILE` でパスを切り替え可能）。開発環境と同じメールアドレスだけが Cloud Run でも認証を通過することを確認してください。
+- `ENVIRONMENT=production` では `ADMIN_EMAIL_ALLOWLIST` が空のままだと Pydantic 設定の検証で即座に失敗し、Google ログインの許可対象が不明な状態で本番デプロイへ進むことを防ぎます。CI では `configs/cloud-run/ci.env` にダミーの許可アドレス（例: `ci-admin@example.com`）を入れた上で dry-run を実行し、本番と同じ必須性チェックを通しています。
 - 使い方
 
 ```bash

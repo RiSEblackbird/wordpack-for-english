@@ -121,6 +121,7 @@ declare -a EXTRA_BUILD_ARGS=()
 
 declare -A DEPLOY_ENV_KEYS=()
 declare -a IGNORE_DEPLOY_KEYS=(PROJECT_ID REGION CLOUD_RUN_SERVICE ARTIFACT_REPOSITORY IMAGE_TAG MACHINE_TYPE BUILD_TIMEOUT)
+declare -a REQUIRED_DEPLOY_KEYS=(ADMIN_EMAIL_ALLOWLIST SESSION_SECRET_KEY CORS_ALLOWED_ORIGINS TRUSTED_PROXY_IPS ALLOWED_HOSTS)
 GCLOUD_CMD_CHECKED=false
 
 # コマンドライン引数のパース。
@@ -287,11 +288,13 @@ for ignore_key in "${IGNORE_DEPLOY_KEYS[@]}"; do
   unset "DEPLOY_ENV_KEYS[$ignore_key]"
 done
 
-# ここで「絶対に必要な環境変数」がすべて埋まっているか確認します。
-# 1つでも欠けている場合は、この段階で止めて原因をはっきり出すようにします。
-for required_key in ADMIN_EMAIL_ALLOWLIST SESSION_SECRET_KEY CORS_ALLOWED_ORIGINS TRUSTED_PROXY_IPS ALLOWED_HOSTS; do
+# ここで「絶対に必要な環境変数」を一覧表示しつつ、値が空でないかをまとめてチェックします。
+# どれか1つでも欠けていると Pydantic の検証や gcloud 実行まで進ませずに終了させ、
+# 「何が足りないか」を前段で明示して環境差分に気付きやすくします。
+log "Pre-flight: ensuring required keys exist before validation: ${REQUIRED_DEPLOY_KEYS[*]}"
+for required_key in "${REQUIRED_DEPLOY_KEYS[@]}"; do
   if [[ -z "${!required_key:-}" ]]; then
-    err "$required_key must be set in $ENV_FILE or environment"
+    err "$required_key must be set in $ENV_FILE or environment (pre-flight check stops before validation)"
     exit 1
   fi
 done
