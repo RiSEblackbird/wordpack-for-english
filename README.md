@@ -63,7 +63,7 @@ cp env.example .env
 # Google ログインを利用する場合は以下も設定（ドメイン制限は任意）
 # GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com
 # GOOGLE_ALLOWED_HD=example.com
-# ADMIN_EMAIL_ALLOWLIST=admin@example.com,owner@example.com
+# ADMIN_EMAIL_ALLOWLIST=test@example.com  # ENVIRONMENT=production では必須。開発/テスト/CI ではダミー値でバリデーションを通過させる
 # CORS_ALLOWED_ORIGINS=http://127.0.0.1:5173,http://localhost:5173
 # TRUSTED_PROXY_IPS=35.191.0.0/16,130.211.0.0/22
 # ALLOWED_HOSTS=app-1234567890-uc.a.run.app,api.example.com
@@ -85,6 +85,8 @@ npm run prepare:frontend-env  # apps/frontend/.env が無い場合に .env.examp
 ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。Firebase Hosting から Cloud Run へリライティングする構成では、`wp_session` に加えて `__session` も同じトークンで自動配信されるため、Hosting の `__session` 制約を意識せずに認証を維持できます。
 
 `ENVIRONMENT=production` のときバックエンドは Cloud Firestore へ永続化します。Google Cloud のサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を必ず設定し、Firestore プロジェクトで `users` / `word_packs` / `examples` などのコレクション作成権限を付与してください。その他の環境では従来どおりローカル SQLite ファイル（`WORDPACK_DB_PATH`）が利用されます。
+
+`ENVIRONMENT` と `ADMIN_EMAIL_ALLOWLIST` は連動する前提でセットアップしてください。`ENVIRONMENT=production` で allowlist が空のままデプロイすると設定バリデーションで起動が止まり、Google ログインの許可メールアドレスがひとつも無い状態を防ぎます。テストや CI では本番同等の検証を通すために `ADMIN_EMAIL_ALLOWLIST=test@example.com` のようなダミー値を必ず設定し、実運用時のみ本当の許可リストへ差し替えてください。
 
 #### Firestore のインデックス要件
 Firestore に保存する主要コレクションは `firestore.indexes.json` で複合インデックスを一括管理しています。`word_packs`（`created_at` 降順 + `__name__`）、`examples`（`word_pack_id`/`category` フィルタ + `position` / `example_id` の組み合わせ）を固定することで、バックエンドのページネーションと `Aggregation Query` の `count()` が常に安定します。`lemma_label_lower` への等価フィルタと `updated_at` 降順の `order_by` を組み合わせるクエリ用のインデックスも追加済みで、lemma 重複チェック時に最新 1 件だけを取得します。JSON ファイルはそのまま Cloud Firestore / エミュレータ / Firebase CLI で流用できるようにしてあるため、手作業で Web Console に登録する必要はありません。
