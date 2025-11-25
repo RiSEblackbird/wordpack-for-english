@@ -8,6 +8,7 @@ from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
+import pytest
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1] / "apps" / "backend"
 if str(_BACKEND_ROOT) not in sys.path:
@@ -83,6 +84,20 @@ def override_settings(**overrides: object) -> Iterator[None]:
     finally:
         for key, value in original.items():
             setattr(settings, key, value)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _force_development_settings() -> Iterator[None]:
+    """CI/ローカルいずれでも設定バリデーションを安全に通過させる。"""
+
+    # なぜ: CI では ENVIRONMENT=production で実行するため、許可リスト未設定だと
+    # Settings モデルの strict バリデーションが Import 時に例外を投げてテストが
+    # 開始できない。開発環境相当の設定に強制し、空許可リストによる起動失敗を防ぐ。
+    with override_settings(
+        environment="development",
+        admin_email_allowlist=("test@example.com",),
+    ):
+        yield
 
 
 def test_security_headers_are_added_to_primary_endpoints() -> None:
