@@ -42,6 +42,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     currentWordPackId,
     data,
     loading,
+    progressUpdating,
     message,
     setStatusMessage,
     generateWordPack,
@@ -82,7 +83,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
   const isLemmaValid = lemmaValidation.valid;
   const normalizedLemma = lemmaValidation.normalizedLemma;
-  const isActionLoading = loading || examplesLoading;
+  const isActionLoading = loading || examplesLoading || progressUpdating;
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
