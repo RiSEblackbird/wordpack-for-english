@@ -56,6 +56,7 @@ const normalizeWordPack = (wp: WordPack): WordPack => ({
 export const useLemmaExplorer = ({ apiBase, requestTimeoutMs, onStatusMessage }: UseLemmaExplorerOptions): UseLemmaExplorerResult => {
   const [explorer, setExplorer] = useState<LemmaExplorerState | null>(null);
   const lemmaCacheRef = useRef<Map<string, LemmaLookupResponseData>>(new Map());
+  // アンマウント後にsetStateしないためのフラグ。リクエスト完了前にウィンドウが閉じられても安全に無視できる。
   const mountedRef = useRef(true);
 
   useEffect(() => () => {
@@ -97,6 +98,7 @@ export const useLemmaExplorer = ({ apiBase, requestTimeoutMs, onStatusMessage }:
       } catch {
         info = { found: false };
       }
+      // 取得結果は存在有無を含めてキャッシュし、短時間で同じ語義を開いた際のリクエストを省く。
       cache.set(key, info);
       return info;
     },
@@ -121,6 +123,7 @@ export const useLemmaExplorer = ({ apiBase, requestTimeoutMs, onStatusMessage }:
         senseTitle: info!.sense_title ?? null,
         wordPackId: info!.id!,
         status: 'loading',
+        // 同じWordPackを再度開いた場合は前回データを再利用し、読み込み中も内容を見せる。
         data: prev && prev.wordPackId === info!.id ? prev.data : null,
         errorMessage: null,
         minimized: false,
@@ -203,6 +206,7 @@ export const useLemmaExplorer = ({ apiBase, requestTimeoutMs, onStatusMessage }:
     if (!explorer || !explorer.data) return null;
     const pack = explorer.data;
     const senses = pack.senses?.slice(0, 3) ?? [];
+    // 例文数はカテゴリ順で固定表示し、実体がなくても0件として扱う。
     const exampleSummary = defaultCategories.map((category) => ({
       category,
       count: pack.examples?.[category]?.length ?? 0,
