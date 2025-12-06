@@ -12,7 +12,8 @@ import { formatDateJst } from '../lib/date';
 import { TTSButton } from './TTSButton';
 import { SidebarPortal } from './SidebarPortal';
 import { highlightLemma } from '../lib/highlight';
-import { LemmaExplorerWindow } from './LemmaExplorerWindow';
+import { LemmaExplorerPanel } from './LemmaExplorer/LemmaExplorerPanel';
+import { LemmaLookupResponseData, useLemmaExplorer } from './LemmaExplorer/useLemmaExplorer';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -21,25 +22,6 @@ interface Props {
   selectedMeta?: { created_at: string; updated_at: string } | null;
   onStudyProgressRecorded?: (payload: { wordPackId: string; checked_only_count: number; learned_count: number }) => void;
 }
-
-interface LemmaLookupResponseData {
-  found: boolean;
-  id?: string | null;
-  lemma?: string | null;
-  sense_title?: string | null;
-}
-
-interface LemmaExplorerState {
-  lemma: string;
-  senseTitle?: string | null;
-  wordPackId: string;
-  status: 'loading' | 'ready' | 'error';
-  data?: WordPack | null;
-  errorMessage?: string | null;
-  minimized: boolean;
-  width: number;
-}
-
 
 export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta, onStudyProgressRecorded }) => {
   const { settings, setSettings } = useSettings();
@@ -62,9 +44,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     handleChangeModel,
     advancedSettings,
   } = useWordPackForm({ settings, setSettings });
-  const [lemmaExplorer, setLemmaExplorer] = useState<LemmaExplorerState | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const lemmaCacheRef = useRef<Map<string, LemmaLookupResponseData>>(new Map());
   const lemmaActionRef = useRef<{
     tooltip: HTMLElement;
     aborter: AbortController | null;
@@ -89,9 +69,19 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     generateExamples: generateExamplesFromHook,
     recordStudyProgress,
   } = useWordPack({ model, onWordPackGenerated, onStudyProgressRecorded });
+  const {
+    explorer: lemmaExplorer,
+    explorerContent,
+    openLemmaExplorer: onLemmaOpen,
+    closeLemmaExplorer,
+    minimizeLemmaExplorer,
+    restoreLemmaExplorer,
+    resizeLemmaExplorer,
+    lookupLemmaMetadata,
+    invalidateLemmaCache,
+  } = useLemmaExplorer({ apiBase, requestTimeoutMs, onStatusMessage: setStatusMessage });
   const [reveal, setReveal] = useState(false);
   const [count, setCount] = useState(3);
-  const mountedRef = useRef(true);
   const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
   const isLemmaValid = lemmaValidation.valid;
   const normalizedLemma = lemmaValidation.normalizedLemma;
@@ -110,89 +100,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     lemmaActionRef.current = null;
   }, []);
 
-  const normalizeWordPack = useCallback(
-    (wp: WordPack): WordPack => ({
-      ...wp,
-      checked_only_count: wp.checked_only_count ?? 0,
-      learned_count: wp.learned_count ?? 0,
-    }),
-    [],
-  );
-
-  const ensureLemmaCache = useCallback((): Map<string, LemmaLookupResponseData> => {
-    if (typeof window === 'undefined') {
-      return lemmaCacheRef.current;
-    }
-    const w = window as typeof window & { __lemmaCache?: Map<string, LemmaLookupResponseData> };
-    if (!w.__lemmaCache) {
-      w.__lemmaCache = lemmaCacheRef.current;
-    }
-    lemmaCacheRef.current = w.__lemmaCache;
-    return lemmaCacheRef.current;
-  }, []);
-
-  const openLemmaExplorer = useCallback(
-    async (raw: string) => {
-      const target = raw.trim();
-      if (!target) return;
-      const cache = ensureLemmaCache();
-      const key = `lemma:${target.toLowerCase()}`;
-      let info = cache.get(key);
-      if (!info) {
-        try {
-          info = await fetchJson<LemmaLookupResponseData>(`${apiBase}/word/lemma/${encodeURIComponent(target)}`, {
-            timeoutMs: requestTimeoutMs,
-          });
-        } catch {
-          info = { found: false };
-        }
-        cache.set(key, info);
-      }
-      if (!info || !info.found || !info.id) {
-        setStatusMessage({ kind: 'alert', text: `「${target}」のWordPackは保存されていません` });
-        return;
-      }
-      if (!mountedRef.current) return;
-      setLemmaExplorer((prev) => ({
-        lemma: info!.lemma || target,
-        senseTitle: info!.sense_title ?? null,
-        wordPackId: info!.id!,
-        status: 'loading',
-        data: prev && prev.wordPackId === info!.id ? prev.data : null,
-        errorMessage: null,
-        minimized: false,
-        width: prev?.width ?? 360,
-      }));
-      try {
-        const detail = await fetchJson<WordPack>(`${apiBase}/word/packs/${info.id}`, {
-          timeoutMs: requestTimeoutMs,
-        });
-        if (!mountedRef.current) return;
-        setLemmaExplorer((prev) => {
-          if (!prev || prev.wordPackId !== info!.id) return prev;
-          return {
-            ...prev,
-            status: 'ready',
-            senseTitle: (detail.sense_title || prev.senseTitle) ?? null,
-            data: normalizeWordPack(detail),
-            errorMessage: null,
-          };
-        });
-      } catch (error) {
-        if (!mountedRef.current) return;
-        setLemmaExplorer((prev) => {
-          if (!prev || prev.wordPackId !== info!.id) return prev;
-          return {
-            ...prev,
-            status: 'error',
-            errorMessage: error instanceof Error ? error.message : null,
-          };
-        });
-      }
-    },
-    [apiBase, ensureLemmaCache, normalizeWordPack, requestTimeoutMs],
-  );
-
   const triggerUnknownLemmaGeneration = useCallback(async (lemmaText: string) => {
     const trimmed = lemmaText.trim();
     if (!trimmed) return false;
@@ -201,29 +108,11 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     setCount(3);
     await generateWordPack(trimmed);
     try {
-      const cache = ensureLemmaCache();
-      cache.delete(`lemma:${trimmed.toLowerCase()}`);
+      invalidateLemmaCache(trimmed);
     } catch {}
-    openLemmaExplorer(trimmed);
+    onLemmaOpen(trimmed);
     return true;
-  }, [detachLemmaActionTooltip, ensureLemmaCache, generateWordPack, openLemmaExplorer, setCount, setReveal]);
-
-  const closeLemmaExplorer = useCallback(() => setLemmaExplorer(null), []);
-
-  const minimizeLemmaExplorer = useCallback(
-    () => setLemmaExplorer((prev) => (prev ? { ...prev, minimized: true } : prev)),
-    [],
-  );
-
-  const restoreLemmaExplorer = useCallback(
-    () => setLemmaExplorer((prev) => (prev ? { ...prev, minimized: false } : prev)),
-    [],
-  );
-
-  const resizeLemmaExplorer = useCallback(
-    (nextWidth: number) => setLemmaExplorer((prev) => (prev ? { ...prev, width: nextWidth } : prev)),
-    [],
-  );
+  }, [detachLemmaActionTooltip, generateWordPack, invalidateLemmaCache, onLemmaOpen, setCount, setReveal]);
 
   const handleExampleActivation = useCallback(
     (event: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>) => {
@@ -236,14 +125,14 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       const highlight = target.closest('span.lemma-highlight') as HTMLElement | null;
       if (highlight) {
         const lemmaAttr = highlight.getAttribute('data-lemma') || highlight.textContent?.trim();
-        if (lemmaAttr) openLemmaExplorer(lemmaAttr);
+        if (lemmaAttr) onLemmaOpen(lemmaAttr);
         return;
       }
       const token = target.closest('span.lemma-token') as HTMLElement | null;
       if (token) {
         const lemmaMatch = token.getAttribute('data-lemma-match');
         if (lemmaMatch) {
-          openLemmaExplorer(lemmaMatch);
+          onLemmaOpen(lemmaMatch);
           return;
         }
         const pendingLemma = token.getAttribute('data-pending-lemma') || container.getAttribute('data-pending-lemma');
@@ -267,9 +156,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         return;
       }
       const fallback = container.getAttribute('data-last-lemma') || container.getAttribute('data-lemma');
-      if (fallback) openLemmaExplorer(fallback);
+      if (fallback) onLemmaOpen(fallback);
     },
-    [detachLemmaActionTooltip, openLemmaExplorer, triggerUnknownLemmaGeneration],
+    [detachLemmaActionTooltip, onLemmaOpen, triggerUnknownLemmaGeneration],
   );
 
   const formatDate = (dateStr?: string | null) => {
@@ -310,61 +199,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
   const packCheckedCount = data?.checked_only_count ?? 0;
   const packLearnedCount = data?.learned_count ?? 0;
-
-  const lemmaExplorerContent = useMemo(() => {
-    if (!lemmaExplorer || !lemmaExplorer.data) return null;
-    const pack = lemmaExplorer.data;
-    const senses = pack.senses?.slice(0, 3) ?? [];
-    const exampleSummary = exampleCategories.map((category) => ({
-      category,
-      count: pack.examples?.[category]?.length ?? 0,
-    }));
-    return (
-      <div className="lemma-window-meta">
-        <div>
-          <strong>語義タイトル</strong>
-          <div>{pack.sense_title || '-'}</div>
-        </div>
-        <div>
-          <strong>語義（上位3件）</strong>
-          {senses.length ? (
-            <ol>
-              {senses.map((sense) => (
-                <li key={sense.id}>
-                  <span>{sense.gloss_ja}</span>
-                  {sense.definition_ja ? (
-                    <div style={{ fontSize: '0.85em', color: '#555' }}>{sense.definition_ja}</div>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <p>語義情報なし</p>
-          )}
-        </div>
-        <div>
-          <strong>例文数</strong>
-          <ul>
-            {exampleSummary.map(({ category, count }) => (
-              <li key={category}>{category}: {count}件</li>
-            ))}
-          </ul>
-        </div>
-        {pack.study_card ? (
-          <div>
-            <strong>学習カード</strong>
-            <p>{pack.study_card}</p>
-          </div>
-        ) : null}
-        {pack.confidence ? (
-          <div>
-            <strong>信頼度</strong>
-            <span>{pack.confidence}</span>
-          </div>
-        ) : null}
-      </div>
-    );
-  }, [lemmaExplorer, exampleCategories]);
 
   const handleGenerate = useCallback(async () => {
     if (!lemmaValidation.valid) {
@@ -497,11 +331,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       window.clearTimeout(t3);
     };
   }, [data, reveal]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
 
   useEffect(() => () => detachLemmaActionTooltip(), [detachLemmaActionTooltip]);
 
@@ -825,8 +654,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                           const hl = target.closest('span.lemma-highlight') as HTMLElement | null;
                           const tok = hl ? null : (target.closest('span.lemma-token') as HTMLElement | null);
                           const container = (e.currentTarget as HTMLElement);
-                          const apiBase = (document.querySelector('meta[name="wp-api-base"]') as HTMLMetaElement)?.content || '/api';
-                          const cache = ensureLemmaCache();
                           let matchedInfo: LemmaLookupResponseData | null = null;
                           let matchedCandidate: { idxs: number[]; text: string } | null = null;
                           const cleanup = detachLemmaActionTooltip;
@@ -884,17 +711,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                           let foundSense = '';
                           let foundIdxs: number[] | null = null;
                           for (const c of cands) {
-                            const key = `lemma:${c.text.toLowerCase()}`;
-                            let info = cache.get(key);
-                            if (!info) {
-                              try {
-                                const res = await fetch(`${apiBase}/word/lemma/${encodeURIComponent(c.text)}`);
-                                info = res.ok ? ((await res.json()) as LemmaLookupResponseData) : { found: false };
-                                cache.set(key, info);
-                              } catch {
-                                info = { found: false };
-                              }
-                            }
+                            const info = await lookupLemmaMetadata(c.text);
                             if (info && info.found && info.sense_title) {
                               foundSense = info.sense_title;
                               foundIdxs = c.idxs;
@@ -1235,20 +1052,14 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       )}
     </section>
       {lemmaExplorer ? (
-        <LemmaExplorerWindow
-          lemma={lemmaExplorer.lemma}
-          senseTitle={lemmaExplorer.senseTitle}
-          minimized={lemmaExplorer.minimized}
-          width={lemmaExplorer.width}
-          status={lemmaExplorer.status}
-          errorMessage={lemmaExplorer.errorMessage}
+        <LemmaExplorerPanel
+          explorer={lemmaExplorer}
+          content={explorerContent}
           onClose={closeLemmaExplorer}
           onMinimize={minimizeLemmaExplorer}
           onRestore={restoreLemmaExplorer}
           onResize={resizeLemmaExplorer}
-        >
-          {lemmaExplorerContent}
-        </LemmaExplorerWindow>
+        />
       ) : null}
     </>
   );
