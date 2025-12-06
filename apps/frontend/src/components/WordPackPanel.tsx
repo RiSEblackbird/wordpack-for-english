@@ -4,6 +4,7 @@ import { useModal } from '../ModalContext';
 import { useConfirmDialog } from '../ConfirmDialogContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { useWordPack, ExampleItem, Examples, WordPack } from '../hooks/useWordPack';
+import { useWordPackForm } from '../hooks/useWordPackForm';
 import { LoadingIndicator } from './LoadingIndicator';
 import { useNotifications } from '../NotificationsContext';
 import { Modal } from './Modal';
@@ -39,9 +40,6 @@ interface LemmaExplorerState {
   width: number;
 }
 
-const LEMMA_PATTERN = /^[A-Za-z0-9-' ]+$/;
-const LEMMA_MAX_LENGTH = 64;
-
 
 export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta, onStudyProgressRecorded }) => {
   const { settings, setSettings } = useSettings();
@@ -54,11 +52,16 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     regenerateScope,
     requestTimeoutMs,
     temperature,
-    reasoningEffort,
-    textVerbosity,
   } = settings;
-  const [lemma, setLemma] = useState('');
-  const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
+  const {
+    lemma,
+    setLemma,
+    lemmaValidation,
+    model,
+    showAdvancedModelOptions,
+    handleChangeModel,
+    advancedSettings,
+  } = useWordPackForm({ settings, setSettings });
   const [lemmaExplorer, setLemmaExplorer] = useState<LemmaExplorerState | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const lemmaCacheRef = useRef<Map<string, LemmaLookupResponseData>>(new Map());
@@ -90,29 +93,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const [count, setCount] = useState(3);
   const mountedRef = useRef(true);
   const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
-  const normalizedLemma = useMemo(() => lemma.trim(), [lemma]);
-  const lemmaValidation = useMemo(() => {
-    if (!normalizedLemma) {
-      return { valid: false, message: '見出し語を入力してください（英数字・ハイフン・アポストロフィ・半角スペースのみ）' };
-    }
-    if (normalizedLemma.length > LEMMA_MAX_LENGTH) {
-      return {
-        valid: false,
-        message: `見出し語は最大${LEMMA_MAX_LENGTH}文字までです（英数字・半角スペース・ハイフン・アポストロフィのみ）`,
-      };
-    }
-    if (!LEMMA_PATTERN.test(normalizedLemma)) {
-      return {
-        valid: false,
-        message: '英数字と半角スペース、ハイフン、アポストロフィのみ利用できます',
-      };
-    }
-    return {
-      valid: true,
-      message: '英数字・半角スペース・ハイフン・アポストロフィのみ（最大64文字）',
-    };
-  }, [normalizedLemma]);
   const isLemmaValid = lemmaValidation.valid;
+  const normalizedLemma = lemmaValidation.normalizedLemma;
 
   const detachLemmaActionTooltip = useCallback(() => {
     const active = lemmaActionRef.current;
@@ -1200,8 +1182,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                   <select
                     id="wordpack-reasoning-select"
                     aria-label="reasoning.effort"
-                    value={reasoningEffort || 'minimal'}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
+                    value={advancedSettings.reasoningEffort}
+                    onChange={(e) => advancedSettings.handleChangeReasoningEffort(e.target.value as typeof advancedSettings.reasoningEffort)}
                     disabled={loading}
                   >
                     <option value="minimal">minimal</option>
@@ -1215,8 +1197,8 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                   <select
                     id="wordpack-verbosity-select"
                     aria-label="text.verbosity"
-                    value={textVerbosity || 'medium'}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
+                    value={advancedSettings.textVerbosity}
+                    onChange={(e) => advancedSettings.handleChangeTextVerbosity(e.target.value as typeof advancedSettings.textVerbosity)}
                     disabled={loading}
                   >
                     <option value="low">low</option>
