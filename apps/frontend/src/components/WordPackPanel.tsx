@@ -2,10 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { useConfirmDialog } from '../ConfirmDialogContext';
-import { fetchJson, ApiError } from '../lib/fetcher';
 import { useWordPack, ExampleItem, Examples, WordPack } from '../hooks/useWordPack';
 import { useWordPackForm } from '../hooks/useWordPackForm';
-import { LoadingIndicator } from './LoadingIndicator';
 import { useNotifications } from '../NotificationsContext';
 import { Modal } from './Modal';
 import { formatDateJst } from '../lib/date';
@@ -14,6 +12,7 @@ import { SidebarPortal } from './SidebarPortal';
 import { highlightLemma } from '../lib/highlight';
 import { LemmaExplorerPanel } from './LemmaExplorer/LemmaExplorerPanel';
 import { LemmaLookupResponseData, useLemmaExplorer } from './LemmaExplorer/useLemmaExplorer';
+import { useExampleActions } from '../hooks/useExampleActions';
 
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
@@ -65,8 +64,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     createEmptyWordPack,
     loadWordPack,
     regenerateWordPack,
-    deleteExample: deleteExampleFromHook,
-    generateExamples: generateExamplesFromHook,
     recordStudyProgress,
   } = useWordPack({ model, onWordPackGenerated, onStudyProgressRecorded });
   const {
@@ -82,9 +79,35 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   } = useLemmaExplorer({ apiBase, requestTimeoutMs, onStatusMessage: setStatusMessage });
   const [reveal, setReveal] = useState(false);
   const [count, setCount] = useState(3);
+  const resetSelfCheck = useCallback(() => {
+    setReveal(false);
+    setCount(3);
+  }, []);
+  const {
+    examplesLoading,
+    deleteExample,
+    generateExamples,
+    importArticleFromExample,
+    copyExampleText,
+  } = useExampleActions({
+    apiBase,
+    requestTimeoutMs,
+    currentWordPackId,
+    data,
+    model,
+    temperature,
+    reasoningEffort: advancedSettings.reasoningEffort,
+    textVerbosity: advancedSettings.textVerbosity,
+    setStatusMessage,
+    loadWordPack,
+    notify: { add: addNotification, update: updateNotification },
+    confirmDialog,
+    onWordPackGenerated,
+  });
   const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
   const isLemmaValid = lemmaValidation.valid;
   const normalizedLemma = lemmaValidation.normalizedLemma;
+  const isActionLoading = loading || examplesLoading;
 
   const detachLemmaActionTooltip = useCallback(() => {
     const active = lemmaActionRef.current;
@@ -104,15 +127,14 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     const trimmed = lemmaText.trim();
     if (!trimmed) return false;
     detachLemmaActionTooltip();
-    setReveal(false);
-    setCount(3);
+    resetSelfCheck();
     await generateWordPack(trimmed);
     try {
       invalidateLemmaCache(trimmed);
     } catch {}
     onLemmaOpen(trimmed);
     return true;
-  }, [detachLemmaActionTooltip, generateWordPack, invalidateLemmaCache, onLemmaOpen, setCount, setReveal]);
+  }, [detachLemmaActionTooltip, generateWordPack, invalidateLemmaCache, onLemmaOpen, resetSelfCheck]);
 
   const handleExampleActivation = useCallback(
     (event: React.MouseEvent<HTMLDivElement> | React.KeyboardEvent<HTMLDivElement>) => {
@@ -205,48 +227,34 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       setStatusMessage({ kind: 'alert', text: lemmaValidation.message });
       return;
     }
-    setReveal(false);
-    setCount(3);
+    resetSelfCheck();
     setLemma('');
     try { focusRef.current?.focus(); } catch {}
     await generateWordPack(normalizedLemma);
-  }, [focusRef, generateWordPack, lemmaValidation, normalizedLemma, setStatusMessage]);
+  }, [focusRef, generateWordPack, lemmaValidation, normalizedLemma, resetSelfCheck, setStatusMessage]);
 
   const handleCreateEmpty = useCallback(async () => {
     if (!lemmaValidation.valid) {
       setStatusMessage({ kind: 'alert', text: lemmaValidation.message });
       return;
     }
-    setReveal(false);
-    setCount(3);
+    resetSelfCheck();
     await createEmptyWordPack(normalizedLemma);
-  }, [createEmptyWordPack, lemmaValidation, normalizedLemma, setStatusMessage]);
+  }, [createEmptyWordPack, lemmaValidation, normalizedLemma, resetSelfCheck, setStatusMessage]);
 
   const handleLoadWordPack = useCallback(
     async (wordPackId: string) => {
-      setReveal(false);
-      setCount(3);
+      resetSelfCheck();
       await loadWordPack(wordPackId);
     },
-    [loadWordPack],
+    [loadWordPack, resetSelfCheck],
   );
 
   const handleRegenerateWordPack = useCallback(async () => {
     if (!currentWordPackId) return;
-    setReveal(false);
-    setCount(3);
+    resetSelfCheck();
     await regenerateWordPack(currentWordPackId, data?.lemma || 'WordPack');
-  }, [currentWordPackId, data?.lemma, regenerateWordPack]);
-
-  const handleDeleteExample = useCallback(
-    async (category: 'Dev' | 'CS' | 'LLM' | 'Business' | 'Common', index: number) => {
-      if (!currentWordPackId) return;
-      const confirmed = await confirmDialog('例文');
-      if (!confirmed) return;
-      await deleteExampleFromHook(category, index);
-    },
-    [confirmDialog, currentWordPackId, deleteExampleFromHook],
-  );
+  }, [currentWordPackId, data?.lemma, regenerateWordPack, resetSelfCheck]);
 
   const importArticleFromExample = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common', index: number) => {
     try {
@@ -303,12 +311,10 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
   const handleGenerateExamples = useCallback(
     async (category: 'Dev' | 'CS' | 'LLM' | 'Business' | 'Common') => {
-      if (!currentWordPackId) return;
-      setReveal(false);
-      setCount(3);
-      await generateExamplesFromHook(category);
+      resetSelfCheck();
+      await generateExamples(category);
     },
-    [currentWordPackId, generateExamplesFromHook],
+    [generateExamples, resetSelfCheck],
   );
 
   // 選択されたWordPackIDが変更された場合の処理
@@ -496,7 +502,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               <button
                 type="button"
                 onClick={handleRegenerateWordPack}
-                disabled={loading}
+                disabled={isActionLoading}
                 style={{ marginLeft: 'auto', backgroundColor: 'var(--color-neutral-surface)' }}
               >
                 再生成
@@ -629,7 +635,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 <span>{k} ({data!.examples?.[k]?.length || 0}件)</span>
                 <button
                   onClick={() => handleGenerateExamples(k)}
-                  disabled={!currentWordPackId || loading}
+                  disabled={!currentWordPackId || isActionLoading}
                   aria-label={`generate-examples-${k}`}
                   title={!currentWordPackId ? '保存済みWordPackのみ追加生成が可能です' : undefined}
                   style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
@@ -817,7 +823,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                           <>
                             <button
                               onClick={() => deleteExample(k, i)}
-                              disabled={loading}
+                              disabled={isActionLoading}
                               aria-label={`delete-example-${k}-${i}`}
                               style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
                             >
@@ -825,7 +831,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                             </button>
                             <button
                               onClick={() => importArticleFromExample(k, i)}
-                              disabled={loading}
+                              disabled={isActionLoading}
                               aria-label={`import-article-from-example-${k}-${i}`}
                               style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
                             >
@@ -833,7 +839,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                             </button>
                             <button
                               onClick={() => copyExampleText(k, i)}
-                              disabled={loading}
+                              disabled={isActionLoading}
                               aria-label={`copy-example-${k}-${i}`}
                               style={{ fontSize: '0.85em', color: '#2e7d32', border: '1px solid #2e7d32', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
                             >
@@ -946,20 +952,20 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 value={lemma}
                 onChange={(e) => setLemma(e.target.value)}
                 placeholder="見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）"
-                disabled={loading}
+                disabled={isActionLoading}
               />
               <p aria-live="polite" className="sidebar-help" style={{ color: isLemmaValid ? '#666' : '#d32f2f' }}>
                 {lemmaValidation.message}
               </p>
             </div>
             <div className="sidebar-actions">
-              <button type="button" onClick={handleGenerate} disabled={!isLemmaValid || loading}>
+              <button type="button" onClick={handleGenerate} disabled={!isLemmaValid || isActionLoading}>
                 生成
               </button>
               <button
                 type="button"
                 onClick={handleCreateEmpty}
-                disabled={!isLemmaValid || loading}
+                disabled={!isLemmaValid || isActionLoading}
                 title="内容の生成を行わず、空のWordPackのみ保存"
               >
                 WordPackのみ作成
@@ -971,7 +977,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                 id="wordpack-model-select"
                 value={model}
                 onChange={(e) => handleChangeModel(e.target.value)}
-                disabled={loading}
+                disabled={isActionLoading}
               >
                 <option value="gpt-5-mini">gpt-5-mini</option>
                 <option value="gpt-5-nano">gpt-5-nano</option>
@@ -988,7 +994,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                     aria-label="reasoning.effort"
                     value={advancedSettings.reasoningEffort}
                     onChange={(e) => advancedSettings.handleChangeReasoningEffort(e.target.value as typeof advancedSettings.reasoningEffort)}
-                    disabled={loading}
+                    disabled={isActionLoading}
                   >
                     <option value="minimal">minimal</option>
                     <option value="low">low</option>
@@ -1003,7 +1009,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
                     aria-label="text.verbosity"
                     value={advancedSettings.textVerbosity}
                     onChange={(e) => advancedSettings.handleChangeTextVerbosity(e.target.value as typeof advancedSettings.textVerbosity)}
-                    disabled={loading}
+                    disabled={isActionLoading}
                   >
                     <option value="low">low</option>
                     <option value="medium">medium</option>

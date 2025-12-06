@@ -80,8 +80,6 @@ interface UseWordPackResult {
   createEmptyWordPack: (lemma: string) => Promise<void>;
   loadWordPack: (wordPackId: string) => Promise<void>;
   regenerateWordPack: (wordPackId: string, lemma: string) => Promise<void>;
-  deleteExample: (category: keyof Examples, index: number) => Promise<void>;
-  generateExamples: (category: keyof Examples) => Promise<void>;
   recordStudyProgress: (kind: 'checked' | 'learned') => Promise<void>;
 }
 
@@ -392,76 +390,6 @@ export const useWordPack = ({
     ],
   );
 
-  const deleteExample = useCallback(
-    async (category: keyof Examples, index: number) => {
-      if (!currentWordPackId) return;
-      abortRef.current?.abort();
-      const ctrl = new AbortController();
-      abortRef.current = ctrl;
-      setLoading(true);
-      setMessage(null);
-      try {
-        await fetchJson(`${apiBase}/word/packs/${currentWordPackId}/examples/${category}/${index}`, {
-          method: 'DELETE',
-          signal: ctrl.signal,
-          timeoutMs: requestTimeoutMs,
-        });
-        setMessage({ kind: 'status', text: '例文を削除しました' });
-        await loadWordPack(currentWordPackId);
-      } catch (error) {
-        if (ctrl.signal.aborted) return;
-        const text = error instanceof ApiError ? error.message : '例文の削除に失敗しました';
-        setMessage({ kind: 'alert', text });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [apiBase, currentWordPackId, loadWordPack, requestTimeoutMs],
-  );
-
-  const generateExamples = useCallback(
-    async (category: keyof Examples) => {
-      if (!currentWordPackId) return;
-      const ctrl = new AbortController();
-      setLoading(true);
-      setMessage(null);
-      const lemmaText = data?.lemma || '(unknown)';
-      const notifId = addNotification({
-        title: `【${lemmaText}】の生成処理中...`,
-        message: `例文（${category}）を2件追加生成しています`,
-        status: 'progress',
-      });
-      try {
-        const requestBody = applyModelRequestFields();
-        await fetchJson(`${apiBase}/word/packs/${currentWordPackId}/examples/${category}/generate`, {
-          method: 'POST',
-          body: requestBody,
-          signal: ctrl.signal,
-          timeoutMs: requestTimeoutMs,
-        });
-        setMessage({ kind: 'status', text: `${category} に例文を2件追加しました` });
-        updateNotification(notifId, { title: `【${lemmaText}】の生成完了！`, status: 'success', message: `${category} に例文を2件追加しました` });
-        await loadWordPack(currentWordPackId);
-        try { onWordPackGenerated?.(currentWordPackId); } catch {}
-      } catch (error) {
-        if (ctrl.signal.aborted) {
-          updateNotification(notifId, { title: `【${lemmaText}】の生成失敗`, status: 'error', message: '処理を中断しました' });
-          return;
-        }
-        const text = error instanceof ApiError ? error.message : '例文の追加生成に失敗しました';
-        setMessage({ kind: 'alert', text });
-        updateNotification(notifId, {
-          title: `【${lemmaText}】の生成失敗`,
-          status: 'error',
-          message: `${category} の例文追加生成に失敗しました（${text}）`,
-        });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [addNotification, apiBase, applyModelRequestFields, currentWordPackId, data?.lemma, loadWordPack, onWordPackGenerated, requestTimeoutMs, updateNotification],
-  );
-
   return {
     aiMeta,
     currentWordPackId,
@@ -475,8 +403,6 @@ export const useWordPack = ({
     createEmptyWordPack,
     loadWordPack,
     regenerateWordPack,
-    deleteExample,
-    generateExamples,
     recordStudyProgress,
   };
 };
