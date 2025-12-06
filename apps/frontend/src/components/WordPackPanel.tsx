@@ -208,19 +208,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     return true;
   }, [detachLemmaActionTooltip, ensureLemmaCache, generateWordPack, openLemmaExplorer, setCount, setReveal]);
 
-  const showAdvancedModelOptions = useMemo(() => {
-    const lower = (model || '').toLowerCase();
-    return lower === 'gpt-5-mini' || lower === 'gpt-5-nano';
-  }, [model]);
-
-  const handleChangeModel = useCallback(
-    (value: string) => {
-      setModel(value);
-      setSettings((prev) => ({ ...prev, model: value }));
-    },
-    [setSettings],
-  );
-
   const closeLemmaExplorer = useCallback(() => setLemmaExplorer(null), []);
 
   const minimizeLemmaExplorer = useCallback(
