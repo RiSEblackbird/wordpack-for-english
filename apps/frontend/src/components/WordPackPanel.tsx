@@ -3,7 +3,7 @@ import { useSettings } from '../SettingsContext';
 import { useModal } from '../ModalContext';
 import { useConfirmDialog } from '../ConfirmDialogContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
-import { composeModelRequestFields, regenerateWordPackRequest } from '../lib/wordpack';
+import { useWordPack, ExampleItem, Examples, WordPack } from '../hooks/useWordPack';
 import { LoadingIndicator } from './LoadingIndicator';
 import { useNotifications } from '../NotificationsContext';
 import { Modal } from './Modal';
@@ -19,57 +19,6 @@ interface Props {
   onWordPackGenerated?: (wordPackId: string | null) => void;
   selectedMeta?: { created_at: string; updated_at: string } | null;
   onStudyProgressRecorded?: (payload: { wordPackId: string; checked_only_count: number; learned_count: number }) => void;
-}
-
-// --- API types ---
-interface Pronunciation {
-  ipa_GA?: string | null;
-  ipa_RP?: string | null;
-  syllables?: number | null;
-  stress_index?: number | null;
-  linking_notes: string[];
-}
-
-interface Sense {
-  id: string;
-  gloss_ja: string;
-  definition_ja?: string | null;
-  nuances_ja?: string | null;
-  term_overview_ja?: string | null;
-  term_core_ja?: string | null;
-  patterns: string[];
-  synonyms?: string[];
-  antonyms?: string[];
-  register?: string | null;
-  notes_ja?: string | null;
-}
-
-interface CollocationLists { verb_object: string[]; adj_noun: string[]; prep_noun: string[] }
-interface Collocations { general: CollocationLists; academic: CollocationLists }
-
-interface ContrastItem { with: string; diff_ja: string }
-
-interface ExampleItem { en: string; ja: string; grammar_ja?: string; llm_model?: string; llm_params?: string }
-interface Examples { Dev: ExampleItem[]; CS: ExampleItem[]; LLM: ExampleItem[]; Business: ExampleItem[]; Common: ExampleItem[] }
-
-interface Etymology { note: string; confidence: 'low' | 'medium' | 'high' }
-
-interface Citation { text: string; meta?: Record<string, any> }
-
-interface WordPack {
-  lemma: string;
-  sense_title: string;
-  pronunciation: Pronunciation;
-  senses: Sense[];
-  collocations: Collocations;
-  contrast: ContrastItem[];
-  examples: Examples;
-  etymology: Etymology;
-  study_card: string;
-  citations: Citation[];
-  confidence: 'low' | 'medium' | 'high';
-  checked_only_count?: number;
-  learned_count?: number;
 }
 
 interface LemmaLookupResponseData {
@@ -109,21 +58,9 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     textVerbosity,
   } = settings;
   const [lemma, setLemma] = useState('');
-  const [data, setData] = useState<WordPack | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
-  const [reveal, setReveal] = useState(false);
-  const [count, setCount] = useState(3);
-  const abortRef = useRef<AbortController | null>(null);
-  const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
   const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
   const [lemmaExplorer, setLemmaExplorer] = useState<LemmaExplorerState | null>(null);
-  // 直近のAIメタ（一覧メタ or 例文メタから推定表示）
-  const [aiMeta, setAiMeta] = useState<{ model?: string | null; params?: string | null } | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const mountedRef = useRef(true);
-  const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
-  const [progressUpdating, setProgressUpdating] = useState(false);
   const lemmaCacheRef = useRef<Map<string, LemmaLookupResponseData>>(new Map());
   const lemmaActionRef = useRef<{
     tooltip: HTMLElement;
@@ -132,6 +69,27 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     keyHandler?: (ev: KeyboardEvent) => void;
     blockHandler?: (ev: Event) => void;
   } | null>(null);
+  const {
+    // WordPackの取得・生成などの副作用処理はカスタムフックに委譲し、UIは状態の受け取りに集中する。
+    aiMeta,
+    currentWordPackId,
+    data,
+    loading,
+    progressUpdating,
+    message,
+    setStatusMessage,
+    generateWordPack,
+    createEmptyWordPack,
+    loadWordPack,
+    regenerateWordPack,
+    deleteExample: deleteExampleFromHook,
+    generateExamples: generateExamplesFromHook,
+    recordStudyProgress,
+  } = useWordPack({ model, onWordPackGenerated, onStudyProgressRecorded });
+  const [reveal, setReveal] = useState(false);
+  const [count, setCount] = useState(3);
+  const mountedRef = useRef(true);
+  const isInModalView = Boolean(selectedWordPackId) || (Boolean(data) && detailOpen);
   const normalizedLemma = useMemo(() => lemma.trim(), [lemma]);
   const lemmaValidation = useMemo(() => {
     if (!normalizedLemma) {
@@ -155,19 +113,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     };
   }, [normalizedLemma]);
   const isLemmaValid = lemmaValidation.valid;
-
-  const applyModelRequestFields = useCallback(
-    (base: Record<string, unknown> = {}) => ({
-      ...base,
-      ...composeModelRequestFields({
-        model,
-        temperature,
-        reasoningEffort,
-        textVerbosity,
-      }),
-    }),
-    [model, temperature, reasoningEffort, textVerbosity]
-  );
 
   const detachLemmaActionTooltip = useCallback(() => {
     const active = lemmaActionRef.current;
@@ -222,7 +167,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
         cache.set(key, info);
       }
       if (!info || !info.found || !info.id) {
-        setMsg({ kind: 'alert', text: `「${target}」のWordPackは保存されていません` });
+        setStatusMessage({ kind: 'alert', text: `「${target}」のWordPackは保存されていません` });
         return;
       }
       if (!mountedRef.current) return;
@@ -269,71 +214,17 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   const triggerUnknownLemmaGeneration = useCallback(async (lemmaText: string) => {
     const trimmed = lemmaText.trim();
     if (!trimmed) return false;
-    const ctrl = new AbortController();
-    const active = lemmaActionRef.current;
-    if (active) {
-      active.aborter = ctrl;
-    }
-    const notifId = addNotification({
-      title: `【${trimmed}】の生成処理中...`,
-      message: '例文中の未知語からWordPackを生成しています',
-      status: 'progress',
-    });
+    detachLemmaActionTooltip();
+    setReveal(false);
+    setCount(3);
+    await generateWordPack(trimmed);
     try {
-      const res = await fetchJson<WordPack>(`${apiBase}/word/pack`, {
-        method: 'POST',
-        body: applyModelRequestFields({
-          lemma: trimmed,
-          pronunciation_enabled: pronunciationEnabled,
-          regenerate_scope: regenerateScope,
-        }),
-        signal: ctrl.signal,
-        timeoutMs: requestTimeoutMs,
-      });
-      const normalized = normalizeWordPack(res);
-      setData(normalized);
-      setCurrentWordPackId(null);
-      setMsg({ kind: 'status', text: `【${normalized.lemma}】のWordPackを生成しました` });
-      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
-      try {
-        const cache = ensureLemmaCache();
-        cache.delete(`lemma:${normalized.lemma.toLowerCase()}`);
-      } catch {}
-      openLemmaExplorer(normalized.lemma);
-      detachLemmaActionTooltip();
-      updateNotification(notifId, {
-        title: `【${normalized.lemma}】の生成完了！`,
-        status: 'success',
-        message: '例文中の未知語からWordPackを生成しました',
-      });
-      return true;
-    } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'WordPack生成に失敗しました';
-      setMsg({ kind: 'alert', text: message });
-      if (lemmaActionRef.current && lemmaActionRef.current.aborter === ctrl) {
-        lemmaActionRef.current.aborter = null;
-      }
-      detachLemmaActionTooltip();
-      updateNotification(notifId, {
-        title: `【${trimmed}】の生成失敗`,
-        status: 'error',
-        message: `例文中の未知語生成に失敗しました（${message}）`,
-      });
-      return false;
-    }
-  }, [
-    addNotification,
-    apiBase,
-    applyModelRequestFields,
-    detachLemmaActionTooltip,
-    ensureLemmaCache,
-    normalizeWordPack,
-    openLemmaExplorer,
-    pronunciationEnabled,
-    regenerateScope,
-    requestTimeoutMs,
-    updateNotification,
-  ]);
+      const cache = ensureLemmaCache();
+      cache.delete(`lemma:${trimmed.toLowerCase()}`);
+    } catch {}
+    openLemmaExplorer(trimmed);
+    return true;
+  }, [detachLemmaActionTooltip, ensureLemmaCache, generateWordPack, openLemmaExplorer, setCount, setReveal]);
 
   const showAdvancedModelOptions = useMemo(() => {
     const lower = (model || '').toLowerCase();
@@ -506,268 +397,59 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     );
   }, [lemmaExplorer, exampleCategories]);
 
-  const generate = async () => {
+  const handleGenerate = useCallback(async () => {
     if (!lemmaValidation.valid) {
-      setMsg({ kind: 'alert', text: lemmaValidation.message });
+      setStatusMessage({ kind: 'alert', text: lemmaValidation.message });
       return;
     }
-    // 直前のフォアグラウンド処理は中断するが、生成処理自体はバックグラウンド継続を許可する
-    // （タブ移動/アンマウントしても通知を完了に更新できるように、abortRef には紐付けない）
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    setLoading(true);
-    const l = normalizedLemma;
-    // 生成開始時に入力をクリアし、次の入力がすぐできるようにフォーカスを戻す
+    setReveal(false);
+    setCount(3);
     setLemma('');
     try { focusRef.current?.focus(); } catch {}
-    const notifId = addNotification({ title: `【${l}】の生成処理中...`, message: '新規のWordPackを生成しています（LLM応答の受信と解析を待機中）', status: 'progress' });
-    setMsg(null);
-    setData(null);
-    setReveal(false);
-    setCount(3);
-    try {
-      const res = await fetchJson<WordPack>(`${apiBase}/word/pack`, {
-        method: 'POST',
-        body: applyModelRequestFields({
-          lemma: l,
-          pronunciation_enabled: pronunciationEnabled,
-          regenerate_scope: regenerateScope,
-        }),
-        signal: ctrl.signal,
-        // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
-        timeoutMs: requestTimeoutMs,
-      });
-      if (mountedRef.current) {
-        setData(normalizeWordPack(res));
-        setCurrentWordPackId(null); // 新規生成なのでIDはnull
-        setMsg({ kind: 'status', text: 'WordPack を生成しました' });
-      }
-      updateNotification(notifId, { title: `【${res.lemma}】の生成完了！`, status: 'success', message: '新規生成が完了しました' });
-      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
-      // 生成完了後の自動モーダル表示は行わない（ユーザー操作を阻害しないため）
-      try { onWordPackGenerated?.(null); } catch {}
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      let m = e instanceof ApiError ? e.message : 'WordPack の生成に失敗しました';
-      if (e instanceof ApiError && e.status === 0 && /aborted|timed out/i.test(e.message)) {
-        m = 'タイムアウトしました（サーバ側で処理継続の可能性があります）。時間をおいて更新または保存済みを開いてください。';
-      }
-      if (mountedRef.current) setMsg({ kind: 'alert', text: m });
-      updateNotification(notifId, { title: `【${l}】の生成失敗`, status: 'error', message: `新規生成に失敗しました（${m}）` });
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-    }
-  };
+    await generateWordPack(normalizedLemma);
+  }, [focusRef, generateWordPack, lemmaValidation, normalizedLemma, setStatusMessage]);
 
-  const createEmpty = async () => {
+  const handleCreateEmpty = useCallback(async () => {
     if (!lemmaValidation.valid) {
-      setMsg({ kind: 'alert', text: lemmaValidation.message });
+      setStatusMessage({ kind: 'alert', text: lemmaValidation.message });
       return;
     }
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setLoading(true);
-    const l2 = normalizedLemma;
-    const notifId = addNotification({ title: `【${l2}】の生成処理中...`, message: '空のWordPackを作成しています', status: 'progress' });
-    setMsg(null);
-    try {
-      const res = await fetchJson<{ id: string }>(`${apiBase}/word/packs`, {
-        method: 'POST',
-        body: { lemma: lemma.trim() },
-        signal: ctrl.signal,
-        // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
-        timeoutMs: requestTimeoutMs,
-      });
-      setCurrentWordPackId(res.id);
-      // 直後に保存済みWordPack詳細を読み込んで表示
-      await loadWordPack(res.id);
-      try { onWordPackGenerated?.(res.id); } catch {}
-      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
-      // 詳細の読み込みまで完了したことを通知
-      updateNotification(notifId, { title: `【${l2}】の生成完了！`, status: 'success', message: '詳細読み込み完了' });
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      const m = e instanceof ApiError ? e.message : '空のWordPack作成に失敗しました';
-      setMsg({ kind: 'alert', text: m });
-      updateNotification(notifId, { title: `【${l2}】の生成失敗`, status: 'error', message: `空のWordPackの作成に失敗しました（${m}）` });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadWordPack = useCallback(async (wordPackId: string) => {
-    // ここでは同時に例文生成などが進行している可能性がある。
-    // 保存済み詳細を閲覧するだけなので、進行中のバックグラウンド処理は中断せずに並行実行させる。
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setLoading(true);
-    setMsg(null);
-    setData(null);
     setReveal(false);
     setCount(3);
-    try {
-      const res = await fetchJson<WordPack>(`${apiBase}/word/packs/${wordPackId}`, {
-        signal: ctrl.signal,
-      });
-      setData(normalizeWordPack(res));
-      setCurrentWordPackId(wordPackId);
-      // 例文に付与された llm_model/llm_params からAI情報を推測
-      try {
-        const cats: (keyof Examples)[] = ['Dev','CS','LLM','Business','Common'];
-        for (const c of cats) {
-          const arr = (res as any)?.examples?.[c] || [];
-          for (const it of arr) {
-            if (it && (it as any).llm_model) {
-              setAiMeta({ model: (it as any).llm_model || null, params: (it as any).llm_params || null });
-              throw new Error('break');
-            }
-          }
-        }
-      } catch {}
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      let m = e instanceof ApiError ? e.message : 'WordPackの読み込みに失敗しました';
-      if (e instanceof ApiError && e.status === 0 && /aborted|timed out/i.test(e.message)) {
-        m = '読み込みがタイムアウトしました。時間をおいて再試行してください。';
-      }
-      setMsg({ kind: 'alert', text: m });
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase]);
+    await createEmptyWordPack(normalizedLemma);
+  }, [createEmptyWordPack, lemmaValidation, normalizedLemma, setStatusMessage]);
 
-  const recordStudyProgress = useCallback(
-    async (kind: 'checked' | 'learned') => {
-      if (!currentWordPackId) return;
-      setProgressUpdating(true);
-      try {
-        const res = await fetchJson<{ checked_only_count: number; learned_count: number }>(
-          `${apiBase}/word/packs/${currentWordPackId}/study-progress`,
-          {
-            method: 'POST',
-            body: { kind },
-          },
-        );
-        setData((prev) =>
-          prev
-            ? {
-                ...prev,
-                checked_only_count: res.checked_only_count,
-                learned_count: res.learned_count,
-              }
-            : prev,
-        );
-        const detail = {
-          wordPackId: currentWordPackId,
-          checked_only_count: res.checked_only_count,
-          learned_count: res.learned_count,
-        };
-        try { onStudyProgressRecorded?.(detail); } catch {}
-        try { window.dispatchEvent(new CustomEvent('wordpack:study-progress', { detail })); } catch {}
-        setMsg({
-          kind: 'status',
-          text: kind === 'learned' ? '学習済みとして記録しました' : '確認済みとして記録しました',
-        });
-      } catch (e) {
-        const m = e instanceof ApiError ? e.message : '学習状況の記録に失敗しました';
-        setMsg({ kind: 'alert', text: m });
-      } finally {
-        setProgressUpdating(false);
-      }
+  const handleLoadWordPack = useCallback(
+    async (wordPackId: string) => {
+      setReveal(false);
+      setCount(3);
+      await loadWordPack(wordPackId);
     },
-    [apiBase, currentWordPackId, onStudyProgressRecorded],
+    [loadWordPack],
   );
 
-  const regenerateWordPack = async (wordPackId: string) => {
-    // 再生成はバックグラウンド継続を許可するため、モーダル閉鎖/アンマウントで中断しない
-    const ctrl = new AbortController();
-    setLoading(true);
-    const lemma3 = data?.lemma || 'WordPack';
-    if (mountedRef.current) setMsg(null);
-    try {
-      await regenerateWordPackRequest({
-        apiBase,
-        wordPackId,
-        settings: {
-          pronunciationEnabled,
-          regenerateScope,
-          requestTimeoutMs,
-          temperature,
-          reasoningEffort,
-          textVerbosity,
-        },
-        model,
-        lemma: lemma3,
-        notify: { add: addNotification, update: updateNotification },
-        abortSignal: ctrl.signal,
-        messages: {
-          progress: 'WordPackを再生成しています',
-          success: '再生成が完了しました',
-          failure: 'WordPackの再生成に失敗しました',
-        },
-      });
-      // 再生成後に最新詳細を取得して反映（アンマウント済みならリフレッシュはスキップ）
-      if (mountedRef.current) {
-        const refreshed = await fetchJson<WordPack>(`${apiBase}/word/packs/${wordPackId}`, {
-          signal: ctrl.signal,
-          timeoutMs: requestTimeoutMs,
-        });
-        if (mountedRef.current) {
-          setData(normalizeWordPack(refreshed));
-          setCurrentWordPackId(wordPackId);
-          setMsg({ kind: 'status', text: 'WordPackを再生成しました' });
-        }
-      }
-      try { onWordPackGenerated?.(wordPackId); } catch {}
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      let m = e instanceof ApiError ? e.message : 'WordPackの再生成に失敗しました';
-      if (e instanceof ApiError && e.status === 0 && /aborted|timed out/i.test(e.message)) {
-        m = '再生成がタイムアウトしました（サーバ側で処理継続の可能性）。時間をおいて再試行してください。';
-      }
-      if (mountedRef.current) setMsg({ kind: 'alert', text: m });
-    } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
-    }
-  };
-
-  const deleteExample = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common', index: number) => {
+  const handleRegenerateWordPack = useCallback(async () => {
     if (!currentWordPackId) return;
-    const confirmed = await confirmDialog('例文');
-    if (!confirmed) return;
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setLoading(true);
-    setMsg(null);
-    try {
-      await fetchJson(`${apiBase}/word/packs/${currentWordPackId}/examples/${category}/${index}`, {
-        method: 'DELETE',
-        signal: ctrl.signal,
-        timeoutMs: requestTimeoutMs,
-      });
-      setMsg({ kind: 'status', text: '例文を削除しました' });
-      // 最新状態を再取得
-      await loadWordPack(currentWordPackId);
-    } catch (e) {
-      if (ctrl.signal.aborted) return;
-      const m = e instanceof ApiError ? e.message : '例文の削除に失敗しました';
-      setMsg({ kind: 'alert', text: m });
-    } finally {
-      setLoading(false);
-    }
-  };
+    setReveal(false);
+    setCount(3);
+    await regenerateWordPack(currentWordPackId, data?.lemma || 'WordPack');
+  }, [currentWordPackId, data?.lemma, regenerateWordPack]);
+
+  const handleDeleteExample = useCallback(
+    async (category: 'Dev' | 'CS' | 'LLM' | 'Business' | 'Common', index: number) => {
+      if (!currentWordPackId) return;
+      const confirmed = await confirmDialog('例文');
+      if (!confirmed) return;
+      await deleteExampleFromHook(category, index);
+    },
+    [confirmDialog, currentWordPackId, deleteExampleFromHook],
+  );
 
   const importArticleFromExample = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common', index: number) => {
     try {
       const ex = data?.examples?.[category]?.[index];
       if (!ex || !ex.en) {
-        setMsg({ kind: 'alert', text: '例文が見つかりません' });
+        setStatusMessage({ kind: 'alert', text: '例文が見つかりません' });
         return;
       }
       const ctrl = new AbortController();
@@ -781,18 +463,18 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       });
       updateNotification(notifId, { title: '文章インポート完了', status: 'success', message: '記事一覧を更新しました' });
       try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
-      setMsg({ kind: 'status', text: '例文から文章インポートを実行しました' });
+      setStatusMessage({ kind: 'status', text: '例文から文章インポートを実行しました' });
     } catch (e) {
       const m = e instanceof ApiError ? e.message : '文章インポートに失敗しました';
-      setMsg({ kind: 'alert', text: m });
+      setStatusMessage({ kind: 'alert', text: m });
     }
   };
 
-  const copyExampleText = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common', index: number) => {
+  const copyExampleText = async (category: 'Dev' | 'CS' | 'LLM' | 'Business' | 'Common', index: number) => {
     try {
       const ex = data?.examples?.[category]?.[index];
       if (!ex || !ex.en) {
-        setMsg({ kind: 'alert', text: '例文が見つかりません' });
+        setStatusMessage({ kind: 'alert', text: '例文が見つかりません' });
         return;
       }
       const text = ex.en;
@@ -812,46 +494,25 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       addNotification({ title: 'コピー完了', message: '例文をクリップボードにコピーしました', status: 'success' });
     } catch (e) {
       const m = e instanceof ApiError ? e.message : 'コピーに失敗しました';
-      setMsg({ kind: 'alert', text: m });
+      setStatusMessage({ kind: 'alert', text: m });
     }
   };
 
-  const generateExamples = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common') => {
-    if (!currentWordPackId) return;
-    // 例文追加生成はバックグラウンド取得を許可し、モーダル閉鎖でも継続させるため
-    // abortRef には紐付けずローカルで管理する
-    const ctrl = new AbortController();
-    setLoading(true);
-    const lemma4 = data?.lemma || '(unknown)';
-    const notifId = addNotification({ title: `【${lemma4}】の生成処理中...`, message: `例文（${category}）を2件追加生成しています`, status: 'progress' });
-    setMsg(null);
-    try {
-      const requestBody = applyModelRequestFields();
-      await fetchJson(`${apiBase}/word/packs/${currentWordPackId}/examples/${category}/generate`, {
-        method: 'POST',
-        body: requestBody,
-        signal: ctrl.signal,
-        timeoutMs: requestTimeoutMs,
-      });
-      setMsg({ kind: 'status', text: `${category} に例文を2件追加しました` });
-      updateNotification(notifId, { title: `【${lemma4}】の生成完了！`, status: 'success', message: `${category} に例文を2件追加しました` });
-      await loadWordPack(currentWordPackId);
-      try { onWordPackGenerated?.(currentWordPackId); } catch {}
-    } catch (e) {
-      if (ctrl.signal.aborted) { updateNotification(notifId, { title: `【${lemma4}】の生成失敗`, status: 'error', message: '処理を中断しました' }); return; }
-      const m = e instanceof ApiError ? e.message : '例文の追加生成に失敗しました';
-      setMsg({ kind: 'alert', text: m });
-      updateNotification(notifId, { title: `【${lemma4}】の生成失敗`, status: 'error', message: `${category} の例文追加生成に失敗しました（${m}）` });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleGenerateExamples = useCallback(
+    async (category: 'Dev' | 'CS' | 'LLM' | 'Business' | 'Common') => {
+      if (!currentWordPackId) return;
+      setReveal(false);
+      setCount(3);
+      await generateExamplesFromHook(category);
+    },
+    [currentWordPackId, generateExamplesFromHook],
+  );
 
   // 選択されたWordPackIDが変更された場合の処理
   useEffect(() => {
     if (!selectedWordPackId || selectedWordPackId === currentWordPackId) return;
-    loadWordPack(selectedWordPackId);
-  }, [currentWordPackId, loadWordPack, selectedWordPackId]);
+    handleLoadWordPack(selectedWordPackId);
+  }, [currentWordPackId, handleLoadWordPack, selectedWordPackId]);
 
   // 3秒セルフチェック: カウントダウン後に自動解除（クリックで即解除）
   useEffect(() => {
@@ -870,7 +531,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => { mountedRef.current = false; abortRef.current?.abort(); };
+    return () => { mountedRef.current = false; };
   }, []);
 
   useEffect(() => () => detachLemmaActionTooltip(), [detachLemmaActionTooltip]);
@@ -1036,7 +697,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
             {currentWordPackId && (
               <button
                 type="button"
-                onClick={() => regenerateWordPack(currentWordPackId)}
+                onClick={handleRegenerateWordPack}
                 disabled={loading}
                 style={{ marginLeft: 'auto', backgroundColor: 'var(--color-neutral-surface)' }}
               >
@@ -1169,7 +830,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               <div className="ex-level" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>{k} ({data!.examples?.[k]?.length || 0}件)</span>
                 <button
-                  onClick={() => generateExamples(k)}
+                  onClick={() => handleGenerateExamples(k)}
                   disabled={!currentWordPackId || loading}
                   aria-label={`generate-examples-${k}`}
                   title={!currentWordPackId ? '保存済みWordPackのみ追加生成が可能です' : undefined}
@@ -1506,12 +1167,12 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
               </p>
             </div>
             <div className="sidebar-actions">
-              <button type="button" onClick={generate} disabled={!isLemmaValid || loading}>
+              <button type="button" onClick={handleGenerate} disabled={!isLemmaValid || loading}>
                 生成
               </button>
               <button
                 type="button"
-                onClick={createEmpty}
+                onClick={handleCreateEmpty}
                 disabled={!isLemmaValid || loading}
                 title="内容の生成を行わず、空のWordPackのみ保存"
               >
@@ -1589,7 +1250,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
       {/* 進捗ヘッダー */}
 
       {/* グローバル通知に置き換えたため、パネル内のローディング表示は削除 */}
-      {msg && <div role={msg.kind}>{msg.text}</div>}
+      {message && <div role={message.kind}>{message.text}</div>}
 
       {/* 詳細表示: 生成ワークフローでは内蔵モーダル、一覧モーダル内では素の内容のみを描画 */}
       {selectedWordPackId ? (
