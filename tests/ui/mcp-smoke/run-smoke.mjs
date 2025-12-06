@@ -555,6 +555,7 @@ async function runSmokeAssertions(wordPackId) {
   ensure(openedPreview?.clicked, 'WordPack カードのクリックに失敗しました');
 
   await waitForSelector(client, '[role="dialog"][aria-label="WordPack プレビュー"]', { timeoutMs: 15000 });
+  await waitForSelector(client, '.wp-modal-lemma strong', { timeoutMs: 15000 });
   const modalInfo = await callEvaluate(
     client,
     `() => {
