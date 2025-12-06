@@ -10,7 +10,7 @@ import { loadSessionState, saveSessionState } from '../lib/storage';
 import { assignSetValues, retainSetValues, toggleSetValue } from '../lib/set';
 import { Modal } from './Modal';
 import { ListControls } from './ListControls';
-import { WordPackPanel } from './WordPackPanel';
+import { WordPackPanel, WordPackPreviewMeta } from './WordPackPanel';
 import { LoadingIndicator } from './LoadingIndicator';
 import { TTSButton } from './TTSButton';
 import { formatDateJst } from '../lib/date';
@@ -174,6 +174,18 @@ export const WordPackListPanel: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(() => new Set());
   const { run: runAbortable } = useAbortableAsync();
+  const previewMeta = useMemo<WordPackPreviewMeta | null>(() => {
+    if (!previewWordPackId) return null;
+    const meta = wordPacks.find((w) => w.id === previewWordPackId);
+    if (!meta) return null;
+    return {
+      id: meta.id,
+      lemma: meta.lemma,
+      senseTitle: meta.sense_title,
+      created_at: meta.created_at,
+      updated_at: meta.updated_at,
+    };
+  }, [previewWordPackId, wordPacks]);
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
   }, []);
@@ -954,10 +966,8 @@ export const WordPackListPanel: React.FC = () => {
             <WordPackPanel
               focusRef={modalFocusRef}
               selectedWordPackId={previewWordPackId}
-              selectedMeta={(() => {
-                const m = wordPacks.find(w => w.id === previewWordPackId);
-                return m ? { created_at: m.created_at, updated_at: m.updated_at } : null;
-              })()}
+              selectedMeta={previewMeta ? { created_at: previewMeta.created_at, updated_at: previewMeta.updated_at } : null}
+              fallbackMeta={previewMeta ? { id: previewMeta.id, lemma: previewMeta.lemma, senseTitle: previewMeta.senseTitle } : null}
               onWordPackGenerated={async () => {
                 // 再生成後に一覧を最新化（更新日時の整合）
                 await loadWordPacks(offset);

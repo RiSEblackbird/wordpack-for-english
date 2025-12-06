@@ -16,11 +16,20 @@ import { PronunciationSection } from './wordpack/PronunciationSection';
 import { SensesSection } from './wordpack/SensesSection';
 import { ExamplesSection } from './wordpack/ExamplesSection';
 
+export interface WordPackPreviewMeta {
+  id: string;
+  lemma: string;
+  senseTitle?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 interface Props {
   focusRef: React.RefObject<HTMLElement>;
   selectedWordPackId?: string | null;
   onWordPackGenerated?: (wordPackId: string | null) => void;
   selectedMeta?: { created_at: string; updated_at: string } | null;
+  fallbackMeta?: Pick<WordPackPreviewMeta, 'id' | 'lemma' | 'senseTitle'> | null;
   onStudyProgressRecorded?: (payload: { wordPackId: string; checked_only_count: number; learned_count: number }) => void;
 }
 
@@ -28,7 +37,14 @@ interface Props {
  * WordPack全体のパネル。データ取得/生成や各セクションへの責務分割を担い、
  * UI本体は小さなセクションコンポーネントへ委譲する。
  */
-export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, onWordPackGenerated, selectedMeta, onStudyProgressRecorded }) => {
+export const WordPackPanel: React.FC<Props> = ({
+  focusRef,
+  selectedWordPackId,
+  onWordPackGenerated,
+  selectedMeta,
+  fallbackMeta,
+  onStudyProgressRecorded,
+}) => {
   const { settings, setSettings } = useSettings();
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
@@ -106,6 +122,15 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
   );
 
   const exampleCategories = useMemo(() => (['Dev', 'CS', 'LLM', 'Business', 'Common'] as const), []);
+
+  // モーダル表示中に本体データが未取得でも、一覧由来の最小情報で見出し語を提示する。
+  const placeholderLemma = useMemo(() => {
+    if (data?.lemma) return data.lemma;
+    if (fallbackMeta?.lemma) return fallbackMeta.lemma;
+    if (fallbackMeta?.senseTitle) return fallbackMeta.senseTitle;
+    if (selectedWordPackId) return selectedWordPackId;
+    return 'WordPack';
+  }, [data?.lemma, fallbackMeta, selectedWordPackId]);
 
   const exampleStats = useMemo(
     () => {
@@ -317,6 +342,33 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     </div>
   ) : null;
 
+  const loadingPlaceholder = selectedWordPackId && !data ? (
+    <div className="wp-container" aria-busy="true">
+      <section className="wp-section" aria-live="polite">
+        <h3>読み込み中</h3>
+        <div className="kv" style={{ fontSize: '1.4em', marginBottom: '0.5rem' }}>
+          <div>見出し語</div>
+          <div className="wp-modal-lemma">
+            <strong>{placeholderLemma}</strong>
+          </div>
+        </div>
+        <div className="sidebar-field" style={{ maxWidth: '30rem' }}>
+          <label htmlFor="wordpack-lemma-input">見出し語</label>
+          <input
+            id="wordpack-lemma-input"
+            value={placeholderLemma}
+            readOnly
+            aria-readonly
+            aria-label="WordPack見出し語読み込み中"
+          />
+          <p style={{ marginTop: '0.4rem' }}>
+            WordPack を読み込み中です。プレビューが準備されるまでお待ちください。
+          </p>
+        </div>
+      </section>
+    </div>
+  ) : null;
+
   return (
     <>
       {/* 生成フォーム: サイドバーに固定し、入力とモデル設定をまとめる */}
@@ -424,7 +476,7 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
 
         {/* 詳細表示: モーダル/ダイレクト表示の両対応 */}
         {selectedWordPackId ? (
-          data ? detailsContent : null
+          data ? detailsContent : loadingPlaceholder
         ) : (
           <Modal
             isOpen={!!data && detailOpen}
