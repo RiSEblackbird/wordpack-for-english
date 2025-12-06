@@ -256,59 +256,6 @@ export const WordPackPanel: React.FC<Props> = ({ focusRef, selectedWordPackId, o
     await regenerateWordPack(currentWordPackId, data?.lemma || 'WordPack');
   }, [currentWordPackId, data?.lemma, regenerateWordPack, resetSelfCheck]);
 
-  const importArticleFromExample = async (category: 'Dev'|'CS'|'LLM'|'Business'|'Common', index: number) => {
-    try {
-      const ex = data?.examples?.[category]?.[index];
-      if (!ex || !ex.en) {
-        setStatusMessage({ kind: 'alert', text: '例文が見つかりません' });
-        return;
-      }
-      const ctrl = new AbortController();
-      const lemma5 = data?.lemma || '(unknown)';
-      const notifId = addNotification({ title: `【${lemma5}】文章インポート中...`, message: '当該の例文を元に記事を生成しています', status: 'progress' });
-      await fetchJson<{ id: string }>(`${apiBase}/article/import`, {
-        method: 'POST',
-        body: { text: ex.en },
-        signal: ctrl.signal,
-        timeoutMs: requestTimeoutMs,
-      });
-      updateNotification(notifId, { title: '文章インポート完了', status: 'success', message: '記事一覧を更新しました' });
-      try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
-      setStatusMessage({ kind: 'status', text: '例文から文章インポートを実行しました' });
-    } catch (e) {
-      const m = e instanceof ApiError ? e.message : '文章インポートに失敗しました';
-      setStatusMessage({ kind: 'alert', text: m });
-    }
-  };
-
-  const copyExampleText = async (category: 'Dev' | 'CS' | 'LLM' | 'Business' | 'Common', index: number) => {
-    try {
-      const ex = data?.examples?.[category]?.[index];
-      if (!ex || !ex.en) {
-        setStatusMessage({ kind: 'alert', text: '例文が見つかりません' });
-        return;
-      }
-      const text = ex.en;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      }
-      addNotification({ title: 'コピー完了', message: '例文をクリップボードにコピーしました', status: 'success' });
-    } catch (e) {
-      const m = e instanceof ApiError ? e.message : 'コピーに失敗しました';
-      setStatusMessage({ kind: 'alert', text: m });
-    }
-  };
-
   const handleGenerateExamples = useCallback(
     async (category: 'Dev' | 'CS' | 'LLM' | 'Business' | 'Common') => {
       resetSelfCheck();
