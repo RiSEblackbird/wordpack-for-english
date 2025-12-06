@@ -208,12 +208,13 @@ export const useWordPack = ({
           signal: ctrl.signal,
           timeoutMs: requestTimeoutMs,
         });
-        if (!mountedRef.current) return;
         const normalized = normalizeWordPack(res);
-        setData(normalized);
-        setCurrentWordPackId(null);
-        setMessage({ kind: 'status', text: 'WordPack を生成しました' });
-        extractAiMeta(normalized);
+        if (mountedRef.current) {
+          setData(normalized);
+          setCurrentWordPackId(null);
+          setMessage({ kind: 'status', text: 'WordPack を生成しました' });
+          extractAiMeta(normalized);
+        }
         updateNotification(notifId, {
           title: `【${res.lemma}】の生成完了！`,
           status: 'success',
