@@ -63,8 +63,11 @@ describe('WordPackListPanel card actions layout (two rows)', () => {
         );
       }
 
-      if (url.endsWith('/api/word/packs/wp:test:1/regenerate') && method === 'POST') {
-        return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (url.endsWith('/api/word/packs/wp:test:1/regenerate/async') && method === 'POST') {
+        return new Response(JSON.stringify({ job_id: 'job:test:1', status: 'succeeded' }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.endsWith('/api/word/packs/wp:test:1/regenerate/jobs/job:test:1') && method === 'GET') {
+        return new Response(JSON.stringify({ job_id: 'job:test:1', status: 'succeeded' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
 
       if (url.startsWith('/api/word/packs/wp:test:') && method === 'DELETE') {

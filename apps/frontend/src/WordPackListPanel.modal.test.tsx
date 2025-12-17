@@ -94,9 +94,15 @@ describe('WordPackListPanel modal preview', () => {
         );
       }
 
-      if (url.endsWith('/api/word/packs/wp:test:1/regenerate')) {
+      if (url.endsWith('/api/word/packs/wp:test:1/regenerate/async')) {
         return new Response(
-          JSON.stringify({ message: 'regenerating' }),
+          JSON.stringify({ job_id: 'job:test:1', status: 'succeeded' }),
+          { status: 202, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/word/packs/wp:test:1/regenerate/jobs/job:test:1')) {
+        return new Response(
+          JSON.stringify({ job_id: 'job:test:1', status: 'succeeded' }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
@@ -510,7 +516,7 @@ describe('WordPackListPanel modal preview', () => {
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/word/packs/wp:test:1/regenerate',
+        '/api/word/packs/wp:test:1/regenerate/async',
         expect.objectContaining({ method: 'POST' }),
       ),
     );
