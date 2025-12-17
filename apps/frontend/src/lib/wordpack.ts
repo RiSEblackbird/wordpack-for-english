@@ -96,4 +96,54 @@ export async function regenerateWordPackRequest(params: {
   }
 }
 
+// --- Async regenerate (avoids long sync wait) ---
+export interface RegenerateJob {
+  job_id: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  result?: any;
+  error?: string | null;
+}
+
+export async function enqueueRegenerateWordPack(params: {
+  apiBase: string;
+  wordPackId: string;
+  settings: RegenerateSettings;
+  model?: string;
+  lemma?: string;
+  abortSignal?: AbortSignal;
+}): Promise<RegenerateJob> {
+  const { apiBase, wordPackId, settings, model, lemma, abortSignal } = params;
+  const body = {
+    pronunciation_enabled: settings.pronunciationEnabled,
+    regenerate_scope: settings.regenerateScope,
+    ...composeModelRequestFields({
+      model,
+      temperature: settings.temperature,
+      reasoningEffort: settings.reasoningEffort,
+      textVerbosity: settings.textVerbosity,
+    }),
+  };
+  return fetchJson<RegenerateJob>(`${apiBase}/word/packs/${wordPackId}/regenerate/async`, {
+    method: 'POST',
+    body,
+    signal: abortSignal,
+    timeoutMs: settings.requestTimeoutMs,
+  });
+}
+
+export async function fetchRegenerateJobStatus(params: {
+  apiBase: string;
+  wordPackId: string;
+  jobId: string;
+  abortSignal?: AbortSignal;
+  timeoutMs: number;
+}): Promise<RegenerateJob> {
+  const { apiBase, wordPackId, jobId, abortSignal, timeoutMs } = params;
+  return fetchJson<RegenerateJob>(`${apiBase}/word/packs/${wordPackId}/regenerate/jobs/${jobId}`, {
+    method: 'GET',
+    signal: abortSignal,
+    timeoutMs,
+  });
+}
+
 
