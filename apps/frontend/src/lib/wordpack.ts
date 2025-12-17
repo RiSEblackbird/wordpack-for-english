@@ -68,24 +68,41 @@ export async function regenerateWordPackRequest(params: {
   });
 
   try {
-    const body = {
-      pronunciation_enabled: settings.pronunciationEnabled,
-      regenerate_scope: settings.regenerateScope,
-      ...composeModelRequestFields({
-        model,
-        temperature: settings.temperature,
-        reasoningEffort: settings.reasoningEffort,
-        textVerbosity: settings.textVerbosity,
-      }),
-    };
-
-    await fetchJson(`${apiBase}/word/packs/${wordPackId}/regenerate`, {
-      method: 'POST',
-      body,
-      signal: abortSignal,
-      // サーバの LLM_TIMEOUT_MS と厳密に一致させる（/api/config 同期値）
-      timeoutMs: settings.requestTimeoutMs,
+    // Firebase Hosting / CDN 経路の 60s 制限を回避するため、再生成は非同期ジョブを起動してポーリングする。
+    const job = await enqueueRegenerateWordPack({
+      apiBase,
+      wordPackId,
+      settings,
+      model,
+      lemma,
+      abortSignal,
     });
+
+    let latest = job;
+    const startedAt = Date.now();
+    // 目的: Hosting/CDN 経由でも完了まで「待てる」ようにする。
+    // settings.requestTimeoutMs が 60_000 等の短い値でも、ジョブ自体は数分かかり得るため、
+    // ここは最低でも 15 分はポーリングを継続する（1回のHTTPは短いので60秒制限を跨がない）。
+    const deadlineMs = startedAt + Math.max(settings.requestTimeoutMs, 15 * 60 * 1000);
+    while (Date.now() < deadlineMs) {
+      if (abortSignal?.aborted) break;
+      if (latest.status === 'succeeded' || latest.status === 'failed') break;
+      // 1回のリクエストは短く、60s を跨がないようにする
+      await new Promise((r) => setTimeout(r, 1500));
+      latest = await fetchRegenerateJobStatus({
+        apiBase,
+        wordPackId,
+        jobId: job.job_id,
+        abortSignal,
+        timeoutMs: Math.min(settings.requestTimeoutMs, 30000),
+      });
+    }
+
+    if (latest.status !== 'succeeded') {
+      const errMsg = latest.error || messages?.failure || '処理に失敗しました';
+      notify.update(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: errMsg, model: model || undefined });
+      throw new ApiError(errMsg, 502);
+    }
 
     notify.update(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: messages?.success || '処理が完了しました', model: model || undefined });
     try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}

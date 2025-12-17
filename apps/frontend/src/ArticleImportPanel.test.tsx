@@ -68,9 +68,15 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
-      if (url.endsWith('/api/word/packs/wp:regen:1/regenerate') && init?.method === 'POST') {
+      if (url.endsWith('/api/word/packs/wp:regen:1/regenerate/async') && init?.method === 'POST') {
         return new Response(
-          JSON.stringify({ ok: true }),
+          JSON.stringify({ job_id: 'job:regen:1', status: 'succeeded' }),
+          { status: 202, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url.endsWith('/api/word/packs/wp:regen:1/regenerate/jobs/job:regen:1')) {
+        return new Response(
+          JSON.stringify({ job_id: 'job:regen:1', status: 'succeeded' }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
@@ -287,7 +293,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     });
 
     const regenBodies = fetchMock.mock.calls
-      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/packs/wp:regen:1/regenerate') : ((c[0] as URL).toString().endsWith('/api/word/packs/wp:regen:1/regenerate'))))
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/packs/wp:regen:1/regenerate/async') : ((c[0] as URL).toString().endsWith('/api/word/packs/wp:regen:1/regenerate/async'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(regenBodies.some((b) => b.model === 'gpt-5-nano' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
   });
@@ -315,7 +321,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     });
 
     const regenBodies = fetchMock.mock.calls
-      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/packs/wp:regen:1/regenerate') : ((c[0] as URL).toString().endsWith('/api/word/packs/wp:regen:1/regenerate'))))
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/packs/wp:regen:1/regenerate/async') : ((c[0] as URL).toString().endsWith('/api/word/packs/wp:regen:1/regenerate/async'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(regenBodies.some((b) => b.model === 'gpt-4o-mini' && typeof b.temperature === 'number' && !('reasoning' in b) && !('text' in b))).toBe(true);
   });
