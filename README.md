@@ -225,6 +225,13 @@ make release-cloud-run \
   REGION=asia-northeast1 \
   ENV_FILE=.env.deploy
 
+# Cloud Run のリクエストタイムアウトを明示する場合（例: 360s）
+make release-cloud-run \
+  PROJECT_ID=my-prod-project \
+  REGION=asia-northeast1 \
+  ENV_FILE=.env.deploy \
+  RUN_TIMEOUT=360s
+
 # GitHub Actions 等でインデックス同期を省略し、CI専用 env を使う場合
 make release-cloud-run \
   PROJECT_ID=${{ env.GCP_PROJECT_ID }} \
@@ -234,6 +241,7 @@ make release-cloud-run \
 ```
 
 - `SKIP_FIRESTORE_INDEX_SYNC=true` を付けると Firestore 側を更新せず Cloud Run デプロイのみを実行します（既にインデックスを同期済みの CI/CD 環境向け）。
+- `RUN_TIMEOUT=360s` のように指定すると Cloud Run のリクエストタイムアウト（`gcloud run deploy --timeout`）を明示できます。
 - release-cloud-run は先に `make deploy-firestore-indexes` を呼び出してから `SKIP_FIRESTORE_INDEX_SYNC=true` を付けて `scripts/deploy_cloud_run.sh` を実行します。CI などでインデックス同期自体を省略したい場合は `SKIP_FIRESTORE_INDEX_SYNC=true make release-cloud-run PROJECT_ID=... REGION=...` のように指定してください。
 - Dry-run (`scripts/deploy_cloud_run.sh --dry-run`) は必ず本番デプロイの直前に走るため、設定エラーは gcloud コマンドの前で検知されます。
 - `ENV_FILE` を省略した場合でも `.env.deploy` の存在確認を行い、欠落しているとターゲットが失敗します。

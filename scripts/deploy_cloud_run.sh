@@ -40,6 +40,8 @@ Options:
   --image-tag <tag>          Image tag (default: git rev-parse --short HEAD)
   --build-arg KEY=VALUE      Additional docker build arg (repeatable)
   --env-file <path>          Explicit env file (default: .env.deploy or .env)
+  --run-timeout <duration>   Cloud Run request timeout, e.g. 360s, 10m (default: use existing service setting)
+  --no-cpu-throttling        Disable CPU throttling to allow background work after responses (default: keep current)
   --generate-secret          Generate SESSION_SECRET_KEY via openssl if missing
   --secret-length <bytes>    Byte size for openssl rand -base64 (default: 48)
   --machine-type <type>      Cloud Build machine type (default: e2-medium)
@@ -117,6 +119,8 @@ GENERATE_SECRET=false
 DRY_RUN=false
 MACHINE_TYPE="e2-medium"
 BUILD_TIMEOUT="30m"
+RUN_TIMEOUT_ARG=""
+NO_CPU_THROTTLING=false
 declare -a EXTRA_BUILD_ARGS=()
 
 declare -A DEPLOY_ENV_KEYS=()
@@ -151,6 +155,14 @@ while [[ $# -gt 0 ]]; do
     --env-file)
       ENV_FILE="$2"
       shift 2
+      ;;
+    --run-timeout)
+      RUN_TIMEOUT_ARG="$2"
+      shift 2
+      ;;
+    --no-cpu-throttling)
+      NO_CPU_THROTTLING=true
+      shift 1
       ;;
     --build-arg)
       EXTRA_BUILD_ARGS+=("$2")
@@ -275,6 +287,12 @@ add_env_key "SESSION_SECRET_KEY"
 add_env_key "CORS_ALLOWED_ORIGINS"
 add_env_key "TRUSTED_PROXY_IPS"
 add_env_key "ALLOWED_HOSTS"
+# Cloud Run へ適用する実行パラメータ（任意）
+# - CLOUD_RUN_TIMEOUT: 例 360s, 10m
+# - CLOUD_RUN_NO_CPU_THROTTLING: true/false
+
+RUN_TIMEOUT="${RUN_TIMEOUT_ARG:-${CLOUD_RUN_TIMEOUT:-}}"
+NO_CPU_THROTTLING="${NO_CPU_THROTTLING:-${CLOUD_RUN_NO_CPU_THROTTLING:-false}}"
 
 while IFS= read -r line || [[ -n "$line" ]]; do
   line="${line%%$'\r'}"
@@ -371,11 +389,20 @@ if [[ ! -s "$ENV_VARS_FILE" ]]; then
 fi
 
 log "Deploying service ${SERVICE_NAME} to region ${REGION} with env file ${ENV_VARS_FILE}"
+RUN_ARGS=()
+if [[ -n "${RUN_TIMEOUT:-}" ]]; then
+  RUN_ARGS+=(--timeout "$RUN_TIMEOUT")
+fi
+if [[ "${NO_CPU_THROTTLING}" == "true" ]]; then
+  RUN_ARGS+=(--no-cpu-throttling)
+fi
+
 gcloud run deploy "$SERVICE_NAME" \
   --project "$PROJECT_ID" \
   --image "$IMAGE_URI" \
   --region "$REGION" \
   --allow-unauthenticated \
-  --env-vars-file "$ENV_VARS_FILE"
+  --env-vars-file "$ENV_VARS_FILE" \
+  "${RUN_ARGS[@]}"
 
 log "Deployment completed"
