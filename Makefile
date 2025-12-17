@@ -1,3 +1,6 @@
+# bash を明示指定（WSL の /bin/sh が dash の場合 pipefail が使えないため）
+SHELL := /bin/bash
+
 .PHONY: deploy-firestore-indexes
 .PHONY: deploy-cloud-run
 .PHONY: release-cloud-run
