@@ -966,7 +966,7 @@ export const WordPackListPanel: React.FC = () => {
             <WordPackPanel
               focusRef={modalFocusRef}
               selectedWordPackId={previewWordPackId}
-              selectedMeta={previewMeta ? { created_at: previewMeta.created_at, updated_at: previewMeta.updated_at } : null}
+              selectedMeta={previewMeta?.created_at && previewMeta?.updated_at ? { created_at: previewMeta.created_at, updated_at: previewMeta.updated_at } : null}
               fallbackMeta={previewMeta ? { id: previewMeta.id, lemma: previewMeta.lemma, senseTitle: previewMeta.senseTitle } : null}
               onWordPackGenerated={async () => {
                 // 再生成後に一覧を最新化（更新日時の整合）
