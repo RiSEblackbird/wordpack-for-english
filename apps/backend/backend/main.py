@@ -184,6 +184,12 @@ class AccessLogAndMetricsMiddleware(BaseHTTPMiddleware):
                             error_type = "HTTPUnauthorized"
                         if error_message is None:
                             error_message = "HTTP 401 Unauthorized"
+                    if isinstance(status_code, int) and status_code >= 500:
+                        is_error = True
+                        if error_type is None:
+                            error_type = f"HTTP{status_code}"
+                        if error_message is None:
+                            error_message = f"HTTP {status_code} response"
                 except Exception:  # pragma: no cover - ログ用補完に失敗しても本処理は継続
                     pass
                 return response

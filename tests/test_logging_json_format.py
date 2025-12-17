@@ -366,3 +366,41 @@ def test_request_log_marks_401_as_error() -> None:
     assert "401" in (data.get("error_message") or "")
 
 
+def test_request_log_marks_5xx_response_as_error() -> None:
+    """例外化されない 5xx レスポンスも ERROR として記録する。"""
+
+    buf_out = io.StringIO()
+    buf_err = io.StringIO()
+
+    with redirect_stdout(buf_out), redirect_stderr(buf_err):
+        with _use_fake_settings():
+            from backend.logging import configure_logging
+
+            configure_logging()
+
+            from fastapi.testclient import TestClient
+            from fastapi.responses import JSONResponse
+
+            from backend.main import app
+
+            @app.get("/fail502")
+            async def fail502() -> JSONResponse:  # pragma: no cover - ログ検証専用
+                return JSONResponse({"detail": "upstream error"}, status_code=502)
+
+            client = TestClient(app, raise_server_exceptions=False)
+            response = client.get("/fail502")
+
+            assert response.status_code == 502
+
+    raw = buf_err.getvalue().strip() or buf_out.getvalue().strip()
+    request_lines = _extract_request_complete_lines(raw)
+
+    assert request_lines, "request_complete log line not found"
+
+    data = json.loads(request_lines[-1])
+    assert data.get("status_code") == 502
+    assert data.get("is_error") is True
+    assert data.get("severity") == "ERROR"
+    assert data.get("error_type") in {"HTTP502", "HTTP 502", "HTTPError"}
+
+
