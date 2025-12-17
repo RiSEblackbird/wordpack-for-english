@@ -11,6 +11,7 @@
 ## 主な機能
 - バックエンド: FastAPI / フロントエンド: React + TypeScript + Vite
 - WordPack の生成・再生成・永続化
+- WordPack再生成は非同期ジョブ化し、ジョブIDを返して完了までポーリング（長時間処理でもUIが切れない）
 - 発音情報（IPA/音節/強勢）の付与
 - 例文（Dev/CS/LLM/Business/Common）の追加・削除
 - 文章インポートと関連 WordPack の紐付け

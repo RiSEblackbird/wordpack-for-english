@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNotifications } from '../NotificationsContext';
 import { useSettings } from '../SettingsContext';
 import { ApiError, fetchJson } from '../lib/fetcher';
-import { composeModelRequestFields, regenerateWordPackRequest } from '../lib/wordpack';
+import { composeModelRequestFields, enqueueRegenerateWordPack, fetchRegenerateJobStatus, regenerateWordPackRequest } from '../lib/wordpack';
 
 export interface Pronunciation {
   ipa_GA?: string | null;
@@ -325,7 +325,14 @@ export const useWordPack = ({
       setLoading(true);
       setMessage(null);
       try {
-        await regenerateWordPackRequest({
+        const notifId = addNotification({
+          title: `【${lemma}】の再生成ジョブ開始`,
+          message: 'バックグラウンドで再生成しています（完了までしばらくお待ちください）',
+          status: 'progress',
+          model: model || undefined,
+        });
+
+        const job = await enqueueRegenerateWordPack({
           apiBase,
           wordPackId,
           settings: {
@@ -338,28 +345,49 @@ export const useWordPack = ({
           },
           model,
           lemma,
-          notify: { add: addNotification, update: updateNotification },
           abortSignal: ctrl.signal,
-          messages: {
-            progress: 'WordPackを再生成しています',
-            success: '再生成が完了しました',
-            failure: 'WordPackの再生成に失敗しました',
-          },
         });
-        if (mountedRef.current) {
-          const refreshed = await fetchJson<WordPack>(`${apiBase}/word/packs/${wordPackId}`, {
-            signal: ctrl.signal,
+
+        const maxPolls = Math.max(3, Math.ceil(requestTimeoutMs / 2000));
+        let latest = job;
+        for (let i = 0; i < maxPolls; i += 1) {
+          if (ctrl.signal.aborted) break;
+          if (latest.status === 'succeeded' || latest.status === 'failed') break;
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          latest = await fetchRegenerateJobStatus({
+            apiBase,
+            wordPackId,
+            jobId: job.job_id,
+            abortSignal: ctrl.signal,
             timeoutMs: requestTimeoutMs,
           });
+        }
+
+        if (latest.status === 'succeeded' && latest.result) {
+          const normalized = normalizeWordPack(latest.result as WordPack);
           if (mountedRef.current) {
-            const normalized = normalizeWordPack(refreshed);
             setData(normalized);
             setCurrentWordPackId(wordPackId);
             extractAiMeta(normalized);
             setMessage({ kind: 'status', text: 'WordPackを再生成しました' });
           }
+          updateNotification(notifId, {
+            title: `【${lemma}】の再生成完了`,
+            status: 'success',
+            message: 'バックグラウンド再生成が完了しました',
+            model: model || undefined,
+          });
+          try { onWordPackGenerated?.(wordPackId); } catch {}
+        } else {
+          const errText = latest.error || '再生成が完了しませんでした（時間をおいて再試行してください）';
+          if (mountedRef.current) setMessage({ kind: 'alert', text: errText });
+          updateNotification(notifId, {
+            title: `【${lemma}】の再生成失敗`,
+            status: 'error',
+            message: errText,
+            model: model || undefined,
+          });
         }
-        try { onWordPackGenerated?.(wordPackId); } catch {}
       } catch (error) {
         if (ctrl.signal.aborted) return;
         let text = error instanceof ApiError ? error.message : 'WordPackの再生成に失敗しました';
