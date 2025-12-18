@@ -87,7 +87,7 @@ npm run prepare:frontend-env  # apps/frontend/.env が無い場合に .env.examp
 
 ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。Firebase Hosting から Cloud Run へリライティングする構成では、`wp_session` に加えて `__session` も同じトークンで自動配信されるため、Hosting の `__session` 制約を意識せずに認証を維持できます。
 
-バックエンドは **全環境で Firestore を利用** します。`FIRESTORE_EMULATOR_HOST` が設定されている場合は Firestore エミュレータへ接続し、未設定のときだけ Cloud Firestore へ向きます。ローカル/CI は課金を避けるため常にエミュレータを併走させ、Cloud Firestore を使う場合のみホスト指定を外して `FIRESTORE_PROJECT_ID`（または `GCP_PROJECT_ID`）とサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を明示してください。`ENVIRONMENT` は認証やセキュリティ関連のガード（allowlist 必須化や Secure 属性の既定値など）にのみ利用し、データベースの種類は切り替えません。
+バックエンドは **全環境で Firestore を利用** します。`FIRESTORE_EMULATOR_HOST` が設定されている場合のみ Firestore エミュレータへ接続し、未設定なら環境に関わらず Cloud Firestore へ向きます。ローカル/CI は課金を避けるため常にエミュレータを併走させ、Cloud Firestore を使う場合のみホスト指定を外して `FIRESTORE_PROJECT_ID`（または `GCP_PROJECT_ID`）とサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を明示してください。`ENVIRONMENT` は認証やセキュリティ関連のガード（allowlist 必須化や Secure 属性の既定値など）にのみ利用し、データベースの種類は切り替えません。
 
 `ENVIRONMENT` と `ADMIN_EMAIL_ALLOWLIST` は連動させる前提でセットアップしてください。`ENVIRONMENT=production` で allowlist が空のままデプロイすると設定バリデーションで起動が止まり、Google ログインの許可メールアドレスがひとつも無い状態を防ぎます。テストや CI では本番同等の検証を通すために `ADMIN_EMAIL_ALLOWLIST=test@example.com` のようなダミー値を必ず設定し、実運用時のみ本当の許可リストへ差し替えてください。Firestore への接続先は allowlist の有無に関わらず Firestore 固定です。
 

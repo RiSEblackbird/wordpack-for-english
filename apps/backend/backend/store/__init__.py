@@ -8,9 +8,6 @@ from ..config import settings
 from .examples import EXAMPLE_CATEGORIES
 from .firestore_store import AppFirestoreStore
 
-_DEFAULT_EMULATOR_HOST = "127.0.0.1:8080"
-
-
 def _normalize_emulator_host(raw_host: str | None) -> str | None:
     """FIRESTORE_EMULATOR_HOST で受け取ったホスト文字列を正規化する。
 
@@ -30,15 +27,11 @@ def _build_firestore_client() -> firestore.Client:
     """Firestore クライアントを構築する。
 
     - FIRESTORE_EMULATOR_HOST が指定されていればエミュレータ向けのエンドポイントを使用。
-    - 開発モードではホスト未指定でも 127.0.0.1:8080 のエミュレータを優先。
-    - それ以外は Cloud Firestore へ接続する。
+    - 未指定の場合は Cloud Firestore へ接続する。
     """
 
-    environment_name = (settings.environment or "").strip().lower()
     emulator_host = _normalize_emulator_host(
-        settings.firestore_emulator_host
-        or os.environ.get("FIRESTORE_EMULATOR_HOST")
-        or (_DEFAULT_EMULATOR_HOST if environment_name != "production" else None)
+        settings.firestore_emulator_host or os.environ.get("FIRESTORE_EMULATOR_HOST")
     )
     project_id = settings.firestore_project_id or settings.gcp_project_id
     if emulator_host:
