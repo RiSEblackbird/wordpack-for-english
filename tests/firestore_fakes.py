@@ -356,7 +356,38 @@ class FakeWriteBatch:
                 ref.update(data)
 
 
+def ensure_firestore_test_env(monkeypatch) -> None:
+    """テスト用に Firestore 接続先をエミュレータ/フェイクへ固定する環境変数を設定する。
+
+    なぜ: backend.store._create_store は環境変数を参照して Firestore クライアントを初期化するため、
+    ここで事前に値を上書きしておくとストア生成が実際の GCP へ向かう誤配を防げる。
+    """
+
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+    monkeypatch.setenv("FIRESTORE_PROJECT_ID", "test-project")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+
+
+def use_fake_firestore_client(monkeypatch, client: "FakeFirestoreClient | None" = None) -> "FakeFirestoreClient":
+    """google.cloud.firestore.Client をフェイクに差し替え、同一インスタンスを返す。
+
+    返却したフェイククライアントは永続層の状態を保持するため、同一テスト内で何度も
+    import/reload を行ってもデータが失われないようにする。
+    """
+
+    instance = client or FakeFirestoreClient()
+    monkeypatch.setattr(firestore, "Client", lambda *args, **kwargs: instance)
+    return instance
+
+
 class FakeFirestoreClient:
+    """google.cloud.firestore.Client 互換の最小フェイク。
+
+    - collection/transaction/batch だけを実装し、AppFirestoreStore が依存する CRUD/ページング/検索を網羅する。
+    - _data は collection ごとに {doc_id: payload} を保持し、テスト毎に新規インスタンスで分離する。
+    """
+
     def __init__(self) -> None:
         self._data: dict[str, dict[str, dict[str, Any]]] = {}
 
