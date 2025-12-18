@@ -87,9 +87,9 @@ npm run prepare:frontend-env  # apps/frontend/.env が無い場合に .env.examp
 
 ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。Firebase Hosting から Cloud Run へリライティングする構成では、`wp_session` に加えて `__session` も同じトークンで自動配信されるため、Hosting の `__session` 制約を意識せずに認証を維持できます。
 
-バックエンドは Firestore を永続層として利用します。`FIRESTORE_EMULATOR_HOST` を指定するとローカルエミュレータへ接続し、未設定の場合は Cloud Firestore を利用します。Cloud Firestore へ接続する場合はサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）と `FIRESTORE_PROJECT_ID`（または `GCP_PROJECT_ID`）を必ず設定してください。開発モードではホスト未指定でも `127.0.0.1:8080` のエミュレータを前提に接続を試みるため、ローカル作業時はエミュレータを併走させてください。
+バックエンドは **全環境で Firestore を利用** します。`FIRESTORE_EMULATOR_HOST` が設定されている場合のみ Firestore エミュレータへ接続し、未設定なら環境に関わらず Cloud Firestore へ向きます。ローカル/CI は課金を避けるため常にエミュレータを併走させ、Cloud Firestore を使う場合のみホスト指定を外して `FIRESTORE_PROJECT_ID`（または `GCP_PROJECT_ID`）とサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を明示してください。`ENVIRONMENT` は認証やセキュリティ関連のガード（allowlist 必須化や Secure 属性の既定値など）にのみ利用し、データベースの種類は切り替えません。
 
-`ENVIRONMENT` と `ADMIN_EMAIL_ALLOWLIST` は連動する前提でセットアップしてください。`ENVIRONMENT=production` で allowlist が空のままデプロイすると設定バリデーションで起動が止まり、Google ログインの許可メールアドレスがひとつも無い状態を防ぎます。テストや CI では本番同等の検証を通すために `ADMIN_EMAIL_ALLOWLIST=test@example.com` のようなダミー値を必ず設定し、実運用時のみ本当の許可リストへ差し替えてください。
+`ENVIRONMENT` と `ADMIN_EMAIL_ALLOWLIST` は連動させる前提でセットアップしてください。`ENVIRONMENT=production` で allowlist が空のままデプロイすると設定バリデーションで起動が止まり、Google ログインの許可メールアドレスがひとつも無い状態を防ぎます。テストや CI では本番同等の検証を通すために `ADMIN_EMAIL_ALLOWLIST=test@example.com` のようなダミー値を必ず設定し、実運用時のみ本当の許可リストへ差し替えてください。Firestore への接続先は allowlist の有無に関わらず Firestore 固定です。
 
 #### Firestore のインデックス要件
 Firestore に保存する主要コレクションは `firestore.indexes.json` で複合インデックスを一括管理しています。`word_packs`（`created_at` 降順 + `__name__`）、`examples`（`word_pack_id`/`category` フィルタ + `position` / `example_id` の組み合わせ）を固定することで、バックエンドのページネーションと `Aggregation Query` の `count()` が常に安定します。`lemma_label_lower` への等価フィルタと `updated_at` 降順の `order_by` を組み合わせるクエリ用のインデックスも追加済みで、lemma 重複チェック時に最新 1 件だけを取得します。JSON ファイルはそのまま Cloud Firestore / エミュレータ / Firebase CLI で流用できるようにしてあるため、手作業で Web Console に登録する必要はありません。
@@ -113,7 +113,7 @@ CI でエミュレータを併走させる場合は、`ENABLE_FIRESTORE_EMULATOR
 特定の Google アカウントだけに利用者を絞り込みたい場合は、カンマ区切りでメールアドレスを列挙した `ADMIN_EMAIL_ALLOWLIST` を設定してください。値は小文字に正規化され、完全一致したアドレスのみが `/api/auth/google` の認証を通過します（未設定または空文字の場合は従来どおり全アカウントを許可します）。
 Cloud Run など本番運用では `.env.deploy` に `ADMIN_EMAIL_ALLOWLIST` を必ず設定し、開発環境と同じ利用者だけがログインできるようにしてください。`ENVIRONMENT=production` かつ空のままデプロイすると、設定バリデーションの時点で起動が止まります。
 
-`SESSION_SECRET_KEY` は 32 文字以上の十分に乱数性を持つ文字列を必ず指定してください。`change-me` など既知のプレースホルダーや短い値を設定すると、アプリケーション起動時に検証エラーとなり実行が停止します。外部に公開する環境では `openssl rand -base64 48 | tr -d '\n'` などで生成した値を `.env` へ保存し、リポジトリへコミットしない運用を徹底してください。過去にドキュメントへ掲載したサンプル値もハッシュ照合で拒否されるため、再利用は避けてください。
+`SESSION_SECRET_KEY` は 32 文字以上の十分に乱数性を持つ文字列を必ず指定してください。`change-me` など既知のプレースホルダーや短い値を設定すると、アプリケーション起動時に検証エラーとなり実行が停止します。外部に公開する環境では `openssl rand -base64 48 | tr -d '\n'` などで生成した値を `.env` へ保存し、リポジトリへコミットしない運用を徹底してください。過去にドキュメントへ掲載したサンプル値もハッシュ照合で拒否されるため、再利用は避けてください。Cloud Firestore を利用する本番では `FIRESTORE_PROJECT_ID` を `PROJECT_ID` と合わせて設定し、`FIRESTORE_EMULATOR_HOST` はローカル/CI 専用のため空のままにしてください。
 
 `CORS_ALLOWED_ORIGINS` を設定すると、指定したオリジンからのみ資格情報付き CORS を許可します。ローカル開発では `http://127.0.0.1:5173,http://localhost:5173` を指定すると従来どおりフロントエンドと連携できます。未設定の場合はワイルドカード許可となりますが、`Access-Control-Allow-Credentials` は返さないためクッキー連携が無効化されます。
 
@@ -183,6 +183,7 @@ cp env.deploy.example .env.deploy
 # .env.deploy の例
 ENVIRONMENT=production
 PROJECT_ID=my-prod-project
+FIRESTORE_PROJECT_ID=my-prod-project
 REGION=asia-northeast1
 CLOUD_RUN_SERVICE=wordpack-backend
 ARTIFACT_REPOSITORY=wordpack/backend
