@@ -27,6 +27,8 @@ bin-release/
 .firebase/
 firestore-emulator-data/
 firebase-debug.log
+firebase-debug.*.log
+firestore-emulator-*.log
 # Firestore シードやエミュレータのエクスポートはサンプルとはいえ利用者入力が含まれ得るため除外
 firestore-seed-*/
 firestore-seed-*.json
