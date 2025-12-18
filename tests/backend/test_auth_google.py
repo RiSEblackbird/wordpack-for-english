@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import Any, Callable
@@ -11,19 +12,22 @@ from fastapi.testclient import TestClient
 
 import sys
 
+os.environ.setdefault("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+os.environ.setdefault("FIRESTORE_PROJECT_ID", "test-project")
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
 
 from backend.config import settings
 from backend.main import create_app
-from backend.store import AppSQLiteStore
+from backend.store import AppFirestoreStore
+from tests.firestore_fakes import FakeFirestoreClient
 
 
 @pytest.fixture()
-def test_client(tmp_path, monkeypatch) -> TestClient:
-    """Create an isolated FastAPI test client with a dedicated SQLite store."""
+def test_client(monkeypatch) -> TestClient:
+    """Create an isolated FastAPI test client with a dedicated Firestore store."""
 
-    db_path = tmp_path / "auth.sqlite3"
-    store_instance = AppSQLiteStore(str(db_path))
+    store_instance = AppFirestoreStore(client=FakeFirestoreClient())
 
     import backend.store as store_module
     import backend.auth as auth_module

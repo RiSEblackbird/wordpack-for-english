@@ -47,11 +47,12 @@ def _use_fake_settings() -> object:
         allowed_hosts = ()
         allowed_hosts_raw = ""
         strict_mode = False
-        wordpack_db_path = ":memory:"
         openai_api_key = None
         voyage_api_key = None
         trusted_proxy_ips = ()
-        gcp_project_id: str | None = None
+        gcp_project_id: str | None = "test-project"
+        firestore_project_id: str | None = "test-project"
+        firestore_emulator_host: str | None = "localhost:8080"
 
     fake_config.settings = _Settings()
     sys.modules["backend.config"] = fake_config
@@ -402,5 +403,4 @@ def test_request_log_marks_5xx_response_as_error() -> None:
     assert data.get("is_error") is True
     assert data.get("severity") == "ERROR"
     assert data.get("error_type") in {"HTTP502", "HTTP 502", "HTTPError"}
-
 

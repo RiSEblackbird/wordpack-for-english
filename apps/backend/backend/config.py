@@ -6,7 +6,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources.types import NoDecode
 
 
-DEFAULT_DB_PATH = ".data/wordpack.sqlite3"
 _MIN_SESSION_SECRET_KEY_LENGTH = 32
 # ローカル開発環境で `uvicorn` を直接叩くときは 127.0.0.1 のみを信頼する。
 _DEFAULT_LOCAL_TRUSTED_PROXY: tuple[str, ...] = ("127.0.0.1",)
@@ -68,6 +67,22 @@ class Settings(BaseSettings):
             "GCP_PROJECT_ID",
             "GOOGLE_CLOUD_PROJECT",
             "PROJECT_ID",
+        ),
+    )
+    firestore_project_id: str | None = Field(
+        default=None,
+        description="Firestore project ID / Firestore 接続に利用するプロジェクト ID",
+        validation_alias=AliasChoices(
+            "firestore_project_id",
+            "FIRESTORE_PROJECT_ID",
+        ),
+    )
+    firestore_emulator_host: str | None = Field(
+        default=None,
+        description="Firestore emulator host (hostname:port) / Firestore エミュレータのホスト:ポート",
+        validation_alias=AliasChoices(
+            "firestore_emulator_host",
+            "FIRESTORE_EMULATOR_HOST",
         ),
     )
     google_client_id: str = Field(
@@ -163,12 +178,6 @@ class Settings(BaseSettings):
     # --- API Keys ---
     openai_api_key: str | None = Field(default=None, description="OpenAI API Key")
     voyage_api_key: str | None = Field(default=None, description="Voyage API Key")
-
-    # --- データ永続化設定 ---
-    wordpack_db_path: str = Field(
-        default=DEFAULT_DB_PATH,
-        description="Path to SQLite database for WordPack persistence / WordPack用SQLite DBパス",
-    )
 
     # --- Operations/Observability (PR4) ---
     rate_limit_per_min_ip: int = Field(
@@ -353,6 +362,14 @@ class Settings(BaseSettings):
             )
 
         return secret
+
+    @field_validator("firestore_emulator_host", mode="after")
+    @classmethod
+    def _normalize_firestore_emulator_host(cls, host: str | None) -> str | None:
+        """Trim emulator host values and treat blanks as unset."""
+
+        cleaned = (host or "").strip()
+        return cleaned or None
 
     @field_validator("admin_email_allowlist", mode="before")
     @classmethod
@@ -565,6 +582,19 @@ class Settings(BaseSettings):
         """
 
         environment_name = (self.environment or "").lower()
+        project_id = self.firestore_project_id or self.gcp_project_id
+        if not project_id and self.firestore_emulator_host:
+            project_id = "local-emulator"
+        if not project_id and environment_name != "production":
+            project_id = "wordpack-local"
+        if project_id:
+            self.firestore_project_id = project_id
+            if self.gcp_project_id is None:
+                self.gcp_project_id = project_id
+        elif self.strict_mode:
+            raise ValueError(
+                "FIRESTORE_PROJECT_ID (or GCP_PROJECT_ID) must be configured for Firestore access"
+            )
         parsed_allowed_hosts = self._parse_allowed_hosts(self.allowed_hosts_raw)
         self._allowed_hosts_values = parsed_allowed_hosts
         is_secure_explicitly_configured = "session_cookie_secure" in self.model_fields_set

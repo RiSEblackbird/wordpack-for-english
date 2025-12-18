@@ -1,5 +1,5 @@
 import json
-import json
+import os
 import re
 import sys
 import types
@@ -9,13 +9,20 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.firestore_fakes import FakeFirestoreClient
+
 _TEST_SESSION_SECRET = "L5qS8vZ1xC4nR7tM0pW3yB6dF9hJ2kG8"  # 32文字の擬似乱数
+
+os.environ.setdefault("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+os.environ.setdefault("FIRESTORE_PROJECT_ID", "test-project")
+os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "test-project")
 
 
 def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_path: Path | None = None):
     """テスト用に backend.* モジュールを再読み込みしてクリーンな状態を準備する補助関数。"""
 
     import importlib
+    from google.cloud import firestore as firestore_module
 
     backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
     if str(backend_root) not in sys.path:
@@ -25,8 +32,10 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
     # セッション認証を無効化して、エンドポイント検証がトークン配布に依存しないようにする。
     monkeypatch.setenv("DISABLE_SESSION_AUTH", "true")
     monkeypatch.setenv("SESSION_SECRET_KEY", _TEST_SESSION_SECRET)
-    if db_path is not None:
-        monkeypatch.setenv("WORDPACK_DB_PATH", str(db_path))
+    monkeypatch.setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+    monkeypatch.setenv("FIRESTORE_PROJECT_ID", "test-project")
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
 
     # backend.* を一度破棄して設定と永続層のキャッシュをリセット
     for name in list(sys.modules.keys()):
@@ -41,6 +50,7 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
     sys.modules.setdefault("langgraph", lg_mod)
     sys.modules.setdefault("langgraph.graph", graph_mod)
     sys.modules.setdefault("chromadb", types.SimpleNamespace())
+    monkeypatch.setattr(firestore_module, "Client", lambda *args, **kwargs: FakeFirestoreClient())
 
     # 設定・ストアを新しい環境変数で初期化
     importlib.import_module("backend.config")
@@ -93,11 +103,10 @@ def _assert_iso_utc(value: str) -> None:
 
 
 @pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory):
+def client(monkeypatch: pytest.MonkeyPatch):
     backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
     sys.path.insert(0, str(backend_root))
-    db_path = tmp_path_factory.mktemp("wordpack") / "store.sqlite3"
-    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=db_path)
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
     return TestClient(backend_main.app)
 
 
@@ -181,10 +190,10 @@ def test_lookup_word_returns_saved_pack(client: TestClient, monkeypatch: pytest.
     assert body.get("examples") and body["examples"][0]["category"] == "Dev"
 
 
-def test_lookup_word_generates_when_not_found(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_lookup_word_generates_when_not_found(monkeypatch: pytest.MonkeyPatch):
     """未保存の lemma でも Flow を使って生成・保存して返すことを確認。"""
 
-    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "lookup_flow.sqlite3")
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
     from fastapi.testclient import TestClient
     from backend.models.word import WordPack
     from backend.store import store as backend_store
@@ -245,10 +254,10 @@ def test_lookup_word_rejects_invalid_lemma(client: TestClient):
     assert "lemma" in body.get("detail", "")
 
 
-def test_lookup_word_strict_flow_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_lookup_word_strict_flow_error(monkeypatch: pytest.MonkeyPatch):
     """strict_mode でも Flow 例外を HTTP 502 にマッピングして返す。"""
 
-    backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=tmp_path / "lookup_strict.sqlite3")
+    backend_main = _reload_backend_app(monkeypatch, strict=True)
     from fastapi.testclient import TestClient
     from backend.routers import word as word_router
 
@@ -262,8 +271,8 @@ def test_lookup_word_strict_flow_error(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     assert resp.status_code == 502
     assert resp.json().get("detail", {}).get("reason_code") == "LLM_JSON_PARSE"
-def test_create_empty_word_pack_generates_japanese_sense_title(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "empty_pack_llm.sqlite3")
+def test_create_empty_word_pack_generates_japanese_sense_title(monkeypatch: pytest.MonkeyPatch):
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
     from fastapi.testclient import TestClient
     import backend.providers as providers_mod
 
@@ -291,11 +300,8 @@ def test_create_empty_word_pack_generates_japanese_sense_title(monkeypatch: pyte
 
 
 
-def test_word_pack_sanitizes_english_sense_title(
-    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
-):
-    db_path = tmp_path_factory.mktemp("wordpack-english-title") / "store.sqlite3"
-    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=db_path)
+def test_word_pack_sanitizes_english_sense_title(monkeypatch: pytest.MonkeyPatch):
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
 
     from fastapi.testclient import TestClient
     import backend.providers as providers_mod
@@ -569,7 +575,6 @@ def test_word_pack_study_progress_endpoint(client):
 
 def test_google_auth_logs_error_details(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
     capfd: pytest.CaptureFixture[str],
 ):
@@ -577,7 +582,7 @@ def test_google_auth_logs_error_details(
 
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id-log-test")
     monkeypatch.setenv("SESSION_SECRET_KEY", "log-secret-key")
-    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "auth-log.sqlite3")
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
 
     from fastapi.testclient import TestClient as LocalTestClient
     from google.oauth2 import id_token
@@ -790,8 +795,8 @@ def test_review_stats_removed(client):
     assert client.get("/api/review/stats").status_code in (404, 405)
 
 
-def test_word_pack_strict_llm_json_parse_failure_to_502(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=tmp_path / "strict.sqlite3")
+def test_word_pack_strict_llm_json_parse_failure_to_502(monkeypatch: pytest.MonkeyPatch):
+    backend_main = _reload_backend_app(monkeypatch, strict=True)
     from fastapi.testclient import TestClient
     import backend.providers as providers_mod
 
@@ -806,10 +811,10 @@ def test_word_pack_strict_llm_json_parse_failure_to_502(monkeypatch: pytest.Monk
     assert r.status_code == 502
 
 
-def test_word_pack_sanitizes_control_chars_in_llm_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_word_pack_sanitizes_control_chars_in_llm_json(monkeypatch: pytest.MonkeyPatch):
     """STRICT_MODE で LLM が未エスケープの制御文字を含む JSON を返しても、
     サニタイザによりパースが成功して 200 を返すことを検証する。"""
-    backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=tmp_path / "strict_cc.sqlite3")
+    backend_main = _reload_backend_app(monkeypatch, strict=True)
     from fastapi.testclient import TestClient
     import backend.providers as providers_mod
 
@@ -1025,13 +1030,13 @@ def test_word_pack_list_pagination(client):
     assert resp.status_code == 422  # validation error
 
 
-def test_word_pack_strict_empty_llm(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_word_pack_strict_empty_llm(monkeypatch: pytest.MonkeyPatch):
     """STRICT_MODE で LLM が空文字を返した場合、5xx となることを確認。
 
     ルータは内部で例外をリレーズするため、FastAPI の既定ハンドラで 500 になる。
     （依存不足系の424は廃止）
     """
-    backend_main = _reload_backend_app(monkeypatch, strict=True, db_path=tmp_path / "strict_empty.sqlite3")
+    backend_main = _reload_backend_app(monkeypatch, strict=True)
     from fastapi.testclient import TestClient
     # LLM を空応答に固定
     import backend.providers as providers_mod
@@ -1047,16 +1052,15 @@ def test_word_pack_strict_empty_llm(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     assert 500 <= r.status_code < 600
 
 
-def test_article_wordpack_link_persists_after_regeneration(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_article_wordpack_link_persists_after_regeneration(monkeypatch: pytest.MonkeyPatch):
     """記事詳細の関連WordPackが再生成後も消えないことを検証する回帰テスト。
 
     現象: 文章プレビューモーダルで [生成] 実行→完了後に再度開くと関連WordPackが一覧から消えることがある。
-    原因候補: SQLite の INSERT OR REPLACE により ON DELETE CASCADE 相当の副作用で
-              link テーブルが一時的に解消されるケース。
+    原因候補: 永続層の upsert 処理でリンクが巻き戻ることによる一時的な欠落。
     本テストでは、記事をインポートし、関連WordPackのうち1件を再生成した後に
     記事詳細取得でリンクが保持されていることを確認する。
     """
-    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "article_link.sqlite3")
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
     from fastapi.testclient import TestClient
     import backend.providers as providers_mod
     from backend.flows.article_import import ArticleImportFlow
@@ -1174,13 +1178,11 @@ def test_category_generate_and_import_endpoint(client, monkeypatch):
 
 
 def test_category_generate_import_returns_502_when_article_import_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch
 ):
     """記事インポートが全件失敗した場合に 502 + reason_code を返すことを検証する。"""
 
-    backend_main = _reload_backend_app(
-        monkeypatch, strict=False, db_path=tmp_path / "cat_import_fail.sqlite3"
-    )
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
     from fastapi.testclient import TestClient
     import backend.providers as providers_mod
     import backend.flows.category_generate_import as cat_flow_module
@@ -1279,10 +1281,10 @@ def test_category_generate_import_fallback_on_duplicate(client, monkeypatch):
     assert body.get("generated_examples", 0) >= 2
 
 
-def test_article_import_includes_llm_metadata(monkeypatch, tmp_path):
+def test_article_import_includes_llm_metadata(monkeypatch):
     """記事インポート時にLLMメタ情報が保存・返却されることを検証する。"""
 
-    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "article_llm_meta.sqlite3")
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
     from fastapi.testclient import TestClient
     import backend.providers as providers_mod
     from backend.flows.article_import import ArticleImportFlow
@@ -1336,11 +1338,11 @@ def test_article_import_includes_llm_metadata(monkeypatch, tmp_path):
     _assert_iso_utc(detail["generation_completed_at"])
     assert detail["generation_duration_ms"] >= 0
 
-def test_article_import_category_and_zero_duration(monkeypatch, tmp_path):
+def test_article_import_category_and_zero_duration(monkeypatch):
     """インポート時に generation_category を指定した場合に保存/再読込で保持され、
     時刻が同一なら duration=0 になることを検証。
     """
-    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "article_llm_meta2.sqlite3")
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
     from fastapi.testclient import TestClient
     import backend.providers as providers_mod
     from backend.flows.article_import import ArticleImportFlow
@@ -1393,13 +1395,13 @@ def test_article_import_category_and_zero_duration(monkeypatch, tmp_path):
     assert detail.get("generation_duration_ms") is not None
 
 
-def test_store_prefers_japanese_sense_title(tmp_path: Path):
+def test_store_prefers_japanese_sense_title():
     backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
     if str(backend_root) not in sys.path:
         sys.path.insert(0, str(backend_root))
-    from backend.store import AppSQLiteStore
+    from backend.store import AppFirestoreStore
 
-    store = AppSQLiteStore(str(tmp_path / "sense.sqlite3"))
+    store = AppFirestoreStore(client=FakeFirestoreClient())
     payload = {
         "sense_title": "alignment",
         "senses": [
@@ -1416,13 +1418,13 @@ def test_store_prefers_japanese_sense_title(tmp_path: Path):
     assert rows and rows[0][2] == "整列"
 
 
-def test_store_uses_lemma_when_no_japanese(tmp_path: Path):
+def test_store_uses_lemma_when_no_japanese():
     backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
     if str(backend_root) not in sys.path:
         sys.path.insert(0, str(backend_root))
-    from backend.store import AppSQLiteStore
+    from backend.store import AppFirestoreStore
 
-    store = AppSQLiteStore(str(tmp_path / "sense-placeholder.sqlite3"))
+    store = AppFirestoreStore(client=FakeFirestoreClient())
     payload = {
         "sense_title": "alignment",
         "senses": [],
@@ -1434,8 +1436,8 @@ def test_store_uses_lemma_when_no_japanese(tmp_path: Path):
     assert rows and rows[0][2] == "alignment"
 
 
-def test_empty_wordpack_creation_sets_sense_title_from_lemma(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    backend_main = _reload_backend_app(monkeypatch, strict=False, db_path=tmp_path / "empty_pack.sqlite3")
+def test_empty_wordpack_creation_sets_sense_title_from_lemma(monkeypatch: pytest.MonkeyPatch):
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
     from fastapi.testclient import TestClient
     client = TestClient(backend_main.app)
 

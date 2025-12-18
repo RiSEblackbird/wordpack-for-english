@@ -87,7 +87,7 @@ npm run prepare:frontend-env  # apps/frontend/.env が無い場合に .env.examp
 
 ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。Firebase Hosting から Cloud Run へリライティングする構成では、`wp_session` に加えて `__session` も同じトークンで自動配信されるため、Hosting の `__session` 制約を意識せずに認証を維持できます。
 
-`ENVIRONMENT=production` のときバックエンドは Cloud Firestore へ永続化します。Google Cloud のサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を必ず設定し、Firestore プロジェクトで `users` / `word_packs` / `examples` などのコレクション作成権限を付与してください。その他の環境では従来どおりローカル SQLite ファイル（`WORDPACK_DB_PATH`）が利用されます。
+バックエンドは Firestore を永続層として利用します。`FIRESTORE_EMULATOR_HOST` を指定するとローカルエミュレータへ接続し、未設定の場合は Cloud Firestore を利用します。Cloud Firestore へ接続する場合はサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）と `FIRESTORE_PROJECT_ID`（または `GCP_PROJECT_ID`）を必ず設定してください。開発モードではホスト未指定でも `127.0.0.1:8080` のエミュレータを前提に接続を試みるため、ローカル作業時はエミュレータを併走させてください。
 
 `ENVIRONMENT` と `ADMIN_EMAIL_ALLOWLIST` は連動する前提でセットアップしてください。`ENVIRONMENT=production` で allowlist が空のままデプロイすると設定バリデーションで起動が止まり、Google ログインの許可メールアドレスがひとつも無い状態を防ぎます。テストや CI では本番同等の検証を通すために `ADMIN_EMAIL_ALLOWLIST=test@example.com` のようなダミー値を必ず設定し、実運用時のみ本当の許可リストへ差し替えてください。
 
@@ -150,10 +150,10 @@ npm run dev
 # Cloud Run と同じ Dockerfile.backend を使って API 用イメージを作成
 docker build -f Dockerfile.backend -t wordpack-backend .
 
-# Firestore を利用する本番挙動を再現したい場合は ENVIRONMENT=production を指定
-docker run --rm -p 8000:8000 -e ENVIRONMENT=production wordpack-backend
+# Firestore を利用する本番挙動を再現したい場合はプロジェクトIDを指定
+docker run --rm -p 8000:8000 -e FIRESTORE_PROJECT_ID=my-project wordpack-backend
 ```
-- `ENVIRONMENT` を `production` にすると Firestore などの本番用依存をロードし、`development` の場合はローカル SQLite を利用します。サービスアカウントをボリュームで渡す場合は `-v $PWD/gcp-service-account.json:/secrets/sa.json -e GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa.json` のように設定してください。
+- Firestore は全環境共通で利用します。ローカル検証では `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` を付与してエミュレータへ接続してください。Cloud Firestore を使う場合は `FIRESTORE_PROJECT_ID`（もしくは `GCP_PROJECT_ID`）とサービスアカウントを `-v $PWD/gcp-service-account.json:/secrets/sa.json -e GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa.json` のように渡してください。
 - `CMD` は `uvicorn backend.main:app --host 0.0.0.0 --port 8000 --app-dir apps/backend` に固定しているため、`docker run` でそのまま FastAPI を起動できます。
 
 #### docker compose
@@ -286,12 +286,11 @@ PS D:\Users\mokut\Documents\GitHub\wordpack-for-english> firebase deploy --only 
 ```
 
 ### Firestore エミュレータを使ったローカルテスト
-`ENVIRONMENT=production` で起動するとバックエンドは `AppFirestoreStore` を選択します。Firestore エミュレータを併用すれば本番相当のデータフローをローカルで検証できます。
+Firestore エミュレータを併用すれば本番相当のデータフローをローカルで検証できます。
 
 1. Firebase CLI をインストールし、別ターミナルで `firebase emulators:start --only firestore --project wordpack-local` を起動。
-2. API を起動する環境で `ENVIRONMENT=production FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` を設定し、`python -m uvicorn backend.main:app --app-dir apps/backend` を実行します（サービスアカウントは不要）。
-3. テストも `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 ENVIRONMENT=production pytest tests/backend/test_firestore_store.py` のように実行すれば、Fake クライアントだけでなく実際のエミュレータ相手の結合テストを追加できます。
-4. エミュレータ利用をやめる場合は `ENVIRONMENT` を `development` に戻すだけで SQLite へフォールバックします。
+2. API を起動する環境で `FIRESTORE_PROJECT_ID=wordpack-local FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` を設定し、`python -m uvicorn backend.main:app --app-dir apps/backend` を実行します（サービスアカウントは不要）。
+3. テストも `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIRESTORE_PROJECT_ID=wordpack-local pytest tests/backend/test_firestore_store.py` のように実行すれば、Fake クライアントだけでなく実際のエミュレータ相手の結合テストを追加できます。
 
 Cloud Run や Firebase Hosting へ出荷する前に、上記の手順で Firestore 統合を通しで確認すると移行時のトラブルを減らせます。
 

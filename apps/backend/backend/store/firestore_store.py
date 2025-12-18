@@ -13,10 +13,9 @@ from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore
 
 from ..logging import logger
-from ..sense_title import choose_sense_title
 from .common import normalize_non_negative_int
 from .examples import EXAMPLE_CATEGORIES, iter_example_rows
-from .wordpacks import merge_core_with_examples, split_examples_from_payload
+from .wordpacks import build_sense_title, merge_core_with_examples, split_examples_from_payload
 
 
 def _now_iso() -> str:
@@ -205,12 +204,7 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             (checked_only_count, learned_count),
             (lemma_llm_model, lemma_llm_params),
         ) = split_examples_from_payload(data)
-        sense_title = choose_sense_title(
-            sense_title_raw,
-            sense_candidates,
-            lemma=lemma,
-            limit=40,
-        )
+        sense_title = build_sense_title(lemma, sense_title_raw, sense_candidates)
         lemma_id = self._upsert_lemma(
             label=lemma,
             sense_title=sense_title,

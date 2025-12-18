@@ -138,7 +138,7 @@
 
 ### A-11. 制約・既知の事項（ユーザー向け）
 - UI文言は今後統一予定
-- SQLite は WordPack と文章の保存専用です（復習スケジュール機能はありません）
+- Firestore（エミュレータ/クラウド）は WordPack と文章の保存専用です（復習スケジュール機能はありません）
 
 ### A-12. トラブルシュート（一般ユーザー向け）
 - 表示が更新されない: ブラウザを更新、または一度アプリを停止して再起動
@@ -241,7 +241,7 @@
   ```bash
   firebase emulators:start --only firestore --project wordpack-local
   # 別ターミナル
-  FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 ENVIRONMENT=production pytest tests/backend/test_firestore_store.py
+  FIRESTORE_PROJECT_ID=wordpack-local FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 pytest tests/backend/test_firestore_store.py
   ```
   - エミュレータを起動すると `firestore.indexes.json` が読み込まれます。`Ctrl+C` で停止し、必要に応じて `FIRESTORE_EMULATOR_HOST` を付与した API/テストを実行してください。
 
@@ -416,4 +416,3 @@
 6. 「インポート済み文章」一覧から、保存済みの文章を再表示できます。不要になった記事は削除してください（削除ボタンを押すと画面中央に「【該当記事の英語タイトル】について削除しますか？」が表示され、「はい」「いいえ」で判断します）。
 
 補足: 「生成＆インポート」ボタン（カテゴリ指定で例文を自動生成して記事化）でも、上記で選択したモデル/パラメータが反映されます。gpt-5-mini / gpt-5-nano は `reasoning`/`text`、その他は `temperature` が送信されます。
-

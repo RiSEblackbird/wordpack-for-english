@@ -1,4 +1,4 @@
-"""AppSQLiteStore.find_word_pack_id_by_lemma の挙動を直接検証する。"""
+"""AppFirestoreStore.find_word_pack_id_by_lemma の挙動を直接検証する。"""
 
 import json
 import sys
@@ -6,14 +6,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
 
-from backend.store import AppSQLiteStore  # noqa: E402
+from backend.store import AppFirestoreStore  # noqa: E402
+from tests.firestore_fakes import FakeFirestoreClient  # noqa: E402
 
 
-def test_find_word_pack_id_by_lemma_handles_case_and_spacing(tmp_path):
+def test_find_word_pack_id_by_lemma_handles_case_and_spacing():
     """大文字小文字や前後の空白を揃えても同じ WordPack ID を返すことを確認する。"""
 
-    db_path = tmp_path / "lemma-lookup.sqlite3"
-    store = AppSQLiteStore(str(db_path))
+    store = AppFirestoreStore(client=FakeFirestoreClient())
     payload = {
         "lemma": "NormalizeMe",
         "sense_title": "normalize me",
