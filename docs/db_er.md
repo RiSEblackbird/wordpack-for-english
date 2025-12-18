@@ -1,6 +1,6 @@
 ### DB ER 図（Mermaid）
 
-以下は本アプリ（SQLite）の主要テーブルとリレーションのER図です。
+以下は Firestore 移行前の SQLite 実装に基づく主要テーブルとリレーションのER図です。現行の Firestore コレクション設計を把握するための参考資料として残しています。
 
 ```mermaid
 erDiagram

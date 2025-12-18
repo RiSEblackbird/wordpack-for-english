@@ -82,7 +82,7 @@ WordPack リポジトリには、Chrome DevTools MCP と Headless Chrome を使�
    ```
 
    - スクリプトは以下を自動で行います。
-     - `STRICT_MODE=false` のバックエンド (FastAPI) を起動し、SQLite データベースを `Seeded WordPack` 1 件で初期化。
+     - `STRICT_MODE=false` のバックエンド (FastAPI) を Firestore エミュレータ向けに起動し、`Seeded WordPack` を 1 件作成。
      - Vite 開発サーバーを `http://127.0.0.1:5173` で起動し、Chrome プロキシターゲットを自動設定。
      - `google-chrome-stable` の自動取得を試み、失敗時には OSS Chromium をダウンロードして `--remote-debugging-port=9222` でヘッドレス起動後 `chrome-devtools-mcp` へ接続。
      - WordPack 一覧・設定タブ・例文一覧タブを MCP ツールで巡回し、主要 UI が表示されることを検証。

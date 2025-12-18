@@ -16,7 +16,6 @@ const repoRoot = path.resolve(__dirname, '../../..');
 const backendDir = path.join(repoRoot, 'apps', 'backend');
 const frontendDir = path.join(repoRoot, 'apps', 'frontend');
 const dataDir = path.join(repoRoot, '.data');
-const sqlitePath = path.join(dataDir, 'ui-smoke.sqlite3');
 // Chrome 実行ファイル解決時に参照する候補パス。
 // 新規参加者が落とし穴にハマりやすい「Chrome 未インストール環境」でも
 // 自動ダウンロードへフォールバックできるよう、既知の主要ディストリビューション
@@ -270,16 +269,58 @@ async function seedWordPack() {
   return data.id;
 }
 
+async function startFirestoreEmulator(env) {
+  logStep('Firestore エミュレータの起動を開始します');
+  const emulatorHost = env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+  const firestoreProject = env.FIRESTORE_PROJECT_ID || env.GOOGLE_CLOUD_PROJECT || 'ui-smoke';
+  const [emulatorHostname, emulatorPort] = emulatorHost.split(':');
+  const emulatorEnv = {
+    ...env,
+    FIRESTORE_EMULATOR_HOST: emulatorHost,
+    FIRESTORE_PROJECT_ID: firestoreProject,
+    GOOGLE_CLOUD_PROJECT: firestoreProject,
+  };
+
+  spawnWithLogs(
+    'firestore-emulator',
+    'npx',
+    [
+      'firebase',
+      'emulators:start',
+      '--only',
+      'firestore',
+      '--project',
+      firestoreProject,
+      '--host',
+      emulatorHostname || emulatorHost,
+      '--port',
+      emulatorPort || '8080',
+      '--quiet',
+    ],
+    { cwd: repoRoot, env: emulatorEnv }
+  );
+
+  await waitForHttp(`http://${emulatorHost}/`, {
+    timeoutMs: 30000,
+    validate: (res) => Promise.resolve(res.status >= 200 && res.status < 500),
+  });
+  logStep('Firestore エミュレータの起動を確認しました');
+}
+
 async function setupBackend(env) {
   logStep('バックエンド (uvicorn) の起動を開始します');
   await fs.mkdir(dataDir, { recursive: true });
-  await fs.rm(sqlitePath, { force: true });
+  const emulatorHost = env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+  const firestoreProject = env.FIRESTORE_PROJECT_ID || env.GOOGLE_CLOUD_PROJECT || 'ui-smoke';
+  logStep(`Firestore エミュレータ ${emulatorHost} を前提としてバックエンドを起動します`);
   const backendEnv = {
     ...env,
     PYTHONPATH: backendDir,
     STRICT_MODE: 'false',
     OPENAI_API_KEY: env.OPENAI_API_KEY || 'test-key',
-    WORDPACK_DB_PATH: sqlitePath,
+    FIRESTORE_EMULATOR_HOST: emulatorHost,
+    FIRESTORE_PROJECT_ID: firestoreProject,
+    GOOGLE_CLOUD_PROJECT: firestoreProject,
     LANGFUSE_ENABLED: 'false',
     DISABLE_SESSION_AUTH: 'true',
     SESSION_SECRET_KEY:
@@ -644,6 +685,7 @@ async function main() {
       logStep('Chrome が利用できない環境のため、UI スモークテストは未実施として終了します');
       return;
     }
+    await startFirestoreEmulator(baseEnv);
     await setupBackend(baseEnv);
     logStep('WordPack のシードデータを投入します');
     const wordPackId = await seedWordPack();

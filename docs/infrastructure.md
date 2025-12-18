@@ -73,11 +73,9 @@ flowchart TB
         end
 
         subgraph Local["ローカルストレージ"]
-            SQLite["SQLite<br/>(ENVIRONMENT=development)"]
+            FirestoreEmulator["Firebase Emulator<br/>(Firestore)<br/>:8080"]
             ChromaDB["ChromaDB<br/>(.chroma/)"]
         end
-
-        FirestoreEmulator["Firebase Emulator<br/>(Firestore)<br/>:8080<br/>※ Optional"]
     end
 
     subgraph External["外部サービス"]
@@ -86,8 +84,7 @@ flowchart TB
     end
 
     FrontendContainer -->|API リクエスト| BackendContainer
-    BackendContainer -->|開発時| SQLite
-    BackendContainer -->|本番相当テスト時| FirestoreEmulator
+    BackendContainer -->|永続化| FirestoreEmulator
     BackendContainer -->|LLM / TTS| OpenAI
     FrontendContainer -->|Google ログイン| GoogleOAuth
     BackendContainer -->|ID トークン検証| GoogleOAuth
@@ -111,8 +108,8 @@ cd apps/frontend && npm run dev
 
 | ENVIRONMENT | データストア | 用途 |
 |-------------|-------------|------|
-| `development` | SQLite (`WORDPACK_DB_PATH`) | ローカル開発 |
-| `production` | Cloud Firestore | 本番・Firestore エミュレータ接続時 |
+| `development` | Firestore Emulator (`FIRESTORE_EMULATOR_HOST`) | ローカル開発 |
+| `production` | Cloud Firestore | 本番 |
 
 ---
 
