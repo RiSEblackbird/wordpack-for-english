@@ -1,5 +1,4 @@
 import json
-import os
 import re
 import sys
 import types
@@ -9,17 +8,26 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.firestore_fakes import FakeFirestoreClient
+from tests.firestore_fakes import (
+    FakeFirestoreClient,
+    ensure_firestore_test_env,
+    use_fake_firestore_client,
+)
 
 _TEST_SESSION_SECRET = "L5qS8vZ1xC4nR7tM0pW3yB6dF9hJ2kG8"  # 32文字の擬似乱数
 
-os.environ.setdefault("FIRESTORE_EMULATOR_HOST", "localhost:8080")
-os.environ.setdefault("FIRESTORE_PROJECT_ID", "test-project")
-os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "test-project")
 
+def _reload_backend_app(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    strict: bool,
+    firestore_client: FakeFirestoreClient | None = None,
+):
+    """テスト用に backend.* モジュールを再読み込みしてクリーンな状態を準備する補助関数。
 
-def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_path: Path | None = None):
-    """テスト用に backend.* モジュールを再読み込みしてクリーンな状態を準備する補助関数。"""
+    - Firestore クライアントをフェイクで差し替え、永続層をテスト専用のインメモリ実装に固定する。
+    - 環境変数を毎回リセットし、設定キャッシュが前後テストへ汚染しないようにする。
+    """
 
     import importlib
     from google.cloud import firestore as firestore_module
@@ -32,9 +40,7 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
     # セッション認証を無効化して、エンドポイント検証がトークン配布に依存しないようにする。
     monkeypatch.setenv("DISABLE_SESSION_AUTH", "true")
     monkeypatch.setenv("SESSION_SECRET_KEY", _TEST_SESSION_SECRET)
-    monkeypatch.setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
-    monkeypatch.setenv("FIRESTORE_PROJECT_ID", "test-project")
-    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
+    ensure_firestore_test_env(monkeypatch)
     monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
 
     # backend.* を一度破棄して設定と永続層のキャッシュをリセット
@@ -50,7 +56,7 @@ def _reload_backend_app(monkeypatch: pytest.MonkeyPatch, *, strict: bool, db_pat
     sys.modules.setdefault("langgraph", lg_mod)
     sys.modules.setdefault("langgraph.graph", graph_mod)
     sys.modules.setdefault("chromadb", types.SimpleNamespace())
-    monkeypatch.setattr(firestore_module, "Client", lambda *args, **kwargs: FakeFirestoreClient())
+    client = use_fake_firestore_client(monkeypatch, firestore_client)
 
     # 設定・ストアを新しい環境変数で初期化
     importlib.import_module("backend.config")
@@ -103,10 +109,17 @@ def _assert_iso_utc(value: str) -> None:
 
 
 @pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch):
+def firestore_client() -> FakeFirestoreClient:
+    """各テストで独立した Firestore フェイクインスタンスを提供する。"""
+
+    return FakeFirestoreClient()
+
+
+@pytest.fixture()
+def client(monkeypatch: pytest.MonkeyPatch, firestore_client: FakeFirestoreClient):
     backend_root = Path(__file__).resolve().parents[1] / "apps" / "backend"
     sys.path.insert(0, str(backend_root))
-    backend_main = _reload_backend_app(monkeypatch, strict=False)
+    backend_main = _reload_backend_app(monkeypatch, strict=False, firestore_client=firestore_client)
     return TestClient(backend_main.app)
 
 

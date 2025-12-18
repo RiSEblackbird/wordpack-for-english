@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import hashlib
-import os
 from http.cookies import SimpleCookie
 from pathlib import Path
 from typing import Any, Callable
@@ -12,22 +11,21 @@ from fastapi.testclient import TestClient
 
 import sys
 
-os.environ.setdefault("FIRESTORE_EMULATOR_HOST", "localhost:8080")
-os.environ.setdefault("FIRESTORE_PROJECT_ID", "test-project")
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
 
 from backend.config import settings
 from backend.main import create_app
 from backend.store import AppFirestoreStore
-from tests.firestore_fakes import FakeFirestoreClient
+from tests.firestore_fakes import FakeFirestoreClient, ensure_firestore_test_env, use_fake_firestore_client
 
 
 @pytest.fixture()
 def test_client(monkeypatch) -> TestClient:
     """Create an isolated FastAPI test client with a dedicated Firestore store."""
 
-    store_instance = AppFirestoreStore(client=FakeFirestoreClient())
+    ensure_firestore_test_env(monkeypatch)
+    store_instance = AppFirestoreStore(client=use_fake_firestore_client(monkeypatch))
+    assert isinstance(store_instance._client, FakeFirestoreClient)
 
     import backend.store as store_module
     import backend.auth as auth_module
@@ -39,7 +37,12 @@ def test_client(monkeypatch) -> TestClient:
     monkeypatch.setattr(auth_router_module, "store", store_instance)
     monkeypatch.setattr(word_router_module, "store", store_instance)
     monkeypatch.setattr(article_router_module, "store", store_instance)
+    monkeypatch.setattr(store_module, "AppFirestoreStore", lambda *args, **kwargs: store_instance)
 
+    monkeypatch.setattr(settings, "environment", "test")
+    monkeypatch.setattr(settings, "firestore_emulator_host", "localhost:8080")
+    monkeypatch.setattr(settings, "firestore_project_id", "test-project")
+    monkeypatch.setattr(settings, "gcp_project_id", "test-project")
     monkeypatch.setattr(settings, "google_client_id", "test-client-id")
     monkeypatch.setattr(settings, "google_allowed_hd", "example.com")
     monkeypatch.setattr(settings, "session_secret_key", "super-secret-key")

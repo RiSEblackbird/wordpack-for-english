@@ -1,6 +1,5 @@
 """Unit tests for the logout endpoint ensuring cookie invalidation."""
 
-import os
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from pathlib import Path
@@ -9,8 +8,6 @@ import sys
 import pytest
 
 # apps/backend 配下のモジュールを直接インポートできるようパスを明示的に追加する。
-os.environ.setdefault("FIRESTORE_EMULATOR_HOST", "localhost:8080")
-os.environ.setdefault("FIRESTORE_PROJECT_ID", "test-project")
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend"))
 
 from fastapi.testclient import TestClient
@@ -18,7 +15,11 @@ from fastapi.testclient import TestClient
 from backend.config import settings
 from backend.main import create_app
 from backend.store import AppFirestoreStore
-from tests.firestore_fakes import FakeFirestoreClient
+from tests.firestore_fakes import (
+    FakeFirestoreClient,
+    ensure_firestore_test_env,
+    use_fake_firestore_client,
+)
 
 
 def _stub_google_verifier(monkeypatch, payload_factory):
@@ -37,7 +38,9 @@ def _stub_google_verifier(monkeypatch, payload_factory):
 def test_client(monkeypatch):
     """ログアウト関連の挙動を検証するための分離済み TestClient を構築する。"""
 
-    store_instance = AppFirestoreStore(client=FakeFirestoreClient())
+    ensure_firestore_test_env(monkeypatch)
+    store_instance = AppFirestoreStore(client=use_fake_firestore_client(monkeypatch))
+    assert isinstance(store_instance._client, FakeFirestoreClient)
 
     import backend.store as store_module
     import backend.auth as auth_module
@@ -45,6 +48,11 @@ def test_client(monkeypatch):
     import backend.routers.word as word_router_module
     import backend.routers.article as article_router_module
 
+    monkeypatch.setattr(settings, "environment", "test")
+    monkeypatch.setattr(settings, "firestore_emulator_host", "localhost:8080")
+    monkeypatch.setattr(settings, "firestore_project_id", "test-project")
+    monkeypatch.setattr(settings, "gcp_project_id", "test-project")
+    monkeypatch.setattr(store_module, "AppFirestoreStore", lambda *args, **kwargs: store_instance)
     monkeypatch.setattr(store_module, "store", store_instance)
     monkeypatch.setattr(auth_module, "store", store_instance)
     monkeypatch.setattr(auth_router_module, "store", store_instance)
