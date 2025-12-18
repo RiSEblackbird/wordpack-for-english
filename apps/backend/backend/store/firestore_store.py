@@ -527,7 +527,8 @@ class FirestoreWordPackStore(FirestoreBaseStore):
 
     def _load_example_rows(self, word_pack_id: str) -> Sequence[Mapping[str, Any]]:
         rows: list[Mapping[str, Any]] = []
-        query = self._build_examples_query(word_pack_id=word_pack_id)
+        # FirestoreExampleStore の検索条件と同一になるよう、ここでも word_pack_id の等価フィルタを明示する。
+        query = self._examples.where("word_pack_id", "==", word_pack_id)
         for snapshot in query.stream():
             data = snapshot.to_dict() or {}
             rows.append(

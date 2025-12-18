@@ -239,11 +239,13 @@
   - 内部では `scripts/deploy_firestore_indexes.sh` が JSON を展開し、gcloud ルートでは各インデックスに対して `gcloud alpha firestore indexes composite create --field-config=...` を順次実行します（`ALREADY_EXISTS` はスキップ）。Firebase ルートでは `firebase deploy --only firestore:indexes --non-interactive` を呼び出します。
 - ローカルでの適用確認:
   ```bash
-  firebase emulators:start --only firestore --project wordpack-local
-  # 別ターミナル
+  make firestore-emulator  # もしくは docker compose up firestore-emulator
+  # 別ターミナルでバックエンド or テストを起動
   FIRESTORE_PROJECT_ID=wordpack-local FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 pytest tests/backend/test_firestore_store.py
+  # 開発用データを投入したい場合
+  make seed-firestore-demo
   ```
-  - エミュレータを起動すると `firestore.indexes.json` が読み込まれます。`Ctrl+C` で停止し、必要に応じて `FIRESTORE_EMULATOR_HOST` を付与した API/テストを実行してください。
+  - エミュレータ起動時に `firestore.indexes.json` が自動で読み込まれます。`Ctrl+C` で停止し、必要に応じて `FIRESTORE_EMULATOR_HOST` を付与した API/テストを実行してください。`.data_demo/wordpack.sqlite3.demo` は Firestore シード用として使用し、SQLite への直接シードは行わない運用に統一しています。
 
 ### B-10. オブザーバビリティ（Langfuse）
 - `.env` に `LANGFUSE_ENABLED=true` と各キーを設定し、`requirements.txt` の `langfuse` を導入してください。

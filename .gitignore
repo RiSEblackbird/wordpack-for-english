@@ -27,6 +27,9 @@ bin-release/
 .firebase/
 firestore-emulator-data/
 firebase-debug.log
+# Firestore シードやエミュレータのエクスポートはサンプルとはいえ利用者入力が含まれ得るため除外
+firestore-seed-*/
+firestore-seed-*.json
 # Cloud Run デプロイ用の秘密情報は必ずローカルファイル (.env.deploy など) に閉じ込める
 .env.deploy
 !env.deploy.example

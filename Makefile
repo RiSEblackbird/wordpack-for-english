@@ -4,6 +4,8 @@ SHELL := /bin/bash
 .PHONY: deploy-firestore-indexes
 .PHONY: deploy-cloud-run
 .PHONY: release-cloud-run
+.PHONY: firestore-emulator
+.PHONY: seed-firestore-demo
 
 CLOUD_RUN_SCRIPT := ./scripts/deploy_cloud_run.sh
 DEPLOY_CLOUD_RUN_ARGS = $(if $(PROJECT_ID),--project-id $(PROJECT_ID),) \
@@ -22,6 +24,12 @@ DEPLOY_CLOUD_RUN_ARGS = $(if $(PROJECT_ID),--project-id $(PROJECT_ID),) \
         $(if $(ENV_FILE),--env-file $(ENV_FILE),)
 
 SKIP_FIRESTORE_INDEX_SYNC ?= false
+FIRESTORE_PROJECT_ID ?= wordpack-local
+FIRESTORE_EMULATOR_HOST ?= 127.0.0.1:8080
+FIRESTORE_EMULATOR_PORT ?= 8080
+FIRESTORE_EMULATOR_BIND ?= 127.0.0.1
+FIRESTORE_EMULATOR_DATA ?= firestore-emulator-data
+SQLITE_DEMO_PATH ?= .data_demo/wordpack.sqlite3.demo
 
 # 使用例:
 #   make deploy-firestore-indexes PROJECT_ID=my-gcp-project
@@ -29,6 +37,14 @@ SKIP_FIRESTORE_INDEX_SYNC ?= false
 
 deploy-firestore-indexes:
 	./scripts/deploy_firestore_indexes.sh $(if $(PROJECT_ID),--project $(PROJECT_ID),) $(if $(TOOL),--tool $(TOOL),)
+
+firestore-emulator:
+	@echo "[firestore-emulator] Firebase CLI 経由で Firestore エミュレータを起動し、firebase.json / firestore.indexes.json を読み込みます"
+	./scripts/start_firestore_emulator.sh --project-id "$(FIRESTORE_PROJECT_ID)" --port "$(FIRESTORE_EMULATOR_PORT)" --bind "$(FIRESTORE_EMULATOR_BIND)" --import-dir "$(FIRESTORE_EMULATOR_DATA)"
+
+seed-firestore-demo:
+	@echo "[seed-firestore-demo] $(SQLITE_DEMO_PATH) から Firestore へ開発用データを投入します"
+	FIRESTORE_PROJECT_ID="$(FIRESTORE_PROJECT_ID)" FIRESTORE_EMULATOR_HOST="$(FIRESTORE_EMULATOR_HOST)" python ./scripts/seed_firestore_demo.py --sqlite-path "$(SQLITE_DEMO_PATH)" --project-id "$(FIRESTORE_PROJECT_ID)" --emulator-host "$(FIRESTORE_EMULATOR_HOST)"
 
 deploy-cloud-run:
 	$(CLOUD_RUN_SCRIPT) $(DEPLOY_CLOUD_RUN_ARGS)

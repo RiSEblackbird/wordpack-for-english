@@ -14,6 +14,11 @@ jobs:
   backend:
     name: Backend tests (pytest)
     runs-on: ubuntu-latest
+    env:
+      FIRESTORE_PROJECT_ID: wordpack-ci
+      FIRESTORE_EMULATOR_PORT: 8080
+      FIRESTORE_EMULATOR_HOST: ""
+      ENABLE_FIRESTORE_EMULATOR: "false"
     strategy:
       matrix:
         python-version: ['3.13']
@@ -44,7 +49,12 @@ jobs:
         env:
           PYTHONPATH: src
         run: |
-          pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60 | cat
+          if [ "${ENABLE_FIRESTORE_EMULATOR}" = "true" ]; then
+            npm install -g firebase-tools
+            FIRESTORE_EMULATOR_HOST="127.0.0.1:${FIRESTORE_EMULATOR_PORT}" FIRESTORE_PROJECT_ID="${FIRESTORE_PROJECT_ID}" firebase emulators:exec --only firestore --project "${FIRESTORE_PROJECT_ID}" --config firebase.json "pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60" | cat
+          else
+            pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60 | cat
+          fi
 
   security_headers:
     name: Security headers tests (pytest)
