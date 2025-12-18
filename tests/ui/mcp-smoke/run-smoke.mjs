@@ -269,6 +269,44 @@ async function seedWordPack() {
   return data.id;
 }
 
+async function startFirestoreEmulator(env) {
+  logStep('Firestore エミュレータの起動を開始します');
+  const emulatorHost = env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+  const firestoreProject = env.FIRESTORE_PROJECT_ID || env.GOOGLE_CLOUD_PROJECT || 'ui-smoke';
+  const [emulatorHostname, emulatorPort] = emulatorHost.split(':');
+  const emulatorEnv = {
+    ...env,
+    FIRESTORE_EMULATOR_HOST: emulatorHost,
+    FIRESTORE_PROJECT_ID: firestoreProject,
+    GOOGLE_CLOUD_PROJECT: firestoreProject,
+  };
+
+  spawnWithLogs(
+    'firestore-emulator',
+    'npx',
+    [
+      'firebase',
+      'emulators:start',
+      '--only',
+      'firestore',
+      '--project',
+      firestoreProject,
+      '--host',
+      emulatorHostname || emulatorHost,
+      '--port',
+      emulatorPort || '8080',
+      '--quiet',
+    ],
+    { cwd: repoRoot, env: emulatorEnv }
+  );
+
+  await waitForHttp(`http://${emulatorHost}/`, {
+    timeoutMs: 30000,
+    validate: (res) => Promise.resolve(res.status >= 200 && res.status < 500),
+  });
+  logStep('Firestore エミュレータの起動を確認しました');
+}
+
 async function setupBackend(env) {
   logStep('バックエンド (uvicorn) の起動を開始します');
   await fs.mkdir(dataDir, { recursive: true });
@@ -647,6 +685,7 @@ async function main() {
       logStep('Chrome が利用できない環境のため、UI スモークテストは未実施として終了します');
       return;
     }
+    await startFirestoreEmulator(baseEnv);
     await setupBackend(baseEnv);
     logStep('WordPack のシードデータを投入します');
     const wordPackId = await seedWordPack();

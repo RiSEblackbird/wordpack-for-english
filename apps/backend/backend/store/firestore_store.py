@@ -527,10 +527,9 @@ class FirestoreWordPackStore(FirestoreBaseStore):
 
     def _load_example_rows(self, word_pack_id: str) -> Sequence[Mapping[str, Any]]:
         rows: list[Mapping[str, Any]] = []
-        for snapshot in self._examples.stream():
+        query = self._build_examples_query(word_pack_id=word_pack_id)
+        for snapshot in query.stream():
             data = snapshot.to_dict() or {}
-            if data.get("word_pack_id") != word_pack_id:
-                continue
             rows.append(
                 {
                     "category": data.get("category"),
