@@ -51,6 +51,16 @@ cd apps/frontend
 npm install
 ```
 
+## ブランチ運用（開発/本番）
+
+- **デフォルトブランチ**: `develop`（ローカル開発・日常的な変更はここへ集約）
+- **本番デプロイ用ブランチ**: `main`（GCP/Cloud Run へのリリースは `main` のみ）
+
+GitHub Actions の挙動は次の方針に合わせています。
+
+- **CI**: `develop`（および `main`）への push、`develop`/`main` 向け pull_request で実行します。
+- **GCP を触り得る dry-run（Cloud Run リリース検証）**: `main` 向け pull_request と `main` への push のみで実行します（`develop` では実行しません）。
+
 ### Google OAuth クライアントの準備
 1. [Google Cloud Console](https://console.cloud.google.com/) にアクセスし、対象プロジェクトを作成または選択します。
 2. 左側メニューの「API とサービス」→「OAuth 同意画面」でユーザータイプを選択し、アプリ名・サポートメールなどを登録して公開ステータスまで設定します。
