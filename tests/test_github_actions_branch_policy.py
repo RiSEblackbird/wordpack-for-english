@@ -46,8 +46,24 @@ def test_deploy_dry_run_is_main_only() -> None:
     """
     yml = _read_text(".github/workflows/deploy-dry-run.yml")
     on_block = _extract_on_block(yml)
-    _assert_contains_all(on_block, ["push:", "pull_request:", "main"])
-    assert "develop" not in on_block, "deploy-dry-run must not run on develop"
+    _assert_contains_all(
+        on_block,
+        [
+            "workflow_run:",
+            "workflows:",
+            "CI",
+            "types:",
+            "completed",
+        ],
+    )
+    _assert_contains_all(
+        yml,
+        [
+            "github.event.workflow_run.head_branch == 'main'",
+            "github.event.workflow_run.pull_requests[0].base.ref == 'main'",
+        ],
+    )
+    assert "develop" not in yml, "deploy-dry-run must not run on develop"
     # Sanity: ensure this workflow is actually the one touching GCP.
     _assert_contains_all(yml, ["google-github-actions/auth@v2", "setup-gcloud@v2"])
 
