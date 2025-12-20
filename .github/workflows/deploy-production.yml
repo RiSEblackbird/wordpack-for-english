@@ -29,6 +29,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Materialize production env file
+        # シークレットに保存した base64 文字列から .env.deploy を復元し、後続の検証に備える。
+        env:
+          CLOUD_RUN_ENV_FILE: ${{ env.CLOUD_RUN_ENV_FILE }}
+          CLOUD_RUN_ENV_FILE_BASE64: ${{ secrets.CLOUD_RUN_ENV_FILE_BASE64 }}
+        run: |
+          if [ -z "${CLOUD_RUN_ENV_FILE_BASE64}" ]; then
+            echo "::error::CLOUD_RUN_ENV_FILE_BASE64 secret is not set. Add a base64-encoded .env.deploy for production deploys." >&2
+            exit 1
+          fi
+
+          echo "::add-mask::${CLOUD_RUN_ENV_FILE_BASE64}"
+          echo "${CLOUD_RUN_ENV_FILE_BASE64}" | base64 --decode > "${CLOUD_RUN_ENV_FILE}"
+          echo "Restored ${CLOUD_RUN_ENV_FILE} from CLOUD_RUN_ENV_FILE_BASE64."
+
       - name: Validate deployment inputs
         # 秘密情報とデプロイ用の環境ファイルが揃っているか事前に検証し、原因が分かりやすい失敗に変換する。
         env:
