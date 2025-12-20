@@ -154,6 +154,8 @@ export const useWordPack = ({
 
   const loadWordPack = useCallback(
     async (wordPackId: string) => {
+      // 前のリクエストをキャンセルして Race Condition を防止
+      abortRef.current?.abort();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       setLoading(true);
