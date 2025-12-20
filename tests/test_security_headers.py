@@ -110,14 +110,12 @@ def _restore_environ() -> Iterator[None]:
 
     # なぜ: ダミーの環境変数を残したままだと他モジュールの設定読込が意図せず緩和される。
     # ここで復元し、セキュリティ設定の前提がズレないようにする。
-    patcher = MonkeyPatch()
     yield
     for key, original in _ORIGINAL_ENV_VARS.items():
         if original is None:
-            patcher.delenv(key, raising=False)
+            os.environ.pop(key, None)
         else:
-            patcher.setenv(key, original)
-    patcher.undo()
+            os.environ[key] = original
 
 
 @pytest.fixture(scope="module", autouse=True)
