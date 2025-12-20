@@ -353,9 +353,9 @@ export const WordPackPanel: React.FC<Props> = ({
           </div>
         </div>
         <div className="sidebar-field" style={{ maxWidth: '30rem' }}>
-          <label htmlFor="wordpack-lemma-input">見出し語</label>
+          <label htmlFor="wordpack-lemma-input-loading">見出し語</label>
           <input
-            id="wordpack-lemma-input"
+            id="wordpack-lemma-input-loading"
             value={placeholderLemma}
             readOnly
             aria-readonly

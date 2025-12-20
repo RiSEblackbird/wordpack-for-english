@@ -1,10 +1,10 @@
-name: Cloud Run dry-run (pull_request & main)
+name: Cloud Run dry-run (CI workflow_run)
 
 on:
-  pull_request:
-    branches: [ main ]
-  push:
-    branches: [ main ]
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
 
 concurrency:
   group: deploy-dry-run-${{ github.workflow }}-${{ github.ref }}
@@ -13,8 +13,13 @@ concurrency:
 jobs:
   dry-run-release:
     name: Validate Cloud Run release via dry-run
-    # Secrets are unavailable on pull_requests from forks, so skip this job in that case
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # CI 完了後に main ブランチ向けイベントが成功した場合のみ dry-run 検証を行う
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      (
+        (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') ||
+        (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.pull_requests[0].base.ref == 'main')
+      )
     runs-on: ubuntu-latest
     env:
       CLOUD_RUN_PROJECT_ID: ci-placeholder-project
@@ -24,6 +29,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Install prerequisite CLI packages
         # gcloud は setup-gcloud で導入するため、ここでは openssh-client 等の汎用ツールのみを明示インストールします。
@@ -45,7 +53,7 @@ jobs:
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
-          echo "GCP_SA_KEY is not available for this run (likely due to forked PRs). Skipping authentication and downstream steps."
+          echo "::notice::Cloud Run dry-run skipped because GCP_SA_KEY is unavailable (likely forked PR). Validation not executed."
           exit 0
 
       - name: Set up gcloud SDK

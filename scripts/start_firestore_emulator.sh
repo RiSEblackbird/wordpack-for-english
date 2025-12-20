@@ -9,6 +9,7 @@ PROJECT_ID=${FIRESTORE_PROJECT_ID:-wordpack-local}
 EMULATOR_PORT=${FIRESTORE_EMULATOR_PORT:-8080}
 BIND_ADDR="127.0.0.1"
 IMPORT_DIR=${FIRESTORE_EMULATOR_DATA:-firestore-emulator-data}
+TEMP_CONFIG=""
 
 print_usage() {
   cat <<'USAGE'
@@ -64,14 +65,86 @@ fi
 
 mkdir -p "$IMPORT_DIR"
 
+# firebase-tools の Firestore エミュレータは Java 21 以上が必須。
+# node:bullseye ベースには入っていないため、未満の場合は Adoptium の Temurin 21 を追加インストールする。
+ensure_java21() {
+  if command -v java >/dev/null 2>&1 && java -version 2>&1 | grep -q 'version "21'; then
+    return 0
+  fi
+
+  echo "[${SCRIPT_NAME}] Java 21+ is required. Installing Temurin 21 (Adoptium tarball, no apt)..."
+  # 過去の失敗で残った外部 repo 設定を掃除（念のため）
+  rm -f /etc/apt/sources.list.d/adoptium.list /usr/share/keyrings/adoptium.gpg || true
+
+  apt-get update -y
+  apt-get install -y --no-install-recommends ca-certificates curl tar
+  update-ca-certificates || true
+
+  TMP_TAR=$(mktemp /tmp/temurin21.XXXX.tgz)
+  if ! curl -fsSL --retry 3 --retry-delay 2 \
+    "https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jre/hotspot/normal/eclipse" \
+    -o "$TMP_TAR"; then
+    echo "[${SCRIPT_NAME}] Failed to download Java 21 JRE (api.adoptium.net). Please ensure HTTPS connectivity or preinstall Java 21 in the image." >&2
+    exit 1
+  fi
+
+  mkdir -p /opt/temurin-21-jre
+  tar -xzf "$TMP_TAR" -C /opt/temurin-21-jre --strip-components=1
+  ln -sf /opt/temurin-21-jre/bin/java /usr/local/bin/java
+  rm -f "$TMP_TAR"
+
+  java -version
+}
+
+ensure_java21
+
 export FIRESTORE_EMULATOR_HOST="${BIND_ADDR}:${EMULATOR_PORT}"
 echo "[${SCRIPT_NAME}] FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_HOST}"
 echo "[${SCRIPT_NAME}] firebase.json / firestore.indexes.json を読み込み、Firestore エミュレータを起動します。"
 echo "[${SCRIPT_NAME}] データは '${IMPORT_DIR}' に --import/--export-on-exit で永続化されます。"
 
+# firebase-tools は emulators:start に --host/--port を直接渡すとエラーになる場合があるため、
+# 一時的な firebase.json を生成して host/port を上書きする。
+TEMP_CONFIG="$(mktemp /tmp/firebase.emulator.XXXX.json)" || {
+  echo "[${SCRIPT_NAME}] failed to create temp config" >&2
+  exit 1
+}
+export TEMP_CONFIG
+export EMULATOR_BIND="${BIND_ADDR}"
+export EMULATOR_PORT_VALUE="${EMULATOR_PORT}"
+node - <<'EOF'
+const fs = require('fs');
+const path = require('path');
+
+const basePath = path.resolve('firebase.json');
+const outPath = process.env.TEMP_CONFIG;
+const bind = process.env.EMULATOR_BIND || '0.0.0.0';
+const port = Number(process.env.EMULATOR_PORT_VALUE || '8080');
+
+if (!fs.existsSync(basePath)) {
+  console.error(`[start_firestore_emulator] firebase.json not found at ${basePath}`);
+  process.exit(1);
+}
+
+const json = JSON.parse(fs.readFileSync(basePath, 'utf8'));
+json.emulators = json.emulators || {};
+json.emulators.firestore = json.emulators.firestore || {};
+json.emulators.firestore.host = bind;
+json.emulators.firestore.port = port;
+
+fs.writeFileSync(outPath, JSON.stringify(json, null, 2));
+console.log(`[start_firestore_emulator] generated config -> ${outPath}`);
+EOF
+
+cleanup() {
+  [[ -n "${TEMP_CONFIG}" && -f "${TEMP_CONFIG}" ]] && rm -f "${TEMP_CONFIG}"
+}
+trap cleanup EXIT
+
 cmd=(
   npx
-  firebase
+  -y
+  firebase-tools
   emulators:start
   --only
   firestore
@@ -80,10 +153,8 @@ cmd=(
   --import
   "$IMPORT_DIR"
   --export-on-exit
-  --host
-  "$BIND_ADDR"
-  --port
-  "$EMULATOR_PORT"
+  --config
+  "$TEMP_CONFIG"
 )
 
 exec "${cmd[@]}"
