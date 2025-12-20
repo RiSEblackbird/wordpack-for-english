@@ -273,7 +273,7 @@ async function startFirestoreEmulator(env) {
   logStep('Firestore エミュレータの起動を開始します');
   const emulatorHost = env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
   const firestoreProject = env.FIRESTORE_PROJECT_ID || env.GOOGLE_CLOUD_PROJECT || 'ui-smoke';
-  const [emulatorHostname, emulatorPort] = emulatorHost.split(':');
+  const firebaseConfigPath = path.join(repoRoot, 'firebase.json');
   const emulatorEnv = {
     ...env,
     FIRESTORE_EMULATOR_HOST: emulatorHost,
@@ -281,7 +281,9 @@ async function startFirestoreEmulator(env) {
     GOOGLE_CLOUD_PROJECT: firestoreProject,
   };
 
-  spawnWithLogs(
+  // firebase-tools が未インストールの場合は npx 実行時点で ENOENT を返すため、
+  // 早期に依存不足を案内してデバッグを容易にする。
+  const emulatorProcess = spawnWithLogs(
     'firestore-emulator',
     'npx',
     [
@@ -291,19 +293,47 @@ async function startFirestoreEmulator(env) {
       'firestore',
       '--project',
       firestoreProject,
-      '--host',
-      emulatorHostname || emulatorHost,
-      '--port',
-      emulatorPort || '8080',
-      '--quiet',
+      '--config',
+      firebaseConfigPath,
     ],
-    { cwd: repoRoot, env: emulatorEnv }
+    { cwd: packageDir, env: emulatorEnv }
   );
 
-  await waitForHttp(`http://${emulatorHost}/`, {
-    timeoutMs: 30000,
-    validate: (res) => Promise.resolve(res.status >= 200 && res.status < 500),
+  let emulatorReady = false;
+  const emulatorStartupMonitor = new Promise((_, reject) => {
+    emulatorProcess.once('error', (error) => {
+      reject(
+        new Error(
+          'Firestore エミュレータの起動に失敗しました。firebase-tools が npm 依存として導入されているか、CI で `npm ci` が実行されているかを確認してください。',
+          { cause: error }
+        )
+      );
+    });
+    emulatorProcess.once('exit', (code, signal) => {
+      if (emulatorReady) return;
+      if (signal) {
+        reject(new Error(`Firestore エミュレータの起動が中断されました (signal=${signal})`));
+        return;
+      }
+      if (code !== 0) {
+        reject(
+          new Error(
+            'Firestore エミュレータの起動プロセスが異常終了しました。firebase-tools のインストール状態と前段のログを確認してください。'
+          )
+        );
+      }
+    });
   });
+
+  await Promise.race([
+    waitForHttp(`http://${emulatorHost}/`, {
+      timeoutMs: 30000,
+      validate: (res) => Promise.resolve(res.status >= 200 && res.status < 500),
+    }).then(() => {
+      emulatorReady = true;
+    }),
+    emulatorStartupMonitor,
+  ]);
   logStep('Firestore エミュレータの起動を確認しました');
 }
 
