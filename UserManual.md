@@ -312,6 +312,7 @@
   - `--dry-run` を付けると設定のロード（`python -m apps.backend.backend.config`）までを実行し、gcloud コマンドをスキップします。CI では `configs/cloud-run/ci.env` を入力にして dry-run を常時実行し、必須設定の欠落をブロックしています。
   - `--image-tag`（既定: `git rev-parse --short HEAD`）、`--build-arg KEY=VALUE`、`--machine-type`、`--timeout` などで Cloud Build のパラメータを細かく制御できます。`--artifact-repo` で Artifact Registry のリポジトリを差し替え可能です。
 - `make deploy-cloud-run PROJECT_ID=... REGION=...` を利用すれば、Makefile から同じスクリプトを呼び出せます。`gcloud config` に既定プロジェクト/リージョンを設定済みなら、Make 実行時の `PROJECT_ID` / `REGION` 省略も可能です。GitHub Actions の `Cloud Run config guard` ジョブでも `scripts/deploy_cloud_run.sh --dry-run` を実行しており、`shellcheck` でスクリプトの静的解析も同ジョブで通過させます。ローカルでスクリプトを更新した場合は `shellcheck scripts/deploy_cloud_run.sh` を必ず実行してください。
+- GitHub Actions の本番自動デプロイは `deploy-production.yml` が担当し、CI が success になった **main ブランチへの push（= develop→main マージコミットを含む）** のみで起動します。CI が検証した commit SHA をチェックアウトして `make release-cloud-run` を実行するため、未検証の HEAD を誤ってデプロイしません。`.env.deploy` はリポジトリへコミットせず、Actions 側で `CLOUD_RUN_ENV_FILE_BASE64`（base64 化した `.env.deploy`）から復元して利用します。
 
 ##### release-cloud-run ターゲット（本番リリースの順序制御）
 
@@ -331,6 +332,162 @@
   ```
 
 - 既に Firestore インデックスが同期済みの検証環境では `SKIP_FIRESTORE_INDEX_SYNC=true` を指定し、Cloud Run の dry-run + 本番デプロイのみを実行できます。Dry-run (`scripts/deploy_cloud_run.sh --dry-run`) はターゲット内部で必ず実行されるため、設定エラーは gcloud 実行前に検出されます。
+
+##### GitHub Actions 本番デプロイ用シークレットの準備
+
+GitHub Actions で本番自動デプロイ（`deploy-production.yml`）を利用するには、以下の3つのリポジトリシークレットが必要です。未設定の場合はワークフローがエラーで停止し、不足しているシークレット名がログに出力されます。
+
+| シークレット名 | 説明 |
+|--------------|------|
+| `GCP_SA_PROJECT_ID` | 本番 GCP プロジェクト ID |
+| `GCP_SA_KEY` | サービスアカウント JSON キー（全体） |
+| `CLOUD_RUN_ENV_FILE_BASE64` | `.env.deploy` の base64 エンコード |
+
+###### 1. GCP_SA_PROJECT_ID（本番プロジェクトID）
+
+1. [GCP コンソール](https://console.cloud.google.com/) を開く
+2. 左上のプロジェクトセレクターから本番用プロジェクトを選択
+3. プロジェクト ID（例: `my-prod-project-123456`）をコピー
+4. GitHub → リポジトリ → **Settings → Secrets and variables → Actions**
+5. **New repository secret** をクリック
+   - Name: `GCP_SA_PROJECT_ID`
+   - Secret: コピーしたプロジェクト ID
+6. **Add secret** をクリック
+
+###### 2. GCP_SA_KEY（サービスアカウントキー JSON）
+
+Cloud Run / Artifact Registry / Firestore へのデプロイ権限を持つサービスアカウントの JSON 鍵を登録します。
+
+**サービスアカウント作成（未作成の場合）:**
+
+```bash
+PROJECT_ID="your-prod-project-id"
+
+# サービスアカウント作成
+gcloud iam service-accounts create github-actions-deploy \
+  --project="${PROJECT_ID}" \
+  --display-name="GitHub Actions Deploy"
+```
+
+**必要な権限を付与:**
+
+```bash
+SA_EMAIL="github-actions-deploy@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# Cloud Run 管理者
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/run.admin"
+
+# Artifact Registry 書き込み
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/artifactregistry.writer"
+
+# Cloud Build 編集者（イメージビルド用）
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/cloudbuild.builds.editor"
+
+# Firestore 管理者（インデックス同期用）
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/datastore.indexAdmin"
+
+# サービスアカウントユーザー（Cloud Run がこの SA を使うため）
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/iam.serviceAccountUser"
+
+# ストレージ管理者（Cloud Build がイメージを push するため）
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/storage.admin"
+```
+
+**JSON 鍵を発行:**
+
+```bash
+gcloud iam service-accounts keys create ./gcp-deploy-key.json \
+  --iam-account="${SA_EMAIL}"
+```
+
+> ⚠️ **注意**: このファイルは機密情報です。`.gitignore` に含まれていることを確認し、絶対にコミットしないでください。
+
+**GitHub シークレットに登録:**
+
+1. GitHub → リポジトリ → **Settings → Secrets and variables → Actions**
+2. **New repository secret** をクリック
+3. Name: `GCP_SA_KEY`
+4. Secret: `gcp-deploy-key.json` の中身全体をコピー＆ペースト
+   ```bash
+   # Windows PowerShell
+   Get-Content .\gcp-deploy-key.json | Set-Clipboard
+   
+   # WSL / Linux / Mac
+   cat gcp-deploy-key.json | pbcopy  # Mac
+   cat gcp-deploy-key.json | xclip   # Linux
+   ```
+5. **Add secret** をクリック
+6. **ローカルの鍵ファイルを削除**（セキュリティのため）:
+   ```bash
+   rm ./gcp-deploy-key.json
+   ```
+
+###### 3. CLOUD_RUN_ENV_FILE_BASE64（.env.deploy の base64 エンコード）
+
+本番環境変数ファイルを base64 エンコードして登録します。
+
+**.env.deploy を作成:**
+
+```bash
+cp env.deploy.example .env.deploy
+```
+
+**.env.deploy を編集（すべてのダミー値を本番値に置換）:**
+
+```
+PROJECT_ID=your-actual-prod-project-id
+FIRESTORE_PROJECT_ID=your-actual-prod-project-id
+GOOGLE_CLIENT_ID=your-actual-oauth-client-id.apps.googleusercontent.com
+ADMIN_EMAIL_ALLOWLIST=your-email@example.com,another-admin@example.com
+CORS_ALLOWED_ORIGINS=https://your-frontend-domain.web.app
+ALLOWED_HOSTS=your-cloudrun-url.a.run.app,your-custom-domain.com
+SESSION_SECRET_KEY=（下記で自動生成可能）
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+**SESSION_SECRET_KEY を生成（まだ設定していない場合）:**
+
+```bash
+openssl rand -base64 48
+# 出力された値を SESSION_SECRET_KEY に貼り付け
+```
+
+**base64 エンコード:**
+
+```bash
+# Windows PowerShell
+[Convert]::ToBase64String([System.IO.File]::ReadAllBytes(".\.env.deploy")) | Set-Clipboard
+
+# WSL / Linux / Mac
+base64 -w 0 .env.deploy  # 出力を手動コピー
+```
+
+**GitHub シークレットに登録:**
+
+1. GitHub → リポジトリ → **Settings → Secrets and variables → Actions**
+2. **New repository secret** をクリック
+3. Name: `CLOUD_RUN_ENV_FILE_BASE64`
+4. Secret: 上でコピーした base64 文字列をペースト
+5. **Add secret** をクリック
+
+###### 動作確認
+
+1. `develop` → `main` へマージ
+2. **Actions** タブで `Deploy to production` ワークフローを確認
+3. `Validate deployment inputs` ステップが成功すればシークレット設定は正常
+4. 失敗時はエラーメッセージで不足シークレットが特定できる
 
 ### B-6. トラブルシュート（詳細）
 - 語義/例文が空になる
