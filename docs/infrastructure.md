@@ -128,10 +128,11 @@ flowchart LR
         FrontendTest["Frontend tests<br/>(vitest)"]
         UISmoke["UI smoke test<br/>(Chrome DevTools MCP)"]
         CloudRunGuard["Cloud Run config guard<br/>(dry-run)"]
+        CISuccess["CI success<br/>(workflow_run hook)"]
     end
 
     subgraph Deploy["デプロイ"]
-        DryRun["Dry-run 検証"]
+        DryRun["Cloud Run dry-run<br/>(CI success後)"]
         FirestoreIndex["Firestore インデックス同期"]
         CloudBuild["Cloud Build"]
         CloudRun["Cloud Run デプロイ"]
@@ -144,7 +145,12 @@ flowchart LR
     BackendTest --> UISmoke
     FrontendTest --> UISmoke
     SecurityTest --> CloudRunGuard
-    CloudRunGuard --> DryRun
+    BackendTest --> CISuccess
+    FrontendTest --> CISuccess
+    SecurityTest --> CISuccess
+    UISmoke --> CISuccess
+    CloudRunGuard --> CISuccess
+    CISuccess -->|main ブランチ対象の push / PR| DryRun
     DryRun --> FirestoreIndex
     FirestoreIndex --> CloudBuild
     CloudBuild --> CloudRun
@@ -159,7 +165,9 @@ flowchart LR
 | **Frontend tests** | push / PR | `vitest` によるフロントエンドテスト |
 | **UI smoke test** | Backend / Frontend テスト成功後 | Chrome DevTools MCP を用いた E2E スモークテスト |
 | **Cloud Run config guard** | Security headers 成功後 | デプロイスクリプトの lint と dry-run 検証 |
-| **Cloud Run dry-run** | main ブランチ push / PR | `make release-cloud-run` の dry-run モード実行 |
+| **Cloud Run dry-run** | CI 成功後の workflow_run（main 向け push / PR のみ） | CI が成功した際に `make release-cloud-run` の dry-run モードを実行。fork からの PR でシークレットが無い場合は notice を残してスキップ |
+
+Cloud Run dry-run は CI の全ジョブが success になった後の workflow_run イベントでのみ起動し、main ブランチへの push または base が main の PR に限定される。fork からの PR などでシークレットを利用できない場合は CI 成功後でも dry-run をスキップし、notice ログで未検証であることを明示する。
 
 ---
 
