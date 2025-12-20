@@ -29,6 +29,9 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.workflow_run.head_repository.full_name }}
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Install prerequisite CLI packages
         # gcloud は setup-gcloud で導入するため、ここでは openssh-client 等の汎用ツールのみを明示インストールします。
