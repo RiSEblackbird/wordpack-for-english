@@ -272,6 +272,9 @@ async function seedWordPack() {
 async function startFirestoreEmulator(env) {
   logStep('Firestore エミュレータの起動を開始します');
   const emulatorHost = env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+  const { hostname: firestoreHost, port: firestorePort } = new URL(
+    emulatorHost.includes('://') ? emulatorHost : `http://${emulatorHost}`
+  );
   const firestoreProject = env.FIRESTORE_PROJECT_ID || env.GOOGLE_CLOUD_PROJECT || 'ui-smoke';
   const firebaseConfigPath = path.join(repoRoot, 'firebase.json');
   const emulatorEnv = {
@@ -291,6 +294,10 @@ async function startFirestoreEmulator(env) {
       'emulators:start',
       '--only',
       'firestore',
+      '--host',
+      firestoreHost,
+      '--port',
+      firestorePort || '8080',
       '--project',
       firestoreProject,
       '--config',
