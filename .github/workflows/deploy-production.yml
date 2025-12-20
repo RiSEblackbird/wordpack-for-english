@@ -1,0 +1,102 @@
+name: Deploy to production
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [ main ]
+    types:
+      - completed
+
+concurrency:
+  group: deploy-production-${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Deploy after CI success
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      CLOUD_RUN_PROJECT_ID: ${{ secrets.GCP_SA_PROJECT_ID }}
+      CLOUD_RUN_REGION: asia-northeast1
+      CLOUD_RUN_ENV_FILE: .env.deploy
+      SKIP_FIRESTORE_INDEX_SYNC: "false"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate deployment inputs
+        # 秘密情報とデプロイ用の環境ファイルが揃っているか事前に検証し、原因が分かりやすい失敗に変換する。
+        env:
+          CLOUD_RUN_PROJECT_ID: ${{ env.CLOUD_RUN_PROJECT_ID }}
+          CLOUD_RUN_ENV_FILE: ${{ env.CLOUD_RUN_ENV_FILE }}
+        run: |
+          missing=0
+          if [ -z "${CLOUD_RUN_PROJECT_ID}" ]; then
+            echo "::error::CLOUD_RUN_PROJECT_ID is not set. Register the production project ID as a repository secret or variable." >&2
+            missing=1
+          fi
+          if [ ! -f "${CLOUD_RUN_ENV_FILE}" ]; then
+            echo "::error::Deployment env file '${CLOUD_RUN_ENV_FILE}' is missing. Create it based on env.deploy.example and store it securely." >&2
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Inputs validated. Proceeding to authenticated deployment."
+
+      - name: Authenticate to Google Cloud with service account key
+        # CI 成功後にのみ実行される本番デプロイなので、サービスアカウントキーで明示的に認証する。
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud SDK
+        # gcloud CLI をプロジェクト/リージョンに合わせて準備する。beta コンポーネントは Cloud Run 関連の最新機能利用に備える。
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.CLOUD_RUN_PROJECT_ID }}
+          install_components: beta
+
+      - name: Run production Cloud Run release
+        # Firestore インデックス同期の有無は環境変数で制御し、Makefile 側で一元管理する。
+        env:
+          CLOUD_RUN_PROJECT_ID: ${{ env.CLOUD_RUN_PROJECT_ID }}
+          CLOUD_RUN_REGION: ${{ env.CLOUD_RUN_REGION }}
+          CLOUD_RUN_ENV_FILE: ${{ env.CLOUD_RUN_ENV_FILE }}
+          SKIP_FIRESTORE_INDEX_SYNC: ${{ env.SKIP_FIRESTORE_INDEX_SYNC }}
+        run: |
+          make release-cloud-run \
+            PROJECT_ID="${CLOUD_RUN_PROJECT_ID}" \
+            REGION="${CLOUD_RUN_REGION}" \
+            ENV_FILE="${CLOUD_RUN_ENV_FILE}" \
+            SKIP_FIRESTORE_INDEX_SYNC="${SKIP_FIRESTORE_INDEX_SYNC}"
+
+      - name: Summarize deployment outcome
+        if: ${{ always() }}
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then
+            ICON="✅"
+          elif [ "$STATUS" = "cancelled" ]; then
+            ICON="⚠️"
+          else
+            ICON="❌"
+          fi
+
+          {
+            echo "## Production deployment"
+            echo "- Status: ${ICON} ${STATUS}"
+            echo "- CI workflow: ${GITHUB_EVENT_WORKFLOW_RUN_NAME:-CI}"
+            echo "- Commit: ${{ github.event.workflow_run.head_sha }}"
+            echo "- Trigger branch: ${{ github.event.workflow_run.head_branch }}"
+            echo "- Actor: ${{ github.actor }}"
+            echo "- Target project: ${CLOUD_RUN_PROJECT_ID}"
+            echo "- Region: ${CLOUD_RUN_REGION}"
+            echo "- Env file: ${CLOUD_RUN_ENV_FILE}"
+            echo "- SKIP_FIRESTORE_INDEX_SYNC: ${SKIP_FIRESTORE_INDEX_SYNC}"
+          } >> "$GITHUB_STEP_SUMMARY"
