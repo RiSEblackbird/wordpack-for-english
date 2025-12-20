@@ -209,7 +209,7 @@
   - `SECURITY_CSP_DEFAULT_SRC` と `SECURITY_CSP_CONNECT_SRC` にカンマ区切りで CSP オリジンを記述（`'self'` を含めたい場合は引用符ごと入力）
   - Swagger UI など外部 CDN が必要な場合は `https://cdn.jsdelivr.net` などをリストへ追加する
 - フロントエンド（`apps/frontend`）では `.env` を `apps/frontend/.env.example` からコピーしてください。リポジトリ直下で `npm run prepare:frontend-env` を実行すると、テンプレートが存在する場合のみ `.env` が自動作成され、既存ファイルは上書きされません。`VITE_GOOGLE_CLIENT_ID` をバックエンドの `GOOGLE_CLIENT_ID` と合わせ、`SESSION_COOKIE_NAME` をカスタマイズした場合のみ `VITE_SESSION_COOKIE_NAME` も更新してください（未設定でも `wp_session` / `__session` の双方をクリアします）。
-- データベースは全環境で Firestore 固定です。ローカル/CI は `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` などでエミュレータへ接続し、Cloud Firestore を使う場合のみエミュレータ設定を外して `FIRESTORE_PROJECT_ID` とサービスアカウントを指定してください。`ENVIRONMENT` は allowlist 必須化やセキュリティ既定値の切り替えにのみ使われ、データベース種別は切り替わりません。
+- データベースは全環境で Firestore 固定です。ローカル/CI はエミュレータへ接続してください。**Docker Compose では `FIRESTORE_EMULATOR_HOST=firestore-emulator:8080`、ホスト直起動/WSL では `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`** を指定します。Cloud Firestore を使う場合のみエミュレータ設定を外して `FIRESTORE_PROJECT_ID` とサービスアカウントを指定してください。`ENVIRONMENT` は allowlist 必須化やセキュリティ既定値の切り替えにのみ使われ、データベース種別は切り替わりません。Firestore エミュレータは Java 21+ が必要なため、環境に無い場合は `scripts/start_firestore_emulator.sh` が Adoptium API から tarball を取得して Temurin 21 を導入します（HTTPS が遮断される環境では事前に Java 21 を用意してください）。
 
 ### B-1-1. Google OAuth クライアントの作成手順
 1. [Google Cloud Console](https://console.cloud.google.com/) を開き、対象プロジェクトを作成または選択します。
