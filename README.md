@@ -97,7 +97,8 @@ npm run prepare:frontend-env  # apps/frontend/.env が無い場合に .env.examp
 
 ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。Firebase Hosting から Cloud Run へリライティングする構成では、`wp_session` に加えて `__session` も同じトークンで自動配信されるため、Hosting の `__session` 制約を意識せずに認証を維持できます。
 
-バックエンドは **全環境で Firestore を利用** します。`FIRESTORE_EMULATOR_HOST` が設定されている場合のみ Firestore エミュレータへ接続し、未設定なら環境に関わらず Cloud Firestore へ向きます。ローカル/CI は課金を避けるため常にエミュレータを併走させ、Cloud Firestore を使う場合のみホスト指定を外して `FIRESTORE_PROJECT_ID`（または `GCP_PROJECT_ID`）とサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を明示してください。`ENVIRONMENT` は認証やセキュリティ関連のガード（allowlist 必須化や Secure 属性の既定値など）にのみ利用し、データベースの種類は切り替えません。
+バックエンドは **全環境で Firestore を利用** します。`FIRESTORE_EMULATOR_HOST` が設定されている場合のみ Firestore エミュレータへ接続し、未設定なら環境に関わらず Cloud Firestore へ向かいます。ローカル/CI は課金を避けるため常にエミュレータを併走させ、Cloud Firestore を使う場合のみホスト指定を外して `FIRESTORE_PROJECT_ID`（または `GCP_PROJECT_ID`）とサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を明示してください。`ENVIRONMENT` は認証やセキュリティ関連のガード（allowlist 必須化や Secure 属性の既定値など）にのみ利用し、データベースの種類は切り替えません。  
+Docker Compose を使う場合は、コンテナ間通信のために `FIRESTORE_EMULATOR_HOST=firestore-emulator:8080` を指定してください（`127.0.0.1` は backend コンテナ自身を指すため接続エラーになります）。ホスト直起動時のみ `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` を利用します。
 
 `ENVIRONMENT` と `ADMIN_EMAIL_ALLOWLIST` は連動させる前提でセットアップしてください。`ENVIRONMENT=production` で allowlist が空のままデプロイすると設定バリデーションで起動が止まり、Google ログインの許可メールアドレスがひとつも無い状態を防ぎます。テストや CI では本番同等の検証を通すために `ADMIN_EMAIL_ALLOWLIST=test@example.com` のようなダミー値を必ず設定し、実運用時のみ本当の許可リストへ差し替えてください。Firestore への接続先は allowlist の有無に関わらず Firestore 固定です。
 
@@ -109,14 +110,17 @@ Firestore に保存する主要コレクションは `firestore.indexes.json` �
 | --- | --- | --- |
 | gcloud で本番/検証プロジェクトへ適用 | `make deploy-firestore-indexes PROJECT_ID=my-gcp-project` | `scripts/deploy_firestore_indexes.sh` が `firestore.indexes.json` を展開し、各定義ごとに `gcloud alpha firestore indexes composite create --field-config=...` を順次実行します（既存インデックスは自動でスキップ）。 |
 | Firebase CLI で適用 | `make deploy-firestore-indexes PROJECT_ID=my-firebase-project TOOL=firebase` | CI/ローカルともに `firebase deploy --only firestore:indexes --non-interactive` を使うルート。 |
-| エミュレータでの検証 | `make firestore-emulator` または `docker compose up firestore-emulator` | `scripts/start_firestore_emulator.sh` が firebase.json / firestore.indexes.json を読み込み、`FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_PORT:-8080}` で Firestore エミュレータを起動します。Cloud Firestore へ切り替えない限り、ローカル開発ではこのエミュレータと連携してください。 |
+| エミュレータでの検証 | `make firestore-emulator` または `docker compose up firestore-emulator` | `scripts/start_firestore_emulator.sh` が firebase.json / firestore.indexes.json を読み込み、`FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_PORT:-8080}` で Firestore エミュレータを起動します。Docker Compose 利用時は backend から `firestore-emulator:8080` を指定してください。 |
 | Firestore デモデータ投入 | `make seed-firestore-demo` | `.data_demo/wordpack.sqlite3.demo` にある SQLite デモ DB を Firestore（エミュレータ含む）へ流し込みます。既存の例文 ID を再採番したうえで `examples` コレクションと `articles` / `article_word_packs` を作成します。 |
 
-エミュレータ起動時は `scripts/start_firestore_emulator.sh` が `firebase emulators:start --only firestore` をラップするため、`firestore.indexes.json` の複合インデックスが自動で適用されます。ログに「Loaded indexes from firestore.indexes.json」が出力されれば、バックエンドやテストから `FIRESTORE_EMULATOR_HOST=127.0.0.1:${FIRESTORE_EMULATOR_PORT:-8080}` を付けて接続できます。停止するときは `Ctrl+C` で終了し、必要に応じて `make seed-firestore-demo` でデータを再投入してください。
+エミュレータ起動時は `scripts/start_firestore_emulator.sh` が `firebase-tools emulators:start --only firestore` をラップするため、`firestore.indexes.json` の複合インデックスが自動で適用されます。ログに「Loaded indexes from firestore.indexes.json」が出力されれば、バックエンドやテストから接続できます。Java 21+ が必須なため、未インストールの場合はスクリプトが Adoptium API から Temurin 21 JRE を tarball で取得して展開します（HTTPS が遮断される環境では事前に Java 21 を入れてください）。  
+- Docker Compose 利用時: `FIRESTORE_EMULATOR_HOST=firestore-emulator:${FIRESTORE_EMULATOR_PORT:-8080}`  
+- ホスト直起動時: `FIRESTORE_EMULATOR_HOST=127.0.0.1:${FIRESTORE_EMULATOR_PORT:-8080}`  
+停止するときは `Ctrl+C` で終了し、必要に応じて `make seed-firestore-demo` でデータを再投入してください。
 
 `.data_demo/wordpack.sqlite3.demo` は Firestore シードの元データとしてのみ利用し、SQLite へ直接シードする運用は非推奨です。`make seed-firestore-demo` は例文 ID を再採番して Firestore スキーマへ正規化するため、CI・ローカルのどちらでも同じ形式で取り込めます。
 
-CI でエミュレータを併走させる場合は、`ENABLE_FIRESTORE_EMULATOR=true` と `FIRESTORE_EMULATOR_PORT` を環境変数で渡し、`FIRESTORE_EMULATOR_HOST=127.0.0.1:${FIRESTORE_EMULATOR_PORT:-8080}` をテストに引き継いでください（`.github/workflows/ci.yml` に手順付きで記載しています）。
+CI でエミュレータを併走させる場合は、`ENABLE_FIRESTORE_EMULATOR=true` と `FIRESTORE_EMULATOR_PORT` を環境変数で渡し、`FIRESTORE_EMULATOR_HOST=127.0.0.1:${FIRESTORE_EMULATOR_PORT:-8080}`（CI はホスト実行）をテストに引き継いでください（`.github/workflows/ci.yml` に手順付きで記載しています）。
 
 `examples` の大量削除は `word_pack_id` で絞り込んだクエリに `limit` を付け、`WriteBatch`（もしくは Firebase CLI の `--recursive` オプション）でページングしながら消していくと、1 回あたり 500 件までに抑えつつ孤児ドキュメントを残さずに済みます。`AppFirestoreStore` も同じ手順で `examples` を削除するため、Cloud Console で手動クリーンアップする場合も同条件のクエリか `firebase firestore:delete --recursive` を用いると安全です。
 
@@ -168,7 +172,7 @@ docker build -f Dockerfile.backend -t wordpack-backend .
 # Firestore を利用する本番挙動を再現したい場合はプロジェクトIDを指定
 docker run --rm -p 8000:8000 -e FIRESTORE_PROJECT_ID=my-project wordpack-backend
 ```
-- Firestore は全環境共通で利用します。ローカル検証では `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` を付与してエミュレータへ接続してください。Cloud Firestore を使う場合は `FIRESTORE_PROJECT_ID`（もしくは `GCP_PROJECT_ID`）とサービスアカウントを `-v $PWD/gcp-service-account.json:/secrets/sa.json -e GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa.json` のように渡してください。
+- Firestore は全環境共通で利用します。ローカル検証ではエミュレータを利用し、**Docker Compose なら `FIRESTORE_EMULATOR_HOST=firestore-emulator:8080`、ホスト直起動なら `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`** を付与してください。Cloud Firestore を使う場合は `FIRESTORE_PROJECT_ID`（もしくは `GCP_PROJECT_ID`）とサービスアカウントを `-v $PWD/gcp-service-account.json:/secrets/sa.json -e GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa.json` のように渡してください。
 - `CMD` は `uvicorn backend.main:app --host 0.0.0.0 --port 8000 --app-dir apps/backend` に固定しているため、`docker run` でそのまま FastAPI を起動できます。
 
 #### docker compose
@@ -304,10 +308,10 @@ PS D:\Users\mokut\Documents\GitHub\wordpack-for-english> firebase deploy --only 
 ### Firestore エミュレータを使ったローカルテスト
 Firestore エミュレータを併用すれば本番相当のデータフローをローカルで検証できます。
 
-1. `make firestore-emulator` または `docker compose up firestore-emulator` を実行してエミュレータを起動（`firestore.indexes.json` が自動適用されます）。
-2. バックエンドを `FIRESTORE_PROJECT_ID=wordpack-local FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 python -m uvicorn backend.main:app --app-dir apps/backend` で起動します（サービスアカウントは不要）。
+1. `make firestore-emulator` または `docker compose up firestore-emulator` を実行してエミュレータを起動（`firestore.indexes.json` が自動適用されます）。Java 21+ が無い環境ではスクリプトが Temurin 21 を自動導入します。
+2. バックエンドを起動する際、ホスト直起動なら `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`, Docker Compose なら `FIRESTORE_EMULATOR_HOST=firestore-emulator:8080` を指定して `python -m uvicorn backend.main:app --app-dir apps/backend` を実行します（サービスアカウントは不要）。
 3. 開発用データが必要なら `make seed-firestore-demo` を別ターミナルで実行し、`.data_demo/wordpack.sqlite3.demo` から Firestore へ投入してください。
-4. テストは `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIRESTORE_PROJECT_ID=wordpack-local pytest tests/backend/test_firestore_store.py` のように実行できます。Fake クライアントに加えて実エミュレータ相手の結合テストも同じ環境変数で走らせられます。
+4. テストも同様に、ホスト直起動時は `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`、Docker Compose では `firestore-emulator:8080` を指定し、例: `FIRESTORE_PROJECT_ID=wordpack-local pytest tests/backend/test_firestore_store.py`。Fake クライアントに加えて実エミュレータ相手の結合テストも同じ環境変数で走らせられます。
 
 Cloud Run や Firebase Hosting へ出荷する前に、上記の手順で Firestore 統合を通しで確認すると移行時のトラブルを減らせます。
 
