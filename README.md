@@ -232,6 +232,14 @@ OPENAI_API_KEY=sk-xxxxx
 
 GitHub Actions では `deploy-dry-run.yml` が pull_request と main ブランチへの push で `make release-cloud-run` を `SKIP_FIRESTORE_INDEX_SYNC=true` / `DRY_RUN=true` 付きで実行し、`configs/cloud-run/ci.env` を用いた設定検証を自動化します。GCP のサービスアカウントキーはリポジトリシークレット `GCP_SA_KEY` に保存し、`google-github-actions/auth` で ADC として読み込んでから `setup-gcloud` に引き渡してください。
 
+本番の自動デプロイは `deploy-production.yml` が担当します。CI が success になった **main ブランチへの push（= develop→main のマージコミット含む）** のみをトリガーにし、CI が検証したコミット SHA をそのままチェックアウトして `make release-cloud-run` を実行します。GitHub Actions で本番デプロイを有効にするには、少なくとも次のシークレットが必要です。
+
+- `GCP_SA_KEY`: 本番デプロイ用サービスアカウントキー（JSON）
+- `GCP_SA_PROJECT_ID`: 本番 GCP プロジェクト ID
+- `CLOUD_RUN_ENV_FILE_BASE64`: `.env.deploy` を base64 化した文字列（Actions 内で `.env.deploy` を復元して使用）
+
+サービスアカウントの作成・権限付与・base64 エンコードの手順は [UserManual.md の「GitHub Actions 本番デプロイ用シークレットの準備」](./UserManual.md#github-actions-本番デプロイ用シークレットの準備) を参照してください。
+
 - 前提条件
   - `PROJECT_ID` と `REGION` を Make 実行時に必ず指定する（gcloud の既定値には依存しません）。
   - Firestore Admin / Cloud Run Admin / Artifact Registry Writer 権限を持つサービスアカウントで `gcloud auth login` または `gcloud auth activate-service-account` を済ませ、`gcloud auth configure-docker` も完了させておく。

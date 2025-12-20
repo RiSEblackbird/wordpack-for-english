@@ -89,3 +89,4 @@ __pycache__/
 終了済みor参考ドキュメント/
 
 **/.vite/
+gcp-deploy-key.json
