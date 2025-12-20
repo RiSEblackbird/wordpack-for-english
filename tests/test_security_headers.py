@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -9,6 +10,7 @@ from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
 import pytest
+from pytest import MonkeyPatch
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[1] / "apps" / "backend"
 if str(_BACKEND_ROOT) not in sys.path:
@@ -61,6 +63,22 @@ api_core_module.exceptions = api_core_exceptions
 sys.modules["google.api_core"] = api_core_module
 sys.modules["google.api_core.exceptions"] = api_core_exceptions
 
+# backend.config 読み込み時のバリデーションを安全に通すため、Firestore/セッション関連の
+# ダミー環境変数を注入する。元の値は下部のフィクスチャで復元し、他テストへの波及を
+# 防ぐ。
+_DUMMY_ENV_VARS: dict[str, str] = {
+    "FIRESTORE_PROJECT_ID": "test-firestore",
+    # Validators では 32 文字以上の乱数文字列を要求するため十分な長さの値を用意する。
+    "SESSION_SECRET_KEY": "dummy-session-secret-key-1234567890-abcdef",
+    # 環境変数経由で strict_mode を緩和し、未設定項目での起動失敗を避ける。
+    "STRICT_MODE": "false",
+}
+_ORIGINAL_ENV_VARS: dict[str, str | None] = {
+    key: os.environ.get(key) for key in _DUMMY_ENV_VARS
+}
+for key, value in _DUMMY_ENV_VARS.items():
+    os.environ.setdefault(key, value)
+
 from backend.config import settings
 from backend.main import create_app
 
@@ -84,6 +102,22 @@ def override_settings(**overrides: object) -> Iterator[None]:
     finally:
         for key, value in original.items():
             setattr(settings, key, value)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _restore_environ() -> Iterator[None]:
+    """テスト終了後に環境変数を元の状態へ戻す。"""
+
+    # なぜ: ダミーの環境変数を残したままだと他モジュールの設定読込が意図せず緩和される。
+    # ここで復元し、セキュリティ設定の前提がズレないようにする。
+    patcher = MonkeyPatch()
+    yield
+    for key, original in _ORIGINAL_ENV_VARS.items():
+        if original is None:
+            patcher.delenv(key, raising=False)
+        else:
+            patcher.setenv(key, original)
+    patcher.undo()
 
 
 @pytest.fixture(scope="module", autouse=True)
