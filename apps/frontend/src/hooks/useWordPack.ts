@@ -147,14 +147,20 @@ export const useWordPack = ({
     }
   }, []);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
-    abortRef.current?.abort();
+  useEffect(() => {
+    // Strict Mode での再マウント時に mounted 状態を復元
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+    };
   }, []);
 
   const loadWordPack = useCallback(
     async (wordPackId: string) => {
       // 前のリクエストをキャンセルして Race Condition を防止
+      // eslint-disable-next-line no-console
+      console.log('[loadWordPack] START', { wordPackId, abortRefExists: !!abortRef.current });
       abortRef.current?.abort();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
@@ -162,16 +168,28 @@ export const useWordPack = ({
       setMessage(null);
       setData(null);
       try {
+        // eslint-disable-next-line no-console
+        console.log('[loadWordPack] fetching...', { url: `${apiBase}/word/packs/${wordPackId}` });
         const res = await fetchJson<WordPack>(`${apiBase}/word/packs/${wordPackId}`, {
           signal: ctrl.signal,
           timeoutMs: requestTimeoutMs,
         });
-        if (!mountedRef.current) return;
+        // eslint-disable-next-line no-console
+        console.log('[loadWordPack] response received', { lemma: res?.lemma, hasData: !!res, mounted: mountedRef.current });
+        if (!mountedRef.current) {
+          // eslint-disable-next-line no-console
+          console.log('[loadWordPack] SKIP: component unmounted');
+          return;
+        }
         const normalized = normalizeWordPack(res);
+        // eslint-disable-next-line no-console
+        console.log('[loadWordPack] setData', { lemma: normalized?.lemma });
         setData(normalized);
         setCurrentWordPackId(wordPackId);
         extractAiMeta(normalized);
       } catch (error) {
+        // eslint-disable-next-line no-console
+        console.log('[loadWordPack] CATCH', { aborted: ctrl.signal.aborted, error });
         if (ctrl.signal.aborted) return;
         let text = error instanceof ApiError ? error.message : 'WordPackの読み込みに失敗しました';
         if (error instanceof ApiError && error.status === 0 && /aborted|timed out/i.test(error.message)) {
@@ -179,6 +197,8 @@ export const useWordPack = ({
         }
         setMessage({ kind: 'alert', text });
       } finally {
+        // eslint-disable-next-line no-console
+        console.log('[loadWordPack] FINALLY', { wordPackId });
         setLoading(false);
       }
     },
