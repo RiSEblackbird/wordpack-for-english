@@ -28,6 +28,7 @@ Codex (MCP クライアント)
 |------|------|
 | Node.js | 22.12.0 以上 |
 | npm | 最新安定版 |
+| Firebase CLI | `tests/ui/mcp-smoke` の依存として同梱される `firebase-tools` を `npm ci --prefix tests/ui/mcp-smoke` で取得する |
 | Chrome/Chromium | 安定版 Chrome を優先し、取得できない場合はスクリプトが OSS Chromium を自動でダウンロード |
 | Codex CLI | [公式ドキュメント](https://github.com/openai/codex/blob/main/docs/advanced.md#model-context-protocol-mcp) を参照してセットアップ |
 
