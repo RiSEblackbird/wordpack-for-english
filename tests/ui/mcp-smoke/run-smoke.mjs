@@ -454,6 +454,9 @@ async function runSmokeAssertions(wordPackId) {
   const waitMain = await client.callTool({ name: 'wait_for', arguments: { text: 'WordPack', timeout: 20000 } });
   ensure(!waitMain.isError, 'Failed to locate WordPack heading');
 
+  logStep('カード一覧の描画完了を待機しています');
+  await waitForSelector(client, '[data-testid="wp-card"]', { timeoutMs: 15000 });
+
   logStep('トップ画面のスナップショットを取得します');
   const snapshot = await client.callTool({ name: 'take_snapshot', arguments: {} });
   const snapshotText = snapshot.content?.[0]?.text || '';
