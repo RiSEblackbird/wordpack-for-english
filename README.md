@@ -240,6 +240,34 @@ GitHub Actions では `deploy-dry-run.yml` が pull_request と main ブラン�
 
 サービスアカウントの作成・権限付与・base64 エンコードの手順は [UserManual.md の「GitHub Actions 本番デプロイ用シークレットの準備」](./UserManual.md#github-actions-本番デプロイ用シークレットの準備) を参照してください。
 
+- GitHub Actions が利用しているサービスアカウント（確認方法）
+  - `GCP_SA_KEY`（JSON キー）をローカルに保持しない運用でも、次の方法で「実際にデプロイに使われたサービスアカウント」を特定できます。
+  - 方式A: GitHub Actions のジョブ内で表示（メールアドレスは通常機密情報ではありません）
+    - `gcloud auth list --filter=status:ACTIVE --format="value(account)"`
+  - 方式B: Cloud Logging（監査ログ）で特定
+    - Logging → ログ エクスプローラで `protoPayload.methodName="google.devtools.cloudbuild.v1.CloudBuild.CreateBuild"` を検索し、`protoPayload.authenticationInfo.principalEmail` を確認します。
+
+- GitHub Actions（本番デプロイ）に必要な IAM ロール
+  - **Cloud Run へのデプロイ**
+    - `roles/run.admin`
+  - **Artifact Registry への push**
+    - `roles/artifactregistry.writer`
+  - **Cloud Build の実行（ビルド送信）**
+    - `roles/cloudbuild.builds.editor`
+    - `roles/storage.objectAdmin`（推奨: `gs://<PROJECT_ID>_cloudbuild` バケットに対して付与。`gcloud builds submit` のソースアップロードに必要）
+  - **Firestore インデックス同期（Firebase CLI）**
+    - `roles/datastore.indexAdmin`
+    - `roles/serviceusage.serviceUsageViewer`（Firestore API の有効化状態確認に必要）
+    - ※ CI が API を自動で有効化してよい方針なら `roles/serviceusage.serviceUsageAdmin` を追加します。
+  - **Cloud Build のログ表示（CI が “ビルド中でも失敗扱い” になるのを防ぐ）**
+    - まず切り分けに `roles/viewer`（広いが確実）
+    - もしくは `roles/cloudbuild.builds.viewer` + `gs://<PROJECT_ID>_cloudbuild` に `roles/storage.objectViewer`（環境により追加ロールが必要な場合あり）
+
+- よくある詰まりポイント（シェル差異）
+  - WSL / Linux / macOS の bash は行継続に `\` を使います（Windows `cmd.exe` の `^` は使えません）。
+    - bash: `command \` + 改行 + `--flag ...`
+    - cmd: `command ^` + 改行 + `--flag ...`
+
 - 前提条件
   - `PROJECT_ID` と `REGION` を Make 実行時に必ず指定する（gcloud の既定値には依存しません）。
   - Firestore Admin / Cloud Run Admin / Artifact Registry Writer 権限を持つサービスアカウントで `gcloud auth login` または `gcloud auth activate-service-account` を済ませ、`gcloud auth configure-docker` も完了させておく。

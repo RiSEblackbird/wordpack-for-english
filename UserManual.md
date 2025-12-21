@@ -389,20 +389,32 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/cloudbuild.builds.editor"
 
-# Firestore 管理者（インデックス同期用）
+# Cloud Build のソースアップロード（gs://<PROJECT_ID>_cloudbuild へアップロードするため）
+# ※ 推奨: プロジェクト全体ではなく対象バケットに対して付与する
+gcloud storage buckets add-iam-policy-binding "gs://${PROJECT_ID}_cloudbuild" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/storage.objectAdmin"
+
+# Firestore インデックス管理（インデックス同期用）
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/datastore.indexAdmin"
+
+# Firestore API の有効化状態確認（Firebase CLI が事前にチェックするため）
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/serviceusage.serviceUsageViewer"
+
+# Cloud Build のログ表示（CI が “ビルド中なのに失敗扱い” で止まるのを避ける）
+# まず確実に通すなら Viewer（広いが切り分けが簡単）
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:${SA_EMAIL}" \
+  --role="roles/viewer"
 
 # サービスアカウントユーザー（Cloud Run がこの SA を使うため）
 gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${SA_EMAIL}" \
   --role="roles/iam.serviceAccountUser"
-
-# ストレージ管理者（Cloud Build がイメージを push するため）
-gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-  --member="serviceAccount:${SA_EMAIL}" \
-  --role="roles/storage.admin"
 ```
 
 **JSON 鍵を発行:**
@@ -433,6 +445,10 @@ gcloud iam service-accounts keys create ./gcp-deploy-key.json \
    ```bash
    rm ./gcp-deploy-key.json
    ```
+
+> 補足: ローカルに鍵ファイルを残さない運用でも、GitHub Actions が実際に使っているサービスアカウントは次の方法で確認できます。  
+> - Actions ジョブ内で確認: `gcloud auth list --filter=status:ACTIVE --format="value(account)"`  
+> - Cloud Logging（監査ログ）で確認: `protoPayload.methodName="google.devtools.cloudbuild.v1.CloudBuild.CreateBuild"` を検索し、`principalEmail` を確認
 
 ###### 3. CLOUD_RUN_ENV_FILE_BASE64（.env.deploy の base64 エンコード）
 
