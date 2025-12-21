@@ -312,7 +312,7 @@
   - `--dry-run` を付けると設定のロード（`python -m apps.backend.backend.config`）までを実行し、gcloud コマンドをスキップします。CI では `configs/cloud-run/ci.env` を入力にして dry-run を常時実行し、必須設定の欠落をブロックしています。
   - `--image-tag`（既定: `git rev-parse --short HEAD`）、`--build-arg KEY=VALUE`、`--machine-type`、`--timeout` などで Cloud Build のパラメータを細かく制御できます。`--artifact-repo` で Artifact Registry のリポジトリを差し替え可能です。
 - `make deploy-cloud-run PROJECT_ID=... REGION=...` を利用すれば、Makefile から同じスクリプトを呼び出せます。`gcloud config` に既定プロジェクト/リージョンを設定済みなら、Make 実行時の `PROJECT_ID` / `REGION` 省略も可能です。GitHub Actions の `Cloud Run config guard` ジョブでも `scripts/deploy_cloud_run.sh --dry-run` を実行しており、`shellcheck` でスクリプトの静的解析も同ジョブで通過させます。ローカルでスクリプトを更新した場合は `shellcheck scripts/deploy_cloud_run.sh` を必ず実行してください。
-- GitHub Actions の本番自動デプロイは `deploy-production.yml` が担当し、CI が success になった **main ブランチへの push（= develop→main マージコミットを含む）** のみで起動します。CI が検証した commit SHA をチェックアウトして `make release-cloud-run` を実行するため、未検証の HEAD を誤ってデプロイしません。`.env.deploy` はリポジトリへコミットせず、Actions 側で `CLOUD_RUN_ENV_FILE_BASE64`（base64 化した `.env.deploy`）から復元して利用します。
+- GitHub Actions の本番自動デプロイは **CI ワークフロー（`.github/workflows/ci.yml`）内の `CD / Deploy to production (Cloud Run)` ジョブ**が担当し、CI が success になった **main ブランチへの push（= develop→main マージコミットを含む）** のみで実行されます。CI と同じ workflow 内で実行されるため、Checks の一覧にも CD が表示されます。`.env.deploy` はリポジトリへコミットせず、Actions 側で `CLOUD_RUN_ENV_FILE_BASE64`（base64 化した `.env.deploy`）から復元して利用します。手動実行用のフォールバックとして `deploy-production.yml` も残しています（`workflow_dispatch` のみ）。
 
 ##### release-cloud-run ターゲット（本番リリースの順序制御）
 
@@ -335,7 +335,7 @@
 
 ##### GitHub Actions 本番デプロイ用シークレットの準備
 
-GitHub Actions で本番自動デプロイ（`deploy-production.yml`）を利用するには、以下の3つのリポジトリシークレットが必要です。未設定の場合はワークフローがエラーで停止し、不足しているシークレット名がログに出力されます。
+GitHub Actions で本番自動デプロイ（CI 内の `CD / Deploy to production (Cloud Run)` ジョブ）を利用するには、以下の3つのリポジトリシークレットが必要です。未設定の場合はワークフローがエラーで停止し、不足しているシークレット名がログに出力されます。
 
 | シークレット名 | 説明 |
 |--------------|------|

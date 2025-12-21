@@ -70,41 +70,31 @@ def test_deploy_dry_run_is_main_only() -> None:
 
 def test_deploy_production_runs_only_on_main_push_and_deploys_tested_commit() -> None:
     """
-    Contract: production deployment must run only after CI succeeds on a push to main,
-    and it must deploy the exact commit SHA that CI validated (avoid deploying default branch HEAD).
+    Contract: production deployment must appear as a check on the same commit (Checks UI),
+    so it must be implemented as a CI job that runs only for push-to-main after other CI jobs succeed.
+    """
+    yml = _read_text(".github/workflows/ci.yml")
+    # Guardrails: run only on push-to-main.
+    _assert_contains_all(
+        yml,
+        [
+            "deploy_production:",
+            "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+        ],
+    )
+    # Sanity: ensure this job is actually the one touching GCP.
+    _assert_contains_all(yml, ["google-github-actions/auth@v2", "setup-gcloud@v2"])
+    _assert_contains_all(yml, ["make release-cloud-run", "TOOL=firebase"])
+
+
+def test_deploy_production_workflow_is_manual_fallback_only() -> None:
+    """
+    Contract: automatic production deploy runs as a CI job.
+    The standalone deploy-production workflow must not auto-trigger from workflow_run (avoid double deploys).
     """
     yml = _read_text(".github/workflows/deploy-production.yml")
     on_block = _extract_on_block(yml)
-    _assert_contains_all(
-        on_block,
-        [
-            "workflow_run:",
-            "workflows:",
-            "CI",
-            "types:",
-            "completed",
-        ],
-    )
-
-    # Guardrails: only deploy after CI for push-to-main (not PR CI runs).
-    _assert_contains_all(
-        yml,
-        [
-            "github.event.workflow_run.conclusion == 'success'",
-            "github.event.workflow_run.event == 'push'",
-            "github.event.workflow_run.head_branch == 'main'",
-        ],
-    )
-    assert "develop" not in yml, "deploy-production must not run on develop"
-
-    # Safety: deploy the tested commit, not whatever happens to be on the default branch.
-    _assert_contains_all(
-        yml,
-        [
-            "ref: ${{ github.event.workflow_run.head_sha }}",
-        ],
-    )
-
-    # Sanity: ensure this workflow is actually the one touching GCP.
-    _assert_contains_all(yml, ["google-github-actions/auth@v2", "setup-gcloud@v2"])
+    _assert_contains_all(on_block, ["workflow_dispatch:"])
+    _assert_contains_none(on_block, ["workflow_run:"])
+    _assert_contains_none(yml, ["github.event.workflow_run."])
 
