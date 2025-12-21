@@ -232,13 +232,42 @@ OPENAI_API_KEY=sk-xxxxx
 
 GitHub Actions では `deploy-dry-run.yml` が pull_request と main ブランチへの push で `make release-cloud-run` を `SKIP_FIRESTORE_INDEX_SYNC=true` / `DRY_RUN=true` 付きで実行し、`configs/cloud-run/ci.env` を用いた設定検証を自動化します。GCP のサービスアカウントキーはリポジトリシークレット `GCP_SA_KEY` に保存し、`google-github-actions/auth` で ADC として読み込んでから `setup-gcloud` に引き渡してください。
 
-本番の自動デプロイは `deploy-production.yml` が担当します。CI が success になった **main ブランチへの push（= develop→main のマージコミット含む）** のみをトリガーにし、CI が検証したコミット SHA をそのままチェックアウトして `make release-cloud-run` を実行します。GitHub Actions で本番デプロイを有効にするには、少なくとも次のシークレットが必要です。
+本番の自動デプロイは **CI ワークフロー（`.github/workflows/ci.yml`）内の `CD / Deploy to production (Cloud Run)` ジョブ**が担当します。CI のテストが全て成功した **main ブランチへの push（= develop→main のマージコミット含む）** のみを条件に `make release-cloud-run` を実行するため、Checks の一覧にも CD が表示されます。手動実行用のフォールバックとして `deploy-production.yml` も残しています（`workflow_dispatch` のみ）。
+GitHub Actions で本番デプロイを有効にするには、少なくとも次のシークレットが必要です。
 
 - `GCP_SA_KEY`: 本番デプロイ用サービスアカウントキー（JSON）
 - `GCP_SA_PROJECT_ID`: 本番 GCP プロジェクト ID
 - `CLOUD_RUN_ENV_FILE_BASE64`: `.env.deploy` を base64 化した文字列（Actions 内で `.env.deploy` を復元して使用）
 
 サービスアカウントの作成・権限付与・base64 エンコードの手順は [UserManual.md の「GitHub Actions 本番デプロイ用シークレットの準備」](./UserManual.md#github-actions-本番デプロイ用シークレットの準備) を参照してください。
+
+- GitHub Actions が利用しているサービスアカウント（確認方法）
+  - `GCP_SA_KEY`（JSON キー）をローカルに保持しない運用でも、次の方法で「実際にデプロイに使われたサービスアカウント」を特定できます。
+  - 方式A: GitHub Actions のジョブ内で表示（メールアドレスは通常機密情報ではありません）
+    - `gcloud auth list --filter=status:ACTIVE --format="value(account)"`
+  - 方式B: Cloud Logging（監査ログ）で特定
+    - Logging → ログ エクスプローラで `protoPayload.methodName="google.devtools.cloudbuild.v1.CloudBuild.CreateBuild"` を検索し、`protoPayload.authenticationInfo.principalEmail` を確認します。
+
+- GitHub Actions（本番デプロイ）に必要な IAM ロール
+  - **Cloud Run へのデプロイ**
+    - `roles/run.admin`
+  - **Artifact Registry への push**
+    - `roles/artifactregistry.writer`
+  - **Cloud Build の実行（ビルド送信）**
+    - `roles/cloudbuild.builds.editor`
+    - `roles/storage.objectAdmin`（推奨: `gs://<PROJECT_ID>_cloudbuild` バケットに対して付与。`gcloud builds submit` のソースアップロードに必要）
+  - **Firestore インデックス同期（Firebase CLI）**
+    - `roles/datastore.indexAdmin`
+    - `roles/serviceusage.serviceUsageViewer`（Firestore API の有効化状態確認に必要）
+    - ※ CI が API を自動で有効化してよい方針なら `roles/serviceusage.serviceUsageAdmin` を追加します。
+  - **Cloud Build のログ表示（CI が “ビルド中でも失敗扱い” になるのを防ぐ）**
+    - まず切り分けに `roles/viewer`（広いが確実）
+    - もしくは `roles/cloudbuild.builds.viewer` + `gs://<PROJECT_ID>_cloudbuild` に `roles/storage.objectViewer`（環境により追加ロールが必要な場合あり）
+
+- よくある詰まりポイント（シェル差異）
+  - WSL / Linux / macOS の bash は行継続に `\` を使います（Windows `cmd.exe` の `^` は使えません）。
+    - bash: `command \` + 改行 + `--flag ...`
+    - cmd: `command ^` + 改行 + `--flag ...`
 
 - 前提条件
   - `PROJECT_ID` と `REGION` を Make 実行時に必ず指定する（gcloud の既定値には依存しません）。
