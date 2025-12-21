@@ -352,14 +352,56 @@ ensure_gcloud
 # Cloud Build にソースコードを送って Docker イメージをビルドします。
 # IMAGE_URI には「リージョン + Artifact Registry + イメージタグ」が入っています。
 log "Submitting build to Cloud Build: $IMAGE_URI"
-# gcloud builds submit は Dockerfile パス指定用の --file を受け付けないため、
-# リポジトリルートの Dockerfile（Dockerfile.backend へのシンボリックリンク）を利用する。
-BUILD_CMD=(gcloud builds submit --project "$PROJECT_ID" --tag "$IMAGE_URI" --machine-type="$MACHINE_TYPE" --timeout="$BUILD_TIMEOUT")
-if [[ ${#EXTRA_BUILD_ARGS[@]} -gt 0 ]]; then
-  for build_arg in "${EXTRA_BUILD_ARGS[@]}"; do
-    BUILD_CMD+=(--build-arg "$build_arg")
-  done
+# Cloud Build では repo-root の Dockerfile がアップロード対象から外れてしまうケースがあるため、
+# `--tag` による暗黙ビルド（Dockerfile 固定）ではなく、Dockerfile.backend を明示した構成でビルドします。
+# これにより "Dockerfile: no such file or directory" の失敗を回避します。
+BUILDCONFIG_PATH="${REPO_ROOT}/cloudbuild.backend.yaml"
+if [[ ! -f "$BUILDCONFIG_PATH" ]]; then
+  err "Cloud Build config not found: $BUILDCONFIG_PATH"
+  exit 1
 fi
+
+GENERATED_BUILDCONFIG=""
+cleanup_generated_buildconfig() {
+  [[ -n "$GENERATED_BUILDCONFIG" && -f "$GENERATED_BUILDCONFIG" ]] && rm -f "$GENERATED_BUILDCONFIG"
+}
+trap cleanup_generated_buildconfig EXIT
+
+SUBSTITUTIONS=("_IMAGE_URI=${IMAGE_URI}")
+CONFIG_TO_USE="$BUILDCONFIG_PATH"
+
+if [[ ${#EXTRA_BUILD_ARGS[@]} -gt 0 ]]; then
+  # --build-arg を指定された場合は Cloud Build config を一時生成して docker build args に反映します。
+  GENERATED_BUILDCONFIG="$(mktemp "${REPO_ROOT}/.cloudbuild.backend.XXXXXX.yaml")"
+  {
+    echo "steps:"
+    echo "  - name: gcr.io/cloud-builders/docker"
+    echo "    args:"
+    echo "      - build"
+    echo "      - -f"
+    echo "      - Dockerfile.backend"
+    echo "      - -t"
+    echo "      - \$_IMAGE_URI"
+    for build_arg in "${EXTRA_BUILD_ARGS[@]}"; do
+      echo "      - --build-arg"
+      echo "      - ${build_arg}"
+    done
+    echo "      - ."
+    echo ""
+    echo "images:"
+    echo "  - \$_IMAGE_URI"
+  } >"$GENERATED_BUILDCONFIG"
+  CONFIG_TO_USE="$GENERATED_BUILDCONFIG"
+fi
+
+BUILD_CMD=(
+  gcloud builds submit
+  --project "$PROJECT_ID"
+  --config "$CONFIG_TO_USE"
+  --substitutions "$(IFS=,; echo "${SUBSTITUTIONS[*]}")"
+  --machine-type "$MACHINE_TYPE"
+  --timeout "$BUILD_TIMEOUT"
+)
 "${BUILD_CMD[@]}"
 
 log "Preparing environment variable file for Cloud Run"
