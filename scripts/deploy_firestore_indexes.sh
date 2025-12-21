@@ -128,6 +128,7 @@ for index in indexes:
         "indexes",
         "composite",
         "create",
+        "--quiet",  # 非インタラクティブ環境（CI/CD）でプロンプトを抑止
         f"--project={project_id}",
         f"--collection-group={collection_group}",
         f"--query-scope={query_scope}",

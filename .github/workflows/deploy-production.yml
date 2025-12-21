@@ -83,14 +83,36 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Set up gcloud SDK
-        # gcloud CLI をプロジェクト/リージョンに合わせて準備する。beta コンポーネントは Cloud Run 関連の最新機能利用に備える。
+        # gcloud CLI をプロジェクト/リージョンに合わせて準備する。Cloud Run / Cloud Build は GA コマンドのみ使用。
         uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ env.CLOUD_RUN_PROJECT_ID }}
-          install_components: beta
+
+      - name: Set up Node.js for Firebase CLI
+        # Firestore インデックス同期に Firebase CLI（GA）を使用するため Node.js を用意する。
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Firebase CLI
+        # firebase deploy --only firestore:indexes は GA であり、gcloud alpha より安定している。
+        run: npm install -g firebase-tools
+
+      - name: Set up Python
+        # デプロイスクリプトが python -m apps.backend.backend.config で設定を検証するため Python 環境を用意する。
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Python dependencies
+        # Pydantic 設定検証など、デプロイ前の dry-run に必要な依存をインストールする。
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run production Cloud Run release
         # Firestore インデックス同期の有無は環境変数で制御し、Makefile 側で一元管理する。
+        # TOOL=firebase で安定版の Firebase CLI を使い、gcloud alpha を回避する。
         env:
           CLOUD_RUN_PROJECT_ID: ${{ env.CLOUD_RUN_PROJECT_ID }}
           CLOUD_RUN_REGION: ${{ env.CLOUD_RUN_REGION }}
@@ -101,7 +123,8 @@ jobs:
             PROJECT_ID="${CLOUD_RUN_PROJECT_ID}" \
             REGION="${CLOUD_RUN_REGION}" \
             ENV_FILE="${CLOUD_RUN_ENV_FILE}" \
-            SKIP_FIRESTORE_INDEX_SYNC="${SKIP_FIRESTORE_INDEX_SYNC}"
+            SKIP_FIRESTORE_INDEX_SYNC="${SKIP_FIRESTORE_INDEX_SYNC}" \
+            TOOL=firebase
 
       - name: Summarize deployment outcome
         if: ${{ always() }}
