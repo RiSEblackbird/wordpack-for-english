@@ -123,13 +123,15 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
     setTranscriptionUpdating(true);
     setTranscriptionFeedback(null);
     try {
+      // バックエンド契約に合わせて入力文字数だけを送信する（本文そのものは送らない）。
+      const inputLength = transcriptionInput.length;
       const res = await fetchJson<{
         id: number;
         word_pack_id: string;
         transcription_typing_count: number;
       }>(`${settings.apiBase}/word/examples/${item.id}/transcription-typing`, {
         method: 'POST',
-        body: { content: transcriptionInput },
+        body: { input_length: inputLength },
       });
       setLocalCounts((prev) => ({
         checked: prev.checked,
@@ -247,7 +249,7 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
                 textAlign: 'left',
               }}
             >
-              文字起こしタイピング ({localCounts.transcriptionTyping})
+              文字起こしタイピング ({localCounts.transcriptionTyping}文字)
             </button>
             {transcriptionFormVisible ? (
               <div style={{ display: 'grid', gap: '0.5rem' }}>

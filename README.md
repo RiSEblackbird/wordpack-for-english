@@ -22,10 +22,10 @@
 - 保存済みWordPack一覧で語義タイトルを即座に確認できる「語義」ボタンと「語義一括表示」スイッチ、例文未生成のカードから直接生成できる「生成」ボタン
 - WordPack・文章・例文の一覧で複数選択して一括削除できる管理機能
 - 例文一覧で訳文を一括開閉できる「訳一括表示」スイッチ
-- 例文詳細モーダルから文字起こしタイピング練習を記録し、一覧にもバッジとして回数を反映する「文字起こしタイピング」機能
+- 例文詳細モーダルから文字起こしタイピング練習を記録し、一覧にもバッジとして**累計入力文字数**を反映する「文字起こしタイピング」機能
 - 画面左上のハンバーガーボタンで共通サイドバーを開閉し、左側からスライド表示されるメニュー経由で主要タブ（WordPack / 文章インポート / 例文一覧 / 設定）へ移動可能。メニュー項目を選択してもサイドバーは開いたままで、開いている間はサイドバーが左端に固定されます。十分な横幅がある場合はメイン画面の配置を保ったまま余白内でサイドバーが表示され、スペースが足りない場合のみメイン画面が残り幅に収まるよう自動でスライドします
 - ヘッダー右端に GitHub リンクと「ログアウト」ボタンを常設。どのタブからでもワンクリックでセッションを終了でき、共有端末の利用でも安全にサインアウトできます
-- WordPack プレビューの例文中ハイライト（lemma）にマウスオーバー0.5秒で `sense_title` ツールチップ表示。対応する lemma が見つからない場合は、最小サイズのポップオーバーに「〇〇 の WordPack を生成」ボタンだけが表示されます。ボタンを押すか、該当の単語（lemma-token）をクリックすると即座に生成が始まり、完了後に「WordPack概要」ウインドウが自動で開きます
+- WordPack プレビューの例文中ハイライト（lemma）にマウスオーバー約0.5秒で `sense_title` のツールチップを表示します。例文中の単語にマウスを重ねると、保存済み WordPack を検索して語義タイトルを表示します。未生成の単語はツールチップが「未生成」となり、下線付き表示になります。未生成の単語をクリックすると WordPack 生成が開始され、完了後に「WordPack概要」ウインドウが自動で開きます。
 
 > **文章インポートの入力上限:** 1回のインポートで送信できる文章は最大 4,000 文字です。これを超えるリクエストはバックエンドが `413 Request Entity Too Large`（`error=article_import_text_too_long`）で拒否し、フロントエンドでもボタンが無効化されて警告文が表示されます。長文を扱う場合は 4,000 文字以内に分割して順番にインポートしてください。
 
@@ -226,6 +226,7 @@ OPENAI_API_KEY=sk-xxxxx
 - `make deploy-cloud-run PROJECT_ID=... REGION=...` を実行すると同じスクリプトが呼び出されます。`gcloud config set project ...` / `gcloud config set run/region ...` を済ませていれば、Makefile 実行時の `PROJECT_ID` / `REGION` も省略できます。CI/CD では `gcloud auth login` / `gcloud auth configure-docker` の完了を前提としてください。
 - デプロイスクリプトは Cloud Build を実行する前に `scripts/deploy_firestore_indexes.sh --tool firebase --project <PROJECT_ID>` を自動で叩き、`firestore.indexes.json` の内容を Firebase CLI 経由で本番プロジェクトへ反映します。`firebase-tools` が未インストールだとこの段階で停止するため、事前に導入しておくか、CI 等で同期済みの場合は `SKIP_FIRESTORE_INDEX_SYNC=true ./scripts/deploy_cloud_run.sh ...` のように環境変数を付けて同期フェーズをスキップしてください。
   - Cloud Build のビルドは `cloudbuild.backend.yaml` を使い、`Dockerfile.backend` を明示指定して実行します（repo ルートの `Dockerfile` がアップロードに含まれない環境でもビルドが失敗しないようにするため）。
+  - Firestore 利用のため、`.env.deploy`（または環境変数）に **`FIRESTORE_PROJECT_ID` もしくは `GCP_PROJECT_ID` を必ず指定**してください。未設定だと Cloud Run 起動時に `FIRESTORE_PROJECT_ID (or GCP_PROJECT_ID) must be configured` で停止します（デプロイスクリプトのプリフライトで検出します）。
 
 #### release-cloud-run（Firestore インデックス同期 + Cloud Run デプロイ）
 

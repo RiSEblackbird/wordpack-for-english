@@ -317,6 +317,14 @@ for required_key in "${REQUIRED_DEPLOY_KEYS[@]}"; do
   fi
 done
 
+# Firestore 接続にはプロジェクト ID が必須。バックエンド config.py と同じエイリアスを許容する。
+# 優先順位: FIRESTORE_PROJECT_ID > GCP_PROJECT_ID > GOOGLE_CLOUD_PROJECT > PROJECT_ID
+_FIRESTORE_PROJECT="${FIRESTORE_PROJECT_ID:-${GCP_PROJECT_ID:-${GOOGLE_CLOUD_PROJECT:-${PROJECT_ID:-}}}}"
+if [[ -z "$_FIRESTORE_PROJECT" ]]; then
+  err "Firestore project ID must be set via FIRESTORE_PROJECT_ID, GCP_PROJECT_ID, GOOGLE_CLOUD_PROJECT, or PROJECT_ID in $ENV_FILE or environment"
+  exit 1
+fi
+
 # ここから先は、デプロイに必要な Git / Python / gcloud を使っていきます。
 require_cmd git
 IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"

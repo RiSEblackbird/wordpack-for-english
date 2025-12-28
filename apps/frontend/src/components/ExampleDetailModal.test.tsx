@@ -85,7 +85,7 @@ describe('ExampleDetailModal', () => {
       </SettingsProvider>
     );
 
-    const toggleButton = screen.getByRole('button', { name: '文字起こしタイピング (0)' });
+    const toggleButton = screen.getByRole('button', { name: '文字起こしタイピング (0文字)' });
     await act(async () => {
       await user.click(toggleButton);
     });
@@ -103,7 +103,7 @@ describe('ExampleDetailModal', () => {
     );
 
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '文字起こしタイピング (0)' }));
+      await user.click(screen.getByRole('button', { name: '文字起こしタイピング (0文字)' }));
     });
     const textarea = screen.getByLabelText('文字起こしタイピング入力');
     await act(async () => {
@@ -143,7 +143,7 @@ describe('ExampleDetailModal', () => {
     );
 
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '文字起こしタイピング (2)' }));
+      await user.click(screen.getByRole('button', { name: '文字起こしタイピング (2文字)' }));
     });
     const textarea = screen.getByLabelText('文字起こしタイピング入力');
     await act(async () => {
@@ -160,7 +160,7 @@ describe('ExampleDetailModal', () => {
         '/api/word/examples/101/transcription-typing',
         expect.objectContaining({
           method: 'POST',
-          body: { content: item.en },
+          body: { input_length: item.en.length },
         })
       );
     });
@@ -169,7 +169,7 @@ describe('ExampleDetailModal', () => {
       word_pack_id: 'wp:test',
       transcription_typing_count: 5,
     });
-    expect(screen.getByRole('button', { name: '文字起こしタイピング (5)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '文字起こしタイピング (5文字)' })).toBeInTheDocument();
     expect(screen.getByText('タイピング記録を保存しました')).toBeInTheDocument();
   });
 });

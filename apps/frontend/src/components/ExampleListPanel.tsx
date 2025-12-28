@@ -430,9 +430,9 @@ export const ExampleListPanel: React.FC = () => {
                         {/* 一覧上でも文字起こしタイピングの利用状況をすぐ把握できるようにバッジで明示する */}
                         <span
                           className="ex-meta-badge"
-                          aria-label={`タイピング練習回数 ${it.transcription_typing_count ?? 0}回`}
+                          aria-label={`タイピング累計入力文字数 ${it.transcription_typing_count ?? 0}文字`}
                         >
-                          タイピング練習: {it.transcription_typing_count ?? 0}回
+                          タイピング累計: {it.transcription_typing_count ?? 0}文字
                         </span>
                       </div>
                     </div>
@@ -487,9 +487,9 @@ export const ExampleListPanel: React.FC = () => {
                         {/* リスト表示でも同一フォーマットでタイピング練習の回数を共有する */}
                         <span
                           className="ex-meta-badge"
-                          aria-label={`タイピング練習回数 ${it.transcription_typing_count ?? 0}回`}
+                          aria-label={`タイピング累計入力文字数 ${it.transcription_typing_count ?? 0}文字`}
                         >
-                          タイピング練習: {it.transcription_typing_count ?? 0}回
+                          タイピング累計: {it.transcription_typing_count ?? 0}文字
                         </span>
                       </div>
                       <div className="ex-en">{it.en}</div>
