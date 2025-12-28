@@ -317,6 +317,12 @@ for required_key in "${REQUIRED_DEPLOY_KEYS[@]}"; do
   fi
 done
 
+# Firestore 接続には FIRESTORE_PROJECT_ID もしくは GCP_PROJECT_ID のいずれかが必須。
+if [[ -z "${FIRESTORE_PROJECT_ID:-}" && -z "${GCP_PROJECT_ID:-}" ]]; then
+  err "FIRESTORE_PROJECT_ID (or GCP_PROJECT_ID) must be set in $ENV_FILE or environment (pre-flight check stops before validation)"
+  exit 1
+fi
+
 # ここから先は、デプロイに必要な Git / Python / gcloud を使っていきます。
 require_cmd git
 IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"
