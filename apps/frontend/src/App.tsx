@@ -391,6 +391,30 @@ export const App: React.FC = () => {
   .header-bar {
     padding-left: 3.5rem;
   }
+  @media (max-width: 430px) {
+    /* モバイルでノッチ/狭幅に配慮し、ヘッダーと本文の余白を最小化する。 */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .header-bar {
+      height: auto;
+      min-height: 50px;
+      flex-wrap: wrap;
+      row-gap: 0.5rem;
+      padding-left: calc(env(safe-area-inset-left) + 0.5rem);
+    }
+    .header-actions {
+      width: 100%;
+      margin-left: 0;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      row-gap: 0.5rem;
+    }
+    .main-column {
+      padding: 0 12px;
+    }
+  }
   .sidebar-nav-button {
     font-size: 1.2rem;
     border: none;
