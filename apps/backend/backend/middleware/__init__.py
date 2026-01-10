@@ -171,6 +171,14 @@ class GuestWriteBlockMiddleware(BaseHTTPMiddleware):
         if path in self._allowlisted_paths:
             return await call_next(request)
 
+        session_token = resolve_session_cookie(request)
+        if session_token:
+            try:
+                verify_session_token(session_token)
+                return await call_next(request)
+            except (SignatureExpired, BadSignature, RuntimeError):
+                pass
+
         guest_token = resolve_guest_session_cookie(request)
         if not guest_token:
             return await call_next(request)
