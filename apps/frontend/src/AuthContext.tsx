@@ -125,22 +125,23 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     console.error(message);
   }, [normalizedClientId, authConfigResolved, authBypassActive]);
 
-  useEffect(() => {
-    authModeRef.current = authMode;
-  }, [authMode]);
+  const updateAuthMode = useCallback((next: AuthMode) => {
+    authModeRef.current = next;
+    setAuthMode(next);
+  }, []);
 
   useEffect(() => {
     const stored = readStoredAuth();
     if (stored) {
       if (stored.authMode === 'guest') {
-        setAuthMode('guest');
+        updateAuthMode('guest');
         setUser(null);
       } else if (stored.user) {
-        setAuthMode('authenticated');
+        updateAuthMode('authenticated');
         setUser(stored.user);
       }
     }
-  }, []);
+  }, [updateAuthMode]);
 
   useEffect(() => {
     if (authMode === 'guest') {
@@ -191,8 +192,8 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
      * ここでモックユーザーを注入する。ID トークンは保持せず、Cookie によるセッションだけを信頼する。
      */
     setUser(AUTH_BYPASS_USER);
-    setAuthMode('authenticated');
-  }, [authBypassActive, user, authMode]);
+    updateAuthMode('authenticated');
+  }, [authBypassActive, user, authMode, updateAuthMode]);
 
   /**
    * Google から取得した ID トークンをバックエンドへ送信し、セッションを確立する。
@@ -217,7 +218,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
         throw new Error(detail);
       }
       setUser(payload.user);
-      setAuthMode('authenticated');
+      updateAuthMode('authenticated');
     } catch (err) {
       console.error('Google sign-in failed', err);
       if (err instanceof Error) {
@@ -229,7 +230,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     } finally {
       setIsAuthenticating(false);
     }
-  }, []);
+  }, [updateAuthMode]);
 
   /**
    * セッションクッキーの破棄をブラウザへ指示する。
@@ -265,13 +266,13 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       fallbackRequired = true;
     } finally {
       setUser(null);
-      setAuthMode('anonymous');
+      updateAuthMode('anonymous');
       if (fallbackRequired) {
         clearSessionCookie();
       }
       setIsAuthenticating(false);
     }
-  }, [clearSessionCookie]);
+  }, [clearSessionCookie, updateAuthMode]);
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -281,9 +282,9 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
    */
   const enterGuestMode = useCallback(() => {
     setUser(null);
-    setAuthMode('guest');
+    updateAuthMode('guest');
     setError(null);
-  }, []);
+  }, [updateAuthMode]);
 
   /**
    * どのエンドポイントでも 401 が返った場合に、セッション切れとして扱う。
@@ -295,8 +296,11 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ status?: number }>).detail;
       if (detail && detail.status === 401) {
+        if (authModeRef.current === 'guest') {
+          return;
+        }
         setUser(null);
-        setAuthMode('anonymous');
+        updateAuthMode('anonymous');
         setError('セッションの有効期限が切れました。もう一度ログインしてください。');
         // サーバ側で Cookie が既に無効なケースに備えて、クライアント側 Cookie も掃除する。
         clearSessionCookie();
@@ -306,7 +310,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     return () => {
       window.removeEventListener('auth:unauthorized', handler as EventListener);
     };
-  }, [clearSessionCookie]);
+  }, [clearSessionCookie, updateAuthMode]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
