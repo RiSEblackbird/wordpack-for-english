@@ -113,3 +113,16 @@ def test_guest_write_is_denied(guest_test_client: tuple[TestClient, AppFirestore
     denied = client.post("/api/word/packs", json={"lemma": "blocked"})
     assert denied.status_code == HTTPStatus.FORBIDDEN
     assert denied.json()["detail"] == "Guest mode cannot perform write operations"
+
+
+def test_guest_delete_is_denied(guest_test_client: tuple[TestClient, AppFirestoreStore]) -> None:
+    """ゲストセッションが DELETE 要求を拒否することを確認する。"""
+
+    client, _store = guest_test_client
+
+    response = client.post("/api/auth/guest")
+    assert response.status_code == HTTPStatus.OK
+
+    denied = client.delete("/api/word/packs/wp-guest")
+    assert denied.status_code == HTTPStatus.FORBIDDEN
+    assert denied.json()["detail"] == "Guest mode cannot perform write operations"
