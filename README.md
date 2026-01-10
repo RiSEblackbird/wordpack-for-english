@@ -357,6 +357,7 @@ Cloud Run や Firebase Hosting へ出荷する前に、上記の手順で Firest
 ### 認証フロー
 - フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。
 - 「Googleでログイン」ボタンは Google Identity Services の `GoogleLogin` コンポーネントを用いており、承認後に `credential`（ID トークン）を取得して `/api/auth/google` へ送信し、セッション Cookie を受け取ります。credential が欠落した場合は直ちにエラー帯を表示し、`/api/diagnostics/oauth-telemetry` へ状況を送信して原因調査に活用します。
+- サインイン画面の「ゲスト閲覧モード」ボタンを押すとログイン不要でアプリの閲覧ができます。ゲスト中は右上にバッジが固定表示され、ブラウザを再読み込みしても同じ状態が復元されます。
 - バックエンド側で `ADMIN_EMAIL_ALLOWLIST` を設定している場合、リストに含まれないメールアドレスは検証後でも即座に 403 となり、構造化ログには `google_auth_denied` / `email_not_allowlisted` が記録されます。利用者を追加したい場合はリストへメールアドレスを追記して再起動してください。
 - Google が返す ID トークンで `email_verified` が `true` でない場合は本人確認が完了していないと判断し、403 で拒否します。ログには `google_auth_denied` / `email_unverified` とハッシュ化済みメールアドレスが残るため、問い合わせ対応時はこの値をもとに利用者へメールアドレスの確認手続きを案内してください。
 - バックエンドの構造化ログでは `google_auth_succeeded` を含むすべての Google 認証イベントで `email_hash`（および `display_name_hash`）が記録され、平文のメールアドレスや表示名は Cloud Logging へ送出されません。調査時はハッシュ値で突き合わせてください。

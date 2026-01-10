@@ -12,8 +12,16 @@ vi.mock('@react-oauth/google', () => ({
 }));
 
 const MissingFlagProbe: React.FC = () => {
-  const { missingClientId } = useAuth();
-  return <span data-testid="client-flag">{missingClientId ? 'missing' : 'ok'}</span>;
+  const { missingClientId, authMode, isGuest } = useAuth();
+  return (
+    <span
+      data-testid="client-flag"
+      data-auth-mode={authMode}
+      data-guest={isGuest ? 'true' : 'false'}
+    >
+      {missingClientId ? 'missing' : 'ok'}
+    </span>
+  );
 };
 
 // 認証コンテキストが ID トークンを公開していないことを検知するための専用プローブ。
@@ -22,6 +30,18 @@ const TokenLeakProbe: React.FC = () => {
   const contextValue = useAuth();
   const hasTokenKey = Object.prototype.hasOwnProperty.call(contextValue, 'token');
   return <span data-testid="token-leak">{hasTokenKey ? 'leaked' : 'clean'}</span>;
+};
+
+const AuthStateProbe: React.FC = () => {
+  const { authMode, user, authBypassActive } = useAuth();
+  return (
+    <span
+      data-testid="auth-state"
+      data-auth-mode={authMode}
+      data-user={user ? 'present' : 'null'}
+      data-bypass={authBypassActive ? 'true' : 'false'}
+    />
+  );
 };
 
 describe('AuthProvider logging behaviour', () => {
@@ -195,9 +215,45 @@ describe('AuthProvider persistence behaviour', () => {
     const [, storedValue] = setItemSpy.mock.calls[setItemSpy.mock.calls.length - 1];
     const payload = JSON.parse(storedValue as string) as Record<string, unknown>;
 
+    expect(payload).toHaveProperty('authMode', 'authenticated');
     expect(payload).toHaveProperty('user');
     expect(payload).not.toHaveProperty('token');
     expect(payload.user).toMatchObject(sampleUser);
+
+    setItemSpy.mockRestore();
+  });
+
+  it('stores guest mode state for later restoration', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const setItemSpy = vi.spyOn(Object.getPrototypeOf(window.localStorage), 'setItem');
+
+    const GuestModeProbe: React.FC = () => {
+      const { enterGuestMode } = useAuth();
+      React.useEffect(() => {
+        enterGuestMode();
+      }, [enterGuestMode]);
+      return null;
+    };
+
+    render(
+      <AuthProvider clientId="test-client">
+        <GuestModeProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(setItemSpy).toHaveBeenCalledWith(
+        'wordpack.auth.v1',
+        expect.stringContaining('"authMode":"guest"'),
+      );
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
 
     setItemSpy.mockRestore();
   });
@@ -224,6 +280,53 @@ describe('AuthProvider public API surface', () => {
     );
 
     expect(await screen.findByTestId('token-leak')).toHaveTextContent('clean');
+    expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
+  });
+
+  it('restores guest mode from localStorage and exposes guest flags', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    window.localStorage.setItem('wordpack.auth.v1', JSON.stringify({ authMode: 'guest' }));
+
+    render(
+      <AuthProvider clientId="test-client">
+        <MissingFlagProbe />
+      </AuthProvider>,
+    );
+
+    const flag = await screen.findByTestId('client-flag');
+    expect(flag).toHaveAttribute('data-auth-mode', 'guest');
+    expect(flag).toHaveAttribute('data-guest', 'true');
+    expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
+  });
+
+  it('does not inject bypass user while restoring guest mode even when /api/config resolves fast', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ session_auth_disabled: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    window.localStorage.setItem('wordpack.auth.v1', JSON.stringify({ authMode: 'guest' }));
+
+    render(
+      <AuthProvider clientId="test-client">
+        <AuthStateProbe />
+      </AuthProvider>,
+    );
+
+    const state = await screen.findByTestId('auth-state');
+    await waitFor(() => {
+      expect(state).toHaveAttribute('data-auth-mode', 'guest');
+      expect(state).toHaveAttribute('data-user', 'null');
+      expect(state).toHaveAttribute('data-bypass', 'true');
+    });
     expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
   });
 });

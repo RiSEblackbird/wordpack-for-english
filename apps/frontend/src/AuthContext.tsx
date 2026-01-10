@@ -15,18 +15,24 @@ export interface AuthenticatedUser {
  */
 export type GoogleIdToken = string;
 
+export type AuthMode = 'authenticated' | 'guest' | 'anonymous';
+
 interface StoredAuthPayload {
-  user: AuthenticatedUser;
+  authMode: 'authenticated' | 'guest';
+  user?: AuthenticatedUser;
   // UI 用に保持したい追加情報を将来拡張できるように予約枠を残す。
   [key: string]: unknown;
 }
 
 interface AuthContextValue {
   user: AuthenticatedUser | null;
+  authMode: AuthMode;
+  isGuest: boolean;
   isAuthenticating: boolean;
   error: string | null;
   signIn: (idToken: GoogleIdToken) => Promise<void>;
   signOut: () => Promise<void>;
+  enterGuestMode: () => void;
   clearError: () => void;
   authBypassActive: boolean;
   missingClientId: boolean;
@@ -56,10 +62,14 @@ function readStoredAuth(): StoredAuthPayload | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<StoredAuthPayload> & { token?: unknown };
-    if (parsed && typeof parsed === 'object' && parsed.user && typeof parsed.user === 'object') {
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (parsed.authMode === 'guest') {
+      return { authMode: 'guest' };
+    }
+    if (parsed.user && typeof parsed.user === 'object') {
       // 互換性確保のため、旧バージョンが保存した token フィールドは読み飛ばし
       // （破棄）し、UI 用のユーザー情報だけを復元する。
-      return { user: parsed.user as AuthenticatedUser };
+      return { authMode: 'authenticated', user: parsed.user as AuthenticatedUser };
     }
   } catch (error) {
     console.warn('Failed to parse stored auth payload', error);
@@ -79,11 +89,23 @@ function persistAuth(payload: StoredAuthPayload | null): void {
     window.localStorage.removeItem(STORAGE_KEY);
     return;
   }
+  // ゲスト閲覧モードはログイン不要の入口として用いるため、再読み込み後も状態を維持する。
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
 export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNode }> = ({ clientId, children }) => {
-  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [initialAuthState] = useState(() => {
+    const stored = readStoredAuth();
+    if (stored?.authMode === 'guest') {
+      return { authMode: 'guest' as const, user: null as AuthenticatedUser | null };
+    }
+    if (stored?.authMode === 'authenticated' && stored.user) {
+      return { authMode: 'authenticated' as const, user: stored.user };
+    }
+    return { authMode: 'anonymous' as const, user: null as AuthenticatedUser | null };
+  });
+  const [user, setUser] = useState<AuthenticatedUser | null>(initialAuthState.user);
+  const [authMode, setAuthMode] = useState<AuthMode>(initialAuthState.authMode);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authBypassActive, setAuthBypassActive] = useState(false);
@@ -95,6 +117,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   const [authConfigResolved, setAuthConfigResolved] = useState(false);
   const normalizedClientId = useMemo(() => clientId.trim(), [clientId]);
   const clientIdRef = useRef(normalizedClientId);
+  const authModeRef = useRef<AuthMode>(authMode);
   const missingClientId = normalizedClientId.length === 0;
 
   useEffect(() => {
@@ -112,20 +135,25 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     console.error(message);
   }, [normalizedClientId, authConfigResolved, authBypassActive]);
 
-  useEffect(() => {
-    const stored = readStoredAuth();
-    if (stored) {
-      setUser(stored.user);
-    }
+  const updateAuthMode = useCallback((next: AuthMode) => {
+    // 重要: authModeRef は「最新のモードを即座に参照する」ための退避先。
+    // /api/config のような初期ロードが非常に高速に完了すると、setState の再レンダー前に
+    // 非同期処理側が参照する可能性があるため、ref と state を同時に更新して競合を避ける。
+    authModeRef.current = next;
+    setAuthMode(next);
   }, []);
 
   useEffect(() => {
-    if (user) {
-      persistAuth({ user });
+    if (authMode === 'guest') {
+      persistAuth({ authMode: 'guest' });
+      return;
+    }
+    if (authMode === 'authenticated' && user) {
+      persistAuth({ authMode: 'authenticated', user });
       return;
     }
     persistAuth(null);
-  }, [user]);
+  }, [authMode, user]);
 
   useEffect(() => {
     let aborted = false;
@@ -139,9 +167,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
         if (aborted) return;
         if (json?.session_auth_disabled) {
           setAuthBypassActive(true);
-          setUser((prev) =>
-            prev ?? AUTH_BYPASS_USER,
-          );
+          setUser((prev) => (authModeRef.current === 'guest' ? prev : prev ?? AUTH_BYPASS_USER));
         }
       } catch (err) {
         console.warn('Failed to detect authentication bypass flag from /api/config', err);
@@ -157,7 +183,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   }, []);
 
   useEffect(() => {
-    if (!authBypassActive || user) {
+    if (!authBypassActive || user || authMode !== 'anonymous') {
       return;
     }
     /**
@@ -166,7 +192,8 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
      * ここでモックユーザーを注入する。ID トークンは保持せず、Cookie によるセッションだけを信頼する。
      */
     setUser(AUTH_BYPASS_USER);
-  }, [authBypassActive, user]);
+    updateAuthMode('authenticated');
+  }, [authBypassActive, user, authMode, updateAuthMode]);
 
   /**
    * Google から取得した ID トークンをバックエンドへ送信し、セッションを確立する。
@@ -191,6 +218,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
         throw new Error(detail);
       }
       setUser(payload.user);
+      updateAuthMode('authenticated');
     } catch (err) {
       console.error('Google sign-in failed', err);
       if (err instanceof Error) {
@@ -202,7 +230,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     } finally {
       setIsAuthenticating(false);
     }
-  }, []);
+  }, [updateAuthMode]);
 
   /**
    * セッションクッキーの破棄をブラウザへ指示する。
@@ -238,14 +266,25 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       fallbackRequired = true;
     } finally {
       setUser(null);
+      updateAuthMode('anonymous');
       if (fallbackRequired) {
         clearSessionCookie();
       }
       setIsAuthenticating(false);
     }
-  }, [clearSessionCookie]);
+  }, [clearSessionCookie, updateAuthMode]);
 
   const clearError = useCallback(() => setError(null), []);
+
+  /**
+   * ログイン不要で画面を閲覧するためのゲストモードへ切り替える。
+   * なぜ: まず UI を体験したい利用者の入口を確保し、学習開始までのハードルを下げるため。
+   */
+  const enterGuestMode = useCallback(() => {
+    setUser(null);
+    updateAuthMode('guest');
+    setError(null);
+  }, [updateAuthMode]);
 
   /**
    * どのエンドポイントでも 401 が返った場合に、セッション切れとして扱う。
@@ -257,7 +296,11 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ status?: number }>).detail;
       if (detail && detail.status === 401) {
+        if (authModeRef.current === 'guest') {
+          return;
+        }
         setUser(null);
+        updateAuthMode('anonymous');
         setError('セッションの有効期限が切れました。もう一度ログインしてください。');
         // サーバ側で Cookie が既に無効なケースに備えて、クライアント側 Cookie も掃除する。
         clearSessionCookie();
@@ -267,15 +310,18 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     return () => {
       window.removeEventListener('auth:unauthorized', handler as EventListener);
     };
-  }, [clearSessionCookie]);
+  }, [clearSessionCookie, updateAuthMode]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      authMode,
+      isGuest: authMode === 'guest',
       isAuthenticating,
       error,
       signIn,
       signOut,
+      enterGuestMode,
       clearError,
       authBypassActive,
       missingClientId,
@@ -283,10 +329,12 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     }),
     [
       user,
+      authMode,
       isAuthenticating,
       error,
       signIn,
       signOut,
+      enterGuestMode,
       clearError,
       authBypassActive,
       missingClientId,
