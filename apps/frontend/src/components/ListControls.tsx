@@ -38,7 +38,10 @@ export function ListControls<TSortKey extends string>(props: ListControlsProps<T
   } = props;
 
   return (
-    <div className={`wp-sort-controls${className ? ` ${className}` : ''}`} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.5rem' }}>
+    <div
+      className={`wp-sort-controls${className ? ` ${className}` : ''}`}
+      style={{ flexWrap: 'wrap' }}
+    >
       <label htmlFor="sort-select">並び順:</label>
       <select
         id="sort-select"

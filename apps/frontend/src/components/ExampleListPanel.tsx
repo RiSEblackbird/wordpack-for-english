@@ -329,6 +329,8 @@ export const ExampleListPanel: React.FC = () => {
         .ex-list-container[data-view="card"] .ex-ja { color: #374151; }
         .ex-list-container[data-view="list"] .ex-en { color:rgb(240, 230, 245); }
         .ex-list-container[data-view="list"] .ex-ja { color: #334155; }
+        .wp-example-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+        .wp-sort-controls { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.5rem; }
         .wp-view-toggle { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; }
         .wp-toggle-btn { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
         .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; }
@@ -336,10 +338,16 @@ export const ExampleListPanel: React.FC = () => {
         .ex-selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0; font-size: 0.9em; }
         .ex-selection-bar button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
         .ex-selection-bar button:disabled { opacity: 0.6; cursor: not-allowed; }
+        /* 狭幅時に操作エリアが折り返せるようにレイアウトを縦方向へ切り替える */
+        @media (max-width: 640px) {
+          .wp-sort-controls { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+          .wp-example-header { flex-direction: column; align-items: flex-start; }
+          .wp-search-input { width: 100%; }
+        }
       `}</style>
 
       <div className="ex-list-container" data-view={viewMode}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="wp-example-header">
           <h2>例文一覧</h2>
           <button onClick={() => load(offset)} disabled={loading}>更新</button>
         </div>
