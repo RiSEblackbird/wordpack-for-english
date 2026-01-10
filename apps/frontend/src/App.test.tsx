@@ -213,6 +213,14 @@ describe('App navigation', () => {
       if (url.endsWith('/api/config')) {
         return Promise.resolve(configSuccess());
       }
+      if (url.endsWith('/api/auth/logout')) {
+        return Promise.resolve(logoutSuccess());
+      }
+      if (url.endsWith('/api/auth/guest')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ mode: 'guest' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        );
+      }
       return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
     });
 
