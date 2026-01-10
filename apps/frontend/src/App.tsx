@@ -188,6 +188,11 @@ export const App: React.FC = () => {
   };
 
   const { user, signOut, isAuthenticating, isGuest } = useAuth();
+  /**
+   * モバイルのノッチ領域で固定UIが隠れないように、安全領域専用のクラスを付与する。
+   * なぜ: ビューポートの安全領域が変化する端末でも操作導線を保護するため。
+   */
+  const fixedSafeAreaClass = isOverlaySidebar ? ' safe-area-adjusted' : '';
 
   /**
    * ヘッダーから即座にセッションを終了する操作を集約する。
@@ -276,6 +281,10 @@ export const App: React.FC = () => {
     right: 12px;
     z-index: 1200;
   }
+  .guest-badge-fixed.safe-area-adjusted {
+    top: calc(12px + env(safe-area-inset-top));
+    right: calc(12px + env(safe-area-inset-right));
+  }
   body.theme-dark .guest-badge {
     border-color: rgba(147, 197, 253, 0.7);
     background: rgba(96, 165, 250, 0.18);
@@ -318,11 +327,18 @@ export const App: React.FC = () => {
   }
   .hamburger-toggle {
     position: fixed;
-    top: 0;
-    left: 0;
+    top: env(safe-area-inset-top);
+    left: env(safe-area-inset-left);
     z-index: 980;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     background: var(--color-surface);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .hamburger-toggle.safe-area-adjusted {
+    padding: calc(0.25rem + env(safe-area-inset-top))
+      calc(0.25rem + env(safe-area-inset-right))
+      calc(0.25rem + env(safe-area-inset-bottom))
+      calc(0.25rem + env(safe-area-inset-left));
   }
   .hamburger-toggle[aria-expanded='true'] {
     box-shadow: none;
@@ -497,7 +513,9 @@ export const App: React.FC = () => {
     outline-offset: 2px;
   }
 `}</style>
-      {isGuest ? <span className="guest-badge guest-badge-fixed">ゲスト閲覧モード</span> : null}
+      {isGuest ? (
+        <span className={`guest-badge guest-badge-fixed${fixedSafeAreaClass}`}>ゲスト閲覧モード</span>
+      ) : null}
       {isSidebarOpen && isOverlaySidebar ? (
         <>
           {/* 背面操作を遮断し、タップで閉じる導線を統一する。 */}
@@ -551,7 +569,7 @@ export const App: React.FC = () => {
                 <button
                   ref={sidebarToggleRef}
                   type="button"
-                  className="hamburger-button hamburger-toggle"
+                  className={`hamburger-button hamburger-toggle${fixedSafeAreaClass}`}
                   aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
                   aria-expanded={isSidebarOpen ? 'true' : 'false'}
                   aria-controls={SIDEBAR_ID}
