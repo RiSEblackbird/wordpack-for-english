@@ -377,7 +377,8 @@ export const App: React.FC = () => {
     min-height: 100vh;
     padding: 2rem 1.5rem;
     display: grid;
-    width: 85%;
+    width: 100%;
+    box-sizing: border-box;
     gap: 1.5rem;
     /* グリッドの余白を上部に詰め、要素間を均等配置しない */
     align-content: flex-start;
@@ -490,6 +491,10 @@ export const App: React.FC = () => {
     .main-column {
       padding: 0 8px;
       width: 100%;
+    }
+    .sidebar-content {
+      /* モバイルでは余白を縮め、内容が横にはみ出さないようにする。 */
+      padding: 1rem;
     }
   }
   .sidebar-nav-button {

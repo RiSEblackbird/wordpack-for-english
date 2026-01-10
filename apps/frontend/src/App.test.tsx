@@ -648,6 +648,38 @@ describe('App navigation', () => {
     expect(computed.alignContent === 'flex-start' || computed.alignContent === '').toBe(true);
   });
 
+  it('keeps sidebar content width at 100% with border-box sizing on mobile', async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = createMatchMediaMock(true);
+
+    try {
+      setupFetchForAuthenticatedFlow(fetchMock);
+      renderWithProviders();
+
+      const user = userEvent.setup();
+      await completeLogin(fetchMock, user);
+
+      const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+      await act(async () => {
+        await user.click(openButton);
+      });
+
+      const sidebarContent = document.querySelector('.sidebar-content');
+      if (!sidebarContent) throw new Error('sidebar content not found');
+
+      // モバイル幅でも横幅とボックスモデルを固定し、内容のはみ出しを防ぐ。
+      const computed = window.getComputedStyle(sidebarContent);
+      expect(computed.width).toBe('100%');
+      expect(computed.boxSizing).toBe('border-box');
+    } finally {
+      if (originalMatchMedia) {
+        window.matchMedia = originalMatchMedia;
+      } else {
+        delete (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
+      }
+    }
+  });
+
   it('returns to the login screen when signing out via the header control', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     renderWithProviders();
