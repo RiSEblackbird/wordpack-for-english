@@ -1,11 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { ExampleDetailModal, type ExampleItemData } from './ExampleDetailModal';
 import { SettingsProvider } from '../SettingsContext';
 import type { ReactNode } from 'react';
-import { act } from 'react';
 import * as AuthContext from '../AuthContext';
+import { guestLockMessage } from './GuestLock';
 
 const mockFetchJson = vi.hoisted(() => vi.fn());
 
@@ -177,5 +177,38 @@ describe('ExampleDetailModal', () => {
     });
     expect(screen.getByRole('button', { name: '文字起こしタイピング (5文字)' })).toBeInTheDocument();
     expect(screen.getByText('タイピング記録を保存しました')).toBeInTheDocument();
+  });
+
+  it('locks study actions and shows tooltip in guest mode', async () => {
+    vi.useFakeTimers();
+    vi.mocked(AuthContext.useAuth).mockReturnValue({ isGuest: true } as any);
+
+    render(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={item} />
+      </SettingsProvider>,
+    );
+
+    const studyButton = screen.getByRole('button', { name: '確認した (0)' });
+    expect(studyButton).toBeDisabled();
+    expect(studyButton).toHaveAttribute('aria-disabled', 'true');
+
+    const wrapper = studyButton.parentElement as HTMLElement;
+    act(() => {
+      fireEvent.mouseEnter(wrapper);
+    });
+    expect(screen.queryByText(guestLockMessage)).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getByText(guestLockMessage)).toBeInTheDocument();
+
+    act(() => {
+      fireEvent.mouseLeave(wrapper);
+    });
+    expect(screen.queryByText(guestLockMessage)).not.toBeInTheDocument();
+
+    vi.useRealTimers();
   });
 });

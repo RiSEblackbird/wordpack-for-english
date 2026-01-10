@@ -186,14 +186,17 @@ export const ArticleImportPanel: React.FC = () => {
           <h2>文章インポート</h2>
           <div className="sidebar-field">
             <label htmlFor="article-import-text">文章</label>
-            <textarea
-              id="article-import-text"
-              placeholder="文章を貼り付け（日本語/英語）"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              disabled={loading}
-              style={{ width: '100%', minHeight: '5rem', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
-            />
+            {/* ゲストモードではAI利用に直結する入力をロックする */}
+            <GuestLock isGuest={isGuest}>
+              <textarea
+                id="article-import-text"
+                placeholder="文章を貼り付け（日本語/英語）"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                disabled={loading}
+                style={{ width: '100%', minHeight: '5rem', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+              />
+            </GuestLock>
             {isTextTooLong ? (
               <p role="alert" style={{ color: 'var(--color-danger, #b00020)', marginTop: '0.25rem' }}>
                 文章は{ARTICLE_IMPORT_TEXT_MAX_LENGTH}文字以内で入力してください（現在 {trimmedText.length} 文字）
@@ -208,18 +211,20 @@ export const ArticleImportPanel: React.FC = () => {
             </GuestLock>
             <div className="sidebar-field">
               <label htmlFor="article-category-select">カテゴリ</label>
-              <select
-                id="article-category-select"
-                value={category}
-                onChange={(e) => setCategory(e.target.value as any)}
-                disabled={loading}
-              >
-                <option value="Dev">Dev</option>
-                <option value="CS">CS</option>
-                <option value="LLM">LLM</option>
-                <option value="Business">Business</option>
-                <option value="Common">Common</option>
-              </select>
+              <GuestLock isGuest={isGuest}>
+                <select
+                  id="article-category-select"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as any)}
+                  disabled={loading}
+                >
+                  <option value="Dev">Dev</option>
+                  <option value="CS">CS</option>
+                  <option value="LLM">LLM</option>
+                  <option value="Business">Business</option>
+                  <option value="Common">Common</option>
+                </select>
+              </GuestLock>
             </div>
             <GuestLock isGuest={isGuest}>
               <button
@@ -264,48 +269,54 @@ export const ArticleImportPanel: React.FC = () => {
           </div>
           <div className="sidebar-field">
             <label htmlFor="article-model-select">モデル</label>
-            <select
-              id="article-model-select"
-              value={model}
-              onChange={(e) => handleChangeModel(e.target.value)}
-              disabled={loading}
-            >
-              <option value="gpt-5-mini">gpt-5-mini</option>
-              <option value="gpt-5-nano">gpt-5-nano</option>
-              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-              <option value="gpt-4o-mini">gpt-4o-mini</option>
-            </select>
+            <GuestLock isGuest={isGuest}>
+              <select
+                id="article-model-select"
+                value={model}
+                onChange={(e) => handleChangeModel(e.target.value)}
+                disabled={loading}
+              >
+                <option value="gpt-5-mini">gpt-5-mini</option>
+                <option value="gpt-5-nano">gpt-5-nano</option>
+                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
+              </select>
+            </GuestLock>
           </div>
           {showAdvancedModelOptions && (
             <div className="sidebar-inline">
               <div className="sidebar-field">
                 <label htmlFor="article-reasoning-select">reasoning.effort</label>
-                <select
-                  id="article-reasoning-select"
-                  aria-label="reasoning.effort"
-                  value={settings.reasoningEffort || 'minimal'}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
-                  disabled={loading}
-                >
-                  <option value="minimal">minimal</option>
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
+                <GuestLock isGuest={isGuest}>
+                  <select
+                    id="article-reasoning-select"
+                    aria-label="reasoning.effort"
+                    value={settings.reasoningEffort || 'minimal'}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
+                    disabled={loading}
+                  >
+                    <option value="minimal">minimal</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </GuestLock>
               </div>
               <div className="sidebar-field">
                 <label htmlFor="article-verbosity-select">text.verbosity</label>
-                <select
-                  id="article-verbosity-select"
-                  aria-label="text.verbosity"
-                  value={settings.textVerbosity || 'medium'}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
-                  disabled={loading}
-                >
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
+                <GuestLock isGuest={isGuest}>
+                  <select
+                    id="article-verbosity-select"
+                    aria-label="text.verbosity"
+                    value={settings.textVerbosity || 'medium'}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
+                    disabled={loading}
+                  >
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </GuestLock>
               </div>
             </div>
           )}
@@ -356,4 +367,3 @@ export const ArticleImportPanel: React.FC = () => {
     </>
   );
 };
-

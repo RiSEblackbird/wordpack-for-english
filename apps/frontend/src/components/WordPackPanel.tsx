@@ -381,14 +381,17 @@ export const WordPackPanel: React.FC<Props> = ({
             <h2>WordPack生成</h2>
             <div className="sidebar-field">
               <label htmlFor="wordpack-lemma-input">見出し語</label>
-              <input
-                id="wordpack-lemma-input"
-                ref={focusRef as React.RefObject<HTMLInputElement>}
-                value={lemma}
-                onChange={(e) => setLemma(e.target.value)}
-                placeholder="見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）"
-                disabled={isActionLoading}
-              />
+              {/* ゲストモードではAI生成に関わる入力をロックし、理由をツールチップで提示する */}
+              <GuestLock isGuest={isGuest}>
+                <input
+                  id="wordpack-lemma-input"
+                  ref={focusRef as React.RefObject<HTMLInputElement>}
+                  value={lemma}
+                  onChange={(e) => setLemma(e.target.value)}
+                  placeholder="見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）"
+                  disabled={isActionLoading}
+                />
+              </GuestLock>
               <p aria-live="polite" className="sidebar-help" style={{ color: isLemmaValid ? '#666' : '#d32f2f' }}>
                 {lemmaValidation.message}
               </p>
@@ -399,59 +402,67 @@ export const WordPackPanel: React.FC<Props> = ({
                   生成
                 </button>
               </GuestLock>
-              <button
-                type="button"
-                onClick={handleCreateEmpty}
-                disabled={!isLemmaValid || isActionLoading}
-                title="内容の生成を行わず、空のWordPackのみ保存"
-              >
-                WordPackのみ作成
-              </button>
+              <GuestLock isGuest={isGuest}>
+                <button
+                  type="button"
+                  onClick={handleCreateEmpty}
+                  disabled={!isLemmaValid || isActionLoading}
+                  title="内容の生成を行わず、空のWordPackのみ保存"
+                >
+                  WordPackのみ作成
+                </button>
+              </GuestLock>
             </div>
             <div className="sidebar-field">
               <label htmlFor="wordpack-model-select">モデル</label>
-              <select
-                id="wordpack-model-select"
-                value={model}
-                onChange={(e) => handleChangeModel(e.target.value)}
-                disabled={isActionLoading}
-              >
-                <option value="gpt-5-mini">gpt-5-mini</option>
-                <option value="gpt-5-nano">gpt-5-nano</option>
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-              </select>
+              <GuestLock isGuest={isGuest}>
+                <select
+                  id="wordpack-model-select"
+                  value={model}
+                  onChange={(e) => handleChangeModel(e.target.value)}
+                  disabled={isActionLoading}
+                >
+                  <option value="gpt-5-mini">gpt-5-mini</option>
+                  <option value="gpt-5-nano">gpt-5-nano</option>
+                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                  <option value="gpt-4o-mini">gpt-4o-mini</option>
+                </select>
+              </GuestLock>
             </div>
             {showAdvancedModelOptions && (
               <div className="sidebar-inline">
                 <div className="sidebar-field">
                   <label htmlFor="wordpack-reasoning-select">reasoning.effort</label>
-                  <select
-                    id="wordpack-reasoning-select"
-                    aria-label="reasoning.effort"
-                    value={advancedSettings.reasoningEffort}
-                    onChange={(e) => advancedSettings.handleChangeReasoningEffort(e.target.value as typeof advancedSettings.reasoningEffort)}
-                    disabled={isActionLoading}
-                  >
-                    <option value="minimal">minimal</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
+                  <GuestLock isGuest={isGuest}>
+                    <select
+                      id="wordpack-reasoning-select"
+                      aria-label="reasoning.effort"
+                      value={advancedSettings.reasoningEffort}
+                      onChange={(e) => advancedSettings.handleChangeReasoningEffort(e.target.value as typeof advancedSettings.reasoningEffort)}
+                      disabled={isActionLoading}
+                    >
+                      <option value="minimal">minimal</option>
+                      <option value="low">low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                    </select>
+                  </GuestLock>
                 </div>
                 <div className="sidebar-field">
                   <label htmlFor="wordpack-verbosity-select">text.verbosity</label>
-                  <select
-                    id="wordpack-verbosity-select"
-                    aria-label="text.verbosity"
-                    value={advancedSettings.textVerbosity}
-                    onChange={(e) => advancedSettings.handleChangeTextVerbosity(e.target.value as typeof advancedSettings.textVerbosity)}
-                    disabled={isActionLoading}
-                  >
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
+                  <GuestLock isGuest={isGuest}>
+                    <select
+                      id="wordpack-verbosity-select"
+                      aria-label="text.verbosity"
+                      value={advancedSettings.textVerbosity}
+                      onChange={(e) => advancedSettings.handleChangeTextVerbosity(e.target.value as typeof advancedSettings.textVerbosity)}
+                      disabled={isActionLoading}
+                    >
+                      <option value="low">low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                    </select>
+                  </GuestLock>
                 </div>
               </div>
             )}
