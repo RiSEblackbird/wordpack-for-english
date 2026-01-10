@@ -22,6 +22,8 @@ bin-release/
 .env.*
 !.env.example
 !.env.ci
+.envrc
+.direnv/
 # ローカル仮想環境や Firebase デバッグログは資格情報を含みうるため除外
 .venv/
 .firebase/
