@@ -285,6 +285,17 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     setIsAuthenticating(true);
     setError(null);
     try {
+      try {
+        const logoutResponse = await fetch('/api/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (logoutResponse.status !== 204 && logoutResponse.status !== 200) {
+          console.warn('Unexpected response when logging out before guest', logoutResponse.status);
+        }
+      } catch (err) {
+        console.warn('Failed to notify backend about logout before guest', err);
+      }
       const response = await fetch('/api/auth/guest', {
         method: 'POST',
         credentials: 'include',

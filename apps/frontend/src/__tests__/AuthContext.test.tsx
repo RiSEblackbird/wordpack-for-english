@@ -234,6 +234,9 @@ describe('AuthProvider persistence behaviour', () => {
           }),
         );
       }
+      if (url.endsWith('/api/auth/logout') && init?.method === 'POST') {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
       if (url.endsWith('/api/auth/guest') && init?.method === 'POST') {
         return Promise.resolve(
           new Response(JSON.stringify({ mode: 'guest' }), {
@@ -269,6 +272,10 @@ describe('AuthProvider persistence behaviour', () => {
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
     expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/logout',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
       '/api/auth/guest',
       expect.objectContaining({ method: 'POST' }),
     );
@@ -286,6 +293,9 @@ describe('AuthProvider persistence behaviour', () => {
             headers: { 'Content-Type': 'application/json' },
           }),
         );
+      }
+      if (url.endsWith('/api/auth/logout') && init?.method === 'POST') {
+        return Promise.resolve(new Response(null, { status: 204 }));
       }
       if (url.endsWith('/api/auth/guest') && init?.method === 'POST') {
         return Promise.resolve(
@@ -317,6 +327,10 @@ describe('AuthProvider persistence behaviour', () => {
     );
 
     await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/logout',
+        expect.objectContaining({ method: 'POST' }),
+      );
       expect(fetchMock).toHaveBeenCalledWith(
         '/api/auth/guest',
         expect.objectContaining({ method: 'POST' }),
