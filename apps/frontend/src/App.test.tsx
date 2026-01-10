@@ -542,10 +542,7 @@ describe('App navigation', () => {
     expect(Math.round(rect.top)).toBe(0);
   });
 
-  it('adds safe-area classes for fixed elements on mobile layouts', async () => {
-    const originalMatchMedia = window.matchMedia;
-    window.matchMedia = createMatchMediaMock(true);
-
+  it('adds safe-area classes for fixed elements on all layouts', async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = resolveUrl(input);
       if (url.endsWith('/api/config')) {
@@ -562,25 +559,21 @@ describe('App navigation', () => {
       return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
     });
 
-    try {
-      renderWithProviders();
+    renderWithProviders();
 
-      const user = userEvent.setup();
-      const guestButton = await screen.findByRole('button', { name: 'ゲスト閲覧モード' });
-      await act(async () => {
-        await user.click(guestButton);
-      });
+    const user = userEvent.setup();
+    const guestButton = await screen.findByRole('button', { name: 'ゲスト閲覧モード' });
+    await act(async () => {
+      await user.click(guestButton);
+    });
 
-      const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
-      const guestBadge = await screen.findByText('ゲスト閲覧モード');
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    const guestBadge = await screen.findByText('ゲスト閲覧モード');
 
-      await waitFor(() => {
-        expect(toggle).toHaveClass('safe-area-adjusted');
-        expect(guestBadge).toHaveClass('safe-area-adjusted');
-      });
-    } finally {
-      window.matchMedia = originalMatchMedia;
-    }
+    await waitFor(() => {
+      expect(toggle).toHaveClass('safe-area-adjusted');
+      expect(guestBadge).toHaveClass('safe-area-adjusted');
+    });
   });
 
   it('renders the main content without a shift animation', async () => {

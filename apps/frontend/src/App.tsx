@@ -189,10 +189,12 @@ export const App: React.FC = () => {
 
   const { user, signOut, isAuthenticating, isGuest } = useAuth();
   /**
-   * モバイルのノッチ領域で固定UIが隠れないように、安全領域専用のクラスを付与する。
-   * なぜ: ビューポートの安全領域が変化する端末でも操作導線を保護するため。
+   * ノッチや角丸を持つすべての端末で固定UIが隠れないように、安全領域専用のクラスを常に付与する。
+   * なぜ: env(safe-area-inset-*)は安全領域がない端末では自動的に0になるため、
+   *       画面幅に依存せず全端末で適用しても問題なく、横向きやタブレット等の
+   *       480px超でもノッチがある端末を確実に保護できる。
    */
-  const fixedSafeAreaClass = isOverlaySidebar ? ' safe-area-adjusted' : '';
+  const fixedSafeAreaClass = ' safe-area-adjusted';
 
   /**
    * ヘッダーから即座にセッションを終了する操作を集約する。
