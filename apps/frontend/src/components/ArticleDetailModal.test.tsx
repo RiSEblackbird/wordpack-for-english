@@ -1,8 +1,18 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
+import * as AuthContext from '../AuthContext';
 
 describe('ArticleDetailModal', () => {
+  beforeEach(() => {
+    vi.spyOn(AuthContext, 'useAuth').mockReturnValue({ isGuest: false } as any);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('displays article metadata below related word packs', () => {
     const article: ArticleDetailData = {
       id: 'art:test',

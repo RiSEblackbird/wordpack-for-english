@@ -10,6 +10,8 @@ import { Modal } from './Modal';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
 import { useAbortableAsync, AbortError } from '../lib/hooks';
 import { assignSetValues, retainSetValues, toggleSetValue } from '../lib/set';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 interface ArticleListItem {
   id: string;
@@ -30,6 +32,7 @@ type ArticleDetailResponse = ArticleDetailData;
 const LIST_LIMIT = 20;
 
 export const ArticleListPanel: React.FC = () => {
+  const { isGuest } = useAuth();
   const { settings } = useSettings();
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
@@ -279,11 +282,13 @@ export const ArticleListPanel: React.FC = () => {
         <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
           全選択解除
         </button>
-        <button
-          type="button"
-          onClick={deleteSelectedArticles}
-          disabled={selectedCount === 0 || loading}
-        >選択した文章を削除</button>
+        <GuestLock isGuest={isGuest}>
+          <button
+            type="button"
+            onClick={deleteSelectedArticles}
+            disabled={selectedCount === 0 || loading}
+          >選択した文章を削除</button>
+        </GuestLock>
       </div>
       <div className="al-grid">
         {items.map((it) => (
@@ -299,7 +304,9 @@ export const ArticleListPanel: React.FC = () => {
               </label>
               <div className="al-card-title-row">
                 <strong style={{ flex: 1, fontSize: '12px' }}>{it.title_en}</strong>
-                <button onClick={(e) => { e.stopPropagation(); del(it); }} aria-label={`delete-article-${it.id}`}>削除</button>
+                <GuestLock isGuest={isGuest}>
+                  <button onClick={(e) => { e.stopPropagation(); del(it); }} aria-label={`delete-article-${it.id}`}>削除</button>
+                </GuestLock>
               </div>
             </div>
             <div style={{ fontSize: '10px', color: 'var(--color-subtle)' }}>更新: {formatDateJst(it.updated_at)}</div>
@@ -325,5 +332,4 @@ export const ArticleListPanel: React.FC = () => {
     </section>
   );
 };
-
 

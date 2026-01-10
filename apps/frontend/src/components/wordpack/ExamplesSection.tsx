@@ -4,6 +4,8 @@ import { LemmaLookupResponseData } from '../LemmaExplorer/useLemmaExplorer';
 import { TTSButton } from '../TTSButton';
 import { highlightLemma } from '../../lib/highlight';
 import { useLemmaTooltip } from './useLemmaTooltip';
+import { useAuth } from '../../AuthContext';
+import { GuestLock } from '../GuestLock';
 
 export type ExampleCategory = keyof Examples;
 
@@ -36,6 +38,7 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
   lookupLemmaMetadata,
   triggerUnknownLemmaGeneration,
 }) => {
+  const { isGuest } = useAuth();
   const exampleCategories = useMemo(() => (['Dev', 'CS', 'LLM', 'Business', 'Common'] as ExampleCategory[]), []);
   const styleDefinition = useMemo(
     () => `
@@ -159,15 +162,17 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
         <div key={category} id={`examples-${category}`} style={{ marginBottom: '0.5rem' }}>
           <div className="ex-level" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{category} ({data.examples?.[category]?.length || 0}件)</span>
-            <button
-              onClick={() => onGenerateExamples(category)}
-              disabled={!currentWordPackId || isActionLoading}
-              aria-label={`generate-examples-${category}`}
-              title={!currentWordPackId ? '保存済みWordPackのみ追加生成が可能です' : undefined}
-              style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-            >
-              追加生成（2件）
-            </button>
+            <GuestLock isGuest={isGuest}>
+              <button
+                onClick={() => onGenerateExamples(category)}
+                disabled={!currentWordPackId || isActionLoading}
+                aria-label={`generate-examples-${category}`}
+                title={!currentWordPackId ? '保存済みWordPackのみ追加生成が可能です' : undefined}
+                style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+              >
+                追加生成（2件）
+              </button>
+            </GuestLock>
           </div>
           {data.examples?.[category]?.length ? (
             <div className="ex-grid">
@@ -198,22 +203,26 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
                     />
                     {currentWordPackId ? (
                       <>
-                        <button
-                          onClick={() => onDeleteExample(category, index)}
-                          disabled={isActionLoading}
-                          aria-label={`delete-example-${category}-${index}`}
-                          style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                        >
-                          削除
-                        </button>
-                        <button
-                          onClick={() => onImportArticleFromExample(category, index)}
-                          disabled={isActionLoading}
-                          aria-label={`import-example-${category}-${index}`}
-                          style={{ fontSize: '0.85em', color: '#2e7d32', border: '1px solid #2e7d32', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                        >
-                          記事化
-                        </button>
+                        <GuestLock isGuest={isGuest}>
+                          <button
+                            onClick={() => onDeleteExample(category, index)}
+                            disabled={isActionLoading}
+                            aria-label={`delete-example-${category}-${index}`}
+                            style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                          >
+                            削除
+                          </button>
+                        </GuestLock>
+                        <GuestLock isGuest={isGuest}>
+                          <button
+                            onClick={() => onImportArticleFromExample(category, index)}
+                            disabled={isActionLoading}
+                            aria-label={`import-example-${category}-${index}`}
+                            style={{ fontSize: '0.85em', color: '#2e7d32', border: '1px solid #2e7d32', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                          >
+                            記事化
+                          </button>
+                        </GuestLock>
                         <button
                           onClick={() => onCopyExampleText(category, index)}
                           disabled={isActionLoading}

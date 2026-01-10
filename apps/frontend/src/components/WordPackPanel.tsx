@@ -15,6 +15,8 @@ import { OverviewSection } from './wordpack/OverviewSection';
 import { PronunciationSection } from './wordpack/PronunciationSection';
 import { SensesSection } from './wordpack/SensesSection';
 import { ExamplesSection } from './wordpack/ExamplesSection';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 export interface WordPackPreviewMeta {
   id: string;
@@ -45,6 +47,7 @@ export const WordPackPanel: React.FC<Props> = ({
   fallbackMeta,
   onStudyProgressRecorded,
 }) => {
+  const { isGuest } = useAuth();
   const { settings, setSettings } = useSettings();
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
@@ -391,9 +394,11 @@ export const WordPackPanel: React.FC<Props> = ({
               </p>
             </div>
             <div className="sidebar-actions">
-              <button type="button" onClick={handleGenerate} disabled={!isLemmaValid || isActionLoading}>
-                生成
-              </button>
+              <GuestLock isGuest={isGuest}>
+                <button type="button" onClick={handleGenerate} disabled={!isLemmaValid || isActionLoading}>
+                  生成
+                </button>
+              </GuestLock>
               <button
                 type="button"
                 onClick={handleCreateEmpty}

@@ -9,6 +9,8 @@ import { LoadingIndicator } from './LoadingIndicator';
 import { ListControls } from './ListControls';
 import { ExampleDetailModal, ExampleItemData } from './ExampleDetailModal';
 import { TTSButton } from './TTSButton';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 type SortKey = 'created_at' | 'pack_updated_at' | 'lemma' | 'category';
 type SortOrder = 'asc' | 'desc';
@@ -58,6 +60,7 @@ const DEFAULT_PERSISTED_STATE: PersistedState = {
 };
 
 export const ExampleListPanel: React.FC = () => {
+  const { isGuest } = useAuth();
   const { settings } = useSettings();
   const [items, setItems] = useState<ExampleItemData[]>([]);
   const [total, setTotal] = useState(0);
@@ -395,9 +398,11 @@ export const ExampleListPanel: React.FC = () => {
           <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
             全選択解除
           </button>
-          <button type="button" onClick={deleteSelectedExamples} disabled={selectedCount === 0 || loading}>
-            選択した例文を削除
-          </button>
+          <GuestLock isGuest={isGuest}>
+            <button type="button" onClick={deleteSelectedExamples} disabled={selectedCount === 0 || loading}>
+              選択した例文を削除
+            </button>
+          </GuestLock>
         </div>
 
         {items.length === 0 && !loading ? (
