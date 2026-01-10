@@ -47,6 +47,8 @@ describe('App guest mode entry', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     setupConfigFetch();
+    // テスト間の独立性を保つため、前のテストで保存されたゲストモード状態をクリア
+    localStorage.clear();
   });
 
   it('shows the guest button and transitions into guest mode', async () => {
@@ -64,6 +66,23 @@ describe('App guest mode entry', () => {
   });
 
   it('closes the sidebar when the backdrop is clicked or Escape is pressed', async () => {
+    // モバイルレイアウト（オーバーレイサイドバー）をシミュレート
+    // なぜ: バックドロップはモバイル（max-width: 480px）でのみ表示される仕様だから
+    const mockMatchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(max-width: 480px)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      onchange: null,
+    }));
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: mockMatchMedia,
+    });
+
     const { container } = renderWithProviders();
     const user = userEvent.setup();
 
