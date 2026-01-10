@@ -645,6 +645,8 @@ export const WordPackListPanel: React.FC = () => {
           .wp-card-header { flex-direction: column; align-items: flex-start; }
           .wp-card-actions { margin-left: 0; margin-top: 0.3rem; }
           .wp-sort-controls { flex-direction: column; align-items: stretch; }
+          .wp-list-header { flex-direction: column; align-items: flex-start; max-height: none; gap: 0.5rem; }
+          .wp-list-header button { width: 100%; }
         }
       `}</style>
 
