@@ -72,6 +72,24 @@ const resolveUrl = (input: RequestInfo | URL): string => {
   return String(input);
 };
 
+/**
+ * モバイル判定の挙動を固定するため、matchMedia を任意の matches で返す。
+ * なぜ: jsdom では viewport が変化しないため、UIの分岐をテストで再現する必要がある。
+ */
+const createMatchMediaMock =
+  (matches: boolean): typeof window.matchMedia =>
+  (query: string) =>
+    ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }) as unknown as MediaQueryList;
+
 const configSuccess = () =>
   new Response(
     JSON.stringify({ request_timeout_ms: 60000, llm_model: 'gpt-5-mini' }),
@@ -522,6 +540,40 @@ describe('App navigation', () => {
     const rect = toggle.getBoundingClientRect();
     expect(Math.round(rect.left)).toBe(0);
     expect(Math.round(rect.top)).toBe(0);
+  });
+
+  it('adds safe-area classes for fixed elements on all layouts', async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(configSuccess());
+      }
+      if (url.endsWith('/api/auth/logout')) {
+        return Promise.resolve(logoutSuccess());
+      }
+      if (url.endsWith('/api/auth/guest')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ mode: 'guest' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    renderWithProviders();
+
+    const user = userEvent.setup();
+    const guestButton = await screen.findByRole('button', { name: 'ゲスト閲覧モード' });
+    await act(async () => {
+      await user.click(guestButton);
+    });
+
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    const guestBadge = await screen.findByText('ゲスト閲覧モード');
+
+    await waitFor(() => {
+      expect(toggle).toHaveClass('safe-area-adjusted');
+      expect(guestBadge).toHaveClass('safe-area-adjusted');
+    });
   });
 
   it('renders the main content without a shift animation', async () => {
