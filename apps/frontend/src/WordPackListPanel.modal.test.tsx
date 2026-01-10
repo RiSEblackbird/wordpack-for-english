@@ -16,6 +16,7 @@ describe('WordPackListPanel modal preview', () => {
       localStorage.setItem(
         'wordpack.auth.v1',
         JSON.stringify({
+          authMode: 'authenticated',
           user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
         }),
       );
@@ -582,5 +583,4 @@ describe('WordPackListPanel modal preview', () => {
     await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(3));
   }, 12000);
 });
-
 

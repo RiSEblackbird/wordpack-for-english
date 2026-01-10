@@ -14,6 +14,7 @@ describe('WordPackListPanel card actions layout (two rows)', () => {
       localStorage.setItem(
         'wordpack.auth.v1',
         JSON.stringify({
+          authMode: 'authenticated',
           user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
         }),
       );
@@ -122,5 +123,4 @@ describe('WordPackListPanel card actions layout (two rows)', () => {
     expect(screen.queryByRole('dialog', { name: 'WordPack プレビュー' })).not.toBeInTheDocument();
   });
 });
-
 

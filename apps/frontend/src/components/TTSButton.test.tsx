@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
@@ -6,6 +6,7 @@ import * as SettingsContext from '../SettingsContext';
 import * as AuthContext from '../AuthContext';
 import { TTSButton } from './TTSButton';
 import { TTS_TEXT_MAX_LENGTH } from '../constants/tts';
+import { guestLockMessage } from './GuestLock';
 
 describe('TTSButton', () => {
   const originalFetch = global.fetch;
@@ -13,9 +14,10 @@ describe('TTSButton', () => {
   const originalCreateObjectURL = URL.createObjectURL;
   const originalRevokeObjectURL = URL.revokeObjectURL;
   const originalAlert = window.alert;
+  let authSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    vi.spyOn(AuthContext, 'useAuth').mockReturnValue({ isGuest: false } as any);
+    authSpy = vi.spyOn(AuthContext, 'useAuth').mockReturnValue({ isGuest: false } as any);
   });
 
   afterEach(() => {
@@ -241,5 +243,34 @@ describe('TTSButton', () => {
     expect(settingsSpy).toHaveBeenCalled();
     await waitFor(() => expect(playMock).toHaveBeenCalled());
     expect(audioInstances[0].volume).toBeCloseTo(2.5);
+  });
+
+  it('disables the button and shows the guest tooltip after a short hover delay', () => {
+    authSpy.mockReturnValue({ isGuest: true } as any);
+    vi.useFakeTimers();
+
+    render(<TTSButton text="Hello" />);
+
+    const button = screen.getByRole('button', { name: '音声' });
+    const wrapper = button.parentElement as HTMLElement;
+
+    expect(button).toBeDisabled();
+
+    act(() => {
+      fireEvent.mouseEnter(wrapper);
+    });
+    expect(screen.queryByText(guestLockMessage)).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getByText(guestLockMessage)).toBeInTheDocument();
+
+    act(() => {
+      fireEvent.mouseLeave(wrapper);
+    });
+    expect(screen.queryByText(guestLockMessage)).not.toBeInTheDocument();
+
+    vi.useRealTimers();
   });
 });
