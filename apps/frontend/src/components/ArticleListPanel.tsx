@@ -276,12 +276,17 @@ export const ArticleListPanel: React.FC = () => {
       {msg && <div role={msg.kind}>{msg.text}</div>}
       <div className="wp-selection-bar" role="group" aria-label="文章選択操作">
         <span>選択中: {selectedCount}件</span>
-        <button type="button" onClick={toggleVisibleSelection} disabled={items.length === 0}>
-          {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
-        </button>
-        <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
-          全選択解除
-        </button>
+        {/* 選択UIは削除と直結するため、ゲスト時はロックする */}
+        <GuestLock isGuest={isGuest}>
+          <button type="button" onClick={toggleVisibleSelection} disabled={items.length === 0}>
+            {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
+          </button>
+        </GuestLock>
+        <GuestLock isGuest={isGuest}>
+          <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
+            全選択解除
+          </button>
+        </GuestLock>
         <GuestLock isGuest={isGuest}>
           <button
             type="button"
@@ -295,12 +300,14 @@ export const ArticleListPanel: React.FC = () => {
           <div key={it.id} className="al-card" onClick={() => open(it.id)}>
             <div className="al-card-header">
               <label className="wp-select-checkbox" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(it.id)}
-                  onChange={() => toggleSelect(it.id)}
-                  aria-label={`文章 ${it.title_en} を選択`}
-                />
+                <GuestLock isGuest={isGuest}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(it.id)}
+                    onChange={() => toggleSelect(it.id)}
+                    aria-label={`文章 ${it.title_en} を選択`}
+                  />
+                </GuestLock>
               </label>
               <div className="al-card-title-row">
                 <strong style={{ flex: 1, fontSize: '12px' }}>{it.title_en}</strong>
@@ -332,4 +339,3 @@ export const ArticleListPanel: React.FC = () => {
     </section>
   );
 };
-

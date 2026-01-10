@@ -3,6 +3,8 @@ import { Modal } from './Modal';
 import { TTSButton } from './TTSButton';
 import { useSettings } from '../SettingsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 export interface ExampleItemData {
   id: number;
@@ -43,6 +45,7 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
   onStudyProgressRecorded,
   onTranscriptionTypingRecorded,
 }) => {
+  const { isGuest } = useAuth();
   const { settings } = useSettings();
   const [progressUpdating, setProgressUpdating] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -195,34 +198,39 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
             aria-label="例文の学習記録"
           >
             <strong style={{ fontSize: '0.9em' }}>学習記録</strong>
-            <button
-              type="button"
-              onClick={() => recordProgress('checked')}
-              disabled={progressUpdating}
-              style={{
-                padding: '0.3rem 0.6rem',
-                borderRadius: 6,
-                border: '1px solid #ffa726',
-                backgroundColor: '#fff3e0',
-                color: '#ef6c00',
-              }}
-            >
-              確認した ({localCounts.checked})
-            </button>
-            <button
-              type="button"
-              onClick={() => recordProgress('learned')}
-              disabled={progressUpdating}
-              style={{
-                padding: '0.3rem 0.6rem',
-                borderRadius: 6,
-                border: '1px solid #81c784',
-                backgroundColor: '#e8f5e9',
-                color: '#1b5e20',
-              }}
-            >
-              学習した ({localCounts.learned})
-            </button>
+            {/* 学習記録はAI連携のためゲスト時はロックする */}
+            <GuestLock isGuest={isGuest}>
+              <button
+                type="button"
+                onClick={() => recordProgress('checked')}
+                disabled={progressUpdating}
+                style={{
+                  padding: '0.3rem 0.6rem',
+                  borderRadius: 6,
+                  border: '1px solid #ffa726',
+                  backgroundColor: '#fff3e0',
+                  color: '#ef6c00',
+                }}
+              >
+                確認した ({localCounts.checked})
+              </button>
+            </GuestLock>
+            <GuestLock isGuest={isGuest}>
+              <button
+                type="button"
+                onClick={() => recordProgress('learned')}
+                disabled={progressUpdating}
+                style={{
+                  padding: '0.3rem 0.6rem',
+                  borderRadius: 6,
+                  border: '1px solid #81c784',
+                  backgroundColor: '#e8f5e9',
+                  color: '#1b5e20',
+                }}
+              >
+                学習した ({localCounts.learned})
+              </button>
+            </GuestLock>
             {feedback ? (
               <span
                 role="status"
@@ -237,52 +245,58 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
             ) : null}
           </div>
           <div style={{ display: 'grid', gap: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={toggleTranscriptionForm}
-              style={{
-                padding: '0.3rem 0.6rem',
-                borderRadius: 6,
-                border: '1px solid #64b5f6',
-                backgroundColor: transcriptionFormVisible ? '#e3f2fd' : '#f5faff',
-                color: '#1e88e5',
-                textAlign: 'left',
-              }}
-            >
-              文字起こしタイピング ({localCounts.transcriptionTyping}文字)
-            </button>
+            <GuestLock isGuest={isGuest}>
+              <button
+                type="button"
+                onClick={toggleTranscriptionForm}
+                style={{
+                  padding: '0.3rem 0.6rem',
+                  borderRadius: 6,
+                  border: '1px solid #64b5f6',
+                  backgroundColor: transcriptionFormVisible ? '#e3f2fd' : '#f5faff',
+                  color: '#1e88e5',
+                  textAlign: 'left',
+                }}
+              >
+                文字起こしタイピング ({localCounts.transcriptionTyping}文字)
+              </button>
+            </GuestLock>
             {transcriptionFormVisible ? (
               <div style={{ display: 'grid', gap: '0.5rem' }}>
                 <label style={{ display: 'grid', gap: '0.25rem' }}>
                   <span style={{ fontWeight: 600 }}>英文を入力してください</span>
-                  <textarea
-                    value={transcriptionInput}
-                    onChange={(event) => setTranscriptionInput(event.target.value)}
-                    rows={5}
-                    style={{
-                      borderRadius: 6,
-                      border: '1px solid #90caf9',
-                      padding: '0.5rem',
-                      fontFamily: 'inherit',
-                    }}
-                    aria-label="文字起こしタイピング入力"
-                  />
+                  <GuestLock isGuest={isGuest}>
+                    <textarea
+                      value={transcriptionInput}
+                      onChange={(event) => setTranscriptionInput(event.target.value)}
+                      rows={5}
+                      style={{
+                        borderRadius: 6,
+                        border: '1px solid #90caf9',
+                        padding: '0.5rem',
+                        fontFamily: 'inherit',
+                      }}
+                      aria-label="文字起こしタイピング入力"
+                    />
+                  </GuestLock>
                 </label>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <button
-                    type="button"
-                    onClick={recordTranscriptionTyping}
-                    disabled={transcriptionRecordDisabled}
-                    style={{
-                      padding: '0.3rem 0.6rem',
-                      borderRadius: 6,
-                      border: '1px solid #64b5f6',
-                      backgroundColor: transcriptionRecordDisabled ? '#e3f2fd' : '#bbdefb',
-                      color: '#0d47a1',
-                    }}
-                  >
-                    タイピング記録
-                  </button>
+                  <GuestLock isGuest={isGuest}>
+                    <button
+                      type="button"
+                      onClick={recordTranscriptionTyping}
+                      disabled={transcriptionRecordDisabled}
+                      style={{
+                        padding: '0.3rem 0.6rem',
+                        borderRadius: 6,
+                        border: '1px solid #64b5f6',
+                        backgroundColor: transcriptionRecordDisabled ? '#e3f2fd' : '#bbdefb',
+                        color: '#0d47a1',
+                      }}
+                    >
+                      タイピング記録
+                    </button>
+                  </GuestLock>
                   <span style={{ fontSize: '0.8em', color: isTranscriptionWithinRange ? '#2e7d32' : '#c62828' }}>
                     入力文字数差: {transcriptionLengthDiff}
                   </span>
@@ -310,5 +324,4 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
     </Modal>
   );
 };
-
 

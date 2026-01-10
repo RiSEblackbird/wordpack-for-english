@@ -392,12 +392,17 @@ export const ExampleListPanel: React.FC = () => {
         {msg && <div role={msg.kind}>{msg.text}</div>}
         <div className="ex-selection-bar" role="group" aria-label="例文選択操作">
           <span>選択中: {selectedCount}件</span>
-          <button type="button" onClick={toggleVisibleSelection} disabled={items.length === 0}>
-            {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
-          </button>
-          <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
-            全選択解除
-          </button>
+          {/* 破壊操作につながる選択UIはゲスト時にロックする */}
+          <GuestLock isGuest={isGuest}>
+            <button type="button" onClick={toggleVisibleSelection} disabled={items.length === 0}>
+              {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
+            </button>
+          </GuestLock>
+          <GuestLock isGuest={isGuest}>
+            <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
+              全選択解除
+            </button>
+          </GuestLock>
           <GuestLock isGuest={isGuest}>
             <button type="button" onClick={deleteSelectedExamples} disabled={selectedCount === 0 || loading}>
               選択した例文を削除
@@ -423,12 +428,14 @@ export const ExampleListPanel: React.FC = () => {
                   >
                     <div className="ex-card-header">
                       <label className="ex-select-checkbox" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(it.id)}
-                          onChange={() => toggleSelect(it.id)}
-                          aria-label={`例文 ${it.en} を選択`}
-                        />
+                        <GuestLock isGuest={isGuest}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(it.id)}
+                            onChange={() => toggleSelect(it.id)}
+                            aria-label={`例文 ${it.en} を選択`}
+                          />
+                        </GuestLock>
                       </label>
                       <div className="ex-meta" aria-label={`例文 ${it.lemma} のメタ情報`}>
                         <span>{it.lemma} / {it.category}</span>
@@ -475,12 +482,14 @@ export const ExampleListPanel: React.FC = () => {
                     }}
                   >
                     <label className="ex-select-checkbox" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(it.id)}
-                        onChange={() => toggleSelect(it.id)}
-                        aria-label={`例文 ${it.en} を選択`}
-                      />
+                      <GuestLock isGuest={isGuest}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(it.id)}
+                          onChange={() => toggleSelect(it.id)}
+                          aria-label={`例文 ${it.en} を選択`}
+                        />
+                      </GuestLock>
                     </label>
                     <div style={{ flex: 1 }}>
                       <div
