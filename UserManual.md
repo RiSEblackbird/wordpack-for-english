@@ -24,6 +24,7 @@
 - 最初にアクセスすると Google アカウントのサインイン画面が表示されます。
 - 「Googleでログイン」ボタンを押すとポップアップが開き、認証に成功すると自動的にアプリ本体へ遷移します。
 - 「ゲスト閲覧モード」ボタンを押すとログインしなくても画面を閲覧できます。ゲスト中は右上にバッジが表示され、ブラウザを再読み込みしても同じ状態が復元されます。
+- ゲスト閲覧モードではバックエンドが署名付きのゲスト Cookie を発行し、閲覧系 API のみ許可されます。生成・削除などの書き込み操作は `403 Forbidden` で拒否されます。
 - ゲスト閲覧モードではAI機能（生成/再生成/削除などのボタン）が無効化され、ボタンにマウスを重ねると「ゲストモードではAI機能は使用できません」と表示されます。例: ログイン後は「生成」ボタンで処理開始 / ゲストでは同じボタンが押せずツールチップが表示されます。
 - Google アカウントでメールアドレスの確認が済んでいない場合は 403 エラーになります。ID トークンの `email_verified` が `false` のまま送信されるため、Google アカウント管理画面からメールを確認して再度ログインしてください。
 - 管理者が `ADMIN_EMAIL_ALLOWLIST` を設定している場合、許可リストに載っていないメールアドレスでログインしようとすると「403 Forbidden」と表示されます。別アカウントを利用するか、管理者に連絡してリストへ登録してもらってください。
@@ -268,11 +269,27 @@
   - cmudict/g2p-en 利用時は精度向上、未導入時は例外辞書+規則フォールバック（タイムアウト制御）
 
 ### B-3. API 一覧（現状）
+- `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始
 - `POST /api/word/pack` … WordPack 生成（語義/共起/対比/例文/語源/学習カード要点/発音RP + `citations`/`confidence`、`pronunciation_enabled`,`regenerate_scope` 対応）
 - `GET /api/word?lemma=...` … lemma から保存済み WordPack を検索し、定義と例文を返却（未存在時は生成して保存）
 - 追加（保存済み WordPack 関連）:
   - `DELETE /api/word/packs/{id}/examples/{category}/{index}` … 例文の個別削除
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts を使い、`text`/`voice` を受け取って `audio/mpeg` ストリームを返却
+
+#### B-3-1. ゲスト閲覧 API 例
+- 正例（ゲスト Cookie を発行して閲覧 API を呼び出す）
+```bash
+curl -i -X POST http://127.0.0.1:8000/api/auth/guest
+curl -i -H "Cookie: wp_guest=<signed-token>" "http://127.0.0.1:8000/api/word?lemma=example"
+```
+- 負例（ゲスト Cookie で書き込み系 API を呼ぶと 403）
+```bash
+curl -i -X POST \
+  -H "Cookie: wp_guest=<signed-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"lemma":"example"}' \
+  http://127.0.0.1:8000/api/word/packs
+```
 
 ### B-4. 保存済み WordPack の内部構造（実装メモ）
 - 例文は DB で別コレクションに正規化。部分読み込み/部分削除が高速

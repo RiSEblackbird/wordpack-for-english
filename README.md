@@ -396,6 +396,7 @@ npm run test
 ```
 
 ## REST API（抜粋）
+- `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始
 - `POST /api/word/pack` … WordPack を生成して語義タイトル・語義・例文・語源・学習カード要点を返却
 - `GET /api/word?lemma=...` … lemma を指定して最新の WordPack から定義と例文を返却（見つからなければ自動生成）
 - `POST /api/word/examples/bulk-delete` … 例文IDの配列を受け取り一括削除
@@ -404,6 +405,22 @@ npm run test
 - `GET /_debug/headers` … デバッグ用: FastAPI が受信した Host / X-Forwarded-* / URL / クライアント IP をそのまま JSON で返却。Firebase Hosting → Cloud Run 経由のヘッダ付け替え確認や、リバースプロキシ配下の疎通検証に利用できる（運用環境でも有効だが目立たないパスとして公開）。
 
 ローカルで `/api/config` と同じアプリに統合されていることを確認する場合は、`uvicorn backend.main:app --app-dir apps/backend --reload` で起動し、別ターミナルから `curl -H "Host: backend.internal" -H "X-Forwarded-Host: public.example.com" -H "X-Forwarded-Proto: https" http://127.0.0.1:8000/_debug/headers` を実行するとレスポンスに受信ヘッダが反映されます。
+
+### ゲスト閲覧 API 例
+- 正例（ゲスト Cookie を発行して閲覧 API を呼び出す）
+```bash
+curl -i -X POST http://127.0.0.1:8000/api/auth/guest
+# 取得した Set-Cookie を付けて GET を実行（Cookie 名は既定で wp_guest）
+curl -i -H "Cookie: wp_guest=<signed-token>" "http://127.0.0.1:8000/api/word?lemma=example"
+```
+- 負例（ゲスト Cookie で書き込み系 API を呼ぶと 403）
+```bash
+curl -i -X POST \
+  -H "Cookie: wp_guest=<signed-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"lemma":"example"}' \
+  http://127.0.0.1:8000/api/word/packs
+```
 
 ### WordPack 生成時の入力制約
 - 見出し語（`lemma`）は **英数字・半角スペース・ハイフン・アポストロフィのみ** で、1〜64文字。

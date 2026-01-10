@@ -26,12 +26,17 @@ try:
 except Exception:  # pragma: no cover - 互換目的のフォールバック
     TimeoutException = None  # type: ignore[assignment]
 
-from .auth import get_current_user
+from .auth import get_current_user, get_current_user_or_guest
 from .config import settings
 from .indexing import seed_domain_terms, seed_from_jsonl, seed_word_snippets
 from .logging import configure_logging, logger
 from .metrics import registry
-from .middleware import RateLimitMiddleware, RequestIDMiddleware, SecurityHeadersMiddleware
+from .middleware import (
+    GuestWriteBlockMiddleware,
+    RateLimitMiddleware,
+    RequestIDMiddleware,
+    SecurityHeadersMiddleware,
+)
 from .middleware.host import ForwardedHostTrustedHostMiddleware
 from .observability import request_trace
 from .providers import ChromaClientFactory, shutdown_providers
@@ -321,8 +326,9 @@ def create_app() -> FastAPI:
 
     _maybe_add_timeout_middleware(app)
     app.add_middleware(RequestIDMiddleware)
+    app.add_middleware(GuestWriteBlockMiddleware)
     # Middleware stack (inner → outer):
-    #   RequestID → AccessLog → RateLimit → ForwardedHostTrustedHost → SecurityHeaders → ProxyHeaders
+    #   RequestID → GuestWriteBlock → AccessLog → RateLimit → ForwardedHostTrustedHost → SecurityHeaders → ProxyHeaders
     #   （Timeout →）CORSMiddleware がさらに内側に位置する。
     # Starlette では後から追加したミドルウェアが外側で実行される。RequestID で
     # `request_id` を採番し、AccessLog 側で構造化ログとメトリクスを記録する。レート
@@ -357,7 +363,7 @@ def create_app() -> FastAPI:
         )
         protected_dependency: list[Any] = []
     else:
-        protected_dependency = [Depends(get_current_user)]
+        protected_dependency = [Depends(get_current_user_or_guest)]
     app.include_router(auth_router.router)
     app.include_router(word.router, prefix="/api/word", dependencies=protected_dependency)
     app.include_router(
