@@ -62,4 +62,24 @@ describe('GuestLock', () => {
 
     vi.useRealTimers();
   });
+
+  it('hoists margin-left:auto to wrapper to preserve flex alignment', () => {
+    render(
+      <div style={{ display: 'flex' }}>
+        <GuestLock isGuest={false}>
+          <button type="button" style={{ marginLeft: 'auto' }}>
+            右寄せ
+          </button>
+        </GuestLock>
+      </div>,
+    );
+
+    const button = screen.getByRole('button', { name: '右寄せ' });
+    const wrapper = button.parentElement as HTMLElement;
+
+    // 外側flexに効かせるため、autoマージンは wrapper 側に付く必要がある
+    expect(wrapper).toHaveStyle({ marginLeft: 'auto' });
+    // 子要素側に残すと wrapper 内の揃えになってしまう
+    expect(button).not.toHaveStyle({ marginLeft: 'auto' });
+  });
 });

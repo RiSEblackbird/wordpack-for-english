@@ -47,6 +47,23 @@ export const GuestLock: React.FC<GuestLockProps> = ({ isGuest, children }) => {
   const disableable = supportsNativeDisabled(children);
   const mergedDisabled = Boolean(children.props.disabled) || isGuest;
   const mergedAriaDisabled = isGuest ? true : children.props['aria-disabled'];
+
+  // GuestLock は tooltip のために wrapper 要素を挟むが、
+  // 子要素側の `margin-left:auto` などは「外側のflex」に効かず、wrapper 内の揃えになってしまう。
+  // 右寄せ等のレイアウト意図を保つため、autoマージンは wrapper 側へ持ち上げる。
+  const childStyle = (children.props.style ?? {}) as React.CSSProperties;
+  const wrapperAutoMargins: Partial<React.CSSProperties> = {};
+  const nextChildStyle: React.CSSProperties = { ...childStyle };
+  const hoistAutoMargin = (key: keyof React.CSSProperties) => {
+    if (childStyle?.[key] !== 'auto') return;
+    (wrapperAutoMargins as any)[key] = 'auto';
+    (nextChildStyle as any)[key] = undefined;
+  };
+  hoistAutoMargin('marginLeft');
+  hoistAutoMargin('marginInlineStart');
+  hoistAutoMargin('marginRight');
+  hoistAutoMargin('marginInlineEnd');
+
   const describedBy = [
     children.props['aria-describedby'],
     isGuest && tooltipVisible ? tooltipId : null,
@@ -59,11 +76,12 @@ export const GuestLock: React.FC<GuestLockProps> = ({ isGuest, children }) => {
     ...(mergedAriaDisabled ? { 'aria-disabled': mergedAriaDisabled } : null),
     ...(describedBy ? { 'aria-describedby': describedBy } : null),
     ...(isGuest && !disableable ? { tabIndex: -1 } : null),
+    ...(Object.keys(wrapperAutoMargins).length > 0 ? { style: nextChildStyle } : null),
   });
 
   return (
     <span
-      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', ...wrapperAutoMargins }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
