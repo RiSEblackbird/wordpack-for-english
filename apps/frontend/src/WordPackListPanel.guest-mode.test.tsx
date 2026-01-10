@@ -75,11 +75,11 @@ describe('WordPackListPanel guest controls', () => {
   });
 
   it('disables write actions and shows the guest tooltip on hover', async () => {
-    vi.useFakeTimers();
-
     renderWithGuestSession();
 
     await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
+
+    vi.useFakeTimers();
 
     const bulkDeleteButton = screen.getByRole('button', { name: '選択したWordPackを削除' });
     const generateButton = screen.getByRole('button', { name: '生成' });
