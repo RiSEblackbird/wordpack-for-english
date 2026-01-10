@@ -350,12 +350,9 @@ export const App: React.FC = () => {
     box-shadow: none;
     overflow: hidden;
     z-index: 1000;
-    transform: translateX(-100%);
-    transition: transform 0.2s ease;
   }
   .app-shell.sidebar-open .sidebar {
     box-shadow: 2px 0 20px rgba(0, 0, 0, 0.2);
-    transform: translateX(0);
     width: ${SIDEBAR_WIDTH}px;
   }
   .sidebar-content {
@@ -465,9 +462,12 @@ export const App: React.FC = () => {
       left: 0;
       height: 100dvh;
       width: min(85vw, 320px);
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
     }
     .app-shell.sidebar-open .sidebar {
       width: min(85vw, 320px);
+      transform: translateX(0);
     }
     .main-column {
       padding: 0 8px;
