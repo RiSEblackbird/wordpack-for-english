@@ -153,6 +153,7 @@ describe('App navigation', () => {
 
     expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Google.?でログイン/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeInTheDocument();
   });
 
   it('renders configuration guidance when the Google client ID is missing', async () => {
@@ -175,6 +176,7 @@ describe('App navigation', () => {
     expect(
       screen.getByText('開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'),
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeInTheDocument();
   });
 
   it('shows the login screen when /api/config responds with 401', async () => {
@@ -195,6 +197,7 @@ describe('App navigation', () => {
 
       expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Google.?でログイン/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeInTheDocument();
       // 401 ではログイン画面を即時に表示し、エラー用の自動リトライタイマーを開始しない。
       expect(
         setTimeoutSpy.mock.calls.some(([, timeout]) => timeout === AUTO_RETRY_INTERVAL_MS),
@@ -202,6 +205,27 @@ describe('App navigation', () => {
     } finally {
       setTimeoutSpy.mockRestore();
     }
+  });
+
+  it('enters guest mode from the login screen', async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(configSuccess());
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    renderWithProviders();
+
+    const user = userEvent.setup();
+    const guestButton = await screen.findByRole('button', { name: 'ゲスト閲覧モード' });
+    await act(async () => {
+      await user.click(guestButton);
+    });
+
+    expect(await screen.findByRole('heading', { name: 'WordPack' })).toBeInTheDocument();
+    expect(screen.getByText('ゲスト閲覧モード')).toBeInTheDocument();
   });
 
   it('transitions to the main interface after a successful login', async () => {
