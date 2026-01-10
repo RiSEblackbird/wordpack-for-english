@@ -126,6 +126,14 @@ class Settings(BaseSettings):
         default=60 * 60 * 24 * 14,
         description="Session lifetime in seconds / セッションの寿命（秒）",
     )
+    guest_session_cookie_name: str = Field(
+        default="wp_guest",
+        description="Guest session cookie name / ゲストセッションCookie名",
+    )
+    guest_session_max_age_seconds: int = Field(
+        default=60 * 60 * 24,
+        description="Guest session lifetime in seconds / ゲストセッションの寿命（秒）",
+    )
     llm_provider: str = Field(
         default="openai",
         description="LLM service provider / 利用するLLMプロバイダ",
