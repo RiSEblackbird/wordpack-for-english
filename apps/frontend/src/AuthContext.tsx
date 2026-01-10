@@ -94,8 +94,18 @@ function persistAuth(payload: StoredAuthPayload | null): void {
 }
 
 export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNode }> = ({ clientId, children }) => {
-  const [user, setUser] = useState<AuthenticatedUser | null>(null);
-  const [authMode, setAuthMode] = useState<AuthMode>('anonymous');
+  const [initialAuthState] = useState(() => {
+    const stored = readStoredAuth();
+    if (stored?.authMode === 'guest') {
+      return { authMode: 'guest' as const, user: null as AuthenticatedUser | null };
+    }
+    if (stored?.authMode === 'authenticated' && stored.user) {
+      return { authMode: 'authenticated' as const, user: stored.user };
+    }
+    return { authMode: 'anonymous' as const, user: null as AuthenticatedUser | null };
+  });
+  const [user, setUser] = useState<AuthenticatedUser | null>(initialAuthState.user);
+  const [authMode, setAuthMode] = useState<AuthMode>(initialAuthState.authMode);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authBypassActive, setAuthBypassActive] = useState(false);
@@ -126,22 +136,12 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   }, [normalizedClientId, authConfigResolved, authBypassActive]);
 
   const updateAuthMode = useCallback((next: AuthMode) => {
+    // 重要: authModeRef は「最新のモードを即座に参照する」ための退避先。
+    // /api/config のような初期ロードが非常に高速に完了すると、setState の再レンダー前に
+    // 非同期処理側が参照する可能性があるため、ref と state を同時に更新して競合を避ける。
     authModeRef.current = next;
     setAuthMode(next);
   }, []);
-
-  useEffect(() => {
-    const stored = readStoredAuth();
-    if (stored) {
-      if (stored.authMode === 'guest') {
-        updateAuthMode('guest');
-        setUser(null);
-      } else if (stored.user) {
-        updateAuthMode('authenticated');
-        setUser(stored.user);
-      }
-    }
-  }, [updateAuthMode]);
 
   useEffect(() => {
     if (authMode === 'guest') {

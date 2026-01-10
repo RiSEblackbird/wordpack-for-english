@@ -32,6 +32,18 @@ const TokenLeakProbe: React.FC = () => {
   return <span data-testid="token-leak">{hasTokenKey ? 'leaked' : 'clean'}</span>;
 };
 
+const AuthStateProbe: React.FC = () => {
+  const { authMode, user, authBypassActive } = useAuth();
+  return (
+    <span
+      data-testid="auth-state"
+      data-auth-mode={authMode}
+      data-user={user ? 'present' : 'null'}
+      data-bypass={authBypassActive ? 'true' : 'false'}
+    />
+  );
+};
+
 describe('AuthProvider logging behaviour', () => {
   // 新規参画者向けメモ: 認証バイパス有効時のログレベル切り替えを固定するための回帰テスト。
   // バイパス環境では error を抑制し warn に切り替わることをここで保証する。
@@ -290,6 +302,31 @@ describe('AuthProvider public API surface', () => {
     const flag = await screen.findByTestId('client-flag');
     expect(flag).toHaveAttribute('data-auth-mode', 'guest');
     expect(flag).toHaveAttribute('data-guest', 'true');
+    expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
+  });
+
+  it('does not inject bypass user while restoring guest mode even when /api/config resolves fast', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ session_auth_disabled: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    window.localStorage.setItem('wordpack.auth.v1', JSON.stringify({ authMode: 'guest' }));
+
+    render(
+      <AuthProvider clientId="test-client">
+        <AuthStateProbe />
+      </AuthProvider>,
+    );
+
+    const state = await screen.findByTestId('auth-state');
+    await waitFor(() => {
+      expect(state).toHaveAttribute('data-auth-mode', 'guest');
+      expect(state).toHaveAttribute('data-user', 'null');
+      expect(state).toHaveAttribute('data-bypass', 'true');
+    });
     expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
   });
 });
