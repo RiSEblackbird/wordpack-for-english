@@ -124,9 +124,21 @@ export const App: React.FC = () => {
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
+  /**
+   * サイドバーを閉じる処理をまとめる。
+   * なぜ: クリック・キーボード操作の共通導線を用意し、挙動の差分を防ぐため。
+   */
+  const closeSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isSidebarOpen) {
+        e.preventDefault();
+        closeSidebar();
+        return;
+      }
       if (e.altKey) {
         if (e.key === '1') setTab('wordpack');
         if (e.key === '2') setTab('settings');
@@ -137,7 +149,7 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [closeSidebar, isSidebarOpen]);
 
   useEffect(() => {
     if (isSidebarOpen) {
@@ -319,9 +331,14 @@ export const App: React.FC = () => {
     background: var(--color-surface);
     box-shadow: none;
     overflow: hidden;
+    z-index: 1000;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
   }
   .app-shell.sidebar-open .sidebar {
     box-shadow: 2px 0 20px rgba(0, 0, 0, 0.2);
+    transform: translateX(0);
+    width: ${SIDEBAR_WIDTH}px;
   }
   .sidebar-content {
     min-height: 100vh;
@@ -377,6 +394,14 @@ export const App: React.FC = () => {
     box-sizing: border-box;
     padding: 0 20px;
   }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    border: none;
+    background: var(--color-inverse-overlay);
+    cursor: pointer;
+    z-index: 900;
+  }
   .main-inner {
     display: flex;
     flex-direction: column;
@@ -415,6 +440,22 @@ export const App: React.FC = () => {
       padding: 0 12px;
     }
   }
+  @media (max-width: 480px) {
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100dvh;
+      width: min(85vw, 320px);
+    }
+    .app-shell.sidebar-open .sidebar {
+      width: min(85vw, 320px);
+    }
+    .main-column {
+      padding: 0 8px;
+      width: 100%;
+    }
+  }
   .sidebar-nav-button {
     font-size: 1.2rem;
     border: none;
@@ -439,13 +480,24 @@ export const App: React.FC = () => {
   }
 `}</style>
       {isGuest ? <span className="guest-badge guest-badge-fixed">ゲスト閲覧モード</span> : null}
+      {isSidebarOpen ? (
+        <>
+          {/* 背面操作を遮断し、タップで閉じる導線を統一する。 */}
+          <button
+            type="button"
+            className="sidebar-backdrop"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={closeSidebar}
+          />
+        </>
+      ) : null}
       <div className="app-layout">
         <aside
           id={SIDEBAR_ID}
           className="sidebar"
           aria-label="アプリ内共通メニュー"
           aria-hidden={isSidebarOpen ? 'false' : 'true'}
-          style={{ width: isSidebarOpen ? `${SIDEBAR_WIDTH}px` : '0px' }}
         >
           <div className="sidebar-content">
             <nav className="sidebar-nav" aria-label="主要メニュー">

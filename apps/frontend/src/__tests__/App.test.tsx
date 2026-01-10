@@ -62,4 +62,41 @@ describe('App guest mode entry', () => {
     expect(await screen.findByRole('heading', { name: 'WordPack' })).toBeInTheDocument();
     expect(screen.getByText('ゲスト閲覧モード')).toBeInTheDocument();
   });
+
+  it('closes the sidebar when the backdrop is clicked or Escape is pressed', async () => {
+    const { container } = renderWithProviders();
+    const user = userEvent.setup();
+
+    const guestButton = await screen.findByRole('button', { name: 'ゲスト閲覧モード' });
+    await act(async () => {
+      await user.click(guestButton);
+    });
+
+    const menuButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(menuButton);
+    });
+
+    expect(container.querySelector('.sidebar-backdrop')).toBeInTheDocument();
+
+    await act(async () => {
+      await user.keyboard('{Escape}');
+    });
+
+    expect(container.querySelector('.sidebar-backdrop')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await user.click(menuButton);
+    });
+
+    const backdropButton = container.querySelector('.sidebar-backdrop') as HTMLButtonElement | null;
+    expect(backdropButton).toBeInTheDocument();
+    if (backdropButton) {
+      await act(async () => {
+        await user.click(backdropButton);
+      });
+    }
+
+    expect(container.querySelector('.sidebar-backdrop')).not.toBeInTheDocument();
+  });
 });

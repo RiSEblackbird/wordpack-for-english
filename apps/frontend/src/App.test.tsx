@@ -489,7 +489,6 @@ describe('App navigation', () => {
 
     const computed = window.getComputedStyle(sidebar);
     expect(computed.display).toBe('block');
-    expect(sidebar.getAttribute('style')).toContain('280px');
 
     const examplesButton = await screen.findByRole('button', { name: '例文一覧' });
     await act(async () => {
