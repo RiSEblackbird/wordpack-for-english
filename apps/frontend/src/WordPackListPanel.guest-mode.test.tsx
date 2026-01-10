@@ -77,7 +77,8 @@ describe('WordPackListPanel guest controls', () => {
   it('disables write actions and shows the guest tooltip on hover', async () => {
     renderWithGuestSession();
 
-    await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
+    // WordPack一覧がロードされて生成ボタンが表示されるまで待機
+    await waitFor(() => expect(screen.getByRole('button', { name: '生成' })).toBeInTheDocument());
 
     vi.useFakeTimers();
 
