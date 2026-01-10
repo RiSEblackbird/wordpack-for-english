@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import * as SettingsContext from '../SettingsContext';
+import * as AuthContext from '../AuthContext';
 import { TTSButton } from './TTSButton';
 import { TTS_TEXT_MAX_LENGTH } from '../constants/tts';
 
@@ -12,6 +13,10 @@ describe('TTSButton', () => {
   const originalCreateObjectURL = URL.createObjectURL;
   const originalRevokeObjectURL = URL.revokeObjectURL;
   const originalAlert = window.alert;
+
+  beforeEach(() => {
+    vi.spyOn(AuthContext, 'useAuth').mockReturnValue({ isGuest: false } as any);
+  });
 
   afterEach(() => {
     vi.restoreAllMocks();

@@ -2,6 +2,8 @@ import React from 'react';
 import { Modal } from './Modal';
 import { calculateDurationMs, formatDateJst, formatDurationMs } from '../lib/date';
 import { TTSButton } from './TTSButton';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 export interface ArticleWordPackLink {
   word_pack_id: string;
@@ -49,6 +51,7 @@ export const ArticleDetailModal: React.FC<Props> = ({
   onOpenWordPackPreview,
   onDeleteWordPack,
 }) => {
+  const { isGuest } = useAuth();
   const formatDateWithFallback = (value?: string | null) => {
     if (!value) return null;
     const formatted = formatDateJst(value);
@@ -204,16 +207,20 @@ export const ArticleDetailModal: React.FC<Props> = ({
                     <span className="ai-badge" style={{ background: '#fff3cd', borderColor: '#ffe08a', color: '#7a5b00' }}>空</span>
                   ) : null}
                   {onRegenerateWordPack ? (
-                    <button onClick={() => onRegenerateWordPack(l.word_pack_id)} style={{ marginLeft: 'auto', fontSize: '0.65em', padding: '0.05rem 0.2rem', borderRadius: 3 }}>生成</button>
+                    <GuestLock isGuest={isGuest}>
+                      <button onClick={() => onRegenerateWordPack(l.word_pack_id)} style={{ marginLeft: 'auto', fontSize: '0.65em', padding: '0.05rem 0.2rem', borderRadius: 3 }}>生成</button>
+                    </GuestLock>
                   ) : null}
                   {onDeleteWordPack ? (
-                    <button
-                      onClick={() => onDeleteWordPack(l.word_pack_id)}
-                      aria-label={`delete-wordpack-${l.word_pack_id}`}
-                      style={{ marginLeft: 4, color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.05rem 0.2rem', borderRadius: 3, fontSize: '0.65em' }}
-                    >
-                      削除
-                    </button>
+                    <GuestLock isGuest={isGuest}>
+                      <button
+                        onClick={() => onDeleteWordPack(l.word_pack_id)}
+                        aria-label={`delete-wordpack-${l.word_pack_id}`}
+                        style={{ marginLeft: 4, color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.05rem 0.2rem', borderRadius: 3, fontSize: '0.65em' }}
+                      >
+                        削除
+                      </button>
+                    </GuestLock>
                   ) : null}
                 </div>
               </div>
@@ -236,5 +243,4 @@ export const ArticleDetailModal: React.FC<Props> = ({
 };
 
 export default ArticleDetailModal;
-
 

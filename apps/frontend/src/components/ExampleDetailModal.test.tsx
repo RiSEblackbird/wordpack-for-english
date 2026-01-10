@@ -5,6 +5,7 @@ import { ExampleDetailModal, type ExampleItemData } from './ExampleDetailModal';
 import { SettingsProvider } from '../SettingsContext';
 import type { ReactNode } from 'react';
 import { act } from 'react';
+import * as AuthContext from '../AuthContext';
 
 const mockFetchJson = vi.hoisted(() => vi.fn());
 
@@ -50,6 +51,11 @@ describe('ExampleDetailModal', () => {
 
   beforeEach(() => {
     mockFetchJson.mockReset();
+    vi.spyOn(AuthContext, 'useAuth').mockReturnValue({ isGuest: false } as any);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('renders TTS buttons for original and translated texts', () => {

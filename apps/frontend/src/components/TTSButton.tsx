@@ -1,6 +1,8 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import { useSettings } from '../SettingsContext';
 import { TTS_TEXT_MAX_LENGTH } from '../constants/tts';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 type Props = {
   text: string;
@@ -10,6 +12,7 @@ type Props = {
 };
 
 export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
+  const { isGuest } = useAuth();
   const [loading, setLoading] = useState(false);
   let contextApiBase: string | undefined;
   let contextPlaybackRate = 1;
@@ -116,15 +119,17 @@ export function TTSButton({ text, className, voice = 'alloy', style }: Props) {
   };
 
   return (
-    <button
-      type="button"
-      onClick={speak}
-      disabled={loading || !text?.trim()}
-      className={className}
-      data-testid="speak-btn"
-      style={style}
-    >
-      {loading ? '読み上げ中…' : '音声'}
-    </button>
+    <GuestLock isGuest={isGuest}>
+      <button
+        type="button"
+        onClick={speak}
+        disabled={loading || !text?.trim()}
+        className={className}
+        data-testid="speak-btn"
+        style={style}
+      >
+        {loading ? '読み上げ中…' : '音声'}
+      </button>
+    </GuestLock>
   );
 }

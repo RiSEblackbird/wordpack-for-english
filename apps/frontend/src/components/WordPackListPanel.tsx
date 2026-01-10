@@ -14,42 +14,48 @@ import { WordPackPanel, WordPackPreviewMeta } from './WordPackPanel';
 import { LoadingIndicator } from './LoadingIndicator';
 import { TTSButton } from './TTSButton';
 import { formatDateJst } from '../lib/date';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 // 削除ボタンの共通コンポーネント
 interface DeleteButtonProps {
   onClick: (e: React.MouseEvent) => void;
   disabled?: boolean;
+  isGuest: boolean;
 }
 
-const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false }) => {
+const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false, isGuest }) => {
+  const resolvedDisabled = disabled || isGuest;
   return (
-    <button 
-      className="danger" 
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        padding: '0.1rem 0.4rem',
-        fontSize: '0.55em',
-        border: '1px solid #d32f2f',
-        borderRadius: '4px',
-        background: 'rgb(234, 230, 217)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        color: '#d32f2f',
-        opacity: disabled ? 0.6 : 1
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.background = '#ffebee';
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.background = 'rgb(234, 230, 217)';
-        }
-      }}
-    >
-      削除
-    </button>
+    <GuestLock isGuest={isGuest}>
+      <button 
+        className="danger" 
+        onClick={onClick}
+        disabled={disabled}
+        style={{
+          padding: '0.1rem 0.4rem',
+          fontSize: '0.55em',
+          border: '1px solid #d32f2f',
+          borderRadius: '4px',
+          background: 'rgb(234, 230, 217)',
+          cursor: resolvedDisabled ? 'not-allowed' : 'pointer',
+          color: '#d32f2f',
+          opacity: resolvedDisabled ? 0.6 : 1
+        }}
+        onMouseEnter={(e) => {
+          if (!resolvedDisabled) {
+            e.currentTarget.style.background = '#ffebee';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!resolvedDisabled) {
+            e.currentTarget.style.background = 'rgb(234, 230, 217)';
+          }
+        }}
+      >
+        削除
+      </button>
+    </GuestLock>
   );
 };
 
@@ -139,6 +145,7 @@ interface WordPackListResponse {
 }
 
 export const WordPackListPanel: React.FC = () => {
+  const { isGuest } = useAuth();
   const { settings } = useSettings();
   const {
     apiBase,
@@ -674,11 +681,13 @@ export const WordPackListPanel: React.FC = () => {
           <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
             全選択解除
           </button>
-          <button
-            type="button"
-            onClick={deleteSelectedWordPacks}
-            disabled={selectedCount === 0 || loading}
-          >選択したWordPackを削除</button>
+          <GuestLock isGuest={isGuest}>
+            <button
+              type="button"
+              onClick={deleteSelectedWordPacks}
+              disabled={selectedCount === 0 || loading}
+            >選択したWordPackを削除</button>
+          </GuestLock>
         </div>
 
         <ListControls<SortKey>
@@ -776,19 +785,22 @@ export const WordPackListPanel: React.FC = () => {
                           <DeleteButton
                             onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
                             disabled={loading}
+                            isGuest={isGuest}
                           />
                         </div>
                         <div className="wp-card-actions-lower" role="group" aria-label="カード操作 下段">
                           {wp.is_empty && (
-                            <button
-                              type="button"
-                              className="wp-generate-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                generateWordPack(wp);
-                              }}
-                              disabled={loading || generatingIds.has(wp.id)}
-                            >生成</button>
+                            <GuestLock isGuest={isGuest}>
+                              <button
+                                type="button"
+                                className="wp-generate-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  generateWordPack(wp);
+                                }}
+                                disabled={loading || generatingIds.has(wp.id)}
+                              >生成</button>
+                            </GuestLock>
                           )}
                           <button
                             type="button"
@@ -910,20 +922,23 @@ export const WordPackListPanel: React.FC = () => {
                         }}
                       >語義</button>
                       {wp.is_empty && (
-                        <button
-                          type="button"
-                          className="wp-generate-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            generateWordPack(wp);
-                          }}
-                          disabled={loading || generatingIds.has(wp.id)}
-                        >生成</button>
+                        <GuestLock isGuest={isGuest}>
+                          <button
+                            type="button"
+                            className="wp-generate-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              generateWordPack(wp);
+                            }}
+                            disabled={loading || generatingIds.has(wp.id)}
+                          >生成</button>
+                        </GuestLock>
                       )}
                       <TTSButton text={wp.lemma} className="wp-index-tts-btn" />
                       <DeleteButton
                         onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
                         disabled={loading}
+                        isGuest={isGuest}
                       />
                     </div>
                   </div>

@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { TTSButton } from '../TTSButton';
 import { WordPack } from '../../hooks/useWordPack';
+import { useAuth } from '../../AuthContext';
+import { GuestLock } from '../GuestLock';
 
 interface ExampleStatItem {
   category: string;
@@ -50,6 +52,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
   formatDate,
   showTtsButton = true,
 }) => {
+  const { isGuest } = useAuth();
   const [reveal, setReveal] = useState(false);
   const [count, setCount] = useState(3);
 
@@ -169,14 +172,16 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
           </button>
         </div>
         {currentWordPackId && (
-          <button
-            type="button"
-            onClick={onRegenerate}
-            disabled={isActionLoading}
-            style={{ marginLeft: 'auto', backgroundColor: 'var(--color-neutral-surface)' }}
-          >
-            再生成
-          </button>
+          <GuestLock isGuest={isGuest}>
+            <button
+              type="button"
+              onClick={onRegenerate}
+              disabled={isActionLoading}
+              style={{ marginLeft: 'auto', backgroundColor: 'var(--color-neutral-surface)' }}
+            >
+              再生成
+            </button>
+          </GuestLock>
         )}
       </div>
       <div className="selfcheck" style={{ marginTop: '0.5rem' }}>
