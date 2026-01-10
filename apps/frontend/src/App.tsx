@@ -769,7 +769,13 @@ const LoginScreen: React.FC = () => {
               ? '開発用の認証バイパスが有効なため、このままでもダミーアカウントで利用可能です。正式な OAuth を確認したい場合のみ上記手順を実施してください。'
               : '開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'}
           </p>
-          <button type="button" className="login-guest-button" onClick={enterGuestMode}>
+          <button
+            type="button"
+            className="login-guest-button"
+            onClick={() => {
+              void enterGuestMode();
+            }}
+          >
             ゲスト閲覧モード
           </button>
         </section>
@@ -885,7 +891,13 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
           />
         </div>
         <p className="login-note">成功するとブラウザにセッションクッキーを保存します。</p>
-        <button type="button" className="login-guest-button" onClick={enterGuestMode}>
+        <button
+          type="button"
+          className="login-guest-button"
+          onClick={() => {
+            void enterGuestMode();
+          }}
+        >
           ゲスト閲覧モード
         </button>
         {isAuthenticating ? (

@@ -32,7 +32,7 @@ interface AuthContextValue {
   error: string | null;
   signIn: (idToken: GoogleIdToken) => Promise<void>;
   signOut: () => Promise<void>;
-  enterGuestMode: () => void;
+  enterGuestMode: () => Promise<void>;
   clearError: () => void;
   authBypassActive: boolean;
   missingClientId: boolean;
@@ -279,12 +279,43 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   /**
    * ログイン不要で画面を閲覧するためのゲストモードへ切り替える。
    * なぜ: まず UI を体験したい利用者の入口を確保し、学習開始までのハードルを下げるため。
+   * 補足: バックエンドの /api/auth/guest は { mode: "guest" } と HttpOnly Cookie を返す。
    */
-  const enterGuestMode = useCallback(() => {
-    setUser(null);
-    updateAuthMode('guest');
+  const enterGuestMode = useCallback(async () => {
+    setIsAuthenticating(true);
     setError(null);
-  }, [updateAuthMode]);
+    try {
+      try {
+        const logoutResponse = await fetch('/api/auth/logout', {
+          method: 'POST',
+          credentials: 'include',
+        });
+        if (logoutResponse.status !== 204 && logoutResponse.status !== 200) {
+          console.warn('Unexpected response when logging out before guest', logoutResponse.status);
+        }
+      } catch (err) {
+        console.warn('Failed to notify backend about logout before guest', err);
+      }
+      const response = await fetch('/api/auth/guest', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const payload = (await response.json().catch(() => null)) as { mode?: string; detail?: string } | null;
+      if (!response.ok || payload?.mode !== 'guest') {
+        throw new Error(payload?.detail || 'Guest session request failed');
+      }
+      // ゲスト閲覧は読み取り専用で固定するため、既存のログイン Cookie を明示的に破棄する。
+      clearSessionCookie();
+      setUser(null);
+      updateAuthMode('guest');
+    } catch (err) {
+      console.warn('Failed to enter guest mode', err);
+      // ゲスト Cookie が確立できない場合は匿名状態を維持し、誤って guest 表示に遷移しない。
+      setError('ゲストモードの開始に失敗しました。しばらくしてから再試行してください。');
+    } finally {
+      setIsAuthenticating(false);
+    }
+  }, [clearSessionCookie, updateAuthMode]);
 
   /**
    * どのエンドポイントでも 401 が返った場合に、セッション切れとして扱う。

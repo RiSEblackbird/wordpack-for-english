@@ -224,19 +224,36 @@ describe('AuthProvider persistence behaviour', () => {
   });
 
   it('stores guest mode state for later restoration', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({}), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith('/api/config') && (!init || init.method === 'GET' || !init.method)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      if (url.endsWith('/api/auth/logout') && init?.method === 'POST') {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (url.endsWith('/api/auth/guest') && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ mode: 'guest' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
 
     const setItemSpy = vi.spyOn(Object.getPrototypeOf(window.localStorage), 'setItem');
 
     const GuestModeProbe: React.FC = () => {
       const { enterGuestMode } = useAuth();
       React.useEffect(() => {
-        enterGuestMode();
+        void enterGuestMode();
       }, [enterGuestMode]);
       return null;
     };
@@ -254,8 +271,78 @@ describe('AuthProvider persistence behaviour', () => {
       );
     });
     expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/logout',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/guest',
+      expect.objectContaining({ method: 'POST' }),
+    );
 
     setItemSpy.mockRestore();
+  });
+
+  it('requests guest session and surfaces an error on failure', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith('/api/config') && (!init || init.method === 'GET' || !init.method)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      if (url.endsWith('/api/auth/logout') && init?.method === 'POST') {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (url.endsWith('/api/auth/guest') && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ detail: 'Guest session failed' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
+
+    const GuestErrorProbe: React.FC = () => {
+      const { enterGuestMode, error, authMode } = useAuth();
+      React.useEffect(() => {
+        void enterGuestMode();
+      }, [enterGuestMode]);
+      return (
+        <span data-testid="guest-error" data-auth-mode={authMode}>
+          {error ?? 'none'}
+        </span>
+      );
+    };
+
+    render(
+      <AuthProvider clientId="test-client">
+        <GuestErrorProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/logout',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/guest',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('guest-error')).toHaveTextContent(
+        'ゲストモードの開始に失敗しました。しばらくしてから再試行してください。',
+      );
+    });
+    expect(screen.getByTestId('guest-error')).toHaveAttribute('data-auth-mode', 'anonymous');
   });
 });
 
