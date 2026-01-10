@@ -121,6 +121,7 @@ export const App: React.FC = () => {
   const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
   const focusRef = useRef<HTMLElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isOverlaySidebar, setIsOverlaySidebar] = useState(false);
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
@@ -159,6 +160,23 @@ export const App: React.FC = () => {
       sidebarToggleRef.current?.focus();
     }
   }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return undefined;
+    }
+    const mediaQuery = window.matchMedia('(max-width: 480px)');
+    const updateOverlayState = () => {
+      setIsOverlaySidebar(mediaQuery.matches);
+    };
+    updateOverlayState();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateOverlayState);
+      return () => mediaQuery.removeEventListener('change', updateOverlayState);
+    }
+    mediaQuery.addListener(updateOverlayState);
+    return () => mediaQuery.removeListener(updateOverlayState);
+  }, []);
 
   const toggleSidebar = () =>
     flushSync(() => {
@@ -480,7 +498,7 @@ export const App: React.FC = () => {
   }
 `}</style>
       {isGuest ? <span className="guest-badge guest-badge-fixed">ゲスト閲覧モード</span> : null}
-      {isSidebarOpen ? (
+      {isSidebarOpen && isOverlaySidebar ? (
         <>
           {/* 背面操作を遮断し、タップで閉じる導線を統一する。 */}
           <button
