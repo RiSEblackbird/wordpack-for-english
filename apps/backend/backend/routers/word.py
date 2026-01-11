@@ -403,15 +403,31 @@ async def lookup_word(
         )
 
     # なぜ: GET /api/word は閲覧専用に寄せ、生成は POST 系 API に集約する。
+    # 認証済みユーザー（user または user_id が存在する）はゲスト Cookie が残存していても
+    # ゲスト扱いせず、未登録語に対して 404 を返す（生成は POST API で実施）。
+    has_authenticated_user = bool(
+        getattr(request.state, "user", None) or getattr(request.state, "user_id", None)
+    )
+
+    if has_authenticated_user:
+        # 認証済みユーザーは未登録語に対して 404 を返す
+        raise HTTPException(status_code=404, detail="WordPack not found")
+
+    # 認証済みユーザーが存在しない場合、ゲストモードをチェック
     is_guest = bool(getattr(request.state, "guest", False))
-    # なぜ: セッション認証が無効化された環境でも、ゲスト Cookie が存在する場合は
-    #       読み取り専用として扱い、未登録語の生成を抑止するため。
+
+    # なぜ: セッション認証が無効化された環境（disable_session_auth=True）でも、
+    #       ゲスト Cookie が存在する場合は読み取り専用として扱い、未登録語の生成を抑止する。
+    #       resolve_guest_session_cookie は副作用として request.state.guest = True を
+    #       設定するため、認証済みユーザーの判定後にのみ呼び出す。
     if not is_guest and resolve_guest_session_cookie(request):
         is_guest = True
+
     if is_guest:
         raise HTTPException(
             status_code=403, detail="Guest mode cannot generate WordPack"
         )
+
     raise HTTPException(status_code=404, detail="WordPack not found")
 
 
