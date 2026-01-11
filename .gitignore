@@ -87,6 +87,8 @@ __pycache__/
 
 # ローカルの gcloud 設定ディレクトリ（資格情報を含むため必ず除外）
 .config/gcloud/
+# ローカルの AWS 資格情報ディレクトリも同様に機密情報を含むため除外
+.aws/
 
 # Vector DB (Chroma) persistence - do not commit generated index data
 .chroma/
