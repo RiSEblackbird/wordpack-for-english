@@ -118,6 +118,13 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   const normalizedClientId = useMemo(() => clientId.trim(), [clientId]);
   const clientIdRef = useRef(normalizedClientId);
   const authModeRef = useRef<AuthMode>(authMode);
+  /**
+   * ゲストセッション再発行の並行実行を防ぐフラグ。
+   * 新参メンバー向けに補足すると、複数の 401 が同時発生しても最初のリクエストのみが
+   * 実行され、後続の重複呼び出しは無視される。これにより遅延した失敗リクエストが
+   * 成功済みセッションを誤って anonymous に戻す競合を防止する。
+   */
+  const isReissuingGuestRef = useRef<boolean>(false);
   const missingClientId = normalizedClientId.length === 0;
 
   useEffect(() => {
@@ -321,8 +328,15 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
    * ゲストセッションの再発行を試みる。
    * なぜ: ゲスト利用中の 401 は Cookie の期限切れが主因のため、無駄なログアウト通知を避けて
    *      体験を中断しないようにバックエンドへ再発行のみを依頼する。
+   * 並行制御: 複数の 401 が同時発生しても最初のリクエストのみが実行され、後続は無視される。
+   *          これにより遅延した失敗リクエストが成功済みセッションを anonymous に戻す競合を防ぐ。
    */
   const reissueGuestSession = useCallback(async () => {
+    // 単一実行ガード: 既に再発行中なら重複呼び出しを無視する
+    if (isReissuingGuestRef.current) {
+      return;
+    }
+    isReissuingGuestRef.current = true;
     try {
       const response = await fetch('/api/auth/guest', {
         method: 'POST',
@@ -332,6 +346,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       if (!response.ok || payload?.mode !== 'guest') {
         throw new Error(payload?.detail || 'Guest session request failed');
       }
+      // 再発行リクエスト中にユーザーが別の操作でモードを変更した可能性を考慮
       if (authModeRef.current !== 'guest') {
         return;
       }
@@ -339,6 +354,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       updateAuthMode('guest');
     } catch (err) {
       console.warn('Failed to reissue guest session', err);
+      // 再発行リクエスト中にユーザーが別の操作でモードを変更した可能性を考慮
       if (authModeRef.current !== 'guest') {
         return;
       }
@@ -346,6 +362,9 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       updateAuthMode('anonymous');
       setError('ゲストセッションの再発行に失敗しました。しばらくしてから再試行してください。');
       clearSessionCookie();
+    } finally {
+      // 成功・失敗に関わらず、次の再発行を許可するためフラグをリセット
+      isReissuingGuestRef.current = false;
     }
   }, [clearSessionCookie, updateAuthMode]);
 
