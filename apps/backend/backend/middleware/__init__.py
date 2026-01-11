@@ -171,7 +171,9 @@ class GuestWriteBlockMiddleware(BaseHTTPMiddleware):
         if path in self._allowlisted_paths:
             return await call_next(request)
 
-        session_token = resolve_session_cookie(request)
+        _cookie_name, session_token = resolve_session_cookie(request)
+        # なぜ: 空のセッショントークンを検証すると署名検証例外に誤って流れるため、
+        #       実トークンがある場合のみ検証してゲスト Cookie の判定へ進める。
         if session_token:
             try:
                 verify_session_token(session_token)

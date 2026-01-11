@@ -109,6 +109,8 @@ def test_guest_write_is_denied(guest_test_client: tuple[TestClient, AppFirestore
 
     response = client.post("/api/auth/guest")
     assert response.status_code == HTTPStatus.OK
+    # なぜ: セッション Cookie が無い状態でもゲスト Cookie による拒否が有効かを明示する。
+    assert client.cookies.get(settings.session_cookie_name) is None
 
     denied = client.post("/api/word/packs", json={"lemma": "blocked"})
     assert denied.status_code == HTTPStatus.FORBIDDEN
