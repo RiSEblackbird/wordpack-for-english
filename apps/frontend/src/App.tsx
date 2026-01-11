@@ -359,7 +359,9 @@ export const App: React.FC = () => {
   }
   .app-layout {
     display: flex;
-    min-height: 100vh;
+    /* iPhone 15 Proのようなアドレスバー可変UIでも縦領域を確保するため、動的ビューポートを優先する。 */
+    min-height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
+    min-height: 100dvh;
   }
   .sidebar {
     width: 0;
@@ -374,7 +376,9 @@ export const App: React.FC = () => {
     width: ${SIDEBAR_WIDTH}px;
   }
   .sidebar-content {
-    min-height: 100vh;
+    /* モバイルSafariでの表示崩れを避けるため、サイドバーも動的ビューポートに合わせる。 */
+    min-height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
+    min-height: 100dvh;
     padding: 2rem 1.5rem;
     display: grid;
     width: 100%;
@@ -463,6 +467,11 @@ export const App: React.FC = () => {
       row-gap: 0.5rem;
       padding-left: calc(env(safe-area-inset-left) + 0.5rem);
     }
+    /* iPhone 15 Proでヘッダーが詰まりすぎないように、タイトルサイズと行間を調整する。 */
+    .header-bar h1 {
+      font-size: 1.35rem;
+      margin: 0;
+    }
     .header-actions {
       width: 100%;
       margin-left: 0;
@@ -479,6 +488,7 @@ export const App: React.FC = () => {
       position: fixed;
       top: 0;
       left: 0;
+      height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
       height: 100dvh;
       width: min(85vw, 320px);
       transform: translateX(-100%);
@@ -489,7 +499,9 @@ export const App: React.FC = () => {
       transform: translateX(0);
     }
     .main-column {
-      padding: 0 8px;
+      /* 狭幅端末で左右が欠けないように、安全領域を含めて横余白を計算する。 */
+      padding: 0 calc(8px + env(safe-area-inset-right));
+      padding-left: calc(8px + env(safe-area-inset-left));
       width: 100%;
     }
     .sidebar-content {
@@ -702,11 +714,13 @@ const LoginScreen: React.FC = () => {
   const [localError, setLocalError] = useState<string | null>(null);
   const loginStyles = `
         .login-shell {
-          min-height: 100vh;
+          /* iPhone 15 Proのような動的ビューポートでも中央配置を維持する。 */
+          min-height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
+          min-height: 100dvh;
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 2rem;
+          padding: calc(2rem + env(safe-area-inset-top)) 2rem calc(2rem + env(safe-area-inset-bottom));
           background: var(--color-bg);
           color: var(--color-text);
         }
@@ -861,6 +875,21 @@ const LoginScreen: React.FC = () => {
         }
         body.theme-dark .login-guest-button:hover {
           background: rgba(96, 165, 250, 0.26);
+        }
+        @media (max-width: 430px) {
+          /* iPhone 15 Proの狭幅でもカード内の情報が読みやすいように余白を調整する。 */
+          .login-shell {
+            padding: calc(1.5rem + env(safe-area-inset-top)) 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+          }
+          .login-card {
+            padding: 2rem 1.5rem;
+          }
+          .login-title {
+            font-size: 1.5rem;
+          }
+          .login-subtitle {
+            font-size: 1rem;
+          }
         }
       `;
 
