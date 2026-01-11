@@ -117,6 +117,22 @@ def test_guest_write_is_denied(guest_test_client: tuple[TestClient, AppFirestore
     assert denied.json()["detail"] == "Guest mode cannot perform write operations"
 
 
+def test_guest_lookup_missing_word_is_rejected(
+    guest_test_client: tuple[TestClient, AppFirestoreStore],
+) -> None:
+    """ゲストで未登録語を要求しても生成されず拒否されることを確認する。"""
+
+    client, store = guest_test_client
+
+    response = client.post("/api/auth/guest")
+    assert response.status_code == HTTPStatus.OK
+
+    lookup = client.get("/api/word/", params={"lemma": "unknown"})
+    assert lookup.status_code == HTTPStatus.FORBIDDEN
+    assert lookup.json()["detail"] == "Guest mode cannot generate WordPack"
+    assert store.find_word_pack_by_lemma_ci("unknown") is None
+
+
 def test_guest_delete_is_denied(guest_test_client: tuple[TestClient, AppFirestoreStore]) -> None:
     """ゲストセッションが DELETE 要求を拒否することを確認する。"""
 
