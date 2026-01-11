@@ -6,12 +6,13 @@ from functools import partial
 from typing import Any, Callable, Mapping, Optional
 
 import anyio  # オフロード用
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from ..config import settings
 from ..flows.word_pack import WordPackFlow
 from ..id_factory import generate_word_pack_id
+from ..auth import get_current_user, resolve_guest_session_cookie
 from ..providers import get_llm_provider
 from ..logging import logger
 from ..models.word import (
@@ -192,6 +193,16 @@ def _collect_examples_for_lookup(data: Mapping[str, Any]) -> list[WordLookupExam
     return examples
 
 
+async def _require_authenticated_user(request: Request) -> dict[str, str]:
+    """ゲストを拒否するための認証依存関数（テスト時は無効化設定に合わせる）。"""
+
+    # なぜ: DISABLE_SESSION_AUTH が有効な検証環境でも生成系 API を動かせるようにしつつ、
+    #       本番では get_current_user でゲスト拒否とセッション検証を強制する。
+    if settings.disable_session_auth:
+        return {"mode": "test"}
+    return await get_current_user(request)
+
+
 def _handle_flow_runtime_error(
     exc: RuntimeError,
     *,
@@ -356,7 +367,9 @@ def _build_lookup_response(
 
 
 @router.get("/", response_model=WordLookupResponse, response_model_exclude_none=True)
-async def lookup_word(lemma: str = Query(..., description="見出し語")) -> WordLookupResponse:
+async def lookup_word(
+    request: Request, lemma: str = Query(..., description="見出し語")
+) -> WordLookupResponse:
     """WordPack を lemma で取得し、定義と例文を返す。"""
 
     normalized_lemma = str(lemma or "").strip()
@@ -389,87 +402,33 @@ async def lookup_word(lemma: str = Query(..., description="見出し語")) -> Wo
             updated_at=updated_at,
         )
 
-    # 2) 未保存なら Flow で生成（strict_mode でも例外マップを適用）
-    try:
-        req_opts = WordPackRequest(lemma=normalized_lemma)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"invalid lemma: {exc}") from exc
-
-    try:
-        word_pack, _ = await run_wordpack_flow(
-            lemma=normalized_lemma,
-            req_opts=req_opts,
-            scope=req_opts.regenerate_scope,
-            http_error_mapping={
-                "llm_json_parse": lambda *, lemma, **__: HTTPException(
-                    status_code=502,
-                    detail={
-                        "message": "LLM output JSON parse failed (strict mode)",
-                        "reason_code": "LLM_JSON_PARSE",
-                        "diagnostics": {"lemma": lemma},
-                        "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
-                    },
-                ),
-                "empty_content": lambda *, lemma, diagnostics, **__: HTTPException(
-                    status_code=502,
-                    detail={
-                        "message": "WordPack generation returned empty content (no senses/examples)",
-                        "reason_code": "EMPTY_CONTENT",
-                        "diagnostics": diagnostics or {},
-                        "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
-                    },
-                ),
-            },
-        )
-    except HTTPException:
-        raise
-    except RuntimeError as exc:
-        _handle_flow_runtime_error(
-            exc,
-            lemma=normalized_lemma,
-            http_error_mapping={
-                "llm_json_parse": lambda *, lemma, **__: HTTPException(
-                    status_code=502,
-                    detail={
-                        "message": "LLM output JSON parse failed (strict mode)",
-                        "reason_code": "LLM_JSON_PARSE",
-                        "diagnostics": {"lemma": lemma},
-                        "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
-                    },
-                ),
-                "empty_content": lambda *, lemma, diagnostics, **__: HTTPException(
-                    status_code=502,
-                    detail={
-                        "message": "WordPack generation returned empty content (no senses/examples)",
-                        "reason_code": "EMPTY_CONTENT",
-                        "diagnostics": diagnostics or {},
-                        "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
-                    },
-                ),
-            },
-        )
-        raise HTTPException(
-            status_code=500,
-            detail={
-                "message": "WordPack lookup failed", "reason_code": "LOOKUP_FAILED"
-            },
-        ) from exc
-    except Exception as exc:  # 想定外の例外も安全に HTTP へ変換
-        logger.exception(
-            "wordpack_lookup_unexpected_error", lemma=normalized_lemma, error=str(exc)
-        )
-        raise HTTPException(status_code=500, detail="unexpected error") from exc
-
-    word_pack_id = generate_word_pack_id()
-    store.save_word_pack(word_pack_id, normalized_lemma, word_pack.model_dump_json())
-    return _build_lookup_response(
-        lemma=word_pack.lemma,
-        sense_title=word_pack.sense_title,
-        word_pack_id=word_pack_id,
-        word_pack_data=word_pack.model_dump(),
-        created_at=None,
-        updated_at=None,
+    # なぜ: GET /api/word は閲覧専用に寄せ、生成は POST 系 API に集約する。
+    # 認証済みユーザー（user または user_id が存在する）はゲスト Cookie が残存していても
+    # ゲスト扱いせず、未登録語に対して 404 を返す（生成は POST API で実施）。
+    has_authenticated_user = bool(
+        getattr(request.state, "user", None) or getattr(request.state, "user_id", None)
     )
+
+    if has_authenticated_user:
+        # 認証済みユーザーは未登録語に対して 404 を返す
+        raise HTTPException(status_code=404, detail="WordPack not found")
+
+    # 認証済みユーザーが存在しない場合、ゲストモードをチェック
+    is_guest = bool(getattr(request.state, "guest", False))
+
+    # なぜ: セッション認証が無効化された環境（disable_session_auth=True）でも、
+    #       ゲスト Cookie が存在する場合は読み取り専用として扱い、未登録語の生成を抑止する。
+    #       resolve_guest_session_cookie は副作用として request.state.guest = True を
+    #       設定するため、認証済みユーザーの判定後にのみ呼び出す。
+    if not is_guest and resolve_guest_session_cookie(request):
+        is_guest = True
+
+    if is_guest:
+        raise HTTPException(
+            status_code=403, detail="Guest mode cannot generate WordPack"
+        )
+
+    raise HTTPException(status_code=404, detail="WordPack not found")
 
 
 @router.post(
@@ -478,7 +437,10 @@ async def lookup_word(lemma: str = Query(..., description="見出し語")) -> Wo
     summary="空のWordPackを作成して保存",
     response_description="作成されたWordPackのIDを返します",
 )
-async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
+async def create_empty_word_pack(
+    req: WordPackCreateRequest,
+    _user: dict[str, str] = Depends(_require_authenticated_user),
+) -> dict:
     """空のWordPackを作成・保存する（sense_title は短い日本語をLLMで生成）。
 
     - スキーマに適合する空のWordPack JSONを構築して保存
@@ -564,7 +526,10 @@ async def create_empty_word_pack(req: WordPackCreateRequest) -> dict:
     summary="WordPack を生成",
     response_description="生成された WordPack を返します",
 )
-async def generate_word_pack(req: WordPackRequest) -> WordPack:
+async def generate_word_pack(
+    req: WordPackRequest,
+    _user: dict[str, str] = Depends(_require_authenticated_user),
+) -> WordPack:
     """Generate a new word pack using LangGraph flow.
 
     指定した語について、発音・語義・共起・対比・例文・語源などを
@@ -738,7 +703,9 @@ async def get_word_pack(word_pack_id: str) -> WordPack:
     response_description="既存のWordPackを再生成して返します",
 )
 async def regenerate_word_pack(
-    word_pack_id: str, req: WordPackRegenerateRequest
+    word_pack_id: str,
+    req: WordPackRegenerateRequest,
+    _user: dict[str, str] = Depends(_require_authenticated_user),
 ) -> WordPack:
     """既存のWordPackを再生成する。"""
     # 既存のWordPackを取得してlemmaを取得
@@ -866,7 +833,9 @@ async def _run_regenerate_job(
     summary="WordPackを非同期で再生成（ジョブIDを返す）",
 )
 async def enqueue_regenerate_word_pack(
-    word_pack_id: str, req: WordPackRegenerateRequest
+    word_pack_id: str,
+    req: WordPackRegenerateRequest,
+    _user: dict[str, str] = Depends(_require_authenticated_user),
 ) -> RegenerateJob:
     """Enqueue an async regenerate job and return job ID immediately."""
 
@@ -970,6 +939,7 @@ async def generate_examples_for_word_pack(
     word_pack_id: str,
     category: ExampleCategory,
     req: ExamplesGenerateRequest | None = None,
+    _user: dict[str, str] = Depends(_require_authenticated_user),
 ) -> dict[str, Any]:
     """保存済みWordPackに、指定カテゴリの例文を2件追加生成して保存する。
 

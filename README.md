@@ -408,7 +408,7 @@ npm run test
 ## REST API（抜粋）
 - `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始
 - `POST /api/word/pack` … WordPack を生成して語義タイトル・語義・例文・語源・学習カード要点を返却
-- `GET /api/word?lemma=...` … lemma を指定して最新の WordPack から定義と例文を返却（見つからなければ自動生成）
+- `GET /api/word?lemma=...` … lemma を指定して保存済み WordPack から定義と例文を返却（未保存なら 404。ゲストは未登録語で 403。生成は `POST /api/word/pack` を使用）
 - `POST /api/word/examples/bulk-delete` … 例文IDの配列を受け取り一括削除
 - `POST /api/word/examples/{id}/transcription-typing` … 指定IDの例文について、文字起こし練習で入力した文字数を検証・加算
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts で読み上げた音声（audio/mpeg）をストリーミング返却
@@ -430,6 +430,10 @@ curl -i -X POST \
   -H "Content-Type: application/json" \
   -d '{"lemma":"example"}' \
   http://127.0.0.1:8000/api/word/packs
+```
+- 負例（ゲストが未登録語を検索すると 403）
+```bash
+curl -i -H "Cookie: wp_guest=<signed-token>" "http://127.0.0.1:8000/api/word?lemma=unknown"
 ```
 
 ### WordPack 生成時の入力制約

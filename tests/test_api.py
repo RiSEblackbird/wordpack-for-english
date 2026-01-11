@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from tests.firestore_fakes import (
@@ -203,58 +204,19 @@ def test_lookup_word_returns_saved_pack(client: TestClient, monkeypatch: pytest.
     assert body.get("examples") and body["examples"][0]["category"] == "Dev"
 
 
-def test_lookup_word_generates_when_not_found(monkeypatch: pytest.MonkeyPatch):
-    """未保存の lemma でも Flow を使って生成・保存して返すことを確認。"""
+def test_lookup_word_returns_404_when_not_found(monkeypatch: pytest.MonkeyPatch):
+    """未保存の lemma は GET では生成せず 404 を返すことを確認。"""
 
     backend_main = _reload_backend_app(monkeypatch, strict=False)
     from fastapi.testclient import TestClient
-    from backend.models.word import WordPack
     from backend.store import store as backend_store
-    from backend.routers import word as word_router
-
-    generated_pack = WordPack(
-        lemma="novel",
-        sense_title="新しい",
-        pronunciation={"ipa_GA": None, "ipa_RP": None, "syllables": None, "stress_index": None, "linking_notes": []},
-        senses=[{"id": "s1", "gloss_ja": "新規性", "definition_ja": "新しく独自であること。"}],
-        collocations={
-            "general": {"verb_object": [], "adj_noun": [], "prep_noun": []},
-            "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []},
-        },
-        contrast=[],
-        examples={
-            "Dev": [],
-            "CS": [],
-            "LLM": [],
-            "Business": [],
-            "Common": [
-                {"en": "That idea is novel.", "ja": "そのアイデアは新しい。", "grammar_ja": "SVC"}
-            ],
-        },
-        etymology={"note": "", "confidence": "low"},
-        study_card="",
-        citations=[],
-        confidence="low",
-    )
-
-    async def _fake_flow(**_: object):
-        return generated_pack, {"model": "stub-model", "params": "t=0"}
-
-    monkeypatch.setattr(word_router, "run_wordpack_flow", _fake_flow)
-    monkeypatch.setattr(word_router, "generate_word_pack_id", lambda: "wp:lookup:generated")
 
     client = TestClient(backend_main.app)
     resp = client.get("/api/word", params={"lemma": "novel"})
 
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["lemma"] == "novel"
-    assert body["word_pack_id"] == "wp:lookup:generated"
-    assert body["definition"] == "新しく独自であること。"
-    assert any(it["category"] == "Common" for it in body.get("examples", []))
-
-    # 保存された ID が取得できることを確認（ストアに永続化されている証拠）
-    assert backend_store.find_word_pack_id_by_lemma("novel") == "wp:lookup:generated"
+    assert resp.status_code == 404
+    assert resp.json().get("detail") == "WordPack not found"
+    assert backend_store.find_word_pack_id_by_lemma("novel") is None
 
 
 def test_lookup_word_rejects_invalid_lemma(client: TestClient):
@@ -267,7 +229,7 @@ def test_lookup_word_rejects_invalid_lemma(client: TestClient):
     assert "lemma" in body.get("detail", "")
 
 
-def test_lookup_word_strict_flow_error(monkeypatch: pytest.MonkeyPatch):
+def test_generate_word_pack_strict_flow_error(monkeypatch: pytest.MonkeyPatch):
     """strict_mode でも Flow 例外を HTTP 502 にマッピングして返す。"""
 
     backend_main = _reload_backend_app(monkeypatch, strict=True)
@@ -275,15 +237,20 @@ def test_lookup_word_strict_flow_error(monkeypatch: pytest.MonkeyPatch):
     from backend.routers import word as word_router
 
     async def _failing_flow(**_: object):
-        raise RuntimeError("failed to parse llm json")
+        raise HTTPException(
+            status_code=502,
+            detail={"message": "LLM output JSON parse failed", "reason_code": "LLM_JSON_PARSE"},
+        )
 
     monkeypatch.setattr(word_router, "run_wordpack_flow", _failing_flow)
 
     client = TestClient(backend_main.app, raise_server_exceptions=False)
-    resp = client.get("/api/word", params={"lemma": "stable"})
+    resp = client.post("/api/word/pack", json={"lemma": "stable"})
 
     assert resp.status_code == 502
     assert resp.json().get("detail", {}).get("reason_code") == "LLM_JSON_PARSE"
+
+
 def test_create_empty_word_pack_generates_japanese_sense_title(monkeypatch: pytest.MonkeyPatch):
     backend_main = _reload_backend_app(monkeypatch, strict=False)
     from fastapi.testclient import TestClient

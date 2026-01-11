@@ -276,7 +276,7 @@
 ### B-3. API 一覧（現状）
 - `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始
 - `POST /api/word/pack` … WordPack 生成（語義/共起/対比/例文/語源/学習カード要点/発音RP + `citations`/`confidence`、`pronunciation_enabled`,`regenerate_scope` 対応）
-- `GET /api/word?lemma=...` … lemma から保存済み WordPack を検索し、定義と例文を返却（未存在時は生成して保存）
+- `GET /api/word?lemma=...` … lemma から保存済み WordPack を検索し、定義と例文を返却（未保存なら 404。ゲストは未登録語で 403。生成は `POST /api/word/pack` を使用）
 - 追加（保存済み WordPack 関連）:
   - `DELETE /api/word/packs/{id}/examples/{category}/{index}` … 例文の個別削除
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts を使い、`text`/`voice` を受け取って `audio/mpeg` ストリームを返却
@@ -294,6 +294,10 @@ curl -i -X POST \
   -H "Content-Type: application/json" \
   -d '{"lemma":"example"}' \
   http://127.0.0.1:8000/api/word/packs
+```
+- 負例（ゲストが未登録語を検索すると 403）
+```bash
+curl -i -H "Cookie: wp_guest=<signed-token>" "http://127.0.0.1:8000/api/word?lemma=unknown"
 ```
 
 ### B-4. 保存済み WordPack の内部構造（実装メモ）
