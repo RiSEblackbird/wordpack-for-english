@@ -360,6 +360,7 @@ export const App: React.FC = () => {
   .app-layout {
     display: flex;
     /* iPhone 15 Proのようなアドレスバー可変UIでも縦領域を確保するため、動的ビューポートを優先する。 */
+    min-height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
     min-height: 100dvh;
   }
   .sidebar {
@@ -376,6 +377,7 @@ export const App: React.FC = () => {
   }
   .sidebar-content {
     /* モバイルSafariでの表示崩れを避けるため、サイドバーも動的ビューポートに合わせる。 */
+    min-height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
     min-height: 100dvh;
     padding: 2rem 1.5rem;
     display: grid;
@@ -486,6 +488,7 @@ export const App: React.FC = () => {
       position: fixed;
       top: 0;
       left: 0;
+      height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
       height: 100dvh;
       width: min(85vw, 320px);
       transform: translateX(-100%);
@@ -712,6 +715,7 @@ const LoginScreen: React.FC = () => {
   const loginStyles = `
         .login-shell {
           /* iPhone 15 Proのような動的ビューポートでも中央配置を維持する。 */
+          min-height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
           min-height: 100dvh;
           display: flex;
           align-items: center;
