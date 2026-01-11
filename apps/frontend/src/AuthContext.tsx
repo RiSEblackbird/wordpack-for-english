@@ -318,6 +318,38 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   }, [clearSessionCookie, updateAuthMode]);
 
   /**
+   * ゲストセッションの再発行を試みる。
+   * なぜ: ゲスト利用中の 401 は Cookie の期限切れが主因のため、無駄なログアウト通知を避けて
+   *      体験を中断しないようにバックエンドへ再発行のみを依頼する。
+   */
+  const reissueGuestSession = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/guest', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const payload = (await response.json().catch(() => null)) as { mode?: string; detail?: string } | null;
+      if (!response.ok || payload?.mode !== 'guest') {
+        throw new Error(payload?.detail || 'Guest session request failed');
+      }
+      if (authModeRef.current !== 'guest') {
+        return;
+      }
+      setError(null);
+      updateAuthMode('guest');
+    } catch (err) {
+      console.warn('Failed to reissue guest session', err);
+      if (authModeRef.current !== 'guest') {
+        return;
+      }
+      setUser(null);
+      updateAuthMode('anonymous');
+      setError('ゲストセッションの再発行に失敗しました。しばらくしてから再試行してください。');
+      clearSessionCookie();
+    }
+  }, [clearSessionCookie, updateAuthMode]);
+
+  /**
    * どのエンドポイントでも 401 が返った場合に、セッション切れとして扱う。
    * fetchJson は `auth:unauthorized` カスタムイベントを発火するため、ここで
    * それを監視してクライアント側状態を初期化する。
@@ -328,6 +360,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       const detail = (event as CustomEvent<{ status?: number }>).detail;
       if (detail && detail.status === 401) {
         if (authModeRef.current === 'guest') {
+          void reissueGuestSession();
           return;
         }
         setUser(null);
@@ -341,7 +374,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     return () => {
       window.removeEventListener('auth:unauthorized', handler as EventListener);
     };
-  }, [clearSessionCookie, updateAuthMode]);
+  }, [clearSessionCookie, reissueGuestSession, updateAuthMode]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
