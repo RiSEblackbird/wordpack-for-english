@@ -440,6 +440,7 @@ E2E_BASE_URL=http://127.0.0.1:5173 npm run e2e
 npx playwright test
 ```
 詳細は `docs/testing/playwright-e2e.md` を参照してください。
+GitHub Actions では Playwright の PR スモーク / 夜間回帰（Chromium）/ 週次クロスブラウザ（Firefox・WebKit）を実行し、`playwright-report/` と `test-results/` を成果物として 90 日保持します。取得手順は各ワークフロー実行ページの Artifacts からダウンロードしてください。
 
 ## REST API（抜粋）
 - `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始

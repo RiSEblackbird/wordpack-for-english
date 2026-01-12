@@ -25,6 +25,13 @@ npm run e2e
 - HTML レポート: `playwright-report/`
 - 失敗時の trace / screenshot / video: `test-results/`
 
+## CI 実行
+- PR 向けのスモーク: `auth.spec.ts` / `guest.spec.ts` / `wordpack.spec.ts` の主要導線のみを実行します。
+- 夜間回帰: Chromium で全シナリオを実行します（毎日 02:00 UTC）。
+- 週次クロスブラウザ: Firefox / WebKit で全シナリオを実行します（毎週月曜 03:00 UTC）。
+- CI の成果物は GitHub Actions の該当ワークフロー実行ページ → Artifacts から取得できます。
+  - `playwright-report/` と `test-results/` を保存し、保持期間は 90 日です。
+
 ## 補足
 - `tests/e2e/playwright.config.ts` に `baseURL` や `timeout`、成果物の出力先を集約しています。
 - `BACKEND_PROXY_TARGET` は Vite のプロキシ先を固定するために `127.0.0.1:8000` を使用します。
