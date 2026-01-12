@@ -72,7 +72,10 @@ __pycache__/
 
 # Test artifacts
 .coverage
+.coverage.*
 .pytest_cache/
+coverage.xml
+htmlcov/
 
 # Runtime diagnostics logs (may contain telemetry/PII)
 *.log
