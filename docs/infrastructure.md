@@ -164,6 +164,7 @@ flowchart LR
 | **Security headers tests** | push / PR | セキュリティヘッダー検証（HSTS, CSP, etc.） |
 | **Frontend tests** | push / PR | `vitest --coverage` によるフロントエンドテストと、lines/statements 80%、branches 70%、functions 66% のカバレッジ閾値チェック（functions は段階的に 70%→75%→80% へ引き上げ予定） |
 | **UI smoke test** | Backend / Frontend テスト成功後 | Chrome DevTools MCP を用いた E2E スモークテスト |
+| **Visual regression** | `pull_request`（UI 変更のみ） | UI 変更が検知された場合に Playwright の視覚回帰 (`tests/e2e/visual.spec.ts`) を実行 |
 | **Cloud Run config guard** | Security headers 成功後 | デプロイスクリプトの lint と dry-run 検証 |
 | **Cloud Run dry-run** | CI 成功後の workflow_run（main 向け push / PR のみ） | CI が成功した際に `make release-cloud-run` の dry-run モードを実行。fork からの PR でシークレットが無い場合は notice を残してスキップ |
 | **Deploy to production** | CI 成功後の workflow_run（main 向け push のみ） | CI が成功した際に、本番用シークレットから `.env.deploy` を復元して `make release-cloud-run` を実行（CI が検証した commit SHA をデプロイ） |
@@ -177,10 +178,11 @@ Playwright の E2E は実行レイヤごとにスコープとブラウザを分�
 | レイヤ | トリガー | ブラウザ | 実行コマンド | 成果物 |
 |---|---|---|---|---|
 | PR スモーク | `pull_request` | Chromium | `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts` | `playwright-report/`, `test-results/` |
+| PR ビジュアル回帰 | `pull_request`（`apps/frontend/src/**`, `apps/frontend/**/*.css`, `apps/frontend/**/*.tsx` の変更時） | Chromium | `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts` | `playwright-report/`, `test-results/` |
 | 夜間回帰 | `schedule (cron: 0 2 * * *)` / `workflow_dispatch` | Chromium | `npx playwright test -c tests/e2e/playwright.config.ts --browser=chromium` | `playwright-report/`, `test-results/` |
 | 週次クロスブラウザ | `schedule (cron: 0 3 * * 1)` / `workflow_dispatch` | Firefox / WebKit | `npx playwright test -c tests/e2e/playwright.config.ts --browser=firefox` / `npx playwright test -c tests/e2e/playwright.config.ts --browser=webkit` | `playwright-report/`, `test-results/` |
 
-各レイヤの実行前に `npx playwright install --with-deps` を実行してブラウザを取得する。成果物は GitHub Actions の Artifacts として 90 日保持する。
+各レイヤの実行前に `npx playwright install --with-deps` を実行してブラウザを取得する。成果物は GitHub Actions の Artifacts として 90 日保持する。ビジュアル回帰の差分画像や HTML レポートは対象ワークフローの実行画面から `playwright-report/` と `test-results/` をダウンロードして確認する。
 
 ---
 

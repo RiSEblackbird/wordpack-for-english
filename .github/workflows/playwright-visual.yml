@@ -1,0 +1,63 @@
+name: Playwright visual regression
+
+on:
+  pull_request:
+    paths:
+      - 'apps/frontend/src/**'
+      - 'apps/frontend/**/*.css'
+      - 'apps/frontend/**/*.tsx'
+
+concurrency:
+  group: playwright-visual-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  playwright_visual:
+    name: Playwright visual regression
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            apps/frontend/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install langgraph
+
+      - name: Install frontend dependencies
+        working-directory: apps/frontend
+        run: npm ci
+
+      - name: Install Playwright dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: Run Playwright visual suite
+        run: npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts
+
+      - name: Upload Playwright artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-visual-artifacts
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 90
+          if-no-files-found: ignore
