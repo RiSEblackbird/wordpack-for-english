@@ -1,4 +1,6 @@
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
 
 // Ensure global fetch exists without external deps
 if (!(globalThis as any).fetch) {
@@ -27,28 +29,24 @@ if (!(globalThis as any).window?.matchMedia) {
   (globalThis as any).window.matchMedia = mm as any;
 }
 
-// Base mock for /api/config so SettingsContext doesn't 404 in tests
-const originalFetch = (globalThis.fetch as any).bind(globalThis);
+// SettingsContext/AuthContext の初期同期に使う /api/config をテスト環境で安定供給する。
+export const server = setupServer(
+  http.get('/api/config', () => {
+    return HttpResponse.json({ request_timeout_ms: 60000 });
+  }),
+);
 
 beforeAll(() => {
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === 'string' ? input : (input as URL).toString();
-    if (url.endsWith('/api/config') && (!init || (init && (!init.method || init.method === 'GET')))) {
-      return new Response(
-        JSON.stringify({ request_timeout_ms: 60000 }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    return originalFetch(input as any, init as any);
-  });
+  server.listen({ onUnhandledRequest: 'warn' });
 });
 
 afterEach(() => {
+  server.resetHandlers();
   vi.clearAllMocks();
 });
 
 afterAll(() => {
-  (globalThis.fetch as any).mockRestore?.();
+  server.close();
 });
 
 
