@@ -447,6 +447,16 @@ npx playwright test
 詳細は `docs/testing/playwright-e2e.md` を参照してください。
 成果物は `playwright-report/`（HTML レポート）と `test-results/`（trace/screenshot/video）に出力されます。
 GitHub Actions では Playwright の PR スモークを CI に含め、夜間回帰（Chromium）と週次クロスブラウザ（Firefox・WebKit）は専用ワークフローで schedule（cron）または手動実行（workflow_dispatch）として扱います。`playwright-report/` と `test-results/` は成果物として 90 日保持します。取得手順は各ワークフロー実行ページの Artifacts からダウンロードしてください。
+- Frontend（ビジュアル回帰: Playwright）
+```bash
+# 正例: ビジュアル回帰のみを実行
+E2E_BASE_URL=http://127.0.0.1:5173 \
+  npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts
+
+# 負例: 設定を通さずに実行すると成果物や webServer が反映されない
+npx playwright test tests/e2e/visual.spec.ts
+```
+詳細は `docs/testing/visual-regression.md` を参照してください。
 
 ## REST API（抜粋）
 - `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始
@@ -502,6 +512,7 @@ docs/                   # 詳細ドキュメント
 - インフラ構成図は `docs/infrastructure.md` を参照してください。
 - フロントエンドの Vitest カバレッジ測定は `docs/testing/vitest-coverage.md` を参照してください。
 - Playwright による E2E 実行手順は `docs/testing/playwright-e2e.md` を参照してください。
+- Playwright のビジュアル回帰テスト手順は `docs/testing/visual-regression.md` を参照してください。
 - ユーザー向け操作は `UserManual.md` を参照してください。
 - GitHub Actions の CI では Chrome DevTools MCP を利用した UI スモークテスト（`UI smoke test (Chrome DevTools MCP)` ジョブ）が自動実行されます。ローカルで同じシナリオを再現する方法は `docs/testing/chrome-devtools-mcp-ui-testing.md` を参照してください（Node.js 22 を用い、ルートディレクトリで `npm run smoke` または `tests/ui/mcp-smoke/run-smoke.mjs` を実行する手順を含みます）。Chrome 未インストール環境でも安定版 Chrome の自動取得を試み、許可されない場合は OSS Chromium へのフォールバックを順番に実施します。いずれもダウンロードできなかった場合は `CHROME_EXECUTABLE` で既存バイナリを指定しない限りローカル実行のみスキップする挙動です。
   - Firestore エミュレータは `tests/ui/mcp-smoke` に含まれる `firebase-tools` で起動するため、実行前に `npm ci --prefix tests/ui/mcp-smoke` などで依存パッケージを取得してください。CI では同コマンドが事前に実行される前提で構成されています。
