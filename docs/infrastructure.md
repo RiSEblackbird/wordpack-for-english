@@ -162,7 +162,7 @@ flowchart LR
 |---------|---------|------|
 | **Backend tests** | push / PR | `PYTHONPATH=apps/backend` で `pytest` を実行し、`pytest.ini` の `addopts` に揃えた `apps/backend/backend` のカバレッジが 60% 以上であることを検証 |
 | **Security headers tests** | push / PR | セキュリティヘッダー検証（HSTS, CSP, etc.） |
-| **Frontend tests** | push / PR | `vitest --coverage` によるフロントエンドテストと、lines/statements 80%、branches 70%、functions 80% のカバレッジ閾値チェック |
+| **Frontend tests** | push / PR | `vitest --coverage` によるフロントエンドテストと、lines/statements 80%、branches 70%、functions 66% のカバレッジ閾値チェック（functions は段階的に 70%→75%→80% へ引き上げ予定） |
 | **UI smoke test** | Backend / Frontend テスト成功後 | Chrome DevTools MCP を用いた E2E スモークテスト |
 | **Cloud Run config guard** | Security headers 成功後 | デプロイスクリプトの lint と dry-run 検証 |
 | **Cloud Run dry-run** | CI 成功後の workflow_run（main 向け push / PR のみ） | CI が成功した際に `make release-cloud-run` の dry-run モードを実行。fork からの PR でシークレットが無い場合は notice を残してスキップ |
