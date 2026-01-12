@@ -431,6 +431,15 @@ cd apps/frontend
 npm run test
 ```
 統合テストの前提条件と補足は `docs/testing/frontend-integration-tests.md` を参照してください。
+- Frontend/Backend（E2E: Playwright）
+```bash
+# 正例: E2E 実行時にフロント/バックを自動起動
+E2E_BASE_URL=http://127.0.0.1:5173 npm run e2e
+
+# 負例: E2E 設定を無視した直接起動（成果物や webServer 設定が反映されない）
+npx playwright test
+```
+詳細は `docs/testing/playwright-e2e.md` を参照してください。
 
 ## REST API（抜粋）
 - `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始
@@ -485,6 +494,7 @@ docs/                   # 詳細ドキュメント
 - 詳細な API・フロー・モデルは `docs/flows.md`, `docs/models.md`, `docs/環境変数の意味.md`, `docs/guest_public_api.md` を参照してください。
 - インフラ構成図は `docs/infrastructure.md` を参照してください。
 - フロントエンドの Vitest カバレッジ測定は `docs/testing/vitest-coverage.md` を参照してください。
+- Playwright による E2E 実行手順は `docs/testing/playwright-e2e.md` を参照してください。
 - ユーザー向け操作は `UserManual.md` を参照してください。
 - GitHub Actions の CI では Chrome DevTools MCP を利用した UI スモークテスト（`UI smoke test (Chrome DevTools MCP)` ジョブ）が自動実行されます。ローカルで同じシナリオを再現する方法は `docs/testing/chrome-devtools-mcp-ui-testing.md` を参照してください（Node.js 22 を用い、ルートディレクトリで `npm run smoke` または `tests/ui/mcp-smoke/run-smoke.mjs` を実行する手順を含みます）。Chrome 未インストール環境でも安定版 Chrome の自動取得を試み、許可されない場合は OSS Chromium へのフォールバックを順番に実施します。いずれもダウンロードできなかった場合は `CHROME_EXECUTABLE` で既存バイナリを指定しない限りローカル実行のみスキップする挙動です。
   - Firestore エミュレータは `tests/ui/mcp-smoke` に含まれる `firebase-tools` で起動するため、実行前に `npm ci --prefix tests/ui/mcp-smoke` などで依存パッケージを取得してください。CI では同コマンドが事前に実行される前提で構成されています。
