@@ -228,13 +228,29 @@
 
 > **メモ:** `.env` や `apps/frontend/.env` を作成したら、バックエンド/フロントエンドを起動する前に必ず環境変数を設定してください。起動後に追加した場合は、それぞれのプロセスを再起動して読み直す必要があります。
 
-### B-1-2. Chrome DevTools MCP による UI 自動テスト体制
+### B-1-2. フロントエンド統合テスト（実バックエンド接続）
+- 目的: `POST /api/word/pack` の実HTTP呼び出しと UI 反映までをローカルで確認します。
+- 前提: バックエンドを `DISABLE_SESSION_AUTH=true` で起動し、Firestore エミュレータと `OPENAI_API_KEY` を設定してください。
+- 実行例:
+  - 正例:
+    ```bash
+    cd apps/frontend
+    INTEGRATION_TEST=true BACKEND_PROXY_TARGET=http://127.0.0.1:8000 npm run test
+    ```
+  - 負例（統合テストが skip される）:
+    ```bash
+    cd apps/frontend
+    npm run test
+    ```
+- 詳細な前提条件は `docs/testing/frontend-integration-tests.md` を参照してください。
+
+### B-1-3. Chrome DevTools MCP による UI 自動テスト体制
 - GitHub Actions の CI では `UI smoke test (Chrome DevTools MCP)` ジョブが自動で走り、主要な UI 動線を Chrome DevTools MCP 経由で検証します。
 - Codex から `chrome-devtools` MCP サーバーを利用すると、CI と同じ UI スモークテストを手元でも再現できます。
 - 設定手順やスモークテストの観点、Codex 用プロンプトは `docs/testing/chrome-devtools-mcp-ui-testing.md` と `tests/ui/` 配下の資料を参照してください。
 - テスト結果を基にフロントエンドを修正した際は、Vitest (`npm run test`) と MCP スモークテストを双方とも再実行して回帰を確認してください（CI の自動実行と併せてローカル再確認する運用です）。
 
-### B-1-3. Firestore インデックス同期フロー
+### B-1-4. Firestore インデックス同期フロー
 - `firestore.indexes.json` に `word_packs` / `examples` 用の複合インデックスを定義済みです。Cloud Firestore / Firebase エミュレータ / Firebase CLI で同じファイルを読み込めるようにしてあり、Web コンソールでの手作業登録は不要です。
 - 例文コレクションは `created_at` / `pack_updated_at` / `search_en` / `search_en_reversed` / `search_terms` を組み合わせたインデックスを持ち、`order_by` + `start_after` + `limit` によるページングで 1 リクエスト最大 50 件だけを読み出します。`search_en` は小文字化、`search_en_reversed` は逆順文字列、`search_terms` は 1〜3 文字の N-gram + トークン配列で、`prefix`/`suffix`/`contains` いずれの検索モードもサーバー側で絞り込みます。`offset` はカーソル計算専用で全件読み込みは行いません。
 - 本番/検証へのデプロイ:

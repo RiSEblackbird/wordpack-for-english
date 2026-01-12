@@ -2,6 +2,9 @@ import { afterAll, afterEach, beforeAll, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 
+// 統合テストでは実HTTPを使うため、MSW のモック層を明示的に無効化する。
+const isIntegrationTest = process.env.INTEGRATION_TEST === 'true';
+
 // Ensure global fetch exists without external deps
 if (!(globalThis as any).fetch) {
   (globalThis as any).fetch = ((): any => {
@@ -37,15 +40,19 @@ export const server = setupServer(
 );
 
 beforeAll(() => {
+  if (isIntegrationTest) return;
   server.listen({ onUnhandledRequest: 'warn' });
 });
 
 afterEach(() => {
-  server.resetHandlers();
+  if (!isIntegrationTest) {
+    server.resetHandlers();
+  }
   vi.clearAllMocks();
 });
 
 afterAll(() => {
+  if (isIntegrationTest) return;
   server.close();
 });
 
