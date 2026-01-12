@@ -69,6 +69,7 @@ export const WordPackPanel: React.FC<Props> = ({
     loadWordPack,
     regenerateWordPack,
     recordStudyProgress,
+    updateGuestPublic,
   } = useWordPack({ model, onWordPackGenerated, onStudyProgressRecorded });
 
   const {
@@ -103,6 +104,7 @@ export const WordPackPanel: React.FC<Props> = ({
   const isLemmaValid = lemmaValidation.valid;
   const normalizedLemma = lemmaValidation.normalizedLemma;
   const isActionLoading = loading || examplesLoading || progressUpdating;
+  const [guestPublicUpdating, setGuestPublicUpdating] = useState(false);
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
@@ -151,6 +153,10 @@ export const WordPackPanel: React.FC<Props> = ({
 
   const packCheckedCount = data?.checked_only_count ?? 0;
   const packLearnedCount = data?.learned_count ?? 0;
+  const guestPublic = data?.guest_public ?? false;
+  const guestPublicDisabledReason = !currentWordPackId
+    ? '保存済みのWordPackのみ公開設定を切り替えできます。'
+    : null;
 
   const triggerUnknownLemmaGeneration = useCallback(async (lemmaText: string) => {
     const trimmed = lemmaText.trim();
@@ -198,6 +204,23 @@ export const WordPackPanel: React.FC<Props> = ({
       await generateExamples(category);
     },
     [generateExamples],
+  );
+
+  const handleGuestPublicChange = useCallback(
+    async (nextValue: boolean) => {
+      if (!currentWordPackId) {
+        setStatusMessage({ kind: 'alert', text: '保存済みのWordPackのみ公開設定を切り替えできます。' });
+        return;
+      }
+      // なぜ: 画面上で即時にON/OFFを反映し、ゲスト公開フローの作業負担を減らすため。
+      setGuestPublicUpdating(true);
+      try {
+        await updateGuestPublic(currentWordPackId, nextValue);
+      } finally {
+        setGuestPublicUpdating(false);
+      }
+    },
+    [currentWordPackId, setStatusMessage, updateGuestPublic],
   );
 
   useEffect(() => {
@@ -276,6 +299,10 @@ export const WordPackPanel: React.FC<Props> = ({
           isActionLoading={isActionLoading}
           packCheckedCount={packCheckedCount}
           packLearnedCount={packLearnedCount}
+          guestPublic={guestPublic}
+          guestPublicUpdating={guestPublicUpdating}
+          guestPublicDisabledReason={guestPublicDisabledReason}
+          onGuestPublicChange={handleGuestPublicChange}
           onRecordStudyProgress={recordStudyProgress}
           onRegenerate={handleRegenerateWordPack}
           formatDate={formatDate}

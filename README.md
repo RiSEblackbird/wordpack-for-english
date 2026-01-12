@@ -32,6 +32,7 @@
 - **概要**: ログインせずに画面を閲覧できる読み取り専用モードです。ログイン画面の「ゲスト閲覧モード」ボタンから入れます。
 - **制限事項**: AI の生成・再生成・削除は利用できません。音声再生も無効です。さらに **POST/DELETE のリクエスト（追加・更新・削除）** はすべて拒否され、閲覧用の GET のみ許可されます。
 - **UIロックの範囲**: 生成・インポート用の入力欄（見出し語/文章/モデル/カテゴリ/advanced設定）や一覧のチェックボックス・全選択/解除ボタンも無効になり、ホバーで同じツールチップが表示されます。
+- **公開範囲**: ゲスト閲覧で表示されるのは `word_packs.metadata.guest_public=true` の WordPack のみです。例文は WordPack に紐づいて公開されるため、WordPack 単位の公開フラグが基準になります（必要に応じて例文単位の公開フラグへ拡張可能）。
 - **ログイン手順（通常モード）**:
   1. ログイン画面で「Google でログイン」ボタンを押します。
   2. Google のポップアップでアカウントを選択し、許可を確定します。
@@ -413,6 +414,7 @@ npm run test
 - `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始
 - `POST /api/word/pack` … WordPack を生成して語義タイトル・語義・例文・語源・学習カード要点を返却
 - `GET /api/word?lemma=...` … lemma を指定して保存済み WordPack から定義と例文を返却（未保存なら 404。ゲストは未登録語で 403。生成は `POST /api/word/pack` を使用）
+- `POST /api/word/packs/{id}/guest-public` … WordPack のゲスト公開フラグを更新（ログイン済みユーザーのみ）
 - `POST /api/word/examples/bulk-delete` … 例文IDの配列を受け取り一括削除
 - `POST /api/word/examples/{id}/transcription-typing` … 指定IDの例文について、文字起こし練習で入力した文字数を検証・加算
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts で読み上げた音声（audio/mpeg）をストリーミング返却
@@ -458,7 +460,7 @@ docs/                   # 詳細ドキュメント
 - UI に変更が入る PR では、同じ PR 内で必ず `UserManual.md` の該当箇所を更新します（後回しや「追記予定」は認めません）。
 
 ## 追加ドキュメント
-- 詳細な API・フロー・モデルは `docs/flows.md`, `docs/models.md`, `docs/環境変数の意味.md` を参照してください。
+- 詳細な API・フロー・モデルは `docs/flows.md`, `docs/models.md`, `docs/環境変数の意味.md`, `docs/guest_public_api.md` を参照してください。
 - インフラ構成図は `docs/infrastructure.md` を参照してください。
 - ユーザー向け操作は `UserManual.md` を参照してください。
 - GitHub Actions の CI では Chrome DevTools MCP を利用した UI スモークテスト（`UI smoke test (Chrome DevTools MCP)` ジョブ）が自動実行されます。ローカルで同じシナリオを再現する方法は `docs/testing/chrome-devtools-mcp-ui-testing.md` を参照してください（Node.js 22 を用い、ルートディレクトリで `npm run smoke` または `tests/ui/mcp-smoke/run-smoke.mjs` を実行する手順を含みます）。Chrome 未インストール環境でも安定版 Chrome の自動取得を試み、許可されない場合は OSS Chromium へのフォールバックを順番に実施します。いずれもダウンロードできなかった場合は `CHROME_EXECUTABLE` で既存バイナリを指定しない限りローカル実行のみスキップする挙動です。

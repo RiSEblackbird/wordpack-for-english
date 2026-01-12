@@ -4,7 +4,7 @@ import { useModal } from '../ModalContext';
 import { useConfirmDialog } from '../ConfirmDialogContext';
 import { useNotifications } from '../NotificationsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
-import { regenerateWordPackRequest } from '../lib/wordpack';
+import { regenerateWordPackRequest, updateGuestPublicFlag } from '../lib/wordpack';
 import { useAbortableAsync, AbortError } from '../lib/hooks';
 import { loadSessionState, saveSessionState } from '../lib/storage';
 import { assignSetValues, retainSetValues, toggleSetValue } from '../lib/set';
@@ -16,6 +16,7 @@ import { TTSButton } from './TTSButton';
 import { formatDateJst } from '../lib/date';
 import { useAuth } from '../AuthContext';
 import { GuestLock } from './GuestLock';
+import { GuestPublicToggle } from './GuestPublicToggle';
 
 // 削除ボタンの共通コンポーネント
 interface DeleteButtonProps {
@@ -66,6 +67,7 @@ interface WordPackListItem {
   created_at: string;
   updated_at: string;
   is_empty?: boolean;
+  guest_public?: boolean;
   examples_count?: {
     Dev: number;
     CS: number;
@@ -180,6 +182,7 @@ export const WordPackListPanel: React.FC = () => {
   const [showAllSense, setShowAllSense] = useState(persistedState.showAllSense);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(() => new Set());
+  const [guestPublicUpdatingIds, setGuestPublicUpdatingIds] = useState<Set<string>>(() => new Set());
   const { run: runAbortable } = useAbortableAsync();
   const previewMeta = useMemo<WordPackPreviewMeta | null>(() => {
     if (!previewWordPackId) return null;
@@ -263,6 +266,7 @@ export const WordPackListPanel: React.FC = () => {
             ...item,
             checked_only_count: item.checked_only_count ?? 0,
             learned_count: item.learned_count ?? 0,
+            guest_public: item.guest_public ?? false,
           })),
         );
         setTotal(res.total);
@@ -347,6 +351,42 @@ export const WordPackListPanel: React.FC = () => {
     reasoningEffort,
     updateNotification,
   ]);
+
+  const updateGuestPublic = useCallback(
+    async (wordPackId: string, nextValue: boolean) => {
+      if (!wordPackId) return;
+      if (guestPublicUpdatingIds.has(wordPackId)) return;
+      const previous = wordPacks.find((wp) => wp.id === wordPackId)?.guest_public ?? false;
+      setGuestPublicUpdatingIds((prev) => new Set(prev).add(wordPackId));
+      setWordPacks((prev) =>
+        prev.map((wp) => (wp.id === wordPackId ? { ...wp, guest_public: nextValue } : wp)),
+      );
+      try {
+        await updateGuestPublicFlag({
+          apiBase,
+          wordPackId,
+          guestPublic: nextValue,
+          timeoutMs: requestTimeoutMs,
+        });
+        setMsg({ kind: 'status', text: nextValue ? 'ゲスト公開を有効にしました' : 'ゲスト公開を解除しました' });
+        try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+      } catch (e) {
+        setWordPacks((prev) =>
+          prev.map((wp) => (wp.id === wordPackId ? { ...wp, guest_public: previous } : wp)),
+        );
+        const m = e instanceof ApiError ? e.message : 'ゲスト公開の更新に失敗しました';
+        setMsg({ kind: 'alert', text: m });
+      } finally {
+        setGuestPublicUpdatingIds((prev) => {
+          if (!prev.has(wordPackId)) return prev;
+          const next = new Set(prev);
+          next.delete(wordPackId);
+          return next;
+        });
+      }
+    },
+    [apiBase, guestPublicUpdatingIds, requestTimeoutMs, wordPacks],
+  );
 
   const deleteWordPack = useCallback(async (wordPack: WordPackListItem) => {
     const targetLabel = wordPack.lemma?.trim() || 'WordPack';
@@ -828,6 +868,17 @@ export const WordPackListPanel: React.FC = () => {
                         <span className="wp-progress-badge learned">学 {wp.learned_count}</span>
                         <span className="wp-progress-badge checked">確 {wp.checked_only_count}</span>
                       </div>
+                      <div style={{ marginTop: '0.35rem' }}>
+                        <GuestPublicToggle
+                          isGuest={isGuest}
+                          checked={Boolean(wp.guest_public)}
+                          disabled={loading || guestPublicUpdatingIds.has(wp.id)}
+                          onChange={(next) => updateGuestPublic(wp.id, next)}
+                          tooltip="ゲスト閲覧の一覧に表示するかどうかを切り替えます。"
+                          description="公開対象のWordPackのみ、ゲスト一覧に表示されます。"
+                          compact
+                        />
+                      </div>
                       {wp.is_empty ? (
                         <div style={{ marginTop: '0.3rem', fontSize: '0.7em' }}>
                           <span style={{
@@ -941,6 +992,17 @@ export const WordPackListPanel: React.FC = () => {
                         onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
                         disabled={loading}
                         isGuest={isGuest}
+                      />
+                    </div>
+                    <div style={{ marginTop: '0.35rem' }} onClick={(e) => e.stopPropagation()}>
+                      <GuestPublicToggle
+                        isGuest={isGuest}
+                        checked={Boolean(wp.guest_public)}
+                        disabled={loading || guestPublicUpdatingIds.has(wp.id)}
+                        onChange={(next) => updateGuestPublic(wp.id, next)}
+                        tooltip="ゲスト閲覧の一覧に表示するかどうかを切り替えます。"
+                        description="公開対象のWordPackのみ、ゲスト一覧に表示されます。"
+                        compact
                       />
                     </div>
                   </div>

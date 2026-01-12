@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 """Word エンドポイント。backend.providers パッケージ経由で LLM を取得する。"""
 
 from functools import partial
@@ -30,6 +30,8 @@ from ..models.word import (
     WordPackListResponse,
     WordPackRegenerateRequest,
     WordPackRequest,
+    WordPackGuestPublicRequest,
+    WordPackGuestPublicResponse,
     StudyProgressRequest,
     WordPackStudyProgressResponse,
     ExampleStudyProgressResponse,
@@ -388,6 +390,10 @@ async def lookup_word(
         if packed is None:
             raise HTTPException(status_code=404, detail="word pack not found")
 
+        if bool(getattr(request.state, "guest", False)):
+            if not store.is_word_pack_guest_public(word_pack_id):
+                raise HTTPException(status_code=404, detail="word pack not found")
+
         lemma_from_store, data_json, created_at, updated_at = packed
         try:
             data_dict = json.loads(data_json) if data_json else {}
@@ -601,11 +607,20 @@ async def generate_word_pack(
     response_description="保存済みWordPackの一覧を返します",
 )
 async def list_word_packs(
+    request: Request,
     limit: int = Query(default=50, ge=1, le=200, description="取得件数上限"),
     offset: int = Query(default=0, ge=0, description="オフセット"),
 ) -> WordPackListResponse:
     """保存済みWordPackの一覧を取得する。"""
-    items_with_flags = store.list_word_packs_with_flags(limit=limit, offset=offset)
+    is_guest = bool(getattr(request.state, "guest", False))
+    if is_guest:
+        items_with_flags = store.list_public_word_packs_with_flags(
+            limit=limit, offset=offset
+        )
+        total = store.count_public_word_packs()
+    else:
+        items_with_flags = store.list_word_packs_with_flags(limit=limit, offset=offset)
+        total = store.count_word_packs()
     items: list[WordPackListItem] = []
     for (
         wp_id,
@@ -617,6 +632,7 @@ async def list_word_packs(
         examples_count,
         checked_only,
         learned,
+        guest_public,
     ) in items_with_flags:
         items.append(
             WordPackListItem(
@@ -629,16 +645,52 @@ async def list_word_packs(
                 examples_count=examples_count,
                 checked_only_count=checked_only,
                 learned_count=learned,
+                guest_public=guest_public,
             )
         )
-
-    total = store.count_word_packs()
 
     return WordPackListResponse(
         items=items,
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post(
+    "/packs/{word_pack_id}/guest-public",
+    response_model=WordPackGuestPublicResponse,
+    summary="WordPackのゲスト公開フラグを更新",
+)
+async def update_word_pack_guest_public(
+    request: Request,
+    word_pack_id: str,
+    req: WordPackGuestPublicRequest,
+    _user: dict[str, str] = Depends(_require_authenticated_user),
+) -> WordPackGuestPublicResponse:
+    """WordPack単位のゲスト公開フラグを更新する。"""
+
+    metadata = store.get_word_pack_metadata(word_pack_id)
+    if metadata is None:
+        raise HTTPException(status_code=404, detail="WordPack not found")
+
+    now = datetime.now(UTC).isoformat()
+    store.update_word_pack_metadata(
+        word_pack_id,
+        updated_at=now,
+        guest_public=req.guest_public,
+    )
+
+    logger.info(
+        "wordpack_guest_public_updated",
+        word_pack_id=word_pack_id,
+        user_id=getattr(request.state, "user_id", None),
+        guest_public=req.guest_public,
+    )
+
+    return WordPackGuestPublicResponse(
+        word_pack_id=word_pack_id,
+        guest_public=req.guest_public,
     )
 
 
@@ -681,15 +733,19 @@ async def update_word_pack_study_progress(
     summary="保存済みWordPackを取得",
     response_description="指定されたIDのWordPackを返します",
 )
-async def get_word_pack(word_pack_id: str) -> WordPack:
+async def get_word_pack(request: Request, word_pack_id: str) -> WordPack:
     """保存済みWordPackをIDで取得する。"""
     result = store.get_word_pack(word_pack_id)
     if result is None:
         raise HTTPException(status_code=404, detail="WordPack not found")
 
     lemma, data, created_at, updated_at = result
+    guest_public = store.is_word_pack_guest_public(word_pack_id)
+    if bool(getattr(request.state, "guest", False)) and not guest_public:
+        raise HTTPException(status_code=404, detail="WordPack not found")
     try:
         word_pack_dict = json.loads(data)
+        word_pack_dict["guest_public"] = guest_public
         return WordPack.model_validate(word_pack_dict)
     except (json.JSONDecodeError, ValueError) as exc:
         raise HTTPException(status_code=500, detail=f"Invalid WordPack data: {exc}")
