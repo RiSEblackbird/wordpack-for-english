@@ -52,6 +52,36 @@ const setupArticleImportHandlers = () => {
   );
 };
 
+// なぜ: 500/タイムアウトを明示的に再現し、エラー時のUI復帰を安定検証するため。
+const overrideImportFailureHandlers = () => {
+  server.use(
+    http.post('/api/article/import', async () => {
+      await delay(30);
+      return HttpResponse.json(
+        { detail: { message: 'インポート処理でサーバーエラーが発生しました' } },
+        { status: 500 },
+      );
+    }),
+  );
+};
+
+// なぜ: 短いタイムアウト設定で生成＆インポート失敗を素早く再現するため。
+const overrideGenerateTimeoutHandlers = () => {
+  server.use(
+    http.get('/api/config', () => HttpResponse.json({ request_timeout_ms: 30 })),
+    http.post('/api/article/generate_and_import', async () => {
+      await delay(80);
+      return HttpResponse.json({
+        lemma: 'test',
+        word_pack_id: 'wp:test:abcd',
+        category: 'Common',
+        generated_examples: 2,
+        article_ids: ['art:1', 'art:2'],
+      });
+    }),
+  );
+};
+
 // なぜ: 依存する全コンテキストを本番構成に寄せ、実利用時のUI遷移をテストで再現するため。
 const renderWithProviders = () => {
   return render(
@@ -101,6 +131,44 @@ describe('ArticleImportPanel (MSW + contexts)', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'インポート結果' });
     expect(dialog).toBeInTheDocument();
+  });
+
+  it('インポート失敗時にエラー表示とボタン再有効化が行われる', async () => {
+    overrideImportFailureHandlers();
+    renderWithProviders();
+    const user = userEvent.setup();
+
+    const textarea = await screen.findByPlaceholderText('文章を貼り付け（日本語/英語）');
+    await user.type(textarea, 'broken import');
+
+    const importButton = screen.getByRole('button', { name: 'インポート' });
+    await user.click(importButton);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('インポート処理でサーバーエラーが発生しました');
+
+    await waitFor(() => {
+      expect(importButton).toBeEnabled();
+    });
+  });
+
+  it('生成＆インポート失敗後に実行中表示が解除される', async () => {
+    overrideGenerateTimeoutHandlers();
+    renderWithProviders();
+    const user = userEvent.setup();
+
+    const generateButton = await screen.findByRole('button', { name: '生成＆インポート' });
+    await user.click(generateButton);
+
+    const runningButton = await screen.findByRole('button', { name: /生成＆インポート（実行中/ });
+    expect(runningButton).toBeInTheDocument();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Request aborted or timed out');
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '生成＆インポート' })).toBeInTheDocument();
+    });
   });
 
   it('モデル切替で reasoning/text UI が表示される', async () => {
