@@ -13,6 +13,10 @@ from .store.examples import EXAMPLE_CATEGORIES
 from .store.firestore_store import AppFirestoreStore
 
 
+# なぜ: WordPack 本体スキーマを変更せず、Firestore 側の metadata でゲスト用データを識別するため。
+_GUEST_DEMO_METADATA = {"guest_demo": True}
+
+
 @dataclass(frozen=True)
 class DemoWordPack:
     """SQLite デモデータから組み立てた WordPack 1 件分のペイロード。"""
@@ -196,7 +200,12 @@ def seed_firestore_from_sqlite(
         store.wordpacks._metadata.document("example_counters").set({"next_id": 1})
 
     for pack in word_packs:
-        store.save_word_pack(pack.word_pack_id, pack.lemma, pack.payload_json)
+        store.save_word_pack(
+            pack.word_pack_id,
+            pack.lemma,
+            pack.payload_json,
+            metadata=_GUEST_DEMO_METADATA,
+        )
 
     for article in articles:
         store.articles.save_article(
@@ -207,3 +216,20 @@ def seed_firestore_from_sqlite(
 
     return len(word_packs), len(articles)
 
+
+def seed_firestore_from_sqlite_if_missing_guest_demo(
+    sqlite_path: Path,
+    store: AppFirestoreStore,
+    *,
+    reset_example_counter: bool = True,
+) -> tuple[int, int]:
+    """ゲスト用のデモデータが未投入の場合のみ SQLite デモデータを反映する。"""
+
+    if store.has_guest_demo_word_pack():
+        return 0, 0
+
+    return seed_firestore_from_sqlite(
+        sqlite_path,
+        store,
+        reset_example_counter=reset_example_counter,
+    )

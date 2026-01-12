@@ -53,7 +53,7 @@ flowchart TB
 |---------------|------|
 | **Firebase Hosting** | React + Vite でビルドした静的ファイルを配信。`/api/**` へのリクエストを Cloud Run へリライト。 |
 | **Cloud Run** | FastAPI バックエンドを実行。`Dockerfile.backend` でビルドしたイメージをデプロイ。 |
-| **Cloud Firestore** | ユーザー情報・WordPack・例文・インポート記事を永続化。`firestore.indexes.json` で複合インデックスを管理。 |
+| **Cloud Firestore** | ユーザー情報・WordPack・例文・インポート記事を永続化。ゲスト閲覧用のデモデータは `word_packs.metadata.guest_demo=true` で識別する。`firestore.indexes.json` で複合インデックスを管理。 |
 | **Artifact Registry** | Cloud Build でビルドした Docker イメージを保存。 |
 | **Cloud Load Balancer** | HTTPS 終端と `X-Forwarded-For` によるクライアント IP 復元。 |
 | **OpenAI API** | WordPack 生成（gpt-4o-mini）と音声読み上げ（gpt-4o-mini-tts）。 |
