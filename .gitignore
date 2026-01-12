@@ -66,6 +66,8 @@ apps/frontend/.env
 apps/frontend/.env.local
 apps/frontend/.env.*
 !apps/frontend/.env.example
+# MSW のローカル生成物（開発時のみ生成される可能性があるため除外）
+.msw/
 
 # Python
 __pycache__/
