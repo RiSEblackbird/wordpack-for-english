@@ -32,6 +32,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="example_counters をリセットせず既存のカウンタを引き継ぐ場合に指定。",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="ゲスト用データの有無に関わらずシードを実行する場合に指定。",
+    )
     return parser
 
 
@@ -49,18 +54,29 @@ def main() -> None:
     backend_root = repo_root / "apps" / "backend"
     sys.path.insert(0, str(backend_root))
 
-    from backend.seed_firestore_demo import seed_firestore_from_sqlite
+    from backend.seed_firestore_demo import (
+        seed_firestore_from_sqlite,
+        seed_firestore_from_sqlite_if_missing_guest_demo,
+    )
     from backend.store.firestore_store import AppFirestoreStore
 
     store = AppFirestoreStore()
-    wordpacks, articles = seed_firestore_from_sqlite(
-        args.sqlite_path,
-        store,
-        reset_example_counter=not args.preserve_example_counter,
-    )
+    if args.force:
+        wordpacks, articles = seed_firestore_from_sqlite(
+            args.sqlite_path,
+            store,
+            reset_example_counter=not args.preserve_example_counter,
+        )
+    else:
+        wordpacks, articles = seed_firestore_from_sqlite_if_missing_guest_demo(
+            args.sqlite_path,
+            store,
+            reset_example_counter=not args.preserve_example_counter,
+        )
+        if wordpacks == 0 and articles == 0:
+            print("Guest demo data already exists. Skipping seed.")
     print(f"Seeded {wordpacks} word_packs and {articles} articles into Firestore ({args.project_id}).")
 
 
 if __name__ == "__main__":
     main()
-

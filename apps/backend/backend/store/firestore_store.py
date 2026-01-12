@@ -194,7 +194,14 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         query = query.limit(normalized_limit)
         return list(query.stream())
 
-    def save_word_pack(self, word_pack_id: str, lemma: str, data: str) -> None:
+    def save_word_pack(
+        self,
+        word_pack_id: str,
+        lemma: str,
+        data: str,
+        *,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
         now = _now_iso()
         (
             core_json,
@@ -216,6 +223,19 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         existing = pack_ref.get()
         existing_data = existing.to_dict() or {}
         existing_examples_total, counts_confident = _extract_example_total(existing_data)
+        # なぜ: 既存 metadata を保持しつつ guest_demo などの識別情報だけを差し替えたい。
+        #      省略時に metadata が消えると、ゲストデータ判定が不安定になるため。
+        existing_metadata = existing_data.get("metadata") or {}
+        metadata_payload: Mapping[str, Any] | None = None
+        if metadata is None:
+            if isinstance(existing_metadata, Mapping) and existing_metadata:
+                metadata_payload = dict(existing_metadata)
+        else:
+            metadata_payload = (
+                {**existing_metadata, **metadata}
+                if isinstance(existing_metadata, Mapping)
+                else dict(metadata)
+            )
         created_at = (
             str(existing_data.get("created_at") or now) if existing.exists else now
         )
@@ -228,22 +248,23 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             existing_example_total=existing_examples_total,
             is_total_confident=counts_confident,
         )
-        pack_ref.set(
-            {
-                "lemma_id": lemma_id,
-                "lemma_label": lemma,
-                "lemma_label_lower": lemma.lower(),
-                "sense_title": sense_title,
-                "lemma_llm_model": lemma_llm_model,
-                "lemma_llm_params": lemma_llm_params,
-                "data_core": core_json,
-                "created_at": created_at,
-                "updated_at": now,
-                "checked_only_count": normalize_non_negative_int(checked_only_count),
-                "learned_count": normalize_non_negative_int(learned_count),
-                "examples_category_counts": category_counts,
-            }
-        )
+        payload = {
+            "lemma_id": lemma_id,
+            "lemma_label": lemma,
+            "lemma_label_lower": lemma.lower(),
+            "sense_title": sense_title,
+            "lemma_llm_model": lemma_llm_model,
+            "lemma_llm_params": lemma_llm_params,
+            "data_core": core_json,
+            "created_at": created_at,
+            "updated_at": now,
+            "checked_only_count": normalize_non_negative_int(checked_only_count),
+            "learned_count": normalize_non_negative_int(learned_count),
+            "examples_category_counts": category_counts,
+        }
+        if metadata_payload is not None:
+            payload["metadata"] = metadata_payload
+        pack_ref.set(payload)
 
     def get_word_pack(self, word_pack_id: str) -> tuple[str, str, str, str] | None:
         doc = self._word_packs.document(word_pack_id).get()
@@ -295,6 +316,14 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             msg = "Firestore client does not support aggregation queries"
             raise RuntimeError(msg) from exc
         return _extract_count_from_aggregation(aggregation)
+
+    def has_guest_demo_word_pack(self) -> bool:
+        """ゲスト閲覧用のデモデータが存在するかを軽量クエリで確認する。"""
+
+        query = self._word_packs.where("metadata.guest_demo", "==", True).limit(1)
+        for _ in query.stream():
+            return True
+        return False
 
     def list_word_packs_with_flags(
         self, limit: int = 50, offset: int = 0
@@ -1366,8 +1395,15 @@ class AppFirestoreStore:
         self.users.delete_user(google_sub)
 
     # --- WordPacks ---
-    def save_word_pack(self, word_pack_id: str, lemma: str, data: str) -> None:
-        self.wordpacks.save_word_pack(word_pack_id, lemma, data)
+    def save_word_pack(
+        self,
+        word_pack_id: str,
+        lemma: str,
+        data: str,
+        *,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        self.wordpacks.save_word_pack(word_pack_id, lemma, data, metadata=metadata)
 
     def get_word_pack(self, word_pack_id: str) -> tuple[str, str, str, str] | None:
         return self.wordpacks.get_word_pack(word_pack_id)
@@ -1377,6 +1413,9 @@ class AppFirestoreStore:
 
     def count_word_packs(self) -> int:
         return self.wordpacks.count_word_packs()
+
+    def has_guest_demo_word_pack(self) -> bool:
+        return self.wordpacks.has_guest_demo_word_pack()
 
     def list_word_packs_with_flags(
         self, limit: int = 50, offset: int = 0

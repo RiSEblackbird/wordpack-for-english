@@ -27,6 +27,7 @@
 - ゲスト中は **画面右上に「ゲスト閲覧モード」バッジ** が表示され、いまは閲覧専用であることを示します。ブラウザを再読み込みしても同じ状態が復元されます。
 - ゲスト閲覧モードでは **AIによる生成・再生成・削除**、**音声再生**、**保存や削除などの操作** は利用できません。該当ボタンは押せず、マウスを重ねると「ゲストモードではAI機能は使用できません」と表示されます。
 - 見出し語/文章の入力欄、モデルやカテゴリの選択、一覧のチェックボックスや全選択/解除ボタンもゲスト中は無効化され、同じツールチップが表示されます。
+- ゲスト用データは Firestore の `word_packs.metadata.guest_demo=true` が付与された WordPack のみが対象です。
 - 例（ゲストでできる/できない）:
   - 正例: WordPack の一覧を開いて内容を読む。
   - 負例: 「削除」ボタンを押してデータを消そうとする（ゲストでは実行できません）。
@@ -250,7 +251,7 @@
   # 開発用データを投入したい場合
   make seed-firestore-demo
   ```
-  - エミュレータ起動時に `firestore.indexes.json` が自動で読み込まれます。`Ctrl+C` で停止し、必要に応じて `FIRESTORE_EMULATOR_HOST` を付与した API/テストを実行してください。`.data_demo/wordpack.sqlite3.demo` は Firestore シード用として使用し、SQLite への直接シードは行わない運用に統一しています。
+  - エミュレータ起動時に `firestore.indexes.json` が自動で読み込まれます。`Ctrl+C` で停止し、必要に応じて `FIRESTORE_EMULATOR_HOST` を付与した API/テストを実行してください。`.data_demo/wordpack.sqlite3.demo` は Firestore シード用として使用し、SQLite への直接シードは行わない運用に統一しています。ゲスト用データは `word_packs.metadata.guest_demo=true` で識別し、既にゲスト用データが存在する場合はシードがスキップされます（再投入したい場合は `scripts/seed_firestore_demo.py --force` を使用）。
 
 ### B-10. オブザーバビリティ（Langfuse）
 - `.env` に `LANGFUSE_ENABLED=true` と各キーを設定し、`requirements.txt` の `langfuse` を導入してください。

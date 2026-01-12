@@ -205,7 +205,7 @@ class FakeQuery:
         expected: Any,
     ) -> bool:
         data = snapshot.to_dict() or {}
-        actual = data.get(field_path)
+        actual = self._resolve_field_path(data, field_path)
         if op_string == "==":
             return actual == expected
         if op_string == "array_contains":
@@ -222,6 +222,18 @@ class FakeQuery:
         if op_string == "<":
             return actual < expected
         raise NotImplementedError(f"unsupported operator: {op_string}")
+
+    def _resolve_field_path(self, data: dict[str, Any], field_path: str) -> Any:
+        """Firestore のドット区切り field_path を dict から辿る。"""
+
+        if "." not in field_path:
+            return data.get(field_path)
+        current: Any = data
+        for key in field_path.split("."):
+            if not isinstance(current, dict):
+                return None
+            current = current.get(key)
+        return current
 
     def _order_value(self, snapshot: FakeDocumentSnapshot, field_path: str) -> Any:
         data = snapshot.to_dict() or {}
