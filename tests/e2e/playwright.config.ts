@@ -41,6 +41,8 @@ export default defineConfig({
       env: {
         // E2E の実行時はローカル API を確実に参照させ、Vite のプロキシ先を固定する。
         BACKEND_PROXY_TARGET: 'http://127.0.0.1:8000',
+        FIRESTORE_EMULATOR_HOST: process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080',
+        FIRESTORE_PROJECT_ID: process.env.FIRESTORE_PROJECT_ID ?? 'wordpack-ci',
       },
     },
     {
