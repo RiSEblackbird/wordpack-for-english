@@ -23,5 +23,14 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
+    // 新規メンバー向け: CIでのVitestカバレッジ閾値をここで集中管理する。
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary'],
+      lines: 80,
+      statements: 80,
+      branches: 70,
+      functions: 80,
+    },
   },
 });

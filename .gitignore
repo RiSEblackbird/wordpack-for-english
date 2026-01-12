@@ -76,6 +76,7 @@ __pycache__/
 .pytest_cache/
 coverage.xml
 htmlcov/
+coverage/
 
 # Runtime diagnostics logs (may contain telemetry/PII)
 *.log
