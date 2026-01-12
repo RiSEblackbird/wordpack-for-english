@@ -432,7 +432,12 @@ npm run test
 ```
 統合テストの前提条件と補足は `docs/testing/frontend-integration-tests.md` を参照してください。
 - Frontend/Backend（E2E: Playwright）
+  - バックエンド/フロントエンドの依存関係は、クイックスタートのセットアップを完了しておくこと。
 ```bash
+# セットアップ: ルートで Playwright をインストール
+npm install
+npx playwright install --with-deps
+
 # 正例: E2E 実行時にフロント/バックを自動起動
 E2E_BASE_URL=http://127.0.0.1:5173 npm run e2e
 
@@ -440,6 +445,7 @@ E2E_BASE_URL=http://127.0.0.1:5173 npm run e2e
 npx playwright test
 ```
 詳細は `docs/testing/playwright-e2e.md` を参照してください。
+成果物は `playwright-report/`（HTML レポート）と `test-results/`（trace/screenshot/video）に出力されます。
 GitHub Actions では Playwright の PR スモーク / 夜間回帰（Chromium）/ 週次クロスブラウザ（Firefox・WebKit）を実行し、`playwright-report/` と `test-results/` を成果物として 90 日保持します。取得手順は各ワークフロー実行ページの Artifacts からダウンロードしてください。
 
 ## REST API（抜粋）

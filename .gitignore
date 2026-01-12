@@ -24,6 +24,9 @@ bin-release/
 !.env.ci
 .envrc
 .direnv/
+# E2E 用ローカル環境変数（テスト用トークンなどを含み得るため除外）
+tests/e2e/.env
+tests/e2e/.env.*
 # 認証トークンを含む可能性のあるパッケージマネージャ設定
 .npmrc
 .yarnrc
