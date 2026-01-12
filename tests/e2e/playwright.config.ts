@@ -1,11 +1,13 @@
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
 
-const repoRoot = path.resolve(__dirname, '../..');
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(currentDir, '../..');
 const baseURL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173';
 
 export default defineConfig({
-  testDir: __dirname,
+  testDir: currentDir,
   fullyParallel: true,
   timeout: 30_000,
   expect: {
@@ -39,6 +41,8 @@ export default defineConfig({
       env: {
         // E2E の実行時はローカル API を確実に参照させ、Vite のプロキシ先を固定する。
         BACKEND_PROXY_TARGET: 'http://127.0.0.1:8000',
+        FIRESTORE_EMULATOR_HOST: process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080',
+        FIRESTORE_PROJECT_ID: process.env.FIRESTORE_PROJECT_ID ?? 'wordpack-ci',
       },
     },
     {
