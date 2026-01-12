@@ -47,13 +47,13 @@ jobs:
 
       - name: Run pytest
         env:
-          PYTHONPATH: src
+          PYTHONPATH: apps/backend
         run: |
           if [ "${ENABLE_FIRESTORE_EMULATOR}" = "true" ]; then
             npm install -g firebase-tools
-            FIRESTORE_EMULATOR_HOST="127.0.0.1:${FIRESTORE_EMULATOR_PORT}" FIRESTORE_PROJECT_ID="${FIRESTORE_PROJECT_ID}" firebase emulators:exec --only firestore --project "${FIRESTORE_PROJECT_ID}" --config firebase.json "pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60" | cat
+            FIRESTORE_EMULATOR_HOST="127.0.0.1:${FIRESTORE_EMULATOR_PORT}" FIRESTORE_PROJECT_ID="${FIRESTORE_PROJECT_ID}" firebase emulators:exec --only firestore --project "${FIRESTORE_PROJECT_ID}" --config firebase.json "pytest" | cat
           else
-            pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60 | cat
+            pytest | cat
           fi
 
   security_headers:
@@ -325,4 +325,3 @@ jobs:
             echo "- Env file: ${CLOUD_RUN_ENV_FILE}"
             echo "- SKIP_FIRESTORE_INDEX_SYNC: ${SKIP_FIRESTORE_INDEX_SYNC}"
           } >> "$GITHUB_STEP_SUMMARY"
-

@@ -400,8 +400,13 @@ Cloud Run や Firebase Hosting へ出荷する前に、上記の手順で Firest
 - `email_hash`: メールアドレスを小文字化し SHA-256 でハッシュ化した先頭12文字。個人情報を露出させずに該当アカウントを突き合わせる目的で使用します。
 
 ## テスト
+バックエンドのカバレッジ計測は `pytest.ini` の `addopts` で `apps/backend/backend` を対象に統一しています（CI も同じ設定を使用）。  
 - Backend（Python）
 ```bash
+# 正例: backend パッケージを解決するために PYTHONPATH を合わせる
+PYTHONPATH=apps/backend pytest
+
+# 負例: PYTHONPATH 未設定だと backend パッケージの import に失敗する場合がある
 pytest
 ```
 - Frontend（Vitest）

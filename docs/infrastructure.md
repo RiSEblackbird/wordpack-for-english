@@ -160,7 +160,7 @@ flowchart LR
 
 | ジョブ名 | トリガー | 内容 |
 |---------|---------|------|
-| **Backend tests** | push / PR | `pytest` によるバックエンドテスト（カバレッジ 60% 以上） |
+| **Backend tests** | push / PR | `PYTHONPATH=apps/backend` で `pytest` を実行し、`pytest.ini` の `addopts` に揃えた `apps/backend/backend` のカバレッジが 60% 以上であることを検証 |
 | **Security headers tests** | push / PR | セキュリティヘッダー検証（HSTS, CSP, etc.） |
 | **Frontend tests** | push / PR | `vitest` によるフロントエンドテスト |
 | **UI smoke test** | Backend / Frontend テスト成功後 | Chrome DevTools MCP を用いた E2E スモークテスト |
