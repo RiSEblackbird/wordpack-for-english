@@ -19,8 +19,10 @@ test.describe('認証導線', () => {
     });
 
     await test.step('Then: ログイン済み UI が表示される', async () => {
+      await page.waitForURL('**/', { waitUntil: 'domcontentloaded' });
+      // なぜ: ログイン後の常設UI（ヘッダー）に存在し、画面文言の揺らぎに強い要素を採用する。
       await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'WordPack生成' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'WordPack' })).toBeVisible();
     });
   });
 });
