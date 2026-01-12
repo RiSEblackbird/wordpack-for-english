@@ -419,6 +419,18 @@ npm run test -- --coverage
 npm run test
 ```
 フロントエンドのカバレッジ閾値やレポート出力の詳細は `docs/testing/vitest-coverage.md` にまとめています。
+- Frontend（統合テスト: 実バックエンド接続）
+```bash
+# 正例: 実バックエンドに接続して統合テストを実行
+# 事前に backend を DISABLE_SESSION_AUTH=true で起動し、Firestore エミュレータ/OPENAI_API_KEY を設定済みであること
+cd apps/frontend
+INTEGRATION_TEST=true BACKEND_PROXY_TARGET=http://127.0.0.1:8000 npm run test
+
+# 負例: INTEGRATION_TEST を指定しないと統合テストは skip される
+cd apps/frontend
+npm run test
+```
+統合テストの前提条件と補足は `docs/testing/frontend-integration-tests.md` を参照してください。
 
 ## REST API（抜粋）
 - `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始
