@@ -13,7 +13,9 @@ test.describe('ゲストモード', () => {
 
     await test.step('Given: 未認証のログイン画面が表示されている', async () => {
       await page.goto('/');
-      await expect(page.getByRole('heading', { name: 'WordPack にサインイン' })).toBeVisible();
+      // ログイン見出しは App.tsx の login-title と一致させ、UI文言の正を明確にする。
+      await expect(page.getByRole('heading', { name: 'WordPack にサインイン' })).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeVisible();
     });
 
     await test.step('When: ゲスト閲覧モードを選択する', async () => {
