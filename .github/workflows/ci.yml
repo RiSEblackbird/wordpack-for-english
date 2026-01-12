@@ -111,7 +111,7 @@ jobs:
         run: npm ci
 
       - name: Run vitest
-        run: npm test --silent
+        run: npm test -- --coverage --silent
 
   ui_smoke:
     name: UI smoke test (Chrome DevTools MCP)
