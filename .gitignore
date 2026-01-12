@@ -86,6 +86,9 @@ coverage/
 # Playwright artifacts (HTML report, traces, screenshots)
 playwright-report/
 test-results/
+# Playwright 認証ストレージはセッション情報を含むため除外
+tests/e2e/.auth/
+tests/e2e/storage-state*.json
 
 # Runtime diagnostics logs (may contain telemetry/PII)
 *.log
