@@ -26,9 +26,9 @@ npm run e2e
 - 失敗時の trace / screenshot / video: `test-results/`
 
 ## CI 実行
-- PR 向けのスモーク: `auth.spec.ts` / `guest.spec.ts` / `wordpack.spec.ts` の主要導線のみを実行します。
-- 夜間回帰: Chromium で全シナリオを実行します（毎日 02:00 UTC）。
-- 週次クロスブラウザ: Firefox / WebKit で全シナリオを実行します（毎週月曜 03:00 UTC）。
+- PR 向けのスモーク（`pull_request`）: `auth.spec.ts` / `guest.spec.ts` / `wordpack.spec.ts` の主要導線のみを実行します。
+- 夜間回帰（`schedule (cron: 0 2 * * *)` / `workflow_dispatch`）: Chromium で全シナリオを実行します。
+- 週次クロスブラウザ（`schedule (cron: 0 3 * * 1)` / `workflow_dispatch`）: Firefox / WebKit で全シナリオを実行します。
 - CI の成果物は GitHub Actions の該当ワークフロー実行ページ → Artifacts から取得できます。
   - `playwright-report/` と `test-results/` を保存し、保持期間は 90 日です。
 
