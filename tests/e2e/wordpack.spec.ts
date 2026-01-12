@@ -190,8 +190,13 @@ test.describe('WordPack 操作', () => {
 
     await test.step('Given: WordPack を作成して編集可能な状態にする', async () => {
       await page.goto('/');
+      await page.waitForLoadState('networkidle');
+      await expect(page.getByRole('heading', { name: 'WordPack' })).toBeVisible();
       await page.getByLabel('見出し語').fill('alpha');
-      await page.getByRole('button', { name: 'WordPackのみ作成' }).click();
+      // 入力バリデーション完了後にボタンが有効化されるため、明示的に待機してから押下する。
+      const createWordPackButton = page.getByRole('button', { name: 'WordPackのみ作成' });
+      await expect(createWordPackButton).toBeEnabled();
+      await createWordPackButton.click();
       await expect(page.getByRole('heading', { name: /例文/ })).toBeVisible();
     });
 
