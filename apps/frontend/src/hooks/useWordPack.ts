@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNotifications } from '../NotificationsContext';
 import { useSettings } from '../SettingsContext';
 import { ApiError, fetchJson } from '../lib/fetcher';
-import { composeModelRequestFields, enqueueRegenerateWordPack, fetchRegenerateJobStatus, regenerateWordPackRequest } from '../lib/wordpack';
+import { composeModelRequestFields, enqueueRegenerateWordPack, fetchRegenerateJobStatus, regenerateWordPackRequest, updateGuestPublicFlag } from '../lib/wordpack';
 
 export interface Pronunciation {
   ipa_GA?: string | null;
@@ -50,6 +50,7 @@ export interface WordPack {
   study_card: string;
   citations: Citation[];
   confidence: 'low' | 'medium' | 'high';
+  guest_public?: boolean;
   checked_only_count?: number;
   learned_count?: number;
 }
@@ -81,6 +82,7 @@ interface UseWordPackResult {
   loadWordPack: (wordPackId: string) => Promise<void>;
   regenerateWordPack: (wordPackId: string, lemma: string) => Promise<void>;
   recordStudyProgress: (kind: 'checked' | 'learned') => Promise<void>;
+  updateGuestPublic: (wordPackId: string, guestPublic: boolean) => Promise<void>;
 }
 
 /**
@@ -341,6 +343,32 @@ export const useWordPack = ({
     [apiBase, currentWordPackId, onStudyProgressRecorded],
   );
 
+  const updateGuestPublic = useCallback(
+    async (wordPackId: string, guestPublic: boolean) => {
+      if (!wordPackId) return;
+      const previous = data?.guest_public ?? false;
+      setData((prev) => (prev ? { ...prev, guest_public: guestPublic } : prev));
+      try {
+        await updateGuestPublicFlag({
+          apiBase,
+          wordPackId,
+          guestPublic,
+          timeoutMs: requestTimeoutMs,
+        });
+        setMessage({
+          kind: 'status',
+          text: guestPublic ? 'ゲスト公開を有効にしました' : 'ゲスト公開を解除しました',
+        });
+        try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+      } catch (error) {
+        setData((prev) => (prev ? { ...prev, guest_public: previous } : prev));
+        const text = error instanceof ApiError ? error.message : 'ゲスト公開の更新に失敗しました';
+        setMessage({ kind: 'alert', text });
+      }
+    },
+    [apiBase, data?.guest_public, requestTimeoutMs],
+  );
+
   const regenerateWordPack = useCallback(
     async (wordPackId: string, lemma: string) => {
       const ctrl = new AbortController();
@@ -456,5 +484,6 @@ export const useWordPack = ({
     loadWordPack,
     regenerateWordPack,
     recordStudyProgress,
+    updateGuestPublic,
   };
 };

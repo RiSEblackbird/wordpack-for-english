@@ -39,6 +39,7 @@ const setupGuestWordPackFetch = () => {
               is_empty: true,
               checked_only_count: 0,
               learned_count: 0,
+              guest_public: true,
             },
           ],
           total: 1,

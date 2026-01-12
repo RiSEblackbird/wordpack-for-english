@@ -190,6 +190,28 @@ def test_has_guest_demo_word_pack_uses_metadata_filter(
     assert log[0]["limit"] == 1
 
 
+def test_list_public_word_packs_filters_by_guest_public(
+    firestore_store: AppFirestoreStore,
+) -> None:
+    payload = {"lemma": "Public", "examples": {}}
+    firestore_store.save_word_pack(
+        "wp-public",
+        payload["lemma"],
+        json.dumps(payload, ensure_ascii=False),
+        metadata={"guest_public": True},
+    )
+    firestore_store.save_word_pack(
+        "wp-private",
+        "Private",
+        json.dumps({"lemma": "Private", "examples": {}}, ensure_ascii=False),
+    )
+
+    public_rows = firestore_store.list_public_word_packs_with_flags(limit=10, offset=0)
+    assert [row[0] for row in public_rows] == ["wp-public"]
+    assert public_rows[0][-1] is True
+    assert firestore_store.count_public_word_packs() == 1
+
+
 def test_find_word_pack_lookup_uses_filtered_query(
     firestore_store: AppFirestoreStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:

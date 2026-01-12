@@ -317,6 +317,17 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             raise RuntimeError(msg) from exc
         return _extract_count_from_aggregation(aggregation)
 
+    def count_public_word_packs(self) -> int:
+        """ゲスト公開フラグ付きの WordPack 件数を返す。"""
+
+        query = self._ordered_word_pack_query().where("metadata.guest_public", "==", True)
+        try:
+            aggregation = query.count().get()
+        except AttributeError as exc:  # pragma: no cover - defensive fallback
+            msg = "Firestore client does not support aggregation queries"
+            raise RuntimeError(msg) from exc
+        return _extract_count_from_aggregation(aggregation)
+
     def has_guest_demo_word_pack(self) -> bool:
         """ゲスト閲覧用のデモデータが存在するかを軽量クエリで確認する。"""
 
@@ -327,9 +338,9 @@ class FirestoreWordPackStore(FirestoreBaseStore):
 
     def list_word_packs_with_flags(
         self, limit: int = 50, offset: int = 0
-    ) -> list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int]]:
+    ) -> list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int, bool]]:
         docs = self._fetch_word_pack_snapshots(limit, offset)
-        results: list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int]] = []
+        results: list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int, bool]] = []
         for doc in docs:
             data = doc.to_dict() or {}
             counts_raw = data.get("examples_category_counts") or {}
@@ -337,6 +348,7 @@ class FirestoreWordPackStore(FirestoreBaseStore):
             total = sum(counts.values())
             checked = normalize_non_negative_int(data.get("checked_only_count"))
             learned = normalize_non_negative_int(data.get("learned_count"))
+            metadata = data.get("metadata") or {}
             results.append(
                 (
                     doc.id,
@@ -348,9 +360,56 @@ class FirestoreWordPackStore(FirestoreBaseStore):
                     counts,
                     checked,
                     learned,
+                    bool(metadata.get("guest_public", False))
+                    if isinstance(metadata, Mapping)
+                    else False,
                 )
             )
         return results
+
+    def list_public_word_packs_with_flags(
+        self, limit: int = 50, offset: int = 0
+    ) -> list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int, bool]]:
+        query = self._ordered_word_pack_query().where("metadata.guest_public", "==", True)
+        if offset:
+            query = query.offset(max(0, int(offset)))
+        query = query.limit(max(0, int(limit)))
+        docs = list(query.stream())
+        results: list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int, bool]] = []
+        for doc in docs:
+            data = doc.to_dict() or {}
+            counts_raw = data.get("examples_category_counts") or {}
+            counts = {cat: int(counts_raw.get(cat, 0)) for cat in EXAMPLE_CATEGORIES}
+            total = sum(counts.values())
+            checked = normalize_non_negative_int(data.get("checked_only_count"))
+            learned = normalize_non_negative_int(data.get("learned_count"))
+            metadata = data.get("metadata") or {}
+            results.append(
+                (
+                    doc.id,
+                    str(data.get("lemma_label") or ""),
+                    str(data.get("sense_title") or ""),
+                    str(data.get("created_at") or ""),
+                    str(data.get("updated_at") or ""),
+                    total == 0,
+                    counts,
+                    checked,
+                    learned,
+                    bool(metadata.get("guest_public", False))
+                    if isinstance(metadata, Mapping)
+                    else False,
+                )
+            )
+        return results
+
+    def is_word_pack_guest_public(self, word_pack_id: str) -> bool:
+        payload = self.get_word_pack_metadata(word_pack_id) or {}
+        if not isinstance(payload, Mapping):
+            return False
+        metadata = payload.get("metadata") or {}
+        if not isinstance(metadata, Mapping):
+            return False
+        return bool(metadata.get("guest_public", False))
 
     def delete_word_pack(self, word_pack_id: str) -> bool:
         doc_ref = self._word_packs.document(word_pack_id)
@@ -659,6 +718,7 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         *,
         updated_at: str | None = None,
         category_counts: Mapping[str, int] | None = None,
+        guest_public: bool | None = None,
     ) -> None:
         updates: dict[str, Any] = {}
         if updated_at is not None:
@@ -666,6 +726,8 @@ class FirestoreWordPackStore(FirestoreBaseStore):
         if category_counts is not None:
             normalized = {cat: int(category_counts.get(cat, 0)) for cat in EXAMPLE_CATEGORIES}
             updates["examples_category_counts"] = normalized
+        if guest_public is not None:
+            updates["metadata.guest_public"] = bool(guest_public)
         if updates:
             self._word_packs.document(word_pack_id).update(updates)
 
@@ -1414,13 +1476,21 @@ class AppFirestoreStore:
     def count_word_packs(self) -> int:
         return self.wordpacks.count_word_packs()
 
+    def get_word_pack_metadata(self, word_pack_id: str) -> Mapping[str, Any] | None:
+        return self.wordpacks.get_word_pack_metadata(word_pack_id)
+
     def has_guest_demo_word_pack(self) -> bool:
         return self.wordpacks.has_guest_demo_word_pack()
 
     def list_word_packs_with_flags(
         self, limit: int = 50, offset: int = 0
-    ) -> list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int]]:
+    ) -> list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int, bool]]:
         return self.wordpacks.list_word_packs_with_flags(limit=limit, offset=offset)
+
+    def list_public_word_packs_with_flags(
+        self, limit: int = 50, offset: int = 0
+    ) -> list[tuple[str, str, str, str, str, bool, Mapping[str, int], int, int, bool]]:
+        return self.wordpacks.list_public_word_packs_with_flags(limit=limit, offset=offset)
 
     def delete_word_pack(self, word_pack_id: str) -> bool:
         return self.wordpacks.delete_word_pack(word_pack_id)
@@ -1441,6 +1511,27 @@ class AppFirestoreStore:
 
     def find_word_pack_by_lemma_ci(self, lemma: str) -> tuple[str, str, str] | None:
         return self.wordpacks.find_word_pack_by_lemma_ci(lemma)
+
+    def count_public_word_packs(self) -> int:
+        return self.wordpacks.count_public_word_packs()
+
+    def is_word_pack_guest_public(self, word_pack_id: str) -> bool:
+        return self.wordpacks.is_word_pack_guest_public(word_pack_id)
+
+    def update_word_pack_metadata(
+        self,
+        word_pack_id: str,
+        *,
+        updated_at: str | None = None,
+        category_counts: Mapping[str, int] | None = None,
+        guest_public: bool | None = None,
+    ) -> None:
+        return self.wordpacks.update_word_pack_metadata(
+            word_pack_id,
+            updated_at=updated_at,
+            category_counts=category_counts,
+            guest_public=guest_public,
+        )
 
     # --- Examples ---
     def update_example_study_progress(

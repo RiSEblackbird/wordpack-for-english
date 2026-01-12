@@ -50,7 +50,20 @@ class FakeDocumentReference:
         bucket = self._client._data.setdefault(self._collection, {})
         if self.id not in bucket:
             raise KeyError(f"document {self._collection}/{self.id} not found")
-        bucket[self.id].update(data)
+        payload = bucket[self.id]
+        for key, value in data.items():
+            if "." not in key:
+                payload[key] = value
+                continue
+            current: dict[str, Any] = payload
+            parts = key.split(".")
+            for part in parts[:-1]:
+                nested = current.get(part)
+                if not isinstance(nested, dict):
+                    nested = {}
+                    current[part] = nested
+                current = nested
+            current[parts[-1]] = value
 
     def get(self, transaction: "FakeTransaction" | None = None) -> FakeDocumentSnapshot:
         bucket = self._client._data.setdefault(self._collection, {})

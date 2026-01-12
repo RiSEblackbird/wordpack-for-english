@@ -388,6 +388,10 @@ class WordPack(BaseModel):
     # 生成に使用したAIのメタ（任意）
     llm_model: str | None = Field(default=None)
     llm_params: str | None = Field(default=None)
+    guest_public: bool = Field(
+        default=False,
+        description="ゲスト閲覧対象かどうか（WordPack単位の公開フラグ）",
+    )
     checked_only_count: int = Field(
         default=0,
         ge=0,
@@ -424,6 +428,10 @@ class WordPackListItem(BaseModel):
         ge=0,
         description="WordPack全体を学習した回数（非負整数）",
     )
+    guest_public: bool = Field(
+        default=False,
+        description="ゲスト閲覧対象かどうか（WordPack単位の公開フラグ）",
+    )
 
 
 class WordPackListResponse(BaseModel):
@@ -433,6 +441,17 @@ class WordPackListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class WordPackGuestPublicRequest(BaseModel):
+    guest_public: bool = Field(
+        description="ゲスト閲覧対象として公開する場合は true",
+    )
+
+
+class WordPackGuestPublicResponse(BaseModel):
+    word_pack_id: str = Field(description="更新対象のWordPack ID")
+    guest_public: bool = Field(description="更新後のゲスト公開フラグ")
 
 
 class StudyProgressRequest(BaseModel):

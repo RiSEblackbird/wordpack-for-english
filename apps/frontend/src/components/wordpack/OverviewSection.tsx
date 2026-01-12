@@ -3,6 +3,7 @@ import { TTSButton } from '../TTSButton';
 import { WordPack } from '../../hooks/useWordPack';
 import { useAuth } from '../../AuthContext';
 import { GuestLock } from '../GuestLock';
+import { GuestPublicToggle } from '../GuestPublicToggle';
 
 interface ExampleStatItem {
   category: string;
@@ -28,6 +29,10 @@ interface OverviewSectionProps {
   isActionLoading: boolean;
   packCheckedCount: number;
   packLearnedCount: number;
+  guestPublic: boolean;
+  guestPublicUpdating: boolean;
+  guestPublicDisabledReason?: string | null;
+  onGuestPublicChange: (next: boolean) => void;
   onRecordStudyProgress: (kind: 'checked' | 'learned') => void;
   onRegenerate?: () => void;
   formatDate: (dateStr?: string | null) => string;
@@ -47,6 +52,10 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
   isActionLoading,
   packCheckedCount,
   packLearnedCount,
+  guestPublic,
+  guestPublicUpdating,
+  guestPublicDisabledReason,
+  onGuestPublicChange,
   onRecordStudyProgress,
   onRegenerate,
   formatDate,
@@ -135,6 +144,17 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
           alignItems: 'center',
         }}
       >
+        <div style={{ flex: '1 1 240px' }}>
+          <GuestPublicToggle
+            isGuest={isGuest}
+            checked={guestPublic}
+            disabled={guestPublicUpdating || !currentWordPackId}
+            onChange={onGuestPublicChange}
+            tooltip="ゲスト閲覧での表示可否を切り替えます（例文もWordPack単位で公開されます）"
+            description="ゲスト閲覧モードに表示させる場合に有効化します。"
+            disabledReason={guestPublicDisabledReason}
+          />
+        </div>
         <div
           style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
           aria-label="学習記録の操作"
