@@ -80,6 +80,10 @@ coverage.xml
 htmlcov/
 coverage/
 
+# Playwright artifacts (HTML report, traces, screenshots)
+playwright-report/
+test-results/
+
 # Runtime diagnostics logs (may contain telemetry/PII)
 *.log
 

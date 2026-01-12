@@ -250,7 +250,21 @@
 - 設定手順やスモークテストの観点、Codex 用プロンプトは `docs/testing/chrome-devtools-mcp-ui-testing.md` と `tests/ui/` 配下の資料を参照してください。
 - テスト結果を基にフロントエンドを修正した際は、Vitest (`npm run test`) と MCP スモークテストを双方とも再実行して回帰を確認してください（CI の自動実行と併せてローカル再確認する運用です）。
 
-### B-1-4. Firestore インデックス同期フロー
+### B-1-4. Playwright による E2E テスト
+- 目的: フロントエンドとバックエンドの実起動をまとめて行い、主要導線の回帰を確認します。
+- 実行例:
+  - 正例:
+    ```bash
+    E2E_BASE_URL=http://127.0.0.1:5173 npm run e2e
+    ```
+  - 負例（webServer 設定を通さずに起動してしまう）:
+    ```bash
+    npx playwright test
+    ```
+- テスト成果物は `playwright-report/` と `test-results/` に保存されます。
+- 詳細は `docs/testing/playwright-e2e.md` を参照してください。
+
+### B-1-5. Firestore インデックス同期フロー
 - `firestore.indexes.json` に `word_packs` / `examples` 用の複合インデックスを定義済みです。Cloud Firestore / Firebase エミュレータ / Firebase CLI で同じファイルを読み込めるようにしてあり、Web コンソールでの手作業登録は不要です。
 - 例文コレクションは `created_at` / `pack_updated_at` / `search_en` / `search_en_reversed` / `search_terms` を組み合わせたインデックスを持ち、`order_by` + `start_after` + `limit` によるページングで 1 リクエスト最大 50 件だけを読み出します。`search_en` は小文字化、`search_en_reversed` は逆順文字列、`search_terms` は 1〜3 文字の N-gram + トークン配列で、`prefix`/`suffix`/`contains` いずれの検索モードもサーバー側で絞り込みます。`offset` はカーソル計算専用で全件読み込みは行いません。
 - 本番/検証へのデプロイ:
