@@ -191,7 +191,7 @@ test.describe('WordPack 操作', () => {
     await test.step('Given: WordPack を作成して編集可能な状態にする', async () => {
       await page.goto('/');
       await page.waitForLoadState('networkidle');
-      await expect(page.getByRole('heading', { name: 'WordPack' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'WordPack', level: 1 })).toBeVisible();
       await runA11yCheck(page);
       await page.getByLabel('見出し語').fill('alpha');
       // 入力バリデーション完了後にボタンが有効化されるため、明示的に待機してから押下する。
