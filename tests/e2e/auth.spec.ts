@@ -23,7 +23,7 @@ test.describe('認証導線', () => {
       await page.waitForLoadState('networkidle');
       // なぜ: ログイン後の常設UI（ヘッダー）に存在し、画面文言の揺らぎに強い要素を採用する。
       await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'WordPack' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'WordPack', level: 1 })).toBeVisible();
     });
 
     await test.step('Then: ログイン後の画面で a11y 違反がない', async () => {
