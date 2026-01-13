@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import type { MockedFunction } from 'vitest';
+import { axe } from 'vitest-axe';
 import { App } from './App';
 import { AppProviders } from './main';
 import { AUTO_RETRY_INTERVAL_MS } from './SettingsContext';
@@ -183,7 +184,7 @@ describe('App navigation', () => {
       return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
     });
 
-    renderWithProviders('');
+    const { container } = renderWithProviders('');
 
     expect(
       await screen.findByRole('heading', { name: 'Google ログインの設定が必要です' }),
@@ -195,6 +196,10 @@ describe('App navigation', () => {
       screen.getByText('開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeInTheDocument();
+    // a11y: ログイン案内カードは aria-live を維持し、axe の違反がないことを保証する。
+    const guidanceCard = screen.getByRole('alert');
+    expect(guidanceCard).toHaveAttribute('aria-live', 'polite');
+    expect(await axe(container)).toHaveNoViolations();
   });
 
   it('shows the login screen when /api/config responds with 401', async () => {
