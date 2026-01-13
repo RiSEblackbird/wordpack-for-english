@@ -122,6 +122,7 @@ export const App: React.FC = () => {
   const focusRef = useRef<HTMLElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isOverlaySidebar, setIsOverlaySidebar] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
@@ -159,6 +160,22 @@ export const App: React.FC = () => {
     } else if (hasSidebarOpened.current) {
       sidebarToggleRef.current?.focus();
     }
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    /**
+     * サイドバーが閉じている間は inert を付与し、aria-hidden とフォーカス可能要素の矛盾を防ぐ。
+     * なぜ: 非表示の要素にフォーカスが残ると a11y 違反になるため。
+     */
+    const sidebar = sidebarRef.current;
+    if (!sidebar) {
+      return;
+    }
+    if (isSidebarOpen) {
+      sidebar.removeAttribute('inert');
+      return;
+    }
+    sidebar.setAttribute('inert', '');
   }, [isSidebarOpen]);
 
   useEffect(() => {
@@ -553,6 +570,7 @@ export const App: React.FC = () => {
           className="sidebar"
           aria-label="アプリ内共通メニュー"
           aria-hidden={isSidebarOpen ? 'false' : 'true'}
+          ref={sidebarRef}
         >
           <div className="sidebar-content">
             <nav className="sidebar-nav" aria-label="主要メニュー">

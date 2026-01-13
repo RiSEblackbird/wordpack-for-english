@@ -26,7 +26,9 @@ test.describe('認証導線', () => {
       await expect(page.getByRole('heading', { name: 'WordPack', level: 1 })).toBeVisible();
     });
 
-    await test.step('Then: ログイン後の画面で a11y 違反がない', async () => {
+    await test.step('Then: サイドバーが閉じており aria-hidden-focus の a11y 違反がない', async () => {
+      const menuButton = page.getByRole('button', { name: 'メニューを開く' });
+      await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
       await runA11yCheck(page);
     });
 
