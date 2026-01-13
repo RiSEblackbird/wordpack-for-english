@@ -84,9 +84,16 @@ export const ignoreRoute = async (route: Route): Promise<void> => {
  * 画面描画後にアクセシビリティ違反が無いことを確認する。
  * なぜ: 主要導線で a11y の退行を早期に検知するため。
  */
-export const runA11yCheck = async (page: Page): Promise<void> => {
+export const runA11yCheck = async (
+  page: Page,
+  options: { rules?: string[] } = {},
+): Promise<void> => {
   // SPA の描画領域（#root）に限定して検査し、ブラウザ既定UIなどのノイズを避ける。
-  const results = await new AxeBuilder({ page }).include('#root').analyze();
+  const builder = new AxeBuilder({ page }).include('#root');
+  if (options.rules && options.rules.length > 0) {
+    builder.withRules(options.rules);
+  }
+  const results = await builder.analyze();
   const violations = results.violations ?? [];
 
   if (violations.length === 0) {

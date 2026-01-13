@@ -15,12 +15,16 @@ test.describe('ゲストモード', () => {
       await page.goto('/');
       await page.waitForLoadState('networkidle');
       // ログイン見出しは App.tsx の login-title と一致させ、UI文言の正を明確にする。
-      await expect(page.getByRole('heading', { name: 'WordPack にサインイン' })).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole('heading', { name: 'WordPack にサインイン', level: 2 })).toBeVisible({ timeout: 15000 });
       await expect(page.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeVisible();
     });
 
     await test.step('Then: ログイン画面で a11y 違反がない', async () => {
       await runA11yCheck(page);
+    });
+
+    await test.step('Then: main ランドマークと h1 の a11y 違反がない', async () => {
+      await runA11yCheck(page, { rules: ['landmark-one-main', 'page-has-heading-one'] });
     });
 
     await test.step('When: キーボードでゲスト閲覧モードを選択する', async () => {
