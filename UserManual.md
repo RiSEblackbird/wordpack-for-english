@@ -181,7 +181,7 @@
 - ドキュメント作成: `docs-authoring.mdc`
 
 ### B-1. ローカル実行（開発用）
-- 必要環境: Python 3.11+（venv 推奨）, Node.js 18+
+- 必要環境: Python 3.11+（venv 推奨）, Node.js 20.19.0+
 - 依存インストール:
   ```bash
   # Python

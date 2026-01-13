@@ -29,8 +29,12 @@ tests/e2e/.env
 tests/e2e/.env.*
 # 認証トークンを含む可能性のあるパッケージマネージャ設定
 .npmrc
+.npmrc.local
+.pnpmrc
+.pnpmrc.local
 .yarnrc
 .yarnrc.yml
+.yarnrc.local
 # ローカル仮想環境や Firebase デバッグログは資格情報を含みうるため除外
 .venv/
 .firebase/
