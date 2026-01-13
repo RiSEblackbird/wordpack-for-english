@@ -1,5 +1,5 @@
-import type { BrowserContext, Page, Route } from '@playwright/test';
-import { checkA11y, injectAxe } from '@axe-core/playwright';
+import { expect, type BrowserContext, type Page, type Route } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
 
 export interface MockUser {
   google_sub: string;
@@ -85,6 +85,24 @@ export const ignoreRoute = async (route: Route): Promise<void> => {
  * なぜ: 主要導線で a11y の退行を早期に検知するため。
  */
 export const runA11yCheck = async (page: Page): Promise<void> => {
-  await injectAxe(page);
-  await checkA11y(page);
+  // SPA の描画領域（#root）に限定して検査し、ブラウザ既定UIなどのノイズを避ける。
+  const results = await new AxeBuilder({ page }).include('#root').analyze();
+  const violations = results.violations ?? [];
+
+  if (violations.length === 0) {
+    expect(violations).toEqual([]);
+    return;
+  }
+
+  const formatted = violations
+    .map((v) => {
+      const targets = v.nodes
+        .flatMap((n) => n.target)
+        .map((t) => (Array.isArray(t) ? t.join(' ') : String(t)))
+        .join(', ');
+      return `- ${v.id} (${v.impact ?? 'unknown'}): ${v.help}\n  targets: ${targets}`;
+    })
+    .join('\n');
+
+  expect(violations, `a11y violations detected:\n${formatted}`).toEqual([]);
 };

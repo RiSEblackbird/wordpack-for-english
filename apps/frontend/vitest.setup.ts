@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { toHaveNoViolations } from 'vitest-axe';
+import { toHaveNoViolations } from 'vitest-axe/matchers';
 
 // 統合テストでは実HTTPを使うため、MSW のモック層を明示的に無効化する。
 const isIntegrationTest = process.env.INTEGRATION_TEST === 'true';
@@ -34,7 +34,7 @@ if (!(globalThis as any).window?.matchMedia) {
 }
 
 // a11y検査のために、axe の結果を直感的に読める matcher として拡張する。
-expect.extend(toHaveNoViolations);
+expect.extend({ toHaveNoViolations });
 
 // SettingsContext/AuthContext の初期同期に使う /api/config をテスト環境で安定供給する。
 export const server = setupServer(
