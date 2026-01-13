@@ -51,6 +51,10 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       cwd: path.join(repoRoot, 'apps/frontend'),
       timeout: 120_000,
+      env: {
+        // E2EではGoogleログインの条件分岐を固定し、文言揺れを防ぐためのダミー値を設定する。
+        VITE_GOOGLE_CLIENT_ID: 'e2e-dummy-client-id',
+      },
     },
   ],
 });
