@@ -27,6 +27,21 @@ const SIDEBAR_ID = 'app-sidebar';
 const MAIN_MAX_WIDTH = 1000;
 const SIDEBAR_WIDTH = 280;
 const OAUTH_TELEMETRY_ENDPOINT = '/api/diagnostics/oauth-telemetry';
+const MAIN_HEADING_TEXT = 'WordPack';
+const VISUALLY_HIDDEN_STYLE = `
+  .visually-hidden {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+`;
 
 const SENSITIVE_TELEMETRY_KEYS = new Set(['access_token', 'id_token', 'refresh_token', 'code', 'credential']);
 
@@ -227,7 +242,7 @@ export const App: React.FC = () => {
   }, [signOut]);
 
   const appContent = user || isGuest ? (
-    <div
+    <main
       className={`app-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
       style={{
         ['--main-max-width' as any]: `${MAIN_MAX_WIDTH}px`,
@@ -235,6 +250,7 @@ export const App: React.FC = () => {
     >
       <style>{`
   /* テーマ変数 */
+  ${VISUALLY_HIDDEN_STYLE}
   body.theme-light {
     --color-bg: #ffffff;
     --color-text: #111827;
@@ -275,6 +291,11 @@ export const App: React.FC = () => {
     display: flex;
     align-items: center;
     gap: 1rem;
+  }
+  .header-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
   }
   .header-actions {
     margin-left: auto;
@@ -485,7 +506,7 @@ export const App: React.FC = () => {
       padding-left: calc(env(safe-area-inset-left) + 0.5rem);
     }
     /* iPhone 15 Proでヘッダーが詰まりすぎないように、タイトルサイズと行間を調整する。 */
-    .header-bar h1 {
+    .header-title {
       font-size: 1.35rem;
       margin: 0;
     }
@@ -549,6 +570,8 @@ export const App: React.FC = () => {
     outline-offset: 2px;
   }
 `}</style>
+      {/* Axe の main/heading ルールを満たすため、h1 は main 直下に配置する。 */}
+      <h1 className="visually-hidden">{MAIN_HEADING_TEXT}</h1>
       {isGuest ? (
         <span className={`guest-badge guest-badge-fixed${fixedSafeAreaClass}`}>ゲスト閲覧モード</span>
       ) : null}
@@ -614,7 +637,7 @@ export const App: React.FC = () => {
                 >
                   <HamburgerIcon />
                 </button>
-                <h1>WordPack</h1>
+                <span className="header-title" aria-hidden="true">WordPack</span>
                 <div className="header-actions">
                   <a
                     href="https://github.com/RiSEblackbird/wordpack-for-english"
@@ -654,7 +677,7 @@ export const App: React.FC = () => {
                 </div>
               </div>
             </header>
-            <main>
+            <section aria-label="アプリのメインコンテンツ">
               {tab === 'wordpack' && (
                 <>
                 <WordPackPanel
@@ -681,23 +704,25 @@ export const App: React.FC = () => {
                 <ExampleListPanel />
               </>
               )}
-            </main>
+            </section>
             <footer style={{ padding: '0.5rem', marginTop: '10rem' }}>
               <small>WordPack 英語学習</small>
             </footer>
           </div>
         </div>
       </div>
-    </div>
+      <NotificationsOverlay />
+    </main>
   ) : (
-    <LoginScreen />
+    <LoginScreen>
+      <NotificationsOverlay />
+    </LoginScreen>
   );
 
   return (
     <>
       <ThemeApplier />
       {appContent}
-      <NotificationsOverlay />
     </>
   );
 };
@@ -718,7 +743,11 @@ const ThemeApplier: React.FC = () => {
  * Google ID プロバイダーでログインを誘導する初期画面。
  * 副作用: ボタンクリックで Google の認証ポップアップを開き、ID トークンを送信する。
  */
-const LoginScreen: React.FC = () => {
+interface LoginScreenProps {
+  children?: React.ReactNode;
+}
+
+const LoginScreen: React.FC<LoginScreenProps> = ({ children }) => {
   const {
     signIn,
     isAuthenticating,
@@ -730,7 +759,9 @@ const LoginScreen: React.FC = () => {
     enterGuestMode,
   } = useAuth();
   const [localError, setLocalError] = useState<string | null>(null);
+  const loginTitle = missingClientId ? 'Google ログインの設定が必要です' : 'WordPack にサインイン';
   const loginStyles = `
+        ${VISUALLY_HIDDEN_STYLE}
         .login-shell {
           /* iPhone 15 Proのような動的ビューポートでも中央配置を維持する。 */
           min-height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
@@ -911,60 +942,60 @@ const LoginScreen: React.FC = () => {
         }
       `;
 
-  if (missingClientId) {
-    /**
-     * クライアント ID が未設定の場合は Google の SDK を初期化できない。
-     * この分岐ではトラブルシューティング手順を案内し、新規メンバーの迷子を防ぐ。
-     */
-    return (
-      <div className="login-shell">
-        <style>{loginStyles}</style>
-        <section className="login-card" role="alert" aria-live="polite">
-          <h1 className="login-title">Google ログインの設定が必要です</h1>
-          <p className="login-description">
-            VITE_GOOGLE_CLIENT_ID が未設定のため Google のサインインを開始できません。README.md の「Google OAuth クライアントの準備」節を参照し、以下の手順で環境を整えてください。
-          </p>
-          <h2 className="login-subtitle">設定手順</h2>
-          <ol className="login-guide-list">
-            <li>`apps/frontend/.env` に VITE_GOOGLE_CLIENT_ID=（Google Cloud Console で発行したクライアント ID）を記載する。</li>
-            <li>`apps/backend/.env` や `.env` も同じクライアント ID を設定し、バックエンドと整合させる。</li>
-            <li>設定後にフロントエンド開発サーバーを再起動し、ブラウザのキャッシュを削除して再読み込みする。</li>
-          </ol>
-          <p className="login-guide-hint">
-            {authBypassActive
-              ? '開発用の認証バイパスが有効なため、このままでもダミーアカウントで利用可能です。正式な OAuth を確認したい場合のみ上記手順を実施してください。'
-              : '開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'}
-          </p>
-          <button
-            type="button"
-            className="login-guest-button"
-            onClick={() => {
-              void enterGuestMode();
-            }}
-          >
-            ゲスト閲覧モード
-          </button>
-        </section>
-      </div>
-    );
-  }
-
   return (
-    <GoogleLoginCard
-      loginStyles={loginStyles}
-      isAuthenticating={isAuthenticating}
-      clearError={clearError}
-      error={error}
-      localError={localError}
-      setLocalError={setLocalError}
-      signIn={signIn}
-      googleClientId={googleClientId}
-    />
+    <main className="login-shell">
+      <style>{loginStyles}</style>
+      {/* Axe の main/heading ルールを満たすため、h1 は main 直下に配置する。 */}
+      <h1 className="visually-hidden">{MAIN_HEADING_TEXT}</h1>
+      {missingClientId ? (
+        <>
+          {/* クライアント ID が未設定の場合は Google の SDK を初期化できない。 */}
+          <section className="login-card" role="alert" aria-live="polite">
+            <h2 className="login-title">Google ログインの設定が必要です</h2>
+            <p className="login-description">
+              VITE_GOOGLE_CLIENT_ID が未設定のため Google のサインインを開始できません。README.md の「Google OAuth クライアントの準備」節を参照し、以下の手順で環境を整えてください。
+            </p>
+            <h3 className="login-subtitle">設定手順</h3>
+            <ol className="login-guide-list">
+              <li>`apps/frontend/.env` に VITE_GOOGLE_CLIENT_ID=（Google Cloud Console で発行したクライアント ID）を記載する。</li>
+              <li>`apps/backend/.env` や `.env` も同じクライアント ID を設定し、バックエンドと整合させる。</li>
+              <li>設定後にフロントエンド開発サーバーを再起動し、ブラウザのキャッシュを削除して再読み込みする。</li>
+            </ol>
+            <p className="login-guide-hint">
+              {authBypassActive
+                ? '開発用の認証バイパスが有効なため、このままでもダミーアカウントで利用可能です。正式な OAuth を確認したい場合のみ上記手順を実施してください。'
+                : '開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'}
+            </p>
+            <button
+              type="button"
+              className="login-guest-button"
+              onClick={() => {
+                void enterGuestMode();
+              }}
+            >
+              ゲスト閲覧モード
+            </button>
+          </section>
+        </>
+      ) : (
+        <GoogleLoginCard
+          title={loginTitle}
+          isAuthenticating={isAuthenticating}
+          clearError={clearError}
+          error={error}
+          localError={localError}
+          setLocalError={setLocalError}
+          signIn={signIn}
+          googleClientId={googleClientId}
+        />
+      )}
+      {children}
+    </main>
   );
 };
 
 interface GoogleLoginCardProps {
-  loginStyles: string;
+  title: string;
   isAuthenticating: boolean;
   clearError: () => void;
   error: string | null;
@@ -979,7 +1010,7 @@ interface GoogleLoginCardProps {
  * なぜ: 認証フローの副作用（ID トークン検証やエラーメッセージ表示）を一箇所に閉じ込め、新規メンバーが挙動を追いやすくする。
  */
 const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
-  loginStyles,
+  title,
   isAuthenticating,
   clearError,
   error,
@@ -1026,10 +1057,9 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
   const combinedError = localError || error;
 
   return (
-    <div className="login-shell">
-      <style>{loginStyles}</style>
+    <>
       <section className="login-card" role="dialog" aria-labelledby="login-title" aria-live="polite">
-        <h1 id="login-title" className="login-title">WordPack にサインイン</h1>
+        <h2 id="login-title" className="login-title">{title}</h2>
         <p className="login-description">Google アカウントでログインして学習データと設定を同期します。</p>
         {combinedError ? (
           <div role="alert" className="login-error">
@@ -1072,6 +1102,6 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
           </div>
         ) : null}
       </section>
-    </div>
+    </>
   );
 };

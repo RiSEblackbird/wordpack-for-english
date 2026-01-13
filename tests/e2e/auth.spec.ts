@@ -23,13 +23,19 @@ test.describe('認証導線', () => {
       await page.waitForLoadState('networkidle');
       // なぜ: ログイン後の常設UI（ヘッダー）に存在し、画面文言の揺らぎに強い要素を採用する。
       await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'WordPack', level: 1 })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'WordPack', level: 1, includeHidden: true }),
+      ).toHaveCount(1);
     });
 
     await test.step('Then: サイドバーが閉じており aria-hidden-focus の a11y 違反がない', async () => {
       const menuButton = page.getByRole('button', { name: 'メニューを開く' });
       await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
       await runA11yCheck(page);
+    });
+
+    await test.step('Then: main ランドマークと h1 の a11y 違反がない', async () => {
+      await runA11yCheck(page, { rules: ['landmark-one-main', 'page-has-heading-one'] });
     });
 
     await test.step('Then: キーボード操作でメニューを開ける', async () => {
