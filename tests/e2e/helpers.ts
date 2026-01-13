@@ -1,4 +1,5 @@
 import type { BrowserContext, Page, Route } from '@playwright/test';
+import { checkA11y, injectAxe } from '@axe-core/playwright';
 
 export interface MockUser {
   google_sub: string;
@@ -77,4 +78,13 @@ export const json = (data: unknown, status = 200): { status: number; contentType
 
 export const ignoreRoute = async (route: Route): Promise<void> => {
   await route.fulfill({ status: 204 });
+};
+
+/**
+ * 画面描画後にアクセシビリティ違反が無いことを確認する。
+ * なぜ: 主要導線で a11y の退行を早期に検知するため。
+ */
+export const runA11yCheck = async (page: Page): Promise<void> => {
+  await injectAxe(page);
+  await checkA11y(page);
 };

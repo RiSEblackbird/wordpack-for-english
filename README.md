@@ -446,7 +446,7 @@ npx playwright test
 ```
 詳細は `docs/testing/playwright-e2e.md` を参照してください。
 成果物は `playwright-report/`（HTML レポート）と `test-results/`（trace/screenshot/video）に出力されます。
-GitHub Actions では Playwright の PR スモークを CI に含め、夜間回帰（Chromium）と週次クロスブラウザ（Firefox・WebKit）は専用ワークフローで schedule（cron）または手動実行（workflow_dispatch）として扱います。`playwright-report/` と `test-results/` は成果物として 90 日保持します。取得手順は各ワークフロー実行ページの Artifacts からダウンロードしてください。
+GitHub Actions では Playwright の PR スモークを CI に含め、夜間回帰（Chromium）と週次クロスブラウザ（Firefox・WebKit）は専用ワークフローで schedule（cron）または手動実行（workflow_dispatch）として扱います。主要シナリオでは画面表示後に axe による a11y チェックも実行します。`playwright-report/` と `test-results/` は成果物として 90 日保持します。取得手順は各ワークフロー実行ページの Artifacts からダウンロードしてください。
 - Frontend（ビジュアル回帰: Playwright）
 ```bash
 # 正例: ビジュアル回帰のみを実行
