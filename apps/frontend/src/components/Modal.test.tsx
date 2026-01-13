@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { axe } from 'vitest-axe';
 import { Modal } from './Modal';
 
 describe('Modal width constraint', () => {
@@ -49,6 +50,20 @@ describe('Modal close interactions', () => {
     );
 
     expect(screen.getByRole('dialog', { name: '確認' })).toBeInTheDocument();
+  });
+
+  it('keeps aria attributes and passes a11y checks', async () => {
+    const { container } = render(
+      <Modal isOpen onClose={() => {}} title="確認">
+        <div>content</div>
+      </Modal>
+    );
+
+    // a11y: モーダルの aria-label/aria-modal が維持されていることを担保する。
+    const dialog = screen.getByRole('dialog', { name: '確認' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-label', '確認');
+    expect(await axe(container)).toHaveNoViolations();
   });
 
   it('calls onClose when pressing Escape', async () => {
