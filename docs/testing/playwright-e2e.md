@@ -3,6 +3,7 @@
 ## 目的
 - フロントエンドとバックエンドを同時に起動し、主要導線の回帰を E2E で確認します。
 - 失敗時は trace / screenshot / video を保存し、原因解析を容易にします。
+- 主要シナリオでは axe を用いたアクセシビリティ違反ゼロを検証します（`waitForLoadState` 後に実行）。
 
 ## E2E とビジュアル回帰の責務分担
 - **E2E（機能）**: 主要導線の「操作 → 結果」を検証し、API 連携や状態遷移の回帰を検知します。
@@ -34,6 +35,7 @@ npm run e2e
 - PR 向けのスモーク（`pull_request`）: `auth.spec.ts` / `guest.spec.ts` / `wordpack.spec.ts` の主要導線のみを実行します。
 - 夜間回帰（`schedule (cron: 0 2 * * *)` / `workflow_dispatch`）: Chromium で全シナリオを実行します。
 - 週次クロスブラウザ（`schedule (cron: 0 3 * * 1)` / `workflow_dispatch`）: Firefox / WebKit で全シナリオを実行します。
+- いずれの実行でも、画面表示後の axe a11y チェックを含めて品質を担保します。
 - CI の成果物は GitHub Actions の該当ワークフロー実行ページ → Artifacts から取得できます。
   - `playwright-report/` と `test-results/` を保存し、保持期間は 90 日です。
 

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { json, mockConfig, seedAuthenticatedSession } from './helpers';
+import { json, mockConfig, runA11yCheck, seedAuthenticatedSession } from './helpers';
 
 type ExampleItem = { en: string; ja: string; grammar_ja?: string };
 
@@ -192,11 +192,15 @@ test.describe('WordPack 操作', () => {
       await page.goto('/');
       await page.waitForLoadState('networkidle');
       await expect(page.getByRole('heading', { name: 'WordPack' })).toBeVisible();
+      await runA11yCheck(page);
       await page.getByLabel('見出し語').fill('alpha');
       // 入力バリデーション完了後にボタンが有効化されるため、明示的に待機してから押下する。
       const createWordPackButton = page.getByRole('button', { name: 'WordPackのみ作成' });
       await expect(createWordPackButton).toBeEnabled();
-      await createWordPackButton.click();
+      await page.getByLabel('見出し語').focus();
+      await page.keyboard.press('Tab');
+      await expect(createWordPackButton).toBeFocused();
+      await page.keyboard.press('Space');
       await expect(page.getByRole('heading', { name: /例文/ })).toBeVisible();
     });
 

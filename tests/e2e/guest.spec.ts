@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { json, mockConfig, ignoreRoute } from './helpers';
+import { json, mockConfig, ignoreRoute, runA11yCheck } from './helpers';
 
 test.describe('ゲストモード', () => {
   test('ログイン画面からゲスト閲覧へ遷移できる', async ({ page }) => {
@@ -13,13 +13,25 @@ test.describe('ゲストモード', () => {
 
     await test.step('Given: 未認証のログイン画面が表示されている', async () => {
       await page.goto('/');
+      await page.waitForLoadState('networkidle');
       // ログイン見出しは App.tsx の login-title と一致させ、UI文言の正を明確にする。
       await expect(page.getByRole('heading', { name: 'WordPack にサインイン' })).toBeVisible({ timeout: 15000 });
       await expect(page.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeVisible();
     });
 
-    await test.step('When: ゲスト閲覧モードを選択する', async () => {
-      await page.getByRole('button', { name: 'ゲスト閲覧モード' }).click();
+    await test.step('Then: ログイン画面で a11y 違反がない', async () => {
+      await runA11yCheck(page);
+    });
+
+    await test.step('When: キーボードでゲスト閲覧モードを選択する', async () => {
+      const googleLoginButton = page.getByRole('button', { name: 'Googleでログイン' });
+      const guestButton = page.getByRole('button', { name: 'ゲスト閲覧モード' });
+
+      await page.keyboard.press('Tab');
+      await expect(googleLoginButton).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(guestButton).toBeFocused();
+      await page.keyboard.press('Enter');
     });
 
     await test.step('Then: ゲストバッジと操作制限が表示される', async () => {
