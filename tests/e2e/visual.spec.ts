@@ -264,7 +264,8 @@ test.describe('ビジュアル回帰: 主要画面', () => {
     await page
       .getByPlaceholder('文章を貼り付け（日本語/英語）')
       .fill('Alpha releases validate core workflows.');
-    await page.getByRole('button', { name: 'インポート' }).click();
+    // 「インポート」を含むボタン（例: 文章インポート/生成＆インポート）が複数あるため、完全一致で確定する。
+    await page.getByRole('button', { name: 'インポート', exact: true }).click();
 
     await expect(page.getByRole('dialog', { name: 'インポート結果' })).toBeVisible();
 
