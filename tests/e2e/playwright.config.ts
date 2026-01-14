@@ -39,6 +39,14 @@ export default defineConfig({
       cwd: repoRoot,
       timeout: 120_000,
       env: {
+        // Backend は起動時に SESSION_SECRET_KEY の厳格バリデーションを行う。
+        // CI/E2E 実行では secrets を注入しないため、ここでテスト専用の安全な値を明示する。
+        // - 32文字以上（backend の最小長制約）
+        // - プレースホルダー禁止（"change-me" 等）
+        // - 空文字が環境に設定されていても上書きする
+        SESSION_SECRET_KEY:
+          (process.env.SESSION_SECRET_KEY || '').trim() ||
+          'e2e-test-session-secret-key-0123456789abcdef',
         // E2E の実行時はローカル API を確実に参照させ、Vite のプロキシ先を固定する。
         BACKEND_PROXY_TARGET: 'http://127.0.0.1:8000',
         FIRESTORE_EMULATOR_HOST: process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080',
