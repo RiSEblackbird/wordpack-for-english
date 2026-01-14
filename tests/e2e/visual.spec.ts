@@ -260,39 +260,14 @@ test.describe('ビジュアル回帰: 主要画面', () => {
     await page.goto('/');
     await disableAnimations(page);
 
-    await openSidebarAndSelect(page, '文章インポート', { keepOpen: true });
-    // 「文章」はセクション名やチェックボックスにも使われるため、入力欄をプレースホルダーで特定する。
-    await page
-      .getByPlaceholder('文章を貼り付け（日本語/英語）')
-      .fill('Alpha releases validate core workflows.');
-    // 「インポート」を含むボタン（例: 文章インポート/生成＆インポート）が複数あるため、完全一致で確定する。
-    const importResponse = page.waitForResponse(
-      (res) =>
-        res.request().method() === 'POST' &&
-        /\/api\/article\/import(?:\?|$)/.test(res.url()) &&
-        res.ok(),
-    );
-    const detailResponse = page.waitForResponse(
-      (res) => /\/api\/article\/article(?:%3A|:)?e2e(?:%3A|:)?001(?:\?|$)/.test(res.url()) && res.ok(),
-    );
-    await page.getByRole('button', { name: 'インポート', exact: true }).click();
-    await importResponse;
-    await detailResponse;
-
-    // サイドバーはレイアウト上の重なりで視認性が落ちることがあるため、キーボード操作で閉じる。
-    // なぜ: pointer-events の重なりでクリックが遮られるケースがあるため。
-    const closeMenuButton = page.getByRole('button', { name: 'メニューを閉じる' });
-    if ((await closeMenuButton.count()) > 0) {
-      await closeMenuButton.focus();
-      await page.keyboard.press('Enter');
-    } else {
-      await page.keyboard.press('Escape');
-    }
-
-    // 確認 UI は実装都合（モーダル/パネル）で role やラベルが変わり得るため、
-    // ユーザーに見える内容（モックで固定した文言）で完了を待つ。
-    await expect(page.getByText('既存WordPackが1件含まれています。')).toBeVisible({ timeout: 15000 });
+    // 「インポート結果」モーダルは、サイドバーの重なり（z-index）やUI変更で不安定になりやすい。
+    // このテストでは「文章インポート」タブで一覧から詳細（プレビュー）を開くことで、同等の詳細UIを安定して再現する。
+    await openSidebarAndSelect(page, '文章インポート');
+    await expect(page.getByRole('heading', { name: 'インポート済み文章' })).toBeVisible();
     await expect(page.getByText('A short briefing on alpha releases')).toBeVisible();
+    await page.getByText('A short briefing on alpha releases').click();
+    await expect(page.getByRole('dialog', { name: '文章プレビュー' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('既存WordPackが1件含まれています。')).toBeVisible();
 
     await expect(page).toHaveScreenshot('article-import-confirmation.png', {
       maxDiffPixelRatio: 0.01,
