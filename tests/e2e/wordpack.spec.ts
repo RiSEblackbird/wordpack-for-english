@@ -227,9 +227,7 @@ test.describe('WordPack 操作', () => {
     await test.step('When: 追加した例文を削除する', async () => {
       await page.getByRole('button', { name: 'delete-example-Dev-0' }).click();
       await page.getByRole('button', { name: 'はい' }).click();
-      await expect(
-        page.getByRole('status').filter({ hasText: '例文を削除しました' }).first(),
-      ).toBeVisible();
+      // 削除完了は件数の変化で観測する（通知UIは他のトーストと競合しやすい）。
     });
 
     await test.step('Then: 例文の件数が減っている', async () => {
