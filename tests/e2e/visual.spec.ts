@@ -230,7 +230,8 @@ const mockArticleImport = async (page: Page): Promise<void> => {
     ),
   );
 
-  await page.route('**/api/article/article:e2e:001', (route) => route.fulfill(json(articleDetail)));
+  // 記事IDにコロンが含まれるため、URL エンコード有無の差分を吸収してモックする。
+  await page.route('**/api/article/article*e2e*001', (route) => route.fulfill(json(articleDetail)));
 };
 
 test.describe('ビジュアル回帰: 主要画面', () => {
@@ -265,7 +266,18 @@ test.describe('ビジュアル回帰: 主要画面', () => {
       .getByPlaceholder('文章を貼り付け（日本語/英語）')
       .fill('Alpha releases validate core workflows.');
     // 「インポート」を含むボタン（例: 文章インポート/生成＆インポート）が複数あるため、完全一致で確定する。
+    const importResponse = page.waitForResponse(
+      (res) =>
+        res.request().method() === 'POST' &&
+        /\/api\/article\/import(?:\?|$)/.test(res.url()) &&
+        res.ok(),
+    );
+    const detailResponse = page.waitForResponse(
+      (res) => /\/api\/article\/article(?:%3A|:)?e2e(?:%3A|:)?001(?:\?|$)/.test(res.url()) && res.ok(),
+    );
     await page.getByRole('button', { name: 'インポート', exact: true }).click();
+    await importResponse;
+    await detailResponse;
 
     // サイドバーはレイアウト上の重なりで視認性が落ちることがあるため、キーボード操作で閉じる。
     // なぜ: pointer-events の重なりでクリックが遮られるケースがあるため。
