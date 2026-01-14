@@ -409,6 +409,15 @@ PYTHONPATH=apps/backend pytest
 # 負例: PYTHONPATH 未設定だと backend パッケージの import に失敗する場合がある
 pytest
 ```
+- Backend（性能回帰: p95）
+```bash
+# 正例: p95 の閾値を指定して主要エンドポイントの回帰を検知する
+API_P95_THRESHOLD_MS=1500 PYTHONPATH=apps/backend pytest -q --no-cov tests/test_api_performance.py
+
+# 負例: 閾値が厳しすぎると回帰が無くても失敗しやすい
+API_P95_THRESHOLD_MS=10 PYTHONPATH=apps/backend pytest -q --no-cov tests/test_api_performance.py
+```
+p95 の運用手順と CI 実行は `docs/testing/backend-performance.md` を参照してください。
 - Frontend（Vitest）
 ```bash
 cd apps/frontend
