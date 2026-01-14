@@ -444,6 +444,7 @@ E2E_BASE_URL=http://127.0.0.1:5173 npm run e2e
 # 負例: E2E 設定を無視した直接起動（成果物や webServer 設定が反映されない）
 npx playwright test
 ```
+WordPack 生成の「操作 → 描画」計測は `E2E_ACTION_THRESHOLD_MS`（ミリ秒、既定 15000ms）で閾値を調整できます。
 詳細は `docs/testing/playwright-e2e.md` を参照してください。
 成果物は `playwright-report/`（HTML レポート）と `test-results/`（trace/screenshot/video）に出力されます。
 GitHub Actions では Playwright の PR スモークを CI に含め、夜間回帰（Chromium）と週次クロスブラウザ（Firefox・WebKit）は専用ワークフローで schedule（cron）または手動実行（workflow_dispatch）として扱います。主要シナリオでは画面表示後に axe による a11y チェックも実行します。`playwright-report/` と `test-results/` は成果物として 90 日保持します。取得手順は各ワークフロー実行ページの Artifacts からダウンロードしてください。
