@@ -285,7 +285,7 @@ export const App: React.FC = () => {
   }
   body { margin: 0; background: var(--color-bg); color: var(--color-text); }
   a { color: var(--color-link); }
-  main, header, footer { padding: 0.5rem; }
+  header, footer { padding: 0.5rem; }
   .header-bar {
     height: 50px;
     display: flex;
@@ -484,6 +484,8 @@ export const App: React.FC = () => {
     max-width: var(--main-max-width);
     width: min(100%, var(--main-max-width));
     margin: 0 auto;
+    /* なぜ: サイドバーの左端を0に保ちつつ、本文だけに0.5remの余白を与えて既存の見た目を維持するため。 */
+    padding: 0.5rem;
     transition: none;
   }
   header {
