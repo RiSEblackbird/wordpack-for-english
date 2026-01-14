@@ -31,10 +31,24 @@ const openSidebarAndSelect = async (
    * サイドバー経由でタブ移動を統一する。
    * なぜ: どの表示幅でも同じ操作でメニュー遷移できるよう手順を固定するため。
    */
-  await page.getByRole('button', { name: 'メニューを開く' }).click();
+  const openButton = page.getByRole('button', { name: 'メニューを開く' });
+  if ((await openButton.count()) > 0) {
+    await openButton.click();
+  }
   await page.getByRole('button', { name: label }).click();
   if (!options.keepOpen) {
-    await page.getByRole('button', { name: 'メニューを閉じる' }).click();
+    /**
+     * メニューを閉じる操作はキーボード（Enter）で行い、オーバーレイの pointer-events による
+     * クリック遮断を回避する。
+     * なぜ: 画面幅やレイアウト差でサイドバー要素がボタン上に重なり、ポインタ操作が
+     *      不安定になることがあるため（a11y 的にはキーボード操作でも閉じられるべき）。
+     */
+    const closeButton = page.getByRole('button', { name: 'メニューを閉じる' });
+    if ((await closeButton.count()) > 0) {
+      await closeButton.focus();
+      await page.keyboard.press('Enter');
+      await expect(page.getByRole('button', { name: 'メニューを開く' })).toBeVisible();
+    }
   }
 };
 
@@ -246,7 +260,10 @@ test.describe('ビジュアル回帰: 主要画面', () => {
     await disableAnimations(page);
 
     await openSidebarAndSelect(page, '文章インポート', { keepOpen: true });
-    await page.getByLabel('文章').fill('Alpha releases validate core workflows.');
+    // 「文章」はセクション名やチェックボックスにも使われるため、入力欄をプレースホルダーで特定する。
+    await page
+      .getByPlaceholder('文章を貼り付け（日本語/英語）')
+      .fill('Alpha releases validate core workflows.');
     await page.getByRole('button', { name: 'インポート' }).click();
 
     await expect(page.getByRole('dialog', { name: 'インポート結果' })).toBeVisible();
