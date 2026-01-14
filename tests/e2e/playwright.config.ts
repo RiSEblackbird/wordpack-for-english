@@ -33,7 +33,7 @@ export default defineConfig({
   webServer: [
     {
       command:
-        'python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --app-dir apps/backend',
+        'python3 -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --app-dir apps/backend',
       url: 'http://127.0.0.1:8000/healthz',
       reuseExistingServer: !process.env.CI,
       cwd: repoRoot,
