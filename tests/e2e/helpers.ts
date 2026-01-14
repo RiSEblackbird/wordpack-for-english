@@ -89,7 +89,11 @@ export const runA11yCheck = async (
   options: { rules?: string[] } = {},
 ): Promise<void> => {
   // SPA の描画領域（#root）に限定して検査し、ブラウザ既定UIなどのノイズを避ける。
-  const builder = new AxeBuilder({ page }).include('#root');
+  const builder = new AxeBuilder({ page })
+    .include('#root')
+    // Google Sign-In などのクロスオリジン iframe が注入されると、フレーム内の不足（main/h1 など）まで
+    // 収集されてアプリ本体の退行と切り分けづらくなる。E2E ではアプリの DOM を主対象にする。
+    .setLegacyMode();
   if (options.rules && options.rules.length > 0) {
     builder.withRules(options.rules);
   }

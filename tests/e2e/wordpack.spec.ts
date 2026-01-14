@@ -193,6 +193,11 @@ test.describe('WordPack 操作', () => {
       await page.waitForLoadState('networkidle');
       await expect(page.getByRole('heading', { name: 'WordPack', level: 1 })).toBeVisible();
       await runA11yCheck(page);
+      // WordPack の入力・作成ボタンはサイドバー内に配置されているため、メニューを開く。
+      const menuToggle = page.locator('button[aria-controls="app-sidebar"]');
+      await expect(menuToggle).toBeVisible();
+      await menuToggle.click();
+      await expect(menuToggle).toHaveAttribute('aria-expanded', 'true');
       await page.getByLabel('見出し語').fill('alpha');
       // 入力バリデーション完了後にボタンが有効化されるため、明示的に待機してから押下する。
       const createWordPackButton = page.getByRole('button', { name: 'WordPackのみ作成' });
