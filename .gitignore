@@ -27,6 +27,9 @@ bin-release/
 # E2E 用ローカル環境変数（テスト用トークンなどを含み得るため除外）
 tests/e2e/.env
 tests/e2e/.env.*
+# UI テスト用ローカル環境変数（トークン/認証情報が混入し得るため除外）
+tests/ui/.env
+tests/ui/.env.*
 # 認証トークンを含む可能性のあるパッケージマネージャ設定
 .npmrc
 .npmrc.local
