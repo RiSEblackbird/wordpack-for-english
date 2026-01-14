@@ -72,6 +72,13 @@ GitHub Actions の挙動は次の方針に合わせています。
 - **CI**: `develop`（および `main`）への push、`develop`/`main` 向け pull_request で実行します。
 - **GCP を触り得る dry-run（Cloud Run リリース検証）**: `main` 向け pull_request と `main` への push のみで実行します（`develop` では実行しません）。
 
+### Lighthouse CI（週次の品質監視）
+- 保存済み WordPack 一覧ページを対象に、性能/ベストプラクティス/SEO/PWA のスコアを週次で測定します。
+- 必要な GitHub Secrets:
+  - `WORDPACK_LIST_URL`: 計測対象 URL
+  - `LHCI_GITHUB_APP_TOKEN`: Lighthouse CI GitHub App トークン
+- ローカル実行手順やしきい値は `docs/testing/lighthouse-ci.md` を参照してください。
+
 ### Google OAuth クライアントの準備
 1. [Google Cloud Console](https://console.cloud.google.com/) にアクセスし、対象プロジェクトを作成または選択します。
 2. 左側メニューの「API とサービス」→「OAuth 同意画面」でユーザータイプを選択し、アプリ名・サポートメールなどを登録して公開ステータスまで設定します。

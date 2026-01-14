@@ -89,6 +89,9 @@ __pycache__/
 coverage.xml
 htmlcov/
 coverage/
+# Lighthouse CI artifacts
+.lighthouseci/
+lhci-results.json
 
 # Playwright artifacts (HTML report, traces, screenshots)
 playwright-report/

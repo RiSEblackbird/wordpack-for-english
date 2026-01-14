@@ -1,0 +1,40 @@
+name: lighthouse-ci
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.0"
+
+      - name: Install Lighthouse CI
+        run: npm install -g @lhci/cli@0.13.0
+
+      - name: Run Lighthouse CI
+        env:
+          WORDPACK_LIST_URL: ${{ secrets.WORDPACK_LIST_URL }}
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+        run: lhci autorun
+
+      - name: Upload Lighthouse CI artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-ci-results
+          path: |
+            .lighthouseci
+            lhci-results.json

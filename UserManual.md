@@ -249,7 +249,22 @@
 - スモークの対象は `auth.spec.ts` / `guest.spec.ts` / `wordpack.spec.ts` の主要導線で、成果物は CI の Artifacts から取得できます。
 - UI 修正後は、Vitest (`npm run test`) と Playwright スモークの結果を確認し、回帰がないことを確認してください。
 
-### B-1-4. Playwright による E2E テスト（ローカル実行）
+### B-1-4. Lighthouse CI（週次）
+- 目的: 保存済み WordPack 一覧ページの品質（Performance/Best Practices/SEO/PWA）を週次で監視します。
+- 必要な GitHub Secrets:
+  - `WORDPACK_LIST_URL`: 計測対象 URL
+  - `LHCI_GITHUB_APP_TOKEN`: Lighthouse CI GitHub App トークン
+- 実行コマンド:
+  ```bash
+  lhci autorun
+  ```
+- 成果物: `.lighthouseci/` と `lhci-results.json` がアーティファクトとして保存されます。
+- 例:
+  - 正例: `WORDPACK_LIST_URL` に本番 URL を設定して週次計測を成功させる。
+  - 負例: `WORDPACK_LIST_URL` を未設定のまま実行し、計測対象が空で失敗する。
+- しきい値やローカル実行方法は `docs/testing/lighthouse-ci.md` を参照してください。
+
+### B-1-5. Playwright による E2E テスト（ローカル実行）
 - 目的: フロントエンドとバックエンドの実起動をまとめて行い、主要導線の回帰を確認します。
 - 実行例:
   - 正例:
@@ -263,7 +278,7 @@
 - テスト成果物は `playwright-report/` と `test-results/` に保存されます。
 - 詳細は `docs/testing/playwright-e2e.md` を参照してください。
 
-### B-1-5. Firestore インデックス同期フロー
+### B-1-6. Firestore インデックス同期フロー
 - `firestore.indexes.json` に `word_packs` / `examples` 用の複合インデックスを定義済みです。Cloud Firestore / Firebase エミュレータ / Firebase CLI で同じファイルを読み込めるようにしてあり、Web コンソールでの手作業登録は不要です。
 - 例文コレクションは `created_at` / `pack_updated_at` / `search_en` / `search_en_reversed` / `search_terms` を組み合わせたインデックスを持ち、`order_by` + `start_after` + `limit` によるページングで 1 リクエスト最大 50 件だけを読み出します。`search_en` は小文字化、`search_en_reversed` は逆順文字列、`search_terms` は 1〜3 文字の N-gram + トークン配列で、`prefix`/`suffix`/`contains` いずれの検索モードもサーバー側で絞り込みます。`offset` はカーソル計算専用で全件読み込みは行いません。
 - 本番/検証へのデプロイ:
