@@ -1,5 +1,8 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
+import { axe } from 'vitest-axe';
 import { Modal } from './Modal';
 
 describe('Modal width constraint', () => {
@@ -35,6 +38,80 @@ describe('Modal width constraint', () => {
     const container = dialog.querySelector('div > div') as HTMLDivElement | null;
     expect(container).not.toBeNull();
     expect(container!.style.maxWidth).toBe('480px');
+  });
+});
+
+describe('Modal close interactions', () => {
+  it('renders dialog with title', () => {
+    render(
+      <Modal isOpen onClose={() => {}} title="確認">
+        <div>content</div>
+      </Modal>
+    );
+
+    expect(screen.getByRole('dialog', { name: '確認' })).toBeInTheDocument();
+  });
+
+  it('keeps aria attributes and passes a11y checks', async () => {
+    const { container } = render(
+      <Modal isOpen onClose={() => {}} title="確認">
+        <div>content</div>
+      </Modal>
+    );
+
+    // a11y: モーダルの aria-label/aria-modal が維持されていることを担保する。
+    const dialog = screen.getByRole('dialog', { name: '確認' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-label', '確認');
+    expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('calls onClose when pressing Escape', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <Modal isOpen onClose={onClose} title="確認">
+        <div>content</div>
+      </Modal>
+    );
+
+    await user.keyboard('{Escape}');
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onClose when clicking the backdrop wrapper', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <Modal isOpen onClose={onClose} title="確認">
+        <div>content</div>
+      </Modal>
+    );
+
+    const dialog = screen.getByRole('dialog', { name: '確認' });
+    // 背景クリック判定はラッパー自身へのクリックで行う。
+    await user.click(dialog);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onClose when clicking the close button', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <Modal isOpen onClose={onClose} title="確認">
+        <div>content</div>
+      </Modal>
+    );
+
+    // ユーザー操作として「閉じる」ボタンをクリックする。
+    await user.click(screen.getByRole('button', { name: '閉じる' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
 

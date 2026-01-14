@@ -9,6 +9,8 @@ import { LoadingIndicator } from './LoadingIndicator';
 import { ListControls } from './ListControls';
 import { ExampleDetailModal, ExampleItemData } from './ExampleDetailModal';
 import { TTSButton } from './TTSButton';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 type SortKey = 'created_at' | 'pack_updated_at' | 'lemma' | 'category';
 type SortOrder = 'asc' | 'desc';
@@ -58,6 +60,7 @@ const DEFAULT_PERSISTED_STATE: PersistedState = {
 };
 
 export const ExampleListPanel: React.FC = () => {
+  const { isGuest } = useAuth();
   const { settings } = useSettings();
   const [items, setItems] = useState<ExampleItemData[]>([]);
   const [total, setTotal] = useState(0);
@@ -326,6 +329,8 @@ export const ExampleListPanel: React.FC = () => {
         .ex-list-container[data-view="card"] .ex-ja { color: #374151; }
         .ex-list-container[data-view="list"] .ex-en { color:rgb(240, 230, 245); }
         .ex-list-container[data-view="list"] .ex-ja { color: #334155; }
+        .wp-example-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+        .wp-sort-controls { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.5rem; }
         .wp-view-toggle { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; }
         .wp-toggle-btn { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
         .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; }
@@ -333,10 +338,16 @@ export const ExampleListPanel: React.FC = () => {
         .ex-selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0; font-size: 0.9em; }
         .ex-selection-bar button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
         .ex-selection-bar button:disabled { opacity: 0.6; cursor: not-allowed; }
+        /* 狭幅時に操作エリアが折り返せるようにレイアウトを縦方向へ切り替える */
+        @media (max-width: 640px) {
+          .wp-sort-controls { flex-direction: column; align-items: stretch; gap: 0.5rem; }
+          .wp-example-header { flex-direction: column; align-items: flex-start; }
+          .wp-search-input { width: 100%; }
+        }
       `}</style>
 
       <div className="ex-list-container" data-view={viewMode}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="wp-example-header">
           <h2>例文一覧</h2>
           <button onClick={() => load(offset)} disabled={loading}>更新</button>
         </div>
@@ -389,15 +400,22 @@ export const ExampleListPanel: React.FC = () => {
         {msg && <div role={msg.kind}>{msg.text}</div>}
         <div className="ex-selection-bar" role="group" aria-label="例文選択操作">
           <span>選択中: {selectedCount}件</span>
-          <button type="button" onClick={toggleVisibleSelection} disabled={items.length === 0}>
-            {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
-          </button>
-          <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
-            全選択解除
-          </button>
-          <button type="button" onClick={deleteSelectedExamples} disabled={selectedCount === 0 || loading}>
-            選択した例文を削除
-          </button>
+          {/* 破壊操作につながる選択UIはゲスト時にロックする */}
+          <GuestLock isGuest={isGuest}>
+            <button type="button" onClick={toggleVisibleSelection} disabled={items.length === 0}>
+              {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
+            </button>
+          </GuestLock>
+          <GuestLock isGuest={isGuest}>
+            <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
+              全選択解除
+            </button>
+          </GuestLock>
+          <GuestLock isGuest={isGuest}>
+            <button type="button" onClick={deleteSelectedExamples} disabled={selectedCount === 0 || loading}>
+              選択した例文を削除
+            </button>
+          </GuestLock>
         </div>
 
         {items.length === 0 && !loading ? (
@@ -418,21 +436,23 @@ export const ExampleListPanel: React.FC = () => {
                   >
                     <div className="ex-card-header">
                       <label className="ex-select-checkbox" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(it.id)}
-                          onChange={() => toggleSelect(it.id)}
-                          aria-label={`例文 ${it.en} を選択`}
-                        />
+                        <GuestLock isGuest={isGuest}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(it.id)}
+                            onChange={() => toggleSelect(it.id)}
+                            aria-label={`例文 ${it.en} を選択`}
+                          />
+                        </GuestLock>
                       </label>
                       <div className="ex-meta" aria-label={`例文 ${it.lemma} のメタ情報`}>
                         <span>{it.lemma} / {it.category}</span>
                         {/* 一覧上でも文字起こしタイピングの利用状況をすぐ把握できるようにバッジで明示する */}
                         <span
                           className="ex-meta-badge"
-                          aria-label={`タイピング練習回数 ${it.transcription_typing_count ?? 0}回`}
+                          aria-label={`タイピング累計入力文字数 ${it.transcription_typing_count ?? 0}文字`}
                         >
-                          タイピング練習: {it.transcription_typing_count ?? 0}回
+                          タイピング累計: {it.transcription_typing_count ?? 0}文字
                         </span>
                       </div>
                     </div>
@@ -470,12 +490,14 @@ export const ExampleListPanel: React.FC = () => {
                     }}
                   >
                     <label className="ex-select-checkbox" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(it.id)}
-                        onChange={() => toggleSelect(it.id)}
-                        aria-label={`例文 ${it.en} を選択`}
-                      />
+                      <GuestLock isGuest={isGuest}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(it.id)}
+                          onChange={() => toggleSelect(it.id)}
+                          aria-label={`例文 ${it.en} を選択`}
+                        />
+                      </GuestLock>
                     </label>
                     <div style={{ flex: 1 }}>
                       <div
@@ -487,9 +509,9 @@ export const ExampleListPanel: React.FC = () => {
                         {/* リスト表示でも同一フォーマットでタイピング練習の回数を共有する */}
                         <span
                           className="ex-meta-badge"
-                          aria-label={`タイピング練習回数 ${it.transcription_typing_count ?? 0}回`}
+                          aria-label={`タイピング累計入力文字数 ${it.transcription_typing_count ?? 0}文字`}
                         >
-                          タイピング練習: {it.transcription_typing_count ?? 0}回
+                          タイピング累計: {it.transcription_typing_count ?? 0}文字
                         </span>
                       </div>
                       <div className="ex-en">{it.en}</div>

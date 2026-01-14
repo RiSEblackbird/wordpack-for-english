@@ -20,12 +20,24 @@
 - WordPack プレビューを開くと、データ取得中でも一覧に表示されている見出し語をプレースホルダーとして即座に表示し、読み込み中である
   ことを明示する入力欄とメッセージを併置します（a11y のため `aria-live` / `aria-readonly` を設定）。
 - 保存済みWordPack一覧で語義タイトルを即座に確認できる「語義」ボタンと「語義一括表示」スイッチ、例文未生成のカードから直接生成できる「生成」ボタン
+- 保存済みWordPack一覧のヘッダーは、画面幅が狭い場合に縦並びとなり更新ボタンが押しやすく表示されます
 - WordPack・文章・例文の一覧で複数選択して一括削除できる管理機能
 - 例文一覧で訳文を一括開閉できる「訳一括表示」スイッチ
-- 例文詳細モーダルから文字起こしタイピング練習を記録し、一覧にもバッジとして回数を反映する「文字起こしタイピング」機能
-- 画面左上のハンバーガーボタンで共通サイドバーを開閉し、左側からスライド表示されるメニュー経由で主要タブ（WordPack / 文章インポート / 例文一覧 / 設定）へ移動可能。メニュー項目を選択してもサイドバーは開いたままで、開いている間はサイドバーが左端に固定されます。十分な横幅がある場合はメイン画面の配置を保ったまま余白内でサイドバーが表示され、スペースが足りない場合のみメイン画面が残り幅に収まるよう自動でスライドします
-- ヘッダー右端に GitHub リンクと「ログアウト」ボタンを常設。どのタブからでもワンクリックでセッションを終了でき、共有端末の利用でも安全にサインアウトできます
-- WordPack プレビューの例文中ハイライト（lemma）にマウスオーバー0.5秒で `sense_title` ツールチップ表示。対応する lemma が見つからない場合は、最小サイズのポップオーバーに「〇〇 の WordPack を生成」ボタンだけが表示されます。ボタンを押すか、該当の単語（lemma-token）をクリックすると即座に生成が始まり、完了後に「WordPack概要」ウインドウが自動で開きます
+- 例文詳細モーダルから文字起こしタイピング練習を記録し、一覧にもバッジとして**累計入力文字数**を反映する「文字起こしタイピング」機能
+- 画面左上のハンバーガーボタンで共通サイドバーを開閉し、左側からスライド表示されるメニュー経由で主要タブ（WordPack / 文章インポート / 例文一覧 / 設定）へ移動可能。メニュー項目を選択してもサイドバーは開いたままで、開いている間はサイドバーが左端に固定されます。閉じたい場合はハンバーガーボタンの再クリック、サイドバー外側の半透明な背景のタップ、または Esc キーで閉じられます。十分な横幅がある場合はメイン画面の配置を保ったまま余白内でサイドバーが表示され、スペースが足りない場合のみメイン画面が残り幅に収まるよう自動でスライドします
+- ヘッダー右端に GitHub リンクと「ログアウト」ボタンを常設。ノッチ付き端末では安全領域を避けて配置され、どのタブからでもワンクリックでセッションを終了でき、共有端末の利用でも安全にサインアウトできます
+- WordPack プレビューの例文中ハイライト（lemma）にマウスオーバー約0.5秒で `sense_title` のツールチップを表示します。例文中の単語にマウスを重ねると、保存済み WordPack を検索して語義タイトルを表示します。未生成の単語はツールチップが「未生成」となり、下線付き表示になります。未生成の単語をクリックすると WordPack 生成が開始され、完了後に「WordPack概要」ウインドウが自動で開きます。
+
+## ゲスト閲覧モード
+- **概要**: ログインせずに画面を閲覧できる読み取り専用モードです。ログイン画面の「ゲスト閲覧モード」ボタンから入れます。
+- **制限事項**: AI の生成・再生成・削除は利用できません。音声再生も無効です。さらに **POST/DELETE のリクエスト（追加・更新・削除）** はすべて拒否され、閲覧用の GET のみ許可されます。
+- **UIロックの範囲**: 生成・インポート用の入力欄（見出し語/文章/モデル/カテゴリ/advanced設定）や一覧のチェックボックス・全選択/解除ボタンも無効になり、ホバーで同じツールチップが表示されます。
+- **公開範囲**: ゲスト閲覧で表示されるのは `word_packs.metadata.guest_public=true` の WordPack のみです。例文は WordPack に紐づいて公開されるため、WordPack 単位の公開フラグが基準になります（必要に応じて例文単位の公開フラグへ拡張可能）。
+- **ログイン手順（通常モード）**:
+  1. ログイン画面で「Google でログイン」ボタンを押します。
+  2. Google のポップアップでアカウントを選択し、許可を確定します。
+  3. 認証完了後にアプリ本体へ遷移し、生成・削除・音声など全機能が利用できます。
+- 初回アクセス時は設定同期中でもログイン画面が表示され、右下に「バックエンド設定を同期中」の通知が出ます。同期完了で通知は消え、取得に失敗した場合は同じ場所に再試行ボタン付き通知が表示されます。
 
 > **文章インポートの入力上限:** 1回のインポートで送信できる文章は最大 4,000 文字です。これを超えるリクエストはバックエンドが `413 Request Entity Too Large`（`error=article_import_text_too_long`）で拒否し、フロントエンドでもボタンが無効化されて警告文が表示されます。長文を扱う場合は 4,000 文字以内に分割して順番にインポートしてください。
 
@@ -37,7 +49,7 @@
 
 ### 前提
 - Python 3.13+
-- Node.js 18+
+- Node.js 20.19.0+
 
 ### セットアップ
 ```bash
@@ -111,7 +123,11 @@ Firestore に保存する主要コレクションは `firestore.indexes.json` �
 | gcloud で本番/検証プロジェクトへ適用 | `make deploy-firestore-indexes PROJECT_ID=my-gcp-project` | `scripts/deploy_firestore_indexes.sh` が `firestore.indexes.json` を展開し、各定義ごとに `gcloud alpha firestore indexes composite create --field-config=...` を順次実行します（既存インデックスは自動でスキップ）。 |
 | Firebase CLI で適用 | `make deploy-firestore-indexes PROJECT_ID=my-firebase-project TOOL=firebase` | CI/ローカルともに `firebase deploy --only firestore:indexes --non-interactive` を使うルート。 |
 | エミュレータでの検証 | `make firestore-emulator` または `docker compose up firestore-emulator` | `scripts/start_firestore_emulator.sh` が firebase.json / firestore.indexes.json を読み込み、`FIRESTORE_EMULATOR_HOST=${FIRESTORE_EMULATOR_PORT:-8080}` で Firestore エミュレータを起動します。Docker Compose 利用時は backend から `firestore-emulator:8080` を指定してください。 |
-| Firestore デモデータ投入 | `make seed-firestore-demo` | `.data_demo/wordpack.sqlite3.demo` にある SQLite デモ DB を Firestore（エミュレータ含む）へ流し込みます。既存の例文 ID を再採番したうえで `examples` コレクションと `articles` / `article_word_packs` を作成します。 |
+| Firestore デモデータ投入 | `make seed-firestore-demo` | `.data_demo/wordpack.sqlite3.demo` にある SQLite デモ DB を Firestore（エミュレータ含む）へ流し込みます。ゲスト用データは `word_packs.metadata.guest_demo=true` を付与して識別し、既にゲスト用データがある場合は投入をスキップします（再投入したい場合は `scripts/seed_firestore_demo.py --force` を使用）。既存の例文 ID を再採番したうえで `examples` コレクションと `articles` / `article_word_packs` を作成します。 |
+
+例（ゲスト用データ判定）:
+- 正例: Firestore の `word_packs` に `metadata.guest_demo=true` が付与されている WordPack はゲスト用データとして扱われます。
+- 負例: `metadata.guest_demo` が無い WordPack はゲスト用データとして扱われません。
 
 エミュレータ起動時は `scripts/start_firestore_emulator.sh` が `firebase-tools emulators:start --only firestore` をラップするため、`firestore.indexes.json` の複合インデックスが自動で適用されます。ログに「Loaded indexes from firestore.indexes.json」が出力されれば、バックエンドやテストから接続できます。Java 21+ が必須なため、未インストールの場合はスクリプトが Adoptium API から Temurin 21 JRE を tarball で取得して展開します（HTTPS が遮断される環境では事前に Java 21 を入れてください）。  
 - Docker Compose 利用時: `FIRESTORE_EMULATOR_HOST=firestore-emulator:${FIRESTORE_EMULATOR_PORT:-8080}`  
@@ -356,6 +372,8 @@ Cloud Run や Firebase Hosting へ出荷する前に、上記の手順で Firest
 ### 認証フロー
 - フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。
 - 「Googleでログイン」ボタンは Google Identity Services の `GoogleLogin` コンポーネントを用いており、承認後に `credential`（ID トークン）を取得して `/api/auth/google` へ送信し、セッション Cookie を受け取ります。credential が欠落した場合は直ちにエラー帯を表示し、`/api/diagnostics/oauth-telemetry` へ状況を送信して原因調査に活用します。
+- サインイン画面の「ゲスト閲覧モード」ボタンを押すとログイン不要でアプリの閲覧ができます。ゲスト中は右上にバッジが固定表示され、ブラウザを再読み込みしても同じ状態が復元されます。
+- ゲスト閲覧モードではAI機能（生成/再生成/削除などの操作ボタン）が無効化され、ボタンにマウスを重ねると「ゲストモードではAI機能は使用できません」と表示されます。例: ログイン後は「生成」ボタンで処理開始 / ゲストでは同じボタンが押せずツールチップが表示されます。
 - バックエンド側で `ADMIN_EMAIL_ALLOWLIST` を設定している場合、リストに含まれないメールアドレスは検証後でも即座に 403 となり、構造化ログには `google_auth_denied` / `email_not_allowlisted` が記録されます。利用者を追加したい場合はリストへメールアドレスを追記して再起動してください。
 - Google が返す ID トークンで `email_verified` が `true` でない場合は本人確認が完了していないと判断し、403 で拒否します。ログには `google_auth_denied` / `email_unverified` とハッシュ化済みメールアドレスが残るため、問い合わせ対応時はこの値をもとに利用者へメールアドレスの確認手続きを案内してください。
 - バックエンドの構造化ログでは `google_auth_succeeded` を含むすべての Google 認証イベントで `email_hash`（および `display_name_hash`）が記録され、平文のメールアドレスや表示名は Cloud Logging へ送出されません。調査時はハッシュ値で突き合わせてください。
@@ -382,25 +400,105 @@ Cloud Run や Firebase Hosting へ出荷する前に、上記の手順で Firest
 - `email_hash`: メールアドレスを小文字化し SHA-256 でハッシュ化した先頭12文字。個人情報を露出させずに該当アカウントを突き合わせる目的で使用します。
 
 ## テスト
+バックエンドのカバレッジ計測は `pytest.ini` の `addopts` で `apps/backend/backend` を対象に統一しています（CI も同じ設定を使用）。  
 - Backend（Python）
 ```bash
+# 正例: backend パッケージを解決するために PYTHONPATH を合わせる
+PYTHONPATH=apps/backend pytest
+
+# 負例: PYTHONPATH 未設定だと backend パッケージの import に失敗する場合がある
 pytest
 ```
+- Backend（性能回帰: p95）
+```bash
+# 正例: p95 の閾値を指定して主要エンドポイントの回帰を検知する
+API_P95_THRESHOLD_MS=1500 PYTHONPATH=apps/backend pytest -q --no-cov tests/test_api_performance.py
+
+# 負例: 閾値が厳しすぎると回帰が無くても失敗しやすい
+API_P95_THRESHOLD_MS=10 PYTHONPATH=apps/backend pytest -q --no-cov tests/test_api_performance.py
+```
+p95 の運用手順と CI 実行は `docs/testing/backend-performance.md` を参照してください。
 - Frontend（Vitest）
 ```bash
 cd apps/frontend
+# 正例: カバレッジを計測し、閾値チェックを行う
+npm run test -- --coverage
+
+# 負例: テストは通るがカバレッジを計測しない
 npm run test
 ```
+フロントエンドのカバレッジ閾値やレポート出力の詳細は `docs/testing/vitest-coverage.md` にまとめています。
+- Frontend（統合テスト: 実バックエンド接続）
+```bash
+# 正例: 実バックエンドに接続して統合テストを実行
+# 事前に backend を DISABLE_SESSION_AUTH=true で起動し、Firestore エミュレータ/OPENAI_API_KEY を設定済みであること
+cd apps/frontend
+INTEGRATION_TEST=true BACKEND_PROXY_TARGET=http://127.0.0.1:8000 npm run test
+
+# 負例: INTEGRATION_TEST を指定しないと統合テストは skip される
+cd apps/frontend
+npm run test
+```
+統合テストの前提条件と補足は `docs/testing/frontend-integration-tests.md` を参照してください。
+- Frontend/Backend（E2E: Playwright）
+  - バックエンド/フロントエンドの依存関係は、クイックスタートのセットアップを完了しておくこと。
+```bash
+# セットアップ: ルートで Playwright をインストール
+npm install
+npx playwright install --with-deps
+
+# 正例: E2E 実行時にフロント/バックを自動起動
+E2E_BASE_URL=http://127.0.0.1:5173 npm run e2e
+
+# 負例: E2E 設定を無視した直接起動（成果物や webServer 設定が反映されない）
+npx playwright test
+```
+WordPack 生成の「操作 → 描画」計測は `E2E_ACTION_THRESHOLD_MS`（ミリ秒、既定 15000ms）で閾値を調整できます。
+詳細は `docs/testing/playwright-e2e.md` を参照してください。
+成果物は `playwright-report/`（HTML レポート）と `test-results/`（trace/screenshot/video）に出力されます。
+GitHub Actions では Playwright の PR スモークを CI に含め、夜間回帰（Chromium）と週次クロスブラウザ（Firefox・WebKit）は専用ワークフローで schedule（cron）または手動実行（workflow_dispatch）として扱います。主要シナリオでは画面表示後に axe による a11y チェックも実行します。`playwright-report/` と `test-results/` は成果物として 90 日保持します。取得手順は各ワークフロー実行ページの Artifacts からダウンロードしてください。
+- Frontend（ビジュアル回帰: Playwright）
+```bash
+# 正例: ビジュアル回帰のみを実行
+E2E_BASE_URL=http://127.0.0.1:5173 \
+  npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts
+
+# 負例: 設定を通さずに実行すると成果物や webServer が反映されない
+npx playwright test tests/e2e/visual.spec.ts
+```
+詳細は `docs/testing/visual-regression.md` を参照してください。
 
 ## REST API（抜粋）
+- `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始
 - `POST /api/word/pack` … WordPack を生成して語義タイトル・語義・例文・語源・学習カード要点を返却
-- `GET /api/word?lemma=...` … lemma を指定して最新の WordPack から定義と例文を返却（見つからなければ自動生成）
+- `GET /api/word?lemma=...` … lemma を指定して保存済み WordPack から定義と例文を返却（未保存なら 404。ゲストは未登録語で 403。生成は `POST /api/word/pack` を使用）
+- `POST /api/word/packs/{id}/guest-public` … WordPack のゲスト公開フラグを更新（ログイン済みユーザーのみ）
 - `POST /api/word/examples/bulk-delete` … 例文IDの配列を受け取り一括削除
 - `POST /api/word/examples/{id}/transcription-typing` … 指定IDの例文について、文字起こし練習で入力した文字数を検証・加算
 - `POST /api/tts` … OpenAI gpt-4o-mini-tts で読み上げた音声（audio/mpeg）をストリーミング返却
 - `GET /_debug/headers` … デバッグ用: FastAPI が受信した Host / X-Forwarded-* / URL / クライアント IP をそのまま JSON で返却。Firebase Hosting → Cloud Run 経由のヘッダ付け替え確認や、リバースプロキシ配下の疎通検証に利用できる（運用環境でも有効だが目立たないパスとして公開）。
 
 ローカルで `/api/config` と同じアプリに統合されていることを確認する場合は、`uvicorn backend.main:app --app-dir apps/backend --reload` で起動し、別ターミナルから `curl -H "Host: backend.internal" -H "X-Forwarded-Host: public.example.com" -H "X-Forwarded-Proto: https" http://127.0.0.1:8000/_debug/headers` を実行するとレスポンスに受信ヘッダが反映されます。
+
+### ゲスト閲覧 API 例
+- 正例（ゲスト Cookie を発行して閲覧 API を呼び出す）
+```bash
+curl -i -X POST http://127.0.0.1:8000/api/auth/guest
+# 取得した Set-Cookie を付けて GET を実行（Cookie 名は既定で wp_guest）
+curl -i -H "Cookie: wp_guest=<signed-token>" "http://127.0.0.1:8000/api/word?lemma=example"
+```
+- 負例（ゲスト Cookie で書き込み系 API を呼ぶと 403）
+```bash
+curl -i -X POST \
+  -H "Cookie: wp_guest=<signed-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"lemma":"example"}' \
+  http://127.0.0.1:8000/api/word/packs
+```
+- 負例（ゲストが未登録語を検索すると 403）
+```bash
+curl -i -H "Cookie: wp_guest=<signed-token>" "http://127.0.0.1:8000/api/word?lemma=unknown"
+```
 
 ### WordPack 生成時の入力制約
 - 見出し語（`lemma`）は **英数字・半角スペース・ハイフン・アポストロフィのみ** で、1〜64文字。
@@ -416,9 +514,13 @@ tests/                  # Python テスト
 docs/                   # 詳細ドキュメント
 ```
 
+## ドキュメント更新ポリシー
+- UI に変更が入る PR では、同じ PR 内で必ず `UserManual.md` の該当箇所を更新します（後回しや「追記予定」は認めません）。
+
 ## 追加ドキュメント
-- 詳細な API・フロー・モデルは `docs/flows.md`, `docs/models.md`, `docs/環境変数の意味.md` を参照してください。
+- 詳細な API・フロー・モデルは `docs/flows.md`, `docs/models.md`, `docs/環境変数の意味.md`, `docs/guest_public_api.md` を参照してください。
 - インフラ構成図は `docs/infrastructure.md` を参照してください。
+- フロントエンドの Vitest カバレッジ測定は `docs/testing/vitest-coverage.md` を参照してください。
+- Playwright による E2E 実行手順は `docs/testing/playwright-e2e.md` を参照してください。
+- Playwright のビジュアル回帰テスト手順は `docs/testing/visual-regression.md` を参照してください。
 - ユーザー向け操作は `UserManual.md` を参照してください。
-- GitHub Actions の CI では Chrome DevTools MCP を利用した UI スモークテスト（`UI smoke test (Chrome DevTools MCP)` ジョブ）が自動実行されます。ローカルで同じシナリオを再現する方法は `docs/testing/chrome-devtools-mcp-ui-testing.md` を参照してください（Node.js 22 を用い、ルートディレクトリで `npm run smoke` または `tests/ui/mcp-smoke/run-smoke.mjs` を実行する手順を含みます）。Chrome 未インストール環境でも安定版 Chrome の自動取得を試み、許可されない場合は OSS Chromium へのフォールバックを順番に実施します。いずれもダウンロードできなかった場合は `CHROME_EXECUTABLE` で既存バイナリを指定しない限りローカル実行のみスキップする挙動です。
-  - Firestore エミュレータは `tests/ui/mcp-smoke` に含まれる `firebase-tools` で起動するため、実行前に `npm ci --prefix tests/ui/mcp-smoke` などで依存パッケージを取得してください。CI では同コマンドが事前に実行される前提で構成されています。

@@ -353,6 +353,82 @@ def test_http_session_cookie_visible_for_document_cookie(
     assert session_cookie_value
 
 
+def test_guest_public_update_requires_authenticated_user(
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """許可されたログインユーザーのみゲスト公開フラグを更新できる。"""
+
+    _stub_verifier(
+        monkeypatch,
+        lambda: {
+            "sub": "sub-guest-public",
+            "email": "user@example.com",
+            "name": "Allowed User",
+            "hd": "example.com",
+            "email_verified": True,
+        },
+    )
+
+    login_response = test_client.post("/api/auth/google", json={"id_token": "valid"})
+    assert login_response.status_code == 200
+
+    from backend.store import store as backend_store
+
+    payload = {"lemma": "publicized", "sense_title": "public", "examples": {}}
+    backend_store.save_word_pack("wp-publicized", "publicized", json.dumps(payload, ensure_ascii=False))
+
+    resp = test_client.post(
+        "/api/word/packs/wp-publicized/guest-public",
+        json={"guest_public": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"word_pack_id": "wp-publicized", "guest_public": True}
+
+    metadata = backend_store.wordpacks.get_word_pack_metadata("wp-publicized") or {}
+    assert metadata.get("metadata", {}).get("guest_public") is True
+
+
+def test_guest_public_pack_is_visible_in_guest_list(
+    test_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """公開フラグ更新後にゲスト一覧へ表示されることを確認する。"""
+
+    _stub_verifier(
+        monkeypatch,
+        lambda: {
+            "sub": "sub-guest-list",
+            "email": "user@example.com",
+            "name": "Allowed User",
+            "hd": "example.com",
+            "email_verified": True,
+        },
+    )
+
+    login_response = test_client.post("/api/auth/google", json={"id_token": "valid"})
+    assert login_response.status_code == 200
+
+    from backend.store import store as backend_store
+
+    payload = {"lemma": "exposed", "sense_title": "exposed", "examples": {}}
+    backend_store.save_word_pack("wp-exposed", "exposed", json.dumps(payload, ensure_ascii=False))
+
+    update_resp = test_client.post(
+        "/api/word/packs/wp-exposed/guest-public",
+        json={"guest_public": True},
+    )
+    assert update_resp.status_code == 200
+
+    test_client.cookies.clear()
+    guest_response = test_client.post("/api/auth/guest")
+    assert guest_response.status_code == 200
+
+    listing = test_client.get("/api/word/packs?limit=50&offset=0")
+    assert listing.status_code == 200
+    items = listing.json().get("items", [])
+    lemmas = [item.get("lemma") for item in items]
+    assert "exposed" in lemmas
+
+
 def test_google_auth_passes_clock_skew_to_verifier(
     test_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

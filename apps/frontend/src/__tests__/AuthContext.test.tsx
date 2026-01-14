@@ -12,8 +12,16 @@ vi.mock('@react-oauth/google', () => ({
 }));
 
 const MissingFlagProbe: React.FC = () => {
-  const { missingClientId } = useAuth();
-  return <span data-testid="client-flag">{missingClientId ? 'missing' : 'ok'}</span>;
+  const { missingClientId, authMode, isGuest } = useAuth();
+  return (
+    <span
+      data-testid="client-flag"
+      data-auth-mode={authMode}
+      data-guest={isGuest ? 'true' : 'false'}
+    >
+      {missingClientId ? 'missing' : 'ok'}
+    </span>
+  );
 };
 
 // 認証コンテキストが ID トークンを公開していないことを検知するための専用プローブ。
@@ -22,6 +30,18 @@ const TokenLeakProbe: React.FC = () => {
   const contextValue = useAuth();
   const hasTokenKey = Object.prototype.hasOwnProperty.call(contextValue, 'token');
   return <span data-testid="token-leak">{hasTokenKey ? 'leaked' : 'clean'}</span>;
+};
+
+const AuthStateProbe: React.FC = () => {
+  const { authMode, user, authBypassActive } = useAuth();
+  return (
+    <span
+      data-testid="auth-state"
+      data-auth-mode={authMode}
+      data-user={user ? 'present' : 'null'}
+      data-bypass={authBypassActive ? 'true' : 'false'}
+    />
+  );
 };
 
 describe('AuthProvider logging behaviour', () => {
@@ -195,11 +215,134 @@ describe('AuthProvider persistence behaviour', () => {
     const [, storedValue] = setItemSpy.mock.calls[setItemSpy.mock.calls.length - 1];
     const payload = JSON.parse(storedValue as string) as Record<string, unknown>;
 
+    expect(payload).toHaveProperty('authMode', 'authenticated');
     expect(payload).toHaveProperty('user');
     expect(payload).not.toHaveProperty('token');
     expect(payload.user).toMatchObject(sampleUser);
 
     setItemSpy.mockRestore();
+  });
+
+  it('stores guest mode state for later restoration', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith('/api/config') && (!init || init.method === 'GET' || !init.method)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      if (url.endsWith('/api/auth/logout') && init?.method === 'POST') {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (url.endsWith('/api/auth/guest') && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ mode: 'guest' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
+
+    const setItemSpy = vi.spyOn(Object.getPrototypeOf(window.localStorage), 'setItem');
+
+    const GuestModeProbe: React.FC = () => {
+      const { enterGuestMode } = useAuth();
+      React.useEffect(() => {
+        void enterGuestMode();
+      }, [enterGuestMode]);
+      return null;
+    };
+
+    render(
+      <AuthProvider clientId="test-client">
+        <GuestModeProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(setItemSpy).toHaveBeenCalledWith(
+        'wordpack.auth.v1',
+        expect.stringContaining('"authMode":"guest"'),
+      );
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/logout',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/auth/guest',
+      expect.objectContaining({ method: 'POST' }),
+    );
+
+    setItemSpy.mockRestore();
+  });
+
+  it('requests guest session and surfaces an error on failure', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith('/api/config') && (!init || init.method === 'GET' || !init.method)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      if (url.endsWith('/api/auth/logout') && init?.method === 'POST') {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (url.endsWith('/api/auth/guest') && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ detail: 'Guest session failed' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
+
+    const GuestErrorProbe: React.FC = () => {
+      const { enterGuestMode, error, authMode } = useAuth();
+      React.useEffect(() => {
+        void enterGuestMode();
+      }, [enterGuestMode]);
+      return (
+        <span data-testid="guest-error" data-auth-mode={authMode}>
+          {error ?? 'none'}
+        </span>
+      );
+    };
+
+    render(
+      <AuthProvider clientId="test-client">
+        <GuestErrorProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/logout',
+        expect.objectContaining({ method: 'POST' }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/guest',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('guest-error')).toHaveTextContent(
+        'ゲストモードの開始に失敗しました。しばらくしてから再試行してください。',
+      );
+    });
+    expect(screen.getByTestId('guest-error')).toHaveAttribute('data-auth-mode', 'anonymous');
   });
 });
 
@@ -225,5 +368,218 @@ describe('AuthProvider public API surface', () => {
 
     expect(await screen.findByTestId('token-leak')).toHaveTextContent('clean');
     expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
+  });
+
+  it('restores guest mode from localStorage and exposes guest flags', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    window.localStorage.setItem('wordpack.auth.v1', JSON.stringify({ authMode: 'guest' }));
+
+    render(
+      <AuthProvider clientId="test-client">
+        <MissingFlagProbe />
+      </AuthProvider>,
+    );
+
+    const flag = await screen.findByTestId('client-flag');
+    expect(flag).toHaveAttribute('data-auth-mode', 'guest');
+    expect(flag).toHaveAttribute('data-guest', 'true');
+    expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
+  });
+
+  it('does not inject bypass user while restoring guest mode even when /api/config resolves fast', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ session_auth_disabled: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    window.localStorage.setItem('wordpack.auth.v1', JSON.stringify({ authMode: 'guest' }));
+
+    render(
+      <AuthProvider clientId="test-client">
+        <AuthStateProbe />
+      </AuthProvider>,
+    );
+
+    const state = await screen.findByTestId('auth-state');
+    await waitFor(() => {
+      expect(state).toHaveAttribute('data-auth-mode', 'guest');
+      expect(state).toHaveAttribute('data-user', 'null');
+      expect(state).toHaveAttribute('data-bypass', 'true');
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/config', { method: 'GET' });
+  });
+});
+
+describe('AuthProvider unauthorized guest recovery', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    try { localStorage.clear(); } catch { /* ignore */ }
+  });
+
+  const UnauthorizedProbe: React.FC = () => {
+    const { authMode, error } = useAuth();
+    return (
+      <span data-testid="unauthorized-probe" data-auth-mode={authMode}>
+        {error ?? 'none'}
+      </span>
+    );
+  };
+
+  it('reissues guest session when unauthorized while in guest mode', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith('/api/config') && (!init || init.method === 'GET' || !init.method)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      if (url.endsWith('/api/auth/guest') && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ mode: 'guest' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
+
+    window.localStorage.setItem('wordpack.auth.v1', JSON.stringify({ authMode: 'guest' }));
+
+    render(
+      <AuthProvider clientId="test-client">
+        <UnauthorizedProbe />
+      </AuthProvider>,
+    );
+
+    const probe = await screen.findByTestId('unauthorized-probe');
+    expect(probe).toHaveAttribute('data-auth-mode', 'guest');
+
+    window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { status: 401 } }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/guest',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(probe).toHaveAttribute('data-auth-mode', 'guest');
+      expect(probe).toHaveTextContent('none');
+    });
+  });
+
+  it('falls back to anonymous when guest reissue fails on unauthorized', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith('/api/config') && (!init || init.method === 'GET' || !init.method)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      if (url.endsWith('/api/auth/guest') && init?.method === 'POST') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ detail: 'Guest session failed' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
+
+    window.localStorage.setItem('wordpack.auth.v1', JSON.stringify({ authMode: 'guest' }));
+
+    render(
+      <AuthProvider clientId="test-client">
+        <UnauthorizedProbe />
+      </AuthProvider>,
+    );
+
+    const probe = await screen.findByTestId('unauthorized-probe');
+    expect(probe).toHaveAttribute('data-auth-mode', 'guest');
+
+    window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { status: 401 } }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/guest',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(probe).toHaveAttribute('data-auth-mode', 'anonymous');
+      expect(probe).toHaveTextContent(
+        'ゲストセッションの再発行に失敗しました。しばらくしてから再試行してください。',
+      );
+    });
+  });
+
+  it('prevents concurrent guest reissue requests when multiple 401s occur simultaneously', async () => {
+    let guestCallCount = 0;
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith('/api/config') && (!init || init.method === 'GET' || !init.method)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      if (url.endsWith('/api/auth/guest') && init?.method === 'POST') {
+        guestCallCount++;
+        // 並行リクエストの競合を模倣: 最初の呼び出しは成功
+        return Promise.resolve(
+          new Response(JSON.stringify({ mode: 'guest' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      return Promise.resolve(new Response('not found', { status: 404 }));
+    });
+
+    window.localStorage.setItem('wordpack.auth.v1', JSON.stringify({ authMode: 'guest' }));
+
+    render(
+      <AuthProvider clientId="test-client">
+        <UnauthorizedProbe />
+      </AuthProvider>,
+    );
+
+    const probe = await screen.findByTestId('unauthorized-probe');
+    expect(probe).toHaveAttribute('data-auth-mode', 'guest');
+
+    // 複数の 401 を同時に発火して並行呼び出しをシミュレート
+    window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { status: 401 } }));
+    window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { status: 401 } }));
+    window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { status: 401 } }));
+
+    // 単一実行ガードにより、最初のリクエストのみが実行されることを検証
+    await waitFor(() => {
+      expect(guestCallCount).toBe(1);
+    });
+
+    await waitFor(() => {
+      expect(probe).toHaveAttribute('data-auth-mode', 'guest');
+      expect(probe).toHaveTextContent('none');
+    });
   });
 });

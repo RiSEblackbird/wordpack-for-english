@@ -50,7 +50,20 @@ class FakeDocumentReference:
         bucket = self._client._data.setdefault(self._collection, {})
         if self.id not in bucket:
             raise KeyError(f"document {self._collection}/{self.id} not found")
-        bucket[self.id].update(data)
+        payload = bucket[self.id]
+        for key, value in data.items():
+            if "." not in key:
+                payload[key] = value
+                continue
+            current: dict[str, Any] = payload
+            parts = key.split(".")
+            for part in parts[:-1]:
+                nested = current.get(part)
+                if not isinstance(nested, dict):
+                    nested = {}
+                    current[part] = nested
+                current = nested
+            current[parts[-1]] = value
 
     def get(self, transaction: "FakeTransaction" | None = None) -> FakeDocumentSnapshot:
         bucket = self._client._data.setdefault(self._collection, {})
@@ -205,7 +218,7 @@ class FakeQuery:
         expected: Any,
     ) -> bool:
         data = snapshot.to_dict() or {}
-        actual = data.get(field_path)
+        actual = self._resolve_field_path(data, field_path)
         if op_string == "==":
             return actual == expected
         if op_string == "array_contains":
@@ -222,6 +235,18 @@ class FakeQuery:
         if op_string == "<":
             return actual < expected
         raise NotImplementedError(f"unsupported operator: {op_string}")
+
+    def _resolve_field_path(self, data: dict[str, Any], field_path: str) -> Any:
+        """Firestore のドット区切り field_path を dict から辿る。"""
+
+        if "." not in field_path:
+            return data.get(field_path)
+        current: Any = data
+        for key in field_path.split("."):
+            if not isinstance(current, dict):
+                return None
+            current = current.get(key)
+        return current
 
     def _order_value(self, snapshot: FakeDocumentSnapshot, field_path: str) -> Any:
         data = snapshot.to_dict() or {}

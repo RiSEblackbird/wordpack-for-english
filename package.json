@@ -3,8 +3,19 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
-    "smoke": "npm run smoke --prefix tests/ui/mcp-smoke",
+    "e2e": "playwright test -c tests/e2e/playwright.config.ts",
     "prepare:frontend-env": "node ./scripts/prepare-frontend-env.mjs"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
+    "@playwright/test": "^1.47.2",
+    "axe-core": "4.11.1",
+    "chalk": "5.6.2",
+    "lodash-es": "4.17.22",
+    "vitest-axe": "0.1.0"
   }
 }

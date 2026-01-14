@@ -22,6 +22,11 @@ vi.mock('../AuthContext', () => ({
     error: null,
     clearError: vi.fn(),
     authBypassActive: false,
+    authMode: 'authenticated',
+    isGuest: false,
+    enterGuestMode: vi.fn().mockResolvedValue(undefined),
+    missingClientId: false,
+    googleClientId: 'test-client',
   }),
 }));
 

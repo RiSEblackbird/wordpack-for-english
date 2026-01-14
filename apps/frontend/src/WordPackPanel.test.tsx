@@ -2,8 +2,10 @@ import { render, screen, act, waitFor, within, fireEvent } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import { axe } from 'vitest-axe';
 import { App } from './App';
 import { AppProviders } from './main';
+import { WordPackPanel } from './components/WordPackPanel';
 
 describe('WordPackPanel E2E (mocked fetch)', () => {
   beforeEach(() => {
@@ -14,6 +16,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       localStorage.setItem(
         'wordpack.auth.v1',
         JSON.stringify({
+          authMode: 'authenticated',
           user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
         }),
       );
@@ -162,6 +165,61 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     });
     return mock;
   }
+
+  it('shows loading placeholder with aria-readonly and no a11y violations', async () => {
+    let resolveFetch: ((response: Response) => void) | null = null;
+    const pending = new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    });
+
+    vi.spyOn(global, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ request_timeout_ms: 60000 }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
+      }
+      if (url.includes('/api/word/packs/wp:loading')) {
+        return pending;
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    const { container } = render(
+      <AppProviders googleClientId="test-client">
+        <WordPackPanel focusRef={{ current: null }} selectedWordPackId="wp:loading" />
+      </AppProviders>,
+    );
+
+    // 読み込み中フォームの aria-readonly が削除されていないことを最小ケースで検知する。
+    const readonlyInput = await screen.findByLabelText('WordPack見出し語読み込み中');
+    expect(readonlyInput).toHaveAttribute('aria-readonly');
+    expect(await axe(container)).toHaveNoViolations();
+
+    await act(async () => {
+      resolveFetch?.(
+        new Response(
+          JSON.stringify({
+            lemma: 'loading',
+            sense_title: 'loading',
+            pronunciation: { ipa_GA: null, ipa_RP: null, syllables: null, stress_index: null, linking_notes: [] },
+            senses: [],
+            collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
+            contrast: [],
+            examples: { Dev: [], CS: [], LLM: [], Business: [], Common: [] },
+            etymology: { note: '-', confidence: 'low' },
+            study_card: '',
+            citations: [],
+            confidence: 'low',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    });
+  });
 
   it('generates WordPack and shows examples', async () => {
     const fetchMock = setupFetchMocks();

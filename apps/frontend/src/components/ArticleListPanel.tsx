@@ -10,6 +10,8 @@ import { Modal } from './Modal';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
 import { useAbortableAsync, AbortError } from '../lib/hooks';
 import { assignSetValues, retainSetValues, toggleSetValue } from '../lib/set';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 interface ArticleListItem {
   id: string;
@@ -30,6 +32,7 @@ type ArticleDetailResponse = ArticleDetailData;
 const LIST_LIMIT = 20;
 
 export const ArticleListPanel: React.FC = () => {
+  const { isGuest } = useAuth();
   const { settings } = useSettings();
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
@@ -273,33 +276,44 @@ export const ArticleListPanel: React.FC = () => {
       {msg && <div role={msg.kind}>{msg.text}</div>}
       <div className="wp-selection-bar" role="group" aria-label="文章選択操作">
         <span>選択中: {selectedCount}件</span>
-        <button type="button" onClick={toggleVisibleSelection} disabled={items.length === 0}>
-          {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
-        </button>
-        <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
-          全選択解除
-        </button>
-        <button
-          type="button"
-          onClick={deleteSelectedArticles}
-          disabled={selectedCount === 0 || loading}
-        >選択した文章を削除</button>
+        {/* 選択UIは削除と直結するため、ゲスト時はロックする */}
+        <GuestLock isGuest={isGuest}>
+          <button type="button" onClick={toggleVisibleSelection} disabled={items.length === 0}>
+            {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
+          </button>
+        </GuestLock>
+        <GuestLock isGuest={isGuest}>
+          <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
+            全選択解除
+          </button>
+        </GuestLock>
+        <GuestLock isGuest={isGuest}>
+          <button
+            type="button"
+            onClick={deleteSelectedArticles}
+            disabled={selectedCount === 0 || loading}
+          >選択した文章を削除</button>
+        </GuestLock>
       </div>
       <div className="al-grid">
         {items.map((it) => (
           <div key={it.id} className="al-card" onClick={() => open(it.id)}>
             <div className="al-card-header">
               <label className="wp-select-checkbox" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(it.id)}
-                  onChange={() => toggleSelect(it.id)}
-                  aria-label={`文章 ${it.title_en} を選択`}
-                />
+                <GuestLock isGuest={isGuest}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(it.id)}
+                    onChange={() => toggleSelect(it.id)}
+                    aria-label={`文章 ${it.title_en} を選択`}
+                  />
+                </GuestLock>
               </label>
               <div className="al-card-title-row">
                 <strong style={{ flex: 1, fontSize: '12px' }}>{it.title_en}</strong>
-                <button onClick={(e) => { e.stopPropagation(); del(it); }} aria-label={`delete-article-${it.id}`}>削除</button>
+                <GuestLock isGuest={isGuest}>
+                  <button onClick={(e) => { e.stopPropagation(); del(it); }} aria-label={`delete-article-${it.id}`}>削除</button>
+                </GuestLock>
               </div>
             </div>
             <div style={{ fontSize: '10px', color: 'var(--color-subtle)' }}>更新: {formatDateJst(it.updated_at)}</div>
@@ -325,5 +339,3 @@ export const ArticleListPanel: React.FC = () => {
     </section>
   );
 };
-
-

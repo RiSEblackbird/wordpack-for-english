@@ -12,7 +12,12 @@ from itsdangerous import BadSignature, SignatureExpired
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
 
-from ..auth import resolve_session_cookie, verify_session_token
+from ..auth import (
+    resolve_guest_session_cookie,
+    resolve_session_cookie,
+    verify_guest_session_token,
+    verify_session_token,
+)
 from ..config import settings
 from ..logging import logger
 
@@ -25,6 +30,7 @@ __all__ = [
     "SecurityHeadersMiddleware",
     "RequestIDMiddleware",
     "RateLimitMiddleware",
+    "GuestWriteBlockMiddleware",
 ]
 
 
@@ -143,6 +149,60 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
             # Some response types may not allow header mutation after body start
             pass
         return response
+
+
+class GuestWriteBlockMiddleware(BaseHTTPMiddleware):
+    """Reject write requests when a signed guest session is present.
+
+    なぜ: ゲスト閲覧モードは読み取り専用を前提としており、誤って
+    生成・削除 API を呼び出した場合でも安全に拒否してデータ更新を防ぐ。
+    """
+
+    _write_methods = {"POST", "PUT", "PATCH", "DELETE"}
+    _allowlisted_paths = {"/api/auth/guest", "/api/auth/google", "/api/auth/logout"}
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:  # type: ignore[override]
+        if request.method.upper() not in self._write_methods:
+            return await call_next(request)
+
+        path = request.url.path
+        if path in self._allowlisted_paths:
+            return await call_next(request)
+
+        _cookie_name, session_token = resolve_session_cookie(request)
+        # なぜ: 空のセッショントークンを検証すると署名検証例外に誤って流れるため、
+        #       実トークンがある場合のみ検証してゲスト Cookie の判定へ進める。
+        if session_token:
+            try:
+                verify_session_token(session_token)
+                return await call_next(request)
+            except (SignatureExpired, BadSignature, RuntimeError):
+                pass
+
+        guest_token = resolve_guest_session_cookie(request)
+        if not guest_token:
+            return await call_next(request)
+
+        try:
+            verify_guest_session_token(guest_token)
+        except (SignatureExpired, BadSignature, RuntimeError):
+            return await call_next(request)
+
+        client_ip = request.client.host if request.client else "unknown"
+        logger.warning(
+            "guest_write_denied",
+            path=path,
+            method=request.method,
+            client_ip=client_ip,
+            user_agent=request.headers.get("user-agent"),
+            request_id=getattr(request.state, "request_id", None),
+        )
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Guest mode cannot perform write operations"},
+        )
 
 
 class _TokenBucket:

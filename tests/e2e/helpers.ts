@@ -1,0 +1,119 @@
+import { expect, type BrowserContext, type Page, type Route } from '@playwright/test';
+import { AxeBuilder } from '@axe-core/playwright';
+
+export interface MockUser {
+  google_sub: string;
+  email: string;
+  display_name: string;
+}
+
+const DEFAULT_USER: MockUser = {
+  google_sub: 'e2e-user',
+  email: 'e2e@example.com',
+  display_name: 'E2E User',
+};
+
+export const createAuthStoragePayload = (user: MockUser = DEFAULT_USER) => ({
+  authMode: 'authenticated',
+  user,
+});
+
+/**
+ * OAuth ポップアップを回避するため、Cookie と localStorage を両方セットする。
+ * なぜ: UI 依存を外しつつ、認証済みの画面遷移だけを再現するため。
+ */
+export const seedAuthenticatedSession = async (
+  context: BrowserContext,
+  page: Page,
+  user: MockUser = DEFAULT_USER,
+): Promise<void> => {
+  const now = Date.now();
+  await context.addCookies([
+    {
+      name: 'wp_session',
+      value: 'e2e-session-token',
+      domain: '127.0.0.1',
+      path: '/',
+      httpOnly: true,
+      sameSite: 'Lax',
+      expires: Math.floor((now + 60 * 60 * 1000) / 1000),
+    },
+    {
+      name: '__session',
+      value: 'e2e-session-token',
+      domain: '127.0.0.1',
+      path: '/',
+      httpOnly: true,
+      sameSite: 'Lax',
+      expires: Math.floor((now + 60 * 60 * 1000) / 1000),
+    },
+  ]);
+  await page.addInitScript((payload) => {
+    window.localStorage.setItem('wordpack.auth.v1', JSON.stringify(payload));
+  }, createAuthStoragePayload(user));
+};
+
+export const mockConfig = async (
+  page: Page,
+  options: { requestTimeoutMs?: number; sessionAuthDisabled?: boolean } = {},
+): Promise<void> => {
+  const { requestTimeoutMs = 60000, sessionAuthDisabled = false } = options;
+  await page.route('**/api/config', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        request_timeout_ms: requestTimeoutMs,
+        session_auth_disabled: sessionAuthDisabled,
+      }),
+    }),
+  );
+};
+
+export const json = (data: unknown, status = 200): { status: number; contentType: string; body: string } => ({
+  status,
+  contentType: 'application/json',
+  body: JSON.stringify(data),
+});
+
+export const ignoreRoute = async (route: Route): Promise<void> => {
+  await route.fulfill({ status: 204 });
+};
+
+/**
+ * 画面描画後にアクセシビリティ違反が無いことを確認する。
+ * なぜ: 主要導線で a11y の退行を早期に検知するため。
+ */
+export const runA11yCheck = async (
+  page: Page,
+  options: { rules?: string[] } = {},
+): Promise<void> => {
+  // SPA の描画領域（#root）に限定して検査し、ブラウザ既定UIなどのノイズを避ける。
+  const builder = new AxeBuilder({ page })
+    .include('#root')
+    // Google Sign-In などのクロスオリジン iframe が注入されると、フレーム内の不足（main/h1 など）まで
+    // 収集されてアプリ本体の退行と切り分けづらくなる。E2E ではアプリの DOM を主対象にする。
+    .setLegacyMode();
+  if (options.rules && options.rules.length > 0) {
+    builder.withRules(options.rules);
+  }
+  const results = await builder.analyze();
+  const violations = results.violations ?? [];
+
+  if (violations.length === 0) {
+    expect(violations).toEqual([]);
+    return;
+  }
+
+  const formatted = violations
+    .map((v) => {
+      const targets = v.nodes
+        .flatMap((n) => n.target)
+        .map((t) => (Array.isArray(t) ? t.join(' ') : String(t)))
+        .join(', ');
+      return `- ${v.id} (${v.impact ?? 'unknown'}): ${v.help}\n  targets: ${targets}`;
+    })
+    .join('\n');
+
+  expect(violations, `a11y violations detected:\n${formatted}`).toEqual([]);
+};

@@ -15,6 +15,8 @@ import { OverviewSection } from './wordpack/OverviewSection';
 import { PronunciationSection } from './wordpack/PronunciationSection';
 import { SensesSection } from './wordpack/SensesSection';
 import { ExamplesSection } from './wordpack/ExamplesSection';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 export interface WordPackPreviewMeta {
   id: string;
@@ -45,6 +47,7 @@ export const WordPackPanel: React.FC<Props> = ({
   fallbackMeta,
   onStudyProgressRecorded,
 }) => {
+  const { isGuest } = useAuth();
   const { settings, setSettings } = useSettings();
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
@@ -66,6 +69,7 @@ export const WordPackPanel: React.FC<Props> = ({
     loadWordPack,
     regenerateWordPack,
     recordStudyProgress,
+    updateGuestPublic,
   } = useWordPack({ model, onWordPackGenerated, onStudyProgressRecorded });
 
   const {
@@ -100,6 +104,7 @@ export const WordPackPanel: React.FC<Props> = ({
   const isLemmaValid = lemmaValidation.valid;
   const normalizedLemma = lemmaValidation.normalizedLemma;
   const isActionLoading = loading || examplesLoading || progressUpdating;
+  const [guestPublicUpdating, setGuestPublicUpdating] = useState(false);
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
@@ -148,6 +153,10 @@ export const WordPackPanel: React.FC<Props> = ({
 
   const packCheckedCount = data?.checked_only_count ?? 0;
   const packLearnedCount = data?.learned_count ?? 0;
+  const guestPublic = data?.guest_public ?? false;
+  const guestPublicDisabledReason = !currentWordPackId
+    ? '保存済みのWordPackのみ公開設定を切り替えできます。'
+    : null;
 
   const triggerUnknownLemmaGeneration = useCallback(async (lemmaText: string) => {
     const trimmed = lemmaText.trim();
@@ -195,6 +204,23 @@ export const WordPackPanel: React.FC<Props> = ({
       await generateExamples(category);
     },
     [generateExamples],
+  );
+
+  const handleGuestPublicChange = useCallback(
+    async (nextValue: boolean) => {
+      if (!currentWordPackId) {
+        setStatusMessage({ kind: 'alert', text: '保存済みのWordPackのみ公開設定を切り替えできます。' });
+        return;
+      }
+      // なぜ: 画面上で即時にON/OFFを反映し、ゲスト公開フローの作業負担を減らすため。
+      setGuestPublicUpdating(true);
+      try {
+        await updateGuestPublic(currentWordPackId, nextValue);
+      } finally {
+        setGuestPublicUpdating(false);
+      }
+    },
+    [currentWordPackId, setStatusMessage, updateGuestPublic],
   );
 
   useEffect(() => {
@@ -273,6 +299,10 @@ export const WordPackPanel: React.FC<Props> = ({
           isActionLoading={isActionLoading}
           packCheckedCount={packCheckedCount}
           packLearnedCount={packLearnedCount}
+          guestPublic={guestPublic}
+          guestPublicUpdating={guestPublicUpdating}
+          guestPublicDisabledReason={guestPublicDisabledReason}
+          onGuestPublicChange={handleGuestPublicChange}
           onRecordStudyProgress={recordStudyProgress}
           onRegenerate={handleRegenerateWordPack}
           formatDate={formatDate}
@@ -378,75 +408,88 @@ export const WordPackPanel: React.FC<Props> = ({
             <h2>WordPack生成</h2>
             <div className="sidebar-field">
               <label htmlFor="wordpack-lemma-input">見出し語</label>
-              <input
-                id="wordpack-lemma-input"
-                ref={focusRef as React.RefObject<HTMLInputElement>}
-                value={lemma}
-                onChange={(e) => setLemma(e.target.value)}
-                placeholder="見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）"
-                disabled={isActionLoading}
-              />
+              {/* ゲストモードではAI生成に関わる入力をロックし、理由をツールチップで提示する */}
+              <GuestLock isGuest={isGuest}>
+                <input
+                  id="wordpack-lemma-input"
+                  ref={focusRef as React.RefObject<HTMLInputElement>}
+                  value={lemma}
+                  onChange={(e) => setLemma(e.target.value)}
+                  placeholder="見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）"
+                  disabled={isActionLoading}
+                />
+              </GuestLock>
               <p aria-live="polite" className="sidebar-help" style={{ color: isLemmaValid ? '#666' : '#d32f2f' }}>
                 {lemmaValidation.message}
               </p>
             </div>
             <div className="sidebar-actions">
-              <button type="button" onClick={handleGenerate} disabled={!isLemmaValid || isActionLoading}>
-                生成
-              </button>
-              <button
-                type="button"
-                onClick={handleCreateEmpty}
-                disabled={!isLemmaValid || isActionLoading}
-                title="内容の生成を行わず、空のWordPackのみ保存"
-              >
-                WordPackのみ作成
-              </button>
+              <GuestLock isGuest={isGuest}>
+                <button type="button" onClick={handleGenerate} disabled={!isLemmaValid || isActionLoading}>
+                  生成
+                </button>
+              </GuestLock>
+              <GuestLock isGuest={isGuest}>
+                <button
+                  type="button"
+                  onClick={handleCreateEmpty}
+                  disabled={!isLemmaValid || isActionLoading}
+                  title="内容の生成を行わず、空のWordPackのみ保存"
+                >
+                  WordPackのみ作成
+                </button>
+              </GuestLock>
             </div>
             <div className="sidebar-field">
               <label htmlFor="wordpack-model-select">モデル</label>
-              <select
-                id="wordpack-model-select"
-                value={model}
-                onChange={(e) => handleChangeModel(e.target.value)}
-                disabled={isActionLoading}
-              >
-                <option value="gpt-5-mini">gpt-5-mini</option>
-                <option value="gpt-5-nano">gpt-5-nano</option>
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
-              </select>
+              <GuestLock isGuest={isGuest}>
+                <select
+                  id="wordpack-model-select"
+                  value={model}
+                  onChange={(e) => handleChangeModel(e.target.value)}
+                  disabled={isActionLoading}
+                >
+                  <option value="gpt-5-mini">gpt-5-mini</option>
+                  <option value="gpt-5-nano">gpt-5-nano</option>
+                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                  <option value="gpt-4o-mini">gpt-4o-mini</option>
+                </select>
+              </GuestLock>
             </div>
             {showAdvancedModelOptions && (
               <div className="sidebar-inline">
                 <div className="sidebar-field">
                   <label htmlFor="wordpack-reasoning-select">reasoning.effort</label>
-                  <select
-                    id="wordpack-reasoning-select"
-                    aria-label="reasoning.effort"
-                    value={advancedSettings.reasoningEffort}
-                    onChange={(e) => advancedSettings.handleChangeReasoningEffort(e.target.value as typeof advancedSettings.reasoningEffort)}
-                    disabled={isActionLoading}
-                  >
-                    <option value="minimal">minimal</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
+                  <GuestLock isGuest={isGuest}>
+                    <select
+                      id="wordpack-reasoning-select"
+                      aria-label="reasoning.effort"
+                      value={advancedSettings.reasoningEffort}
+                      onChange={(e) => advancedSettings.handleChangeReasoningEffort(e.target.value as typeof advancedSettings.reasoningEffort)}
+                      disabled={isActionLoading}
+                    >
+                      <option value="minimal">minimal</option>
+                      <option value="low">low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                    </select>
+                  </GuestLock>
                 </div>
                 <div className="sidebar-field">
                   <label htmlFor="wordpack-verbosity-select">text.verbosity</label>
-                  <select
-                    id="wordpack-verbosity-select"
-                    aria-label="text.verbosity"
-                    value={advancedSettings.textVerbosity}
-                    onChange={(e) => advancedSettings.handleChangeTextVerbosity(e.target.value as typeof advancedSettings.textVerbosity)}
-                    disabled={isActionLoading}
-                  >
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
+                  <GuestLock isGuest={isGuest}>
+                    <select
+                      id="wordpack-verbosity-select"
+                      aria-label="text.verbosity"
+                      value={advancedSettings.textVerbosity}
+                      onChange={(e) => advancedSettings.handleChangeTextVerbosity(e.target.value as typeof advancedSettings.textVerbosity)}
+                      disabled={isActionLoading}
+                    >
+                      <option value="low">low</option>
+                      <option value="medium">medium</option>
+                      <option value="high">high</option>
+                    </select>
+                  </GuestLock>
                 </div>
               </div>
             )}

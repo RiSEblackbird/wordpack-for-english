@@ -10,7 +10,14 @@ from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from pydantic import BaseModel, Field
 
-from ..auth import get_current_user, issue_session_token, session_cookie_names
+from ..auth import (
+    get_current_user,
+    guest_session_cookie_max_age,
+    guest_session_cookie_name,
+    issue_guest_session_token,
+    issue_session_token,
+    session_cookie_names,
+)
 from ..config import settings
 from ..logging import logger
 from ..store import store
@@ -29,6 +36,12 @@ class GoogleAuthResponse(BaseModel):
     """Response carrying the persisted user profile."""
 
     user: dict[str, str]
+
+
+class GuestAuthResponse(BaseModel):
+    """Response signaling that guest mode is active."""
+
+    mode: str = Field(default="guest", description="Guest mode marker")
 
 
 @router.post("/api/auth/google", response_model=GoogleAuthResponse)
@@ -170,6 +183,40 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
     request.state.user_id = google_sub
     # 成功ログは個人情報を直接出力しないよう `_log_google_auth_success` へ委譲する。
     _log_google_auth_success(google_sub, email, display_name)
+    return response
+
+
+@router.post("/api/auth/guest", response_model=GuestAuthResponse)
+async def authenticate_as_guest(request: Request) -> JSONResponse:
+    """Issue a signed guest session cookie for read-only access."""
+
+    if not settings.session_secret_key:
+        logger.error(
+            "guest_auth_failed",
+            user_id=None,
+            reason="missing_session_secret",
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Session secret key is not configured",
+        )
+
+    guest_token = issue_guest_session_token()
+    response = JSONResponse(status_code=HTTPStatus.OK, content={"mode": "guest"})
+    response.set_cookie(
+        key=guest_session_cookie_name(),
+        value=guest_token,
+        httponly=True,
+        secure=settings.session_cookie_secure,
+        samesite="lax",
+        max_age=guest_session_cookie_max_age(),
+    )
+    request.state.guest = True
+    logger.info(
+        "guest_session_issued",
+        user_id=None,
+        reason="guest_mode",
+    )
     return response
 
 

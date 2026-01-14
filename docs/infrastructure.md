@@ -53,7 +53,7 @@ flowchart TB
 |---------------|------|
 | **Firebase Hosting** | React + Vite でビルドした静的ファイルを配信。`/api/**` へのリクエストを Cloud Run へリライト。 |
 | **Cloud Run** | FastAPI バックエンドを実行。`Dockerfile.backend` でビルドしたイメージをデプロイ。 |
-| **Cloud Firestore** | ユーザー情報・WordPack・例文・インポート記事を永続化。`firestore.indexes.json` で複合インデックスを管理。 |
+| **Cloud Firestore** | ユーザー情報・WordPack・例文・インポート記事を永続化。ゲスト閲覧用のデモデータは `word_packs.metadata.guest_demo=true` で識別する。`firestore.indexes.json` で複合インデックスを管理。 |
 | **Artifact Registry** | Cloud Build でビルドした Docker イメージを保存。 |
 | **Cloud Load Balancer** | HTTPS 終端と `X-Forwarded-For` によるクライアント IP 復元。 |
 | **OpenAI API** | WordPack 生成（gpt-4o-mini）と音声読み上げ（gpt-4o-mini-tts）。 |
@@ -126,7 +126,7 @@ flowchart LR
         BackendTest["Backend tests<br/>(pytest)"]
         SecurityTest["Security headers tests"]
         FrontendTest["Frontend tests<br/>(vitest)"]
-        UISmoke["UI smoke test<br/>(Chrome DevTools MCP)"]
+        PlaywrightSmoke["Playwright smoke<br/>(PR critical flows)"]
         CloudRunGuard["Cloud Run config guard<br/>(dry-run)"]
         CISuccess["CI success<br/>(workflow_run hook)"]
     end
@@ -142,13 +142,13 @@ flowchart LR
     Actions --> BackendTest
     Actions --> SecurityTest
     Actions --> FrontendTest
-    BackendTest --> UISmoke
-    FrontendTest --> UISmoke
+    BackendTest --> PlaywrightSmoke
+    FrontendTest --> PlaywrightSmoke
     SecurityTest --> CloudRunGuard
     BackendTest --> CISuccess
     FrontendTest --> CISuccess
     SecurityTest --> CISuccess
-    UISmoke --> CISuccess
+    PlaywrightSmoke --> CISuccess
     CloudRunGuard --> CISuccess
     CISuccess -->|main ブランチ対象の push / PR| DryRun
     DryRun --> FirestoreIndex
@@ -160,15 +160,29 @@ flowchart LR
 
 | ジョブ名 | トリガー | 内容 |
 |---------|---------|------|
-| **Backend tests** | push / PR | `pytest` によるバックエンドテスト（カバレッジ 60% 以上） |
+| **Backend tests** | push / PR | `PYTHONPATH=apps/backend` で `pytest` を実行し、`pytest.ini` の `addopts` に揃えた `apps/backend/backend` のカバレッジが 60% 以上であることを検証 |
 | **Security headers tests** | push / PR | セキュリティヘッダー検証（HSTS, CSP, etc.） |
-| **Frontend tests** | push / PR | `vitest` によるフロントエンドテスト |
-| **UI smoke test** | Backend / Frontend テスト成功後 | Chrome DevTools MCP を用いた E2E スモークテスト |
+| **Frontend tests** | push / PR | `vitest --coverage` によるフロントエンドテストと、lines/statements 80%、branches 70%、functions 66% のカバレッジ閾値チェック（functions は段階的に 70%→75%→80% へ引き上げ予定） |
+| **Playwright smoke** | `pull_request`（Backend / Frontend テスト成功後） | Playwright の主要導線スモークテスト（`auth.spec.ts` / `guest.spec.ts` / `wordpack.spec.ts`） |
+| **Visual regression** | `pull_request`（UI 変更のみ） | UI 変更が検知された場合に Playwright の視覚回帰 (`tests/e2e/visual.spec.ts`) を実行 |
 | **Cloud Run config guard** | Security headers 成功後 | デプロイスクリプトの lint と dry-run 検証 |
 | **Cloud Run dry-run** | CI 成功後の workflow_run（main 向け push / PR のみ） | CI が成功した際に `make release-cloud-run` の dry-run モードを実行。fork からの PR でシークレットが無い場合は notice を残してスキップ |
 | **Deploy to production** | CI 成功後の workflow_run（main 向け push のみ） | CI が成功した際に、本番用シークレットから `.env.deploy` を復元して `make release-cloud-run` を実行（CI が検証した commit SHA をデプロイ） |
 
 Cloud Run dry-run は CI の全ジョブが success になった後の workflow_run イベントでのみ起動し、main ブランチへの push または base が main の PR に限定される。fork からの PR などでシークレットを利用できない場合は CI 成功後でも dry-run をスキップし、notice ログで未検証であることを明示する。
+
+### E2E 実行レイヤ（Playwright）
+
+Playwright の E2E は実行レイヤごとにスコープとブラウザを分離する。PR では最短のスモークのみを CI に含め、回帰は schedule（cron）または手動実行（workflow_dispatch）で起動する専用ワークフローで扱う。
+
+| レイヤ | トリガー | ブラウザ | 実行コマンド | 成果物 |
+|---|---|---|---|---|
+| PR スモーク | `pull_request` | Chromium | `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts` | `playwright-report/`, `test-results/` |
+| PR ビジュアル回帰 | `pull_request`（`apps/frontend/src/**`, `apps/frontend/**/*.css`, `apps/frontend/**/*.tsx` の変更時） | Chromium | `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts` | `playwright-report/`, `test-results/` |
+| 夜間回帰 | `schedule (cron: 0 2 * * *)` / `workflow_dispatch` | Chromium | `npx playwright test -c tests/e2e/playwright.config.ts --browser=chromium` | `playwright-report/`, `test-results/` |
+| 週次クロスブラウザ | `schedule (cron: 0 3 * * 1)` / `workflow_dispatch` | Firefox / WebKit | `npx playwright test -c tests/e2e/playwright.config.ts --browser=firefox` / `npx playwright test -c tests/e2e/playwright.config.ts --browser=webkit` | `playwright-report/`, `test-results/` |
+
+各レイヤの実行前に `npx playwright install --with-deps` を実行してブラウザを取得する。成果物は GitHub Actions の Artifacts として 90 日保持する。ビジュアル回帰の差分画像や HTML レポートは対象ワークフローの実行画面から `playwright-report/` と `test-results/` をダウンロードして確認する。
 
 ---
 
@@ -186,7 +200,7 @@ sequenceDiagram
 
     Dev->>GitHub: git push main
     GitHub->>Actions: CI トリガー
-    Actions->>Actions: pytest / vitest / smoke test
+    Actions->>Actions: pytest / vitest / Playwright smoke
     Actions->>GCloud: dry-run 検証
     GCloud-->>Actions: 設定 OK
 

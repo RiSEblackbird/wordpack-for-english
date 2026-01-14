@@ -10,6 +10,8 @@ import { WordPackPanel } from './WordPackPanel';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
 import { SidebarPortal } from './SidebarPortal';
 import { ARTICLE_IMPORT_TEXT_MAX_LENGTH } from '../constants/article';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
 
 interface ArticleWordPackLink {
   word_pack_id: string;
@@ -21,6 +23,7 @@ interface ArticleWordPackLink {
 type ArticleDetailResponse = ArticleDetailData;
 
 export const ArticleImportPanel: React.FC = () => {
+  const { isGuest } = useAuth();
   const { settings, setSettings } = useSettings();
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
@@ -183,14 +186,17 @@ export const ArticleImportPanel: React.FC = () => {
           <h2>文章インポート</h2>
           <div className="sidebar-field">
             <label htmlFor="article-import-text">文章</label>
-            <textarea
-              id="article-import-text"
-              placeholder="文章を貼り付け（日本語/英語）"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              disabled={loading}
-              style={{ width: '100%', minHeight: '5rem', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
-            />
+            {/* ゲストモードではAI利用に直結する入力をロックする */}
+            <GuestLock isGuest={isGuest}>
+              <textarea
+                id="article-import-text"
+                placeholder="文章を貼り付け（日本語/英語）"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                disabled={loading}
+                style={{ width: '100%', minHeight: '5rem', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
+              />
+            </GuestLock>
             {isTextTooLong ? (
               <p role="alert" style={{ color: 'var(--color-danger, #b00020)', marginTop: '0.25rem' }}>
                 文章は{ARTICLE_IMPORT_TEXT_MAX_LENGTH}文字以内で入力してください（現在 {trimmedText.length} 文字）
@@ -198,107 +204,119 @@ export const ArticleImportPanel: React.FC = () => {
             ) : null}
           </div>
           <div className="sidebar-actions">
-            <button type="button" onClick={importArticle} disabled={importDisabled}>
-              インポート
-            </button>
+            <GuestLock isGuest={isGuest}>
+              <button type="button" onClick={importArticle} disabled={importDisabled}>
+                インポート
+              </button>
+            </GuestLock>
             <div className="sidebar-field">
               <label htmlFor="article-category-select">カテゴリ</label>
-              <select
-                id="article-category-select"
-                value={category}
-                onChange={(e) => setCategory(e.target.value as any)}
+              <GuestLock isGuest={isGuest}>
+                <select
+                  id="article-category-select"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as any)}
+                  disabled={loading}
+                >
+                  <option value="Dev">Dev</option>
+                  <option value="CS">CS</option>
+                  <option value="LLM">LLM</option>
+                  <option value="Business">Business</option>
+                  <option value="Common">Common</option>
+                </select>
+              </GuestLock>
+            </div>
+            <GuestLock isGuest={isGuest}>
+              <button
+                type="button"
+                onClick={async () => {
+                  const selectedCategory = category;
+                  const selectedModel = model;
+                  setMsg(null);
+                  setArticle(null);
+                  setGenRunning((n) => n + 1);
+                  const notifId = addNotification({ title: `【${selectedCategory}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
+                  try {
+                    const reqBody: any = { category: selectedCategory };
+                    reqBody.model = selectedModel;
+                    if ((selectedModel || '').toLowerCase() === 'gpt-5-mini' || (selectedModel || '').toLowerCase() === 'gpt-5-nano') {
+                      reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+                      reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
+                    } else {
+                      reqBody.temperature = settings.temperature;
+                    }
+                    const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
+                      method: 'POST',
+                      body: reqBody,
+                      timeoutMs: settings.requestTimeoutMs,
+                    });
+                    updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
+                    try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
+                    setMsg({ kind: 'status', text: '生成＆インポートを実行しました' });
+                  } catch (e) {
+                    const m = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
+                    setMsg({ kind: 'alert', text: m });
+                    updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message: m, model: selectedModel, category: selectedCategory });
+                  } finally {
+                    setGenRunning((n) => Math.max(0, n - 1));
+                  }
+                }}
                 disabled={loading}
               >
-                <option value="Dev">Dev</option>
-                <option value="CS">CS</option>
-                <option value="LLM">LLM</option>
-                <option value="Business">Business</option>
-                <option value="Common">Common</option>
-              </select>
-            </div>
-            <button
-              type="button"
-              onClick={async () => {
-                const selectedCategory = category;
-                const selectedModel = model;
-                setMsg(null);
-                setArticle(null);
-                setGenRunning((n) => n + 1);
-                const notifId = addNotification({ title: `【${selectedCategory}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
-                try {
-                  const reqBody: any = { category: selectedCategory };
-                  reqBody.model = selectedModel;
-                  if ((selectedModel || '').toLowerCase() === 'gpt-5-mini' || (selectedModel || '').toLowerCase() === 'gpt-5-nano') {
-                    reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
-                    reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
-                  } else {
-                    reqBody.temperature = settings.temperature;
-                  }
-                  const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
-                    method: 'POST',
-                    body: reqBody,
-                    timeoutMs: settings.requestTimeoutMs,
-                  });
-                  updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
-                  try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
-                  setMsg({ kind: 'status', text: '生成＆インポートを実行しました' });
-                } catch (e) {
-                  const m = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
-                  setMsg({ kind: 'alert', text: m });
-                  updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message: m, model: selectedModel, category: selectedCategory });
-                } finally {
-                  setGenRunning((n) => Math.max(0, n - 1));
-                }
-              }}
-              disabled={loading}
-            >
-              生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
-            </button>
+                生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
+              </button>
+            </GuestLock>
           </div>
           <div className="sidebar-field">
             <label htmlFor="article-model-select">モデル</label>
-            <select
-              id="article-model-select"
-              value={model}
-              onChange={(e) => handleChangeModel(e.target.value)}
-              disabled={loading}
-            >
-              <option value="gpt-5-mini">gpt-5-mini</option>
-              <option value="gpt-5-nano">gpt-5-nano</option>
-              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-              <option value="gpt-4o-mini">gpt-4o-mini</option>
-            </select>
+            <GuestLock isGuest={isGuest}>
+              <select
+                id="article-model-select"
+                value={model}
+                onChange={(e) => handleChangeModel(e.target.value)}
+                disabled={loading}
+              >
+                <option value="gpt-5-mini">gpt-5-mini</option>
+                <option value="gpt-5-nano">gpt-5-nano</option>
+                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
+              </select>
+            </GuestLock>
           </div>
           {showAdvancedModelOptions && (
             <div className="sidebar-inline">
               <div className="sidebar-field">
                 <label htmlFor="article-reasoning-select">reasoning.effort</label>
-                <select
-                  id="article-reasoning-select"
-                  aria-label="reasoning.effort"
-                  value={settings.reasoningEffort || 'minimal'}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
-                  disabled={loading}
-                >
-                  <option value="minimal">minimal</option>
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
+                <GuestLock isGuest={isGuest}>
+                  <select
+                    id="article-reasoning-select"
+                    aria-label="reasoning.effort"
+                    value={settings.reasoningEffort || 'minimal'}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
+                    disabled={loading}
+                  >
+                    <option value="minimal">minimal</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </GuestLock>
               </div>
               <div className="sidebar-field">
                 <label htmlFor="article-verbosity-select">text.verbosity</label>
-                <select
-                  id="article-verbosity-select"
-                  aria-label="text.verbosity"
-                  value={settings.textVerbosity || 'medium'}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
-                  disabled={loading}
-                >
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
+                <GuestLock isGuest={isGuest}>
+                  <select
+                    id="article-verbosity-select"
+                    aria-label="text.verbosity"
+                    value={settings.textVerbosity || 'medium'}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
+                    disabled={loading}
+                  >
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </GuestLock>
               </div>
             </div>
           )}
@@ -349,5 +367,3 @@ export const ArticleImportPanel: React.FC = () => {
     </>
   );
 };
-
-

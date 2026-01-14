@@ -121,6 +121,11 @@ export interface RegenerateJob {
   error?: string | null;
 }
 
+export interface GuestPublicUpdateResponse {
+  word_pack_id: string;
+  guest_public: boolean;
+}
+
 export async function enqueueRegenerateWordPack(params: {
   apiBase: string;
   wordPackId: string;
@@ -163,4 +168,19 @@ export async function fetchRegenerateJobStatus(params: {
   });
 }
 
+export async function updateGuestPublicFlag(params: {
+  apiBase: string;
+  wordPackId: string;
+  guestPublic: boolean;
+  timeoutMs: number;
+  abortSignal?: AbortSignal;
+}): Promise<GuestPublicUpdateResponse> {
+  const { apiBase, wordPackId, guestPublic, timeoutMs, abortSignal } = params;
+  return fetchJson<GuestPublicUpdateResponse>(`${apiBase}/word/packs/${wordPackId}/guest-public`, {
+    method: 'POST',
+    body: { guest_public: guestPublic },
+    signal: abortSignal,
+    timeoutMs,
+  });
+}
 

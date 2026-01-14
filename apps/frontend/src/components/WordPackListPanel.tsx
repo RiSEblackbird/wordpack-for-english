@@ -4,7 +4,7 @@ import { useModal } from '../ModalContext';
 import { useConfirmDialog } from '../ConfirmDialogContext';
 import { useNotifications } from '../NotificationsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
-import { regenerateWordPackRequest } from '../lib/wordpack';
+import { regenerateWordPackRequest, updateGuestPublicFlag } from '../lib/wordpack';
 import { useAbortableAsync, AbortError } from '../lib/hooks';
 import { loadSessionState, saveSessionState } from '../lib/storage';
 import { assignSetValues, retainSetValues, toggleSetValue } from '../lib/set';
@@ -14,42 +14,49 @@ import { WordPackPanel, WordPackPreviewMeta } from './WordPackPanel';
 import { LoadingIndicator } from './LoadingIndicator';
 import { TTSButton } from './TTSButton';
 import { formatDateJst } from '../lib/date';
+import { useAuth } from '../AuthContext';
+import { GuestLock } from './GuestLock';
+import { GuestPublicToggle } from './GuestPublicToggle';
 
 // 削除ボタンの共通コンポーネント
 interface DeleteButtonProps {
   onClick: (e: React.MouseEvent) => void;
   disabled?: boolean;
+  isGuest: boolean;
 }
 
-const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false }) => {
+const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false, isGuest }) => {
+  const resolvedDisabled = disabled || isGuest;
   return (
-    <button 
-      className="danger" 
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        padding: '0.1rem 0.4rem',
-        fontSize: '0.55em',
-        border: '1px solid #d32f2f',
-        borderRadius: '4px',
-        background: 'rgb(234, 230, 217)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        color: '#d32f2f',
-        opacity: disabled ? 0.6 : 1
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.background = '#ffebee';
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.background = 'rgb(234, 230, 217)';
-        }
-      }}
-    >
-      削除
-    </button>
+    <GuestLock isGuest={isGuest}>
+      <button 
+        className="danger" 
+        onClick={onClick}
+        disabled={disabled}
+        style={{
+          padding: '0.1rem 0.4rem',
+          fontSize: '0.55em',
+          border: '1px solid #d32f2f',
+          borderRadius: '4px',
+          background: 'rgb(234, 230, 217)',
+          cursor: resolvedDisabled ? 'not-allowed' : 'pointer',
+          color: '#d32f2f',
+          opacity: resolvedDisabled ? 0.6 : 1
+        }}
+        onMouseEnter={(e) => {
+          if (!resolvedDisabled) {
+            e.currentTarget.style.background = '#ffebee';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!resolvedDisabled) {
+            e.currentTarget.style.background = 'rgb(234, 230, 217)';
+          }
+        }}
+      >
+        削除
+      </button>
+    </GuestLock>
   );
 };
 
@@ -60,6 +67,7 @@ interface WordPackListItem {
   created_at: string;
   updated_at: string;
   is_empty?: boolean;
+  guest_public?: boolean;
   examples_count?: {
     Dev: number;
     CS: number;
@@ -139,6 +147,7 @@ interface WordPackListResponse {
 }
 
 export const WordPackListPanel: React.FC = () => {
+  const { isGuest } = useAuth();
   const { settings } = useSettings();
   const {
     apiBase,
@@ -173,6 +182,7 @@ export const WordPackListPanel: React.FC = () => {
   const [showAllSense, setShowAllSense] = useState(persistedState.showAllSense);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(() => new Set());
+  const [guestPublicUpdatingIds, setGuestPublicUpdatingIds] = useState<Set<string>>(() => new Set());
   const { run: runAbortable } = useAbortableAsync();
   const previewMeta = useMemo<WordPackPreviewMeta | null>(() => {
     if (!previewWordPackId) return null;
@@ -256,6 +266,7 @@ export const WordPackListPanel: React.FC = () => {
             ...item,
             checked_only_count: item.checked_only_count ?? 0,
             learned_count: item.learned_count ?? 0,
+            guest_public: item.guest_public ?? false,
           })),
         );
         setTotal(res.total);
@@ -340,6 +351,42 @@ export const WordPackListPanel: React.FC = () => {
     reasoningEffort,
     updateNotification,
   ]);
+
+  const updateGuestPublic = useCallback(
+    async (wordPackId: string, nextValue: boolean) => {
+      if (!wordPackId) return;
+      if (guestPublicUpdatingIds.has(wordPackId)) return;
+      const previous = wordPacks.find((wp) => wp.id === wordPackId)?.guest_public ?? false;
+      setGuestPublicUpdatingIds((prev) => new Set(prev).add(wordPackId));
+      setWordPacks((prev) =>
+        prev.map((wp) => (wp.id === wordPackId ? { ...wp, guest_public: nextValue } : wp)),
+      );
+      try {
+        await updateGuestPublicFlag({
+          apiBase,
+          wordPackId,
+          guestPublic: nextValue,
+          timeoutMs: requestTimeoutMs,
+        });
+        setMsg({ kind: 'status', text: nextValue ? 'ゲスト公開を有効にしました' : 'ゲスト公開を解除しました' });
+        try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+      } catch (e) {
+        setWordPacks((prev) =>
+          prev.map((wp) => (wp.id === wordPackId ? { ...wp, guest_public: previous } : wp)),
+        );
+        const m = e instanceof ApiError ? e.message : 'ゲスト公開の更新に失敗しました';
+        setMsg({ kind: 'alert', text: m });
+      } finally {
+        setGuestPublicUpdatingIds((prev) => {
+          if (!prev.has(wordPackId)) return prev;
+          const next = new Set(prev);
+          next.delete(wordPackId);
+          return next;
+        });
+      }
+    },
+    [apiBase, guestPublicUpdatingIds, requestTimeoutMs, wordPacks],
+  );
 
   const deleteWordPack = useCallback(async (wordPack: WordPackListItem) => {
     const targetLabel = wordPack.lemma?.trim() || 'WordPack';
@@ -608,6 +655,8 @@ export const WordPackListPanel: React.FC = () => {
         .wp-pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
         .wp-pagination button:hover:not(:disabled) { background: #f5f5f5; }
         .wp-empty { text-align: center; color: #666; padding: 2rem; }
+        /* ダークテーマの空状態テキストはWCAG AAの可読性を確保する */
+        body.theme-dark .wp-empty { color: #9aa4b2; }
         .wp-view-toggle { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; }
         .wp-toggle-btn { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
         .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; }
@@ -638,6 +687,8 @@ export const WordPackListPanel: React.FC = () => {
           .wp-card-header { flex-direction: column; align-items: flex-start; }
           .wp-card-actions { margin-left: 0; margin-top: 0.3rem; }
           .wp-sort-controls { flex-direction: column; align-items: stretch; }
+          .wp-list-header { flex-direction: column; align-items: flex-start; max-height: none; gap: 0.5rem; }
+          .wp-list-header button { width: 100%; }
         }
       `}</style>
 
@@ -674,11 +725,13 @@ export const WordPackListPanel: React.FC = () => {
           <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
             全選択解除
           </button>
-          <button
-            type="button"
-            onClick={deleteSelectedWordPacks}
-            disabled={selectedCount === 0 || loading}
-          >選択したWordPackを削除</button>
+          <GuestLock isGuest={isGuest}>
+            <button
+              type="button"
+              onClick={deleteSelectedWordPacks}
+              disabled={selectedCount === 0 || loading}
+            >選択したWordPackを削除</button>
+          </GuestLock>
         </div>
 
         <ListControls<SortKey>
@@ -776,19 +829,22 @@ export const WordPackListPanel: React.FC = () => {
                           <DeleteButton
                             onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
                             disabled={loading}
+                            isGuest={isGuest}
                           />
                         </div>
                         <div className="wp-card-actions-lower" role="group" aria-label="カード操作 下段">
                           {wp.is_empty && (
-                            <button
-                              type="button"
-                              className="wp-generate-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                generateWordPack(wp);
-                              }}
-                              disabled={loading || generatingIds.has(wp.id)}
-                            >生成</button>
+                            <GuestLock isGuest={isGuest}>
+                              <button
+                                type="button"
+                                className="wp-generate-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  generateWordPack(wp);
+                                }}
+                                disabled={loading || generatingIds.has(wp.id)}
+                              >生成</button>
+                            </GuestLock>
                           )}
                           <button
                             type="button"
@@ -813,6 +869,17 @@ export const WordPackListPanel: React.FC = () => {
                       <div className="wp-progress-badges" aria-label="学習状況">
                         <span className="wp-progress-badge learned">学 {wp.learned_count}</span>
                         <span className="wp-progress-badge checked">確 {wp.checked_only_count}</span>
+                      </div>
+                      <div style={{ marginTop: '0.35rem' }}>
+                        <GuestPublicToggle
+                          isGuest={isGuest}
+                          checked={Boolean(wp.guest_public)}
+                          disabled={loading || guestPublicUpdatingIds.has(wp.id)}
+                          onChange={(next) => updateGuestPublic(wp.id, next)}
+                          tooltip="ゲスト閲覧の一覧に表示するかどうかを切り替えます。"
+                          description="公開対象のWordPackのみ、ゲスト一覧に表示されます。"
+                          compact
+                        />
                       </div>
                       {wp.is_empty ? (
                         <div style={{ marginTop: '0.3rem', fontSize: '0.7em' }}>
@@ -910,20 +977,34 @@ export const WordPackListPanel: React.FC = () => {
                         }}
                       >語義</button>
                       {wp.is_empty && (
-                        <button
-                          type="button"
-                          className="wp-generate-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            generateWordPack(wp);
-                          }}
-                          disabled={loading || generatingIds.has(wp.id)}
-                        >生成</button>
+                        <GuestLock isGuest={isGuest}>
+                          <button
+                            type="button"
+                            className="wp-generate-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              generateWordPack(wp);
+                            }}
+                            disabled={loading || generatingIds.has(wp.id)}
+                          >生成</button>
+                        </GuestLock>
                       )}
                       <TTSButton text={wp.lemma} className="wp-index-tts-btn" />
                       <DeleteButton
                         onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
                         disabled={loading}
+                        isGuest={isGuest}
+                      />
+                    </div>
+                    <div style={{ marginTop: '0.35rem' }} onClick={(e) => e.stopPropagation()}>
+                      <GuestPublicToggle
+                        isGuest={isGuest}
+                        checked={Boolean(wp.guest_public)}
+                        disabled={loading || guestPublicUpdatingIds.has(wp.id)}
+                        onChange={(next) => updateGuestPublic(wp.id, next)}
+                        tooltip="ゲスト閲覧の一覧に表示するかどうかを切り替えます。"
+                        description="公開対象のWordPackのみ、ゲスト一覧に表示されます。"
+                        compact
                       />
                     </div>
                   </div>

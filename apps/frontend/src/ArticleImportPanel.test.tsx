@@ -14,6 +14,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       localStorage.setItem(
         'wordpack.auth.v1',
         JSON.stringify({
+          authMode: 'authenticated',
           user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
         }),
       );
@@ -326,5 +327,4 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     expect(regenBodies.some((b) => b.model === 'gpt-4o-mini' && typeof b.temperature === 'number' && !('reasoning' in b) && !('text' in b))).toBe(true);
   });
 });
-
 

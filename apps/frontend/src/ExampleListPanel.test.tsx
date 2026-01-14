@@ -15,6 +15,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
       localStorage.setItem(
         'wordpack.auth.v1',
         JSON.stringify({
+          authMode: 'authenticated',
           user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
         }),
       );
@@ -218,7 +219,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
 
       if (url.endsWith('/api/word/examples/1/transcription-typing') && method === 'POST') {
         const body = init?.body ? JSON.parse(init.body as string) : {};
-        expect(body).toEqual({ content: 'example en 1' });
+        expect(body).toEqual({ input_length: 'example en 1'.length });
         return new Response(
           JSON.stringify({ id: 1, word_pack_id: 'wp:test:1', transcription_typing_count: 3 }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -235,7 +236,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
     await openTab(user, '例文一覧');
     await screen.findByRole('heading', { name: '例文一覧' });
 
-    const typingBadge = await screen.findByText('タイピング練習: 0回');
+    const typingBadge = await screen.findByText('タイピング累計: 0文字');
     expect(typingBadge).toBeInTheDocument();
 
     const card = await screen.findByTestId('example-card');
@@ -243,7 +244,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
       await user.click(card);
     });
 
-    const toggleTypingButton = await screen.findByRole('button', { name: '文字起こしタイピング (0)' });
+    const toggleTypingButton = await screen.findByRole('button', { name: '文字起こしタイピング (0文字)' });
     await act(async () => {
       await user.click(toggleTypingButton);
     });
@@ -259,10 +260,10 @@ describe('ExampleListPanel pagination offset behavior', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('タイピング練習: 3回')).toBeInTheDocument();
+      expect(screen.getByText('タイピング累計: 3文字')).toBeInTheDocument();
     });
 
-    await screen.findByRole('button', { name: '文字起こしタイピング (3)' });
+    await screen.findByRole('button', { name: '文字起こしタイピング (3文字)' });
 
     fetchMock.mockRestore();
   }, 20000);
@@ -386,5 +387,4 @@ describe('ExampleListPanel pagination offset behavior', () => {
     });
   }, 15000);
 });
-
 

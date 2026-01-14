@@ -22,6 +22,22 @@ bin-release/
 .env.*
 !.env.example
 !.env.ci
+.envrc
+.direnv/
+# E2E 用ローカル環境変数（テスト用トークンなどを含み得るため除外）
+tests/e2e/.env
+tests/e2e/.env.*
+# UI テスト用ローカル環境変数（トークン/認証情報が混入し得るため除外）
+tests/ui/.env
+tests/ui/.env.*
+# 認証トークンを含む可能性のあるパッケージマネージャ設定
+.npmrc
+.npmrc.local
+.pnpmrc
+.pnpmrc.local
+.yarnrc
+.yarnrc.yml
+.yarnrc.local
 # ローカル仮想環境や Firebase デバッグログは資格情報を含みうるため除外
 .venv/
 .firebase/
@@ -33,6 +49,8 @@ firestore-debug.log
 # Firestore シードやエミュレータのエクスポートはサンプルとはいえ利用者入力が含まれ得るため除外
 firestore-seed-*/
 firestore-seed-*.json
+firestore-export-*/
+firestore-export-*.json
 # Cloud Run デプロイ用の秘密情報は必ずローカルファイル (.env.deploy など) に閉じ込める
 .env.deploy
 !env.deploy.example
@@ -48,6 +66,7 @@ gcp-service-account*.json
 *.pem
 *.p12
 *.pfx
+*.key
 __pycache__/
 *.pyc
 # Node
@@ -57,13 +76,29 @@ apps/frontend/.env
 apps/frontend/.env.local
 apps/frontend/.env.*
 !apps/frontend/.env.example
+# MSW のローカル生成物（開発時のみ生成される可能性があるため除外）
+.msw/
 
 # Python
 __pycache__/
 
 # Test artifacts
 .coverage
+.coverage.*
 .pytest_cache/
+coverage.xml
+htmlcov/
+coverage/
+
+# Playwright artifacts (HTML report, traces, screenshots)
+playwright-report/
+test-results/
+# a11y 検証のローカル出力（レポートを生成する場合に備える）
+axe-report/
+axe-results/
+# Playwright 認証ストレージはセッション情報を含むため除外
+tests/e2e/.auth/
+tests/e2e/storage-state*.json
 
 # Runtime diagnostics logs (may contain telemetry/PII)
 *.log
@@ -80,11 +115,15 @@ __pycache__/
 
 # ローカルの gcloud 設定ディレクトリ（資格情報を含むため必ず除外）
 .config/gcloud/
+# ローカルの AWS 資格情報ディレクトリも同様に機密情報を含むため除外
+.aws/
 
 # Vector DB (Chroma) persistence - do not commit generated index data
 .chroma/
 
 .vscode/
+# ローカルの秘密情報ディレクトリは誤コミット防止のため除外
+.secrets/
 
 終了済みor参考ドキュメント/
 

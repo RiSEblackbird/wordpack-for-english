@@ -14,6 +14,7 @@ describe('ArticleListPanel bulk delete', () => {
       localStorage.setItem(
         'wordpack.auth.v1',
         JSON.stringify({
+          authMode: 'authenticated',
           user: { google_sub: 'tester', email: 'tester@example.com', display_name: 'Tester' },
         }),
       );
@@ -135,4 +136,3 @@ describe('ArticleListPanel bulk delete', () => {
     });
   });
 });
-

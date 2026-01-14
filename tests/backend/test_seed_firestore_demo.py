@@ -12,7 +12,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(PROJECT_ROOT / "apps" / "backend"))
 
-from backend.seed_firestore_demo import seed_firestore_from_sqlite  # noqa: E402
+from backend.seed_firestore_demo import (  # noqa: E402
+    seed_firestore_from_sqlite,
+    seed_firestore_from_sqlite_if_missing_guest_demo,
+)
 from backend.store.firestore_store import AppFirestoreStore  # noqa: E402
 from tests.firestore_fakes import FakeFirestoreClient  # noqa: E402
 
@@ -185,4 +188,30 @@ def test_seed_firestore_from_sqlite_moves_wordpacks_and_articles(tmp_path: Path)
     assert article is not None
     assert article[0] == "Demo Article"
     assert article[-1] == [("wp-1", "bottleneck", "existing")]
+    stored_meta = store.wordpacks.get_word_pack_metadata("wp-1") or {}
+    assert stored_meta.get("metadata", {}).get("guest_demo") is True
 
+
+def test_seed_firestore_from_sqlite_runs_when_guest_demo_is_missing(
+    tmp_path: Path,
+) -> None:
+    """私用データがあってもゲスト用データが無ければシードが走ることを確認する。"""
+
+    db_path = _prepare_demo_sqlite(tmp_path)
+    store = AppFirestoreStore(client=FakeFirestoreClient())
+
+    store.save_word_pack(
+        "wp-private",
+        "Private",
+        json.dumps({"lemma": "Private", "examples": {}}, ensure_ascii=False),
+    )
+
+    wp_count, article_count = seed_firestore_from_sqlite_if_missing_guest_demo(
+        db_path, store
+    )
+
+    assert wp_count == 1
+    assert article_count == 1
+    assert store.wordpacks.get_word_pack_metadata("wp-private") is not None
+    seeded_meta = store.wordpacks.get_word_pack_metadata("wp-1") or {}
+    assert seeded_meta.get("metadata", {}).get("guest_demo") is True

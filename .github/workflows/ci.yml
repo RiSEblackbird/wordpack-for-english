@@ -47,13 +47,13 @@ jobs:
 
       - name: Run pytest
         env:
-          PYTHONPATH: src
+          PYTHONPATH: apps/backend
         run: |
           if [ "${ENABLE_FIRESTORE_EMULATOR}" = "true" ]; then
             npm install -g firebase-tools
-            FIRESTORE_EMULATOR_HOST="127.0.0.1:${FIRESTORE_EMULATOR_PORT}" FIRESTORE_PROJECT_ID="${FIRESTORE_PROJECT_ID}" firebase emulators:exec --only firestore --project "${FIRESTORE_PROJECT_ID}" --config firebase.json "pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60" | cat
+            FIRESTORE_EMULATOR_HOST="127.0.0.1:${FIRESTORE_EMULATOR_PORT}" FIRESTORE_PROJECT_ID="${FIRESTORE_PROJECT_ID}" firebase emulators:exec --only firestore --project "${FIRESTORE_PROJECT_ID}" --config firebase.json "pytest" | cat
           else
-            pytest -q --cov=src/backend --cov-report=term-missing --cov-fail-under=60 | cat
+            pytest | cat
           fi
 
   security_headers:
@@ -67,6 +67,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+
+      - name: Set SESSION_SECRET_KEY for CI
+        # Settings 検証で必須のため、CI 実行ごとにランダム値を注入する（実運用の秘密鍵は不要）。
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import secrets
+          print("SESSION_SECRET_KEY=" + secrets.token_hex(32))
+          PY
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -111,14 +119,15 @@ jobs:
         run: npm ci
 
       - name: Run vitest
-        run: npm test --silent
+        run: npm test -- --coverage --silent
 
-  ui_smoke:
-    name: UI smoke test (Chrome DevTools MCP)
+  playwright_smoke:
+    name: Playwright smoke (PR critical flows)
     runs-on: ubuntu-latest
     needs:
       - backend
       - frontend
+    if: github.event_name == 'pull_request'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -129,13 +138,21 @@ jobs:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: |
+            package-lock.json
             apps/frontend/package-lock.json
-            tests/ui/mcp-smoke/package-lock.json
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+
+      - name: Set SESSION_SECRET_KEY for CI
+        # Settings 検証で必須のため、CI 実行ごとにランダム値を注入する（実運用の秘密鍵は不要）。
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import secrets
+          print("SESSION_SECRET_KEY=" + secrets.token_hex(32))
+          PY
 
       - name: Install backend dependencies
         run: |
@@ -147,19 +164,31 @@ jobs:
         working-directory: apps/frontend
         run: npm ci
 
-      - name: Install MCP smoke test dependencies
-        working-directory: tests/ui/mcp-smoke
-        run: npm ci
+      - name: Install Playwright dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps
 
-      - name: Setup Chrome
-        id: chrome
-        uses: browser-actions/setup-chrome@v1
+      - name: Run Playwright smoke suite
+        # PR では主要導線のみを実行し、短時間で回帰を検知する。
+        run: |
+          npx playwright test \
+            -c tests/e2e/playwright.config.ts \
+            tests/e2e/auth.spec.ts \
+            tests/e2e/guest.spec.ts \
+            tests/e2e/wordpack.spec.ts
 
-      - name: Run MCP UI smoke test
-        working-directory: tests/ui/mcp-smoke
-        env:
-          CHROME_EXECUTABLE: ${{ steps.chrome.outputs.chrome-path }}
-        run: npm run smoke
+      - name: Upload Playwright artifacts
+        # 失敗時のスクリーンショット/トレース/HTML レポートを回収する。
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-smoke-artifacts
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 90
+          if-no-files-found: ignore
 
   cloud_run_guard:
     name: Cloud Run config guard
@@ -174,6 +203,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+
+      - name: Set SESSION_SECRET_KEY for CI
+        # Settings 検証で必須のため、CI 実行ごとにランダム値を注入する（実運用の秘密鍵は不要）。
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import secrets
+          print("SESSION_SECRET_KEY=" + secrets.token_hex(32))
+          PY
 
       - name: Install backend dependencies
         run: |

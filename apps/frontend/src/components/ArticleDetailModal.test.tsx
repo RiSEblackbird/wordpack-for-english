@@ -1,8 +1,18 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
+import * as AuthContext from '../AuthContext';
 
 describe('ArticleDetailModal', () => {
+  beforeEach(() => {
+    vi.spyOn(AuthContext, 'useAuth').mockReturnValue({ isGuest: false } as any);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('displays article metadata below related word packs', () => {
     const article: ArticleDetailData = {
       id: 'art:test',
@@ -78,5 +88,29 @@ describe('ArticleDetailModal', () => {
     expect(meta).toHaveTextContent('0秒');
     expect(meta).toHaveTextContent('未指定');
     expect(meta).toHaveTextContent('未記録');
+  });
+
+  it('keeps the "生成" button right-aligned when wrapped by GuestLock', () => {
+    const article: ArticleDetailData = {
+      id: 'art:wp-actions',
+      title_en: 'Title',
+      body_en: 'English body',
+      body_ja: '日本語本文',
+      related_word_packs: [{ word_pack_id: 'wp:1', lemma: 'alpha', status: 'existing' }],
+    };
+
+    render(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        article={article}
+        onRegenerateWordPack={() => {}}
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: '生成' });
+    const wrapper = button.parentElement as HTMLElement;
+    // GuestLock wrapper が flex item になるため、autoマージンは wrapper 側に必要
+    expect(wrapper).toHaveStyle({ marginLeft: 'auto' });
   });
 });

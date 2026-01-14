@@ -27,6 +27,21 @@ const SIDEBAR_ID = 'app-sidebar';
 const MAIN_MAX_WIDTH = 1000;
 const SIDEBAR_WIDTH = 280;
 const OAUTH_TELEMETRY_ENDPOINT = '/api/diagnostics/oauth-telemetry';
+const MAIN_HEADING_TEXT = 'WordPack';
+const VISUALLY_HIDDEN_STYLE = `
+  .visually-hidden {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+`;
 
 const SENSITIVE_TELEMETRY_KEYS = new Set(['access_token', 'id_token', 'refresh_token', 'code', 'credential']);
 
@@ -121,12 +136,26 @@ export const App: React.FC = () => {
   const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
   const focusRef = useRef<HTMLElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isOverlaySidebar, setIsOverlaySidebar] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
   const hasSidebarOpened = useRef(false);
+  /**
+   * サイドバーを閉じる処理をまとめる。
+   * なぜ: クリック・キーボード操作の共通導線を用意し、挙動の差分を防ぐため。
+   */
+  const closeSidebar = useCallback(() => {
+    setIsSidebarOpen(false);
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isSidebarOpen) {
+        e.preventDefault();
+        closeSidebar();
+        return;
+      }
       if (e.altKey) {
         if (e.key === '1') setTab('wordpack');
         if (e.key === '2') setTab('settings');
@@ -137,7 +166,7 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [closeSidebar, isSidebarOpen]);
 
   useEffect(() => {
     if (isSidebarOpen) {
@@ -148,6 +177,39 @@ export const App: React.FC = () => {
     }
   }, [isSidebarOpen]);
 
+  useEffect(() => {
+    /**
+     * サイドバーが閉じている間は inert を付与し、aria-hidden とフォーカス可能要素の矛盾を防ぐ。
+     * なぜ: 非表示の要素にフォーカスが残ると a11y 違反になるため。
+     */
+    const sidebar = sidebarRef.current;
+    if (!sidebar) {
+      return;
+    }
+    if (isSidebarOpen) {
+      sidebar.removeAttribute('inert');
+      return;
+    }
+    sidebar.setAttribute('inert', '');
+  }, [isSidebarOpen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return undefined;
+    }
+    const mediaQuery = window.matchMedia('(max-width: 480px)');
+    const updateOverlayState = () => {
+      setIsOverlaySidebar(mediaQuery.matches);
+    };
+    updateOverlayState();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', updateOverlayState);
+      return () => mediaQuery.removeEventListener('change', updateOverlayState);
+    }
+    mediaQuery.addListener(updateOverlayState);
+    return () => mediaQuery.removeListener(updateOverlayState);
+  }, []);
+
   const toggleSidebar = () =>
     flushSync(() => {
       setIsSidebarOpen((prev) => !prev);
@@ -157,7 +219,14 @@ export const App: React.FC = () => {
     setTab(next);
   };
 
-  const { user, signOut, isAuthenticating } = useAuth();
+  const { user, signOut, isAuthenticating, isGuest } = useAuth();
+  /**
+   * ノッチや角丸を持つすべての端末で固定UIが隠れないように、安全領域専用のクラスを常に付与する。
+   * なぜ: env(safe-area-inset-*)は安全領域がない端末では自動的に0になるため、
+   *       画面幅に依存せず全端末で適用しても問題なく、横向きやタブレット等の
+   *       480px超でもノッチがある端末を確実に保護できる。
+   */
+  const fixedSafeAreaClass = ' safe-area-adjusted';
 
   /**
    * ヘッダーから即座にセッションを終了する操作を集約する。
@@ -172,8 +241,8 @@ export const App: React.FC = () => {
     }
   }, [signOut]);
 
-  const appContent = user ? (
-    <div
+  const appContent = user || isGuest ? (
+    <main
       className={`app-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
       style={{
         ['--main-max-width' as any]: `${MAIN_MAX_WIDTH}px`,
@@ -181,6 +250,7 @@ export const App: React.FC = () => {
     >
       <style>{`
   /* テーマ変数 */
+  ${VISUALLY_HIDDEN_STYLE}
   body.theme-light {
     --color-bg: #ffffff;
     --color-text: #111827;
@@ -215,18 +285,49 @@ export const App: React.FC = () => {
   }
   body { margin: 0; background: var(--color-bg); color: var(--color-text); }
   a { color: var(--color-link); }
-  main, header, footer { padding: 0.5rem; }
+  header, footer { padding: 0.5rem; }
   .header-bar {
     height: 50px;
     display: flex;
     align-items: center;
     gap: 1rem;
   }
+  .header-title {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
   .header-actions {
     margin-left: auto;
     display: inline-flex;
     align-items: center;
     gap: 0.75rem;
+  }
+  .guest-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    border: 1px dashed rgba(37, 99, 235, 0.6);
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: 0.85rem;
+    background: rgba(37, 99, 235, 0.12);
+  }
+  .guest-badge-fixed {
+    position: fixed;
+    top: 12px;
+    right: 12px;
+    z-index: 1200;
+  }
+  .guest-badge-fixed.safe-area-adjusted {
+    top: calc(12px + env(safe-area-inset-top));
+    right: calc(12px + env(safe-area-inset-right));
+  }
+  body.theme-dark .guest-badge {
+    border-color: rgba(147, 197, 253, 0.7);
+    background: rgba(96, 165, 250, 0.18);
   }
   .logout-button {
     border: 1px solid rgba(37, 99, 235, 0.2);
@@ -266,11 +367,18 @@ export const App: React.FC = () => {
   }
   .hamburger-toggle {
     position: fixed;
-    top: 0;
-    left: 0;
+    top: env(safe-area-inset-top);
+    left: env(safe-area-inset-left);
     z-index: 980;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     background: var(--color-surface);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .hamburger-toggle.safe-area-adjusted {
+    padding: calc(0.25rem + env(safe-area-inset-top))
+      calc(0.25rem + env(safe-area-inset-right))
+      calc(0.25rem + env(safe-area-inset-bottom))
+      calc(0.25rem + env(safe-area-inset-left));
   }
   .hamburger-toggle[aria-expanded='true'] {
     box-shadow: none;
@@ -289,7 +397,9 @@ export const App: React.FC = () => {
   }
   .app-layout {
     display: flex;
-    min-height: 100vh;
+    /* iPhone 15 Proのようなアドレスバー可変UIでも縦領域を確保するため、動的ビューポートを優先する。 */
+    min-height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
+    min-height: 100dvh;
   }
   .sidebar {
     width: 0;
@@ -297,15 +407,20 @@ export const App: React.FC = () => {
     background: var(--color-surface);
     box-shadow: none;
     overflow: hidden;
+    z-index: 1000;
   }
   .app-shell.sidebar-open .sidebar {
     box-shadow: 2px 0 20px rgba(0, 0, 0, 0.2);
+    width: ${SIDEBAR_WIDTH}px;
   }
   .sidebar-content {
-    min-height: 100vh;
+    /* モバイルSafariでの表示崩れを避けるため、サイドバーも動的ビューポートに合わせる。 */
+    min-height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
+    min-height: 100dvh;
     padding: 2rem 1.5rem;
     display: grid;
-    width: 85%;
+    width: 100%;
+    box-sizing: border-box;
     gap: 1.5rem;
     /* グリッドの余白を上部に詰め、要素間を均等配置しない */
     align-content: flex-start;
@@ -355,12 +470,22 @@ export const App: React.FC = () => {
     box-sizing: border-box;
     padding: 0 20px;
   }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    border: none;
+    background: var(--color-inverse-overlay);
+    cursor: pointer;
+    z-index: 900;
+  }
   .main-inner {
     display: flex;
     flex-direction: column;
     max-width: var(--main-max-width);
     width: min(100%, var(--main-max-width));
     margin: 0 auto;
+    /* なぜ: サイドバーの左端を0に保ちつつ、本文だけに0.5remの余白を与えて既存の見た目を維持するため。 */
+    padding: 0.5rem;
     transition: none;
   }
   header {
@@ -368,6 +493,61 @@ export const App: React.FC = () => {
   }
   .header-bar {
     padding-left: 3.5rem;
+  }
+  @media (max-width: 430px) {
+    /* モバイルでノッチ/狭幅に配慮し、ヘッダーと本文の余白を最小化する。 */
+    body {
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .header-bar {
+      height: auto;
+      min-height: 50px;
+      flex-wrap: wrap;
+      row-gap: 0.5rem;
+      padding-left: calc(env(safe-area-inset-left) + 0.5rem);
+    }
+    /* iPhone 15 Proでヘッダーが詰まりすぎないように、タイトルサイズと行間を調整する。 */
+    .header-title {
+      font-size: 1.35rem;
+      margin: 0;
+    }
+    .header-actions {
+      width: 100%;
+      margin-left: 0;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      row-gap: 0.5rem;
+    }
+    .main-column {
+      padding: 0 12px;
+    }
+  }
+  @media (max-width: 480px) {
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
+      height: 100dvh;
+      width: min(85vw, 320px);
+      transform: translateX(-100%);
+      transition: transform 0.2s ease;
+    }
+    .app-shell.sidebar-open .sidebar {
+      width: min(85vw, 320px);
+      transform: translateX(0);
+    }
+    .main-column {
+      /* 狭幅端末で左右が欠けないように、安全領域を含めて横余白を計算する。 */
+      padding: 0 calc(8px + env(safe-area-inset-right));
+      padding-left: calc(8px + env(safe-area-inset-left));
+      width: 100%;
+    }
+    .sidebar-content {
+      /* モバイルでは余白を縮め、内容が横にはみ出さないようにする。 */
+      padding: 1rem;
+    }
   }
   .sidebar-nav-button {
     font-size: 1.2rem;
@@ -392,13 +572,30 @@ export const App: React.FC = () => {
     outline-offset: 2px;
   }
 `}</style>
+      {/* Axe の main/heading ルールを満たすため、h1 は main 直下に配置する。 */}
+      <h1 className="visually-hidden">{MAIN_HEADING_TEXT}</h1>
+      {isGuest ? (
+        <span className={`guest-badge guest-badge-fixed${fixedSafeAreaClass}`}>ゲスト閲覧モード</span>
+      ) : null}
+      {isSidebarOpen && isOverlaySidebar ? (
+        <>
+          {/* 背面操作を遮断し、タップで閉じる導線を統一する。 */}
+          <button
+            type="button"
+            className="sidebar-backdrop"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={closeSidebar}
+          />
+        </>
+      ) : null}
       <div className="app-layout">
         <aside
           id={SIDEBAR_ID}
           className="sidebar"
           aria-label="アプリ内共通メニュー"
           aria-hidden={isSidebarOpen ? 'false' : 'true'}
-          style={{ width: isSidebarOpen ? `${SIDEBAR_WIDTH}px` : '0px' }}
+          ref={sidebarRef}
         >
           <div className="sidebar-content">
             <nav className="sidebar-nav" aria-label="主要メニュー">
@@ -434,7 +631,7 @@ export const App: React.FC = () => {
                 <button
                   ref={sidebarToggleRef}
                   type="button"
-                  className="hamburger-button hamburger-toggle"
+                  className={`hamburger-button hamburger-toggle${fixedSafeAreaClass}`}
                   aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
                   aria-expanded={isSidebarOpen ? 'true' : 'false'}
                   aria-controls={SIDEBAR_ID}
@@ -442,7 +639,7 @@ export const App: React.FC = () => {
                 >
                   <HamburgerIcon />
                 </button>
-                <h1>WordPack</h1>
+                <span className="header-title" aria-hidden="true">WordPack</span>
                 <div className="header-actions">
                   <a
                     href="https://github.com/RiSEblackbird/wordpack-for-english"
@@ -469,18 +666,20 @@ export const App: React.FC = () => {
                     <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
                   </svg>
                   </a>
-                  <button
-                    type="button"
-                    className="logout-button"
-                    onClick={handleHeaderSignOut}
-                    disabled={isAuthenticating}
-                  >
-                    ログアウト
-                  </button>
+                  {!isGuest ? (
+                    <button
+                      type="button"
+                      className="logout-button"
+                      onClick={handleHeaderSignOut}
+                      disabled={isAuthenticating}
+                    >
+                      ログアウト
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </header>
-            <main>
+            <section aria-label="アプリのメインコンテンツ">
               {tab === 'wordpack' && (
                 <>
                 <WordPackPanel
@@ -507,23 +706,25 @@ export const App: React.FC = () => {
                 <ExampleListPanel />
               </>
               )}
-            </main>
+            </section>
             <footer style={{ padding: '0.5rem', marginTop: '10rem' }}>
               <small>WordPack 英語学習</small>
             </footer>
           </div>
         </div>
       </div>
-    </div>
+      <NotificationsOverlay />
+    </main>
   ) : (
-    <LoginScreen />
+    <LoginScreen>
+      <NotificationsOverlay />
+    </LoginScreen>
   );
 
   return (
     <>
       <ThemeApplier />
       {appContent}
-      <NotificationsOverlay />
     </>
   );
 };
@@ -544,7 +745,11 @@ const ThemeApplier: React.FC = () => {
  * Google ID プロバイダーでログインを誘導する初期画面。
  * 副作用: ボタンクリックで Google の認証ポップアップを開き、ID トークンを送信する。
  */
-const LoginScreen: React.FC = () => {
+interface LoginScreenProps {
+  children?: React.ReactNode;
+}
+
+const LoginScreen: React.FC<LoginScreenProps> = ({ children }) => {
   const {
     signIn,
     isAuthenticating,
@@ -553,15 +758,20 @@ const LoginScreen: React.FC = () => {
     missingClientId,
     authBypassActive,
     googleClientId,
+    enterGuestMode,
   } = useAuth();
   const [localError, setLocalError] = useState<string | null>(null);
+  const loginTitle = missingClientId ? 'Google ログインの設定が必要です' : 'WordPack にサインイン';
   const loginStyles = `
+        ${VISUALLY_HIDDEN_STYLE}
         .login-shell {
-          min-height: 100vh;
+          /* iPhone 15 Proのような動的ビューポートでも中央配置を維持する。 */
+          min-height: 100vh; /* 動的ビューポート未対応ブラウザのフォールバック */
+          min-height: 100dvh;
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 2rem;
+          padding: calc(2rem + env(safe-area-inset-top)) 2rem calc(2rem + env(safe-area-inset-bottom));
           background: var(--color-bg);
           color: var(--color-text);
         }
@@ -686,53 +896,108 @@ const LoginScreen: React.FC = () => {
           display: flex;
           justify-content: center;
         }
+        .login-guest-button {
+          appearance: none;
+          border-radius: 999px;
+          padding: 0.75rem 1.4rem;
+          font-size: 0.95rem;
+          font-weight: 700;
+          background: rgba(37, 99, 235, 0.12);
+          color: var(--color-text);
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.5rem;
+          border: 1px dashed rgba(37, 99, 235, 0.4);
+          transition: background 0.15s ease, box-shadow 0.2s ease;
+        }
+        .login-guest-button:hover {
+          background: rgba(37, 99, 235, 0.18);
+          box-shadow: 0 10px 24px -18px rgba(37, 99, 235, 0.6);
+        }
+        .login-guest-button:focus-visible {
+          outline: 3px solid rgba(96, 165, 250, 0.8);
+          outline-offset: 3px;
+        }
+        body.theme-dark .login-guest-button {
+          border-color: rgba(147, 197, 253, 0.55);
+          background: rgba(96, 165, 250, 0.18);
+        }
+        body.theme-dark .login-guest-button:hover {
+          background: rgba(96, 165, 250, 0.26);
+        }
+        @media (max-width: 430px) {
+          /* iPhone 15 Proの狭幅でもカード内の情報が読みやすいように余白を調整する。 */
+          .login-shell {
+            padding: calc(1.5rem + env(safe-area-inset-top)) 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+          }
+          .login-card {
+            padding: 2rem 1.5rem;
+          }
+          .login-title {
+            font-size: 1.5rem;
+          }
+          .login-subtitle {
+            font-size: 1rem;
+          }
+        }
       `;
 
-  if (missingClientId) {
-    /**
-     * クライアント ID が未設定の場合は Google の SDK を初期化できない。
-     * この分岐ではトラブルシューティング手順を案内し、新規メンバーの迷子を防ぐ。
-     */
-    return (
-      <div className="login-shell">
-        <style>{loginStyles}</style>
-        <section className="login-card" role="alert" aria-live="polite">
-          <h1 className="login-title">Google ログインの設定が必要です</h1>
-          <p className="login-description">
-            VITE_GOOGLE_CLIENT_ID が未設定のため Google のサインインを開始できません。README.md の「Google OAuth クライアントの準備」節を参照し、以下の手順で環境を整えてください。
-          </p>
-          <h2 className="login-subtitle">設定手順</h2>
-          <ol className="login-guide-list">
-            <li>`apps/frontend/.env` に VITE_GOOGLE_CLIENT_ID=（Google Cloud Console で発行したクライアント ID）を記載する。</li>
-            <li>`apps/backend/.env` や `.env` も同じクライアント ID を設定し、バックエンドと整合させる。</li>
-            <li>設定後にフロントエンド開発サーバーを再起動し、ブラウザのキャッシュを削除して再読み込みする。</li>
-          </ol>
-          <p className="login-guide-hint">
-            {authBypassActive
-              ? '開発用の認証バイパスが有効なため、このままでもダミーアカウントで利用可能です。正式な OAuth を確認したい場合のみ上記手順を実施してください。'
-              : '開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'}
-          </p>
-        </section>
-      </div>
-    );
-  }
-
   return (
-    <GoogleLoginCard
-      loginStyles={loginStyles}
-      isAuthenticating={isAuthenticating}
-      clearError={clearError}
-      error={error}
-      localError={localError}
-      setLocalError={setLocalError}
-      signIn={signIn}
-      googleClientId={googleClientId}
-    />
+    <main className="login-shell">
+      <style>{loginStyles}</style>
+      {/* Axe の main/heading ルールを満たすため、h1 は main 直下に配置する。 */}
+      <h1 className="visually-hidden">{MAIN_HEADING_TEXT}</h1>
+      {missingClientId ? (
+        <>
+          {/* クライアント ID が未設定の場合は Google の SDK を初期化できない。 */}
+          <section className="login-card" role="alert" aria-live="polite">
+            <h2 className="login-title">Google ログインの設定が必要です</h2>
+            <p className="login-description">
+              VITE_GOOGLE_CLIENT_ID が未設定のため Google のサインインを開始できません。README.md の「Google OAuth クライアントの準備」節を参照し、以下の手順で環境を整えてください。
+            </p>
+            <h3 className="login-subtitle">設定手順</h3>
+            <ol className="login-guide-list">
+              <li>`apps/frontend/.env` に VITE_GOOGLE_CLIENT_ID=（Google Cloud Console で発行したクライアント ID）を記載する。</li>
+              <li>`apps/backend/.env` や `.env` も同じクライアント ID を設定し、バックエンドと整合させる。</li>
+              <li>設定後にフロントエンド開発サーバーを再起動し、ブラウザのキャッシュを削除して再読み込みする。</li>
+            </ol>
+            <p className="login-guide-hint">
+              {authBypassActive
+                ? '開発用の認証バイパスが有効なため、このままでもダミーアカウントで利用可能です。正式な OAuth を確認したい場合のみ上記手順を実施してください。'
+                : '開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'}
+            </p>
+            <button
+              type="button"
+              className="login-guest-button"
+              onClick={() => {
+                void enterGuestMode();
+              }}
+            >
+              ゲスト閲覧モード
+            </button>
+          </section>
+        </>
+      ) : (
+        <GoogleLoginCard
+          title={loginTitle}
+          isAuthenticating={isAuthenticating}
+          clearError={clearError}
+          error={error}
+          localError={localError}
+          setLocalError={setLocalError}
+          signIn={signIn}
+          googleClientId={googleClientId}
+        />
+      )}
+      {children}
+    </main>
   );
 };
 
 interface GoogleLoginCardProps {
-  loginStyles: string;
+  title: string;
   isAuthenticating: boolean;
   clearError: () => void;
   error: string | null;
@@ -747,7 +1012,7 @@ interface GoogleLoginCardProps {
  * なぜ: 認証フローの副作用（ID トークン検証やエラーメッセージ表示）を一箇所に閉じ込め、新規メンバーが挙動を追いやすくする。
  */
 const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
-  loginStyles,
+  title,
   isAuthenticating,
   clearError,
   error,
@@ -756,6 +1021,7 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
   signIn,
   googleClientId,
 }) => {
+  const { enterGuestMode } = useAuth();
   const handleCredentialSuccess = async (credentialResponse: CredentialResponse) => {
     /**
      * Google Identity Services から返却された credential（ID トークン）を検証に回す。
@@ -793,10 +1059,9 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
   const combinedError = localError || error;
 
   return (
-    <div className="login-shell">
-      <style>{loginStyles}</style>
+    <>
       <section className="login-card" role="dialog" aria-labelledby="login-title" aria-live="polite">
-        <h1 id="login-title" className="login-title">WordPack にサインイン</h1>
+        <h2 id="login-title" className="login-title">{title}</h2>
         <p className="login-description">Google アカウントでログインして学習データと設定を同期します。</p>
         {combinedError ? (
           <div role="alert" className="login-error">
@@ -824,12 +1089,21 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
           />
         </div>
         <p className="login-note">成功するとブラウザにセッションクッキーを保存します。</p>
+        <button
+          type="button"
+          className="login-guest-button"
+          onClick={() => {
+            void enterGuestMode();
+          }}
+        >
+          ゲスト閲覧モード
+        </button>
         {isAuthenticating ? (
           <div className="login-progress">
             <LoadingIndicator label="認証処理中" subtext="Google の応答を検証しています" />
           </div>
         ) : null}
       </section>
-    </div>
+    </>
   );
 };

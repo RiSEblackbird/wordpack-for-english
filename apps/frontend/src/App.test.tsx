@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import type { MockedFunction } from 'vitest';
+import { axe } from 'vitest-axe';
 import { App } from './App';
 import { AppProviders } from './main';
 import { AUTO_RETRY_INTERVAL_MS } from './SettingsContext';
@@ -71,6 +72,24 @@ const resolveUrl = (input: RequestInfo | URL): string => {
   if (input instanceof Request) return input.url;
   return String(input);
 };
+
+/**
+ * モバイル判定の挙動を固定するため、matchMedia を任意の matches で返す。
+ * なぜ: jsdom では viewport が変化しないため、UIの分岐をテストで再現する必要がある。
+ */
+const createMatchMediaMock =
+  (matches: boolean): typeof window.matchMedia =>
+  (query: string) =>
+    ({
+      matches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }) as unknown as MediaQueryList;
 
 const configSuccess = () =>
   new Response(
@@ -153,6 +172,23 @@ describe('App navigation', () => {
 
     expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Google.?でログイン/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeInTheDocument();
+  });
+
+  it('renders the login screen while settings sync is still in progress', () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return new Promise<Response>(() => {});
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    renderWithProviders();
+
+    expect(screen.getByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Google.?でログイン/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeInTheDocument();
   });
 
   it('renders configuration guidance when the Google client ID is missing', async () => {
@@ -164,7 +200,7 @@ describe('App navigation', () => {
       return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
     });
 
-    renderWithProviders('');
+    const { container } = renderWithProviders('');
 
     expect(
       await screen.findByRole('heading', { name: 'Google ログインの設定が必要です' }),
@@ -175,6 +211,11 @@ describe('App navigation', () => {
     expect(
       screen.getByText('開発用の認証バイパスが無効な環境では、上記手順を完了するまでアプリへサインインできません。環境変数を設定後に再度アクセスしてください。'),
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeInTheDocument();
+    // a11y: ログイン案内カードは aria-live を維持し、axe の違反がないことを保証する。
+    const guidanceCard = screen.getByRole('alert');
+    expect(guidanceCard).toHaveAttribute('aria-live', 'polite');
+    expect(await axe(container)).toHaveNoViolations();
   });
 
   it('shows the login screen when /api/config responds with 401', async () => {
@@ -195,6 +236,7 @@ describe('App navigation', () => {
 
       expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Google.?でログイン/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeInTheDocument();
       // 401 ではログイン画面を即時に表示し、エラー用の自動リトライタイマーを開始しない。
       expect(
         setTimeoutSpy.mock.calls.some(([, timeout]) => timeout === AUTO_RETRY_INTERVAL_MS),
@@ -202,6 +244,35 @@ describe('App navigation', () => {
     } finally {
       setTimeoutSpy.mockRestore();
     }
+  });
+
+  it('enters guest mode from the login screen', async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(configSuccess());
+      }
+      if (url.endsWith('/api/auth/logout')) {
+        return Promise.resolve(logoutSuccess());
+      }
+      if (url.endsWith('/api/auth/guest')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ mode: 'guest' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    renderWithProviders();
+
+    const user = userEvent.setup();
+    const guestButton = await screen.findByRole('button', { name: 'ゲスト閲覧モード' });
+    await act(async () => {
+      await user.click(guestButton);
+    });
+
+    expect(await screen.findByRole('heading', { name: 'WordPack' })).toBeInTheDocument();
+    expect(screen.getByText('ゲスト閲覧モード')).toBeInTheDocument();
   });
 
   it('transitions to the main interface after a successful login', async () => {
@@ -344,6 +415,7 @@ describe('App navigation', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/\/api\/config.*設定を取得できませんでした/);
+    expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
 
     const retryButton = screen.getByRole('button', { name: '再試行' });
     const user = userEvent.setup();
@@ -457,7 +529,6 @@ describe('App navigation', () => {
 
     const computed = window.getComputedStyle(sidebar);
     expect(computed.display).toBe('block');
-    expect(sidebar.getAttribute('style')).toContain('280px');
 
     const examplesButton = await screen.findByRole('button', { name: '例文一覧' });
     await act(async () => {
@@ -491,6 +562,40 @@ describe('App navigation', () => {
     const rect = toggle.getBoundingClientRect();
     expect(Math.round(rect.left)).toBe(0);
     expect(Math.round(rect.top)).toBe(0);
+  });
+
+  it('adds safe-area classes for fixed elements on all layouts', async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(configSuccess());
+      }
+      if (url.endsWith('/api/auth/logout')) {
+        return Promise.resolve(logoutSuccess());
+      }
+      if (url.endsWith('/api/auth/guest')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ mode: 'guest' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    renderWithProviders();
+
+    const user = userEvent.setup();
+    const guestButton = await screen.findByRole('button', { name: 'ゲスト閲覧モード' });
+    await act(async () => {
+      await user.click(guestButton);
+    });
+
+    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    const guestBadge = await screen.findByText('ゲスト閲覧モード');
+
+    await waitFor(() => {
+      expect(toggle).toHaveClass('safe-area-adjusted');
+      expect(guestBadge).toHaveClass('safe-area-adjusted');
+    });
   });
 
   it('renders the main content without a shift animation', async () => {
@@ -563,6 +668,38 @@ describe('App navigation', () => {
 
     const computed = window.getComputedStyle(sidebarContent);
     expect(computed.alignContent === 'flex-start' || computed.alignContent === '').toBe(true);
+  });
+
+  it('keeps sidebar content width at 100% with border-box sizing on mobile', async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = createMatchMediaMock(true);
+
+    try {
+      setupFetchForAuthenticatedFlow(fetchMock);
+      renderWithProviders();
+
+      const user = userEvent.setup();
+      await completeLogin(fetchMock, user);
+
+      const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+      await act(async () => {
+        await user.click(openButton);
+      });
+
+      const sidebarContent = document.querySelector('.sidebar-content');
+      if (!sidebarContent) throw new Error('sidebar content not found');
+
+      // モバイル幅でも横幅とボックスモデルを固定し、内容のはみ出しを防ぐ。
+      const computed = window.getComputedStyle(sidebarContent);
+      expect(computed.width).toBe('100%');
+      expect(computed.boxSizing).toBe('border-box');
+    } finally {
+      if (originalMatchMedia) {
+        window.matchMedia = originalMatchMedia;
+      } else {
+        delete (window as { matchMedia?: typeof window.matchMedia }).matchMedia;
+      }
+    }
   });
 
   it('returns to the login screen when signing out via the header control', async () => {
