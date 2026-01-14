@@ -200,9 +200,13 @@ test.describe('WordPack 操作', () => {
       await expect(menuToggle).toHaveAttribute('aria-expanded', 'true');
       await page.getByLabel('見出し語').fill('alpha');
       // 入力バリデーション完了後にボタンが有効化されるため、明示的に待機してから押下する。
+      const generateButton = page.getByRole('button', { name: '生成' });
       const createWordPackButton = page.getByRole('button', { name: 'WordPackのみ作成' });
       await expect(createWordPackButton).toBeEnabled();
       await page.getByLabel('見出し語').focus();
+      await page.keyboard.press('Tab');
+      // タブ順は「生成」→「WordPackのみ作成」の順に並ぶため、2回で作成ボタンへ到達する。
+      await expect(generateButton).toBeFocused();
       await page.keyboard.press('Tab');
       await expect(createWordPackButton).toBeFocused();
       await page.keyboard.press('Space');
