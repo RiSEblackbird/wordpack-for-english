@@ -514,5 +514,3 @@ docs/                   # 詳細ドキュメント
 - Playwright による E2E 実行手順は `docs/testing/playwright-e2e.md` を参照してください。
 - Playwright のビジュアル回帰テスト手順は `docs/testing/visual-regression.md` を参照してください。
 - ユーザー向け操作は `UserManual.md` を参照してください。
-- GitHub Actions の CI では Chrome DevTools MCP を利用した UI スモークテスト（`UI smoke test (Chrome DevTools MCP)` ジョブ）が自動実行されます。ローカルで同じシナリオを再現する方法は `docs/testing/chrome-devtools-mcp-ui-testing.md` を参照してください（Node.js 22 を用い、ルートディレクトリで `npm run smoke` または `tests/ui/mcp-smoke/run-smoke.mjs` を実行する手順を含みます）。Chrome 未インストール環境でも安定版 Chrome の自動取得を試み、許可されない場合は OSS Chromium へのフォールバックを順番に実施します。いずれもダウンロードできなかった場合は `CHROME_EXECUTABLE` で既存バイナリを指定しない限りローカル実行のみスキップする挙動です。
-  - Firestore エミュレータは `tests/ui/mcp-smoke` に含まれる `firebase-tools` で起動するため、実行前に `npm ci --prefix tests/ui/mcp-smoke` などで依存パッケージを取得してください。CI では同コマンドが事前に実行される前提で構成されています。

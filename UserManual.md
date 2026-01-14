@@ -244,13 +244,12 @@
     ```
 - 詳細な前提条件は `docs/testing/frontend-integration-tests.md` を参照してください。
 
-### B-1-3. Chrome DevTools MCP による UI 自動テスト体制
-- GitHub Actions の CI では `UI smoke test (Chrome DevTools MCP)` ジョブが自動で走り、主要な UI 動線を Chrome DevTools MCP 経由で検証します。
-- Codex から `chrome-devtools` MCP サーバーを利用すると、CI と同じ UI スモークテストを手元でも再現できます。
-- 設定手順やスモークテストの観点、Codex 用プロンプトは `docs/testing/chrome-devtools-mcp-ui-testing.md` と `tests/ui/` 配下の資料を参照してください。
-- テスト結果を基にフロントエンドを修正した際は、Vitest (`npm run test`) と MCP スモークテストを双方とも再実行して回帰を確認してください（CI の自動実行と併せてローカル再確認する運用です）。
+### B-1-3. Playwright による UI スモークテスト（CI）
+- GitHub Actions の CI では、PR 向けに Playwright のスモークテストを実行し、主要な UI 動線の回帰を短時間で検知します。
+- スモークの対象は `auth.spec.ts` / `guest.spec.ts` / `wordpack.spec.ts` の主要導線で、成果物は CI の Artifacts から取得できます。
+- UI 修正後は、Vitest (`npm run test`) と Playwright スモークの結果を確認し、回帰がないことを確認してください。
 
-### B-1-4. Playwright による E2E テスト
+### B-1-4. Playwright による E2E テスト（ローカル実行）
 - 目的: フロントエンドとバックエンドの実起動をまとめて行い、主要導線の回帰を確認します。
 - 実行例:
   - 正例:

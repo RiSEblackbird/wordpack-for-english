@@ -126,7 +126,7 @@ flowchart LR
         BackendTest["Backend tests<br/>(pytest)"]
         SecurityTest["Security headers tests"]
         FrontendTest["Frontend tests<br/>(vitest)"]
-        UISmoke["UI smoke test<br/>(Chrome DevTools MCP)"]
+        PlaywrightSmoke["Playwright smoke<br/>(PR critical flows)"]
         CloudRunGuard["Cloud Run config guard<br/>(dry-run)"]
         CISuccess["CI success<br/>(workflow_run hook)"]
     end
@@ -142,13 +142,13 @@ flowchart LR
     Actions --> BackendTest
     Actions --> SecurityTest
     Actions --> FrontendTest
-    BackendTest --> UISmoke
-    FrontendTest --> UISmoke
+    BackendTest --> PlaywrightSmoke
+    FrontendTest --> PlaywrightSmoke
     SecurityTest --> CloudRunGuard
     BackendTest --> CISuccess
     FrontendTest --> CISuccess
     SecurityTest --> CISuccess
-    UISmoke --> CISuccess
+    PlaywrightSmoke --> CISuccess
     CloudRunGuard --> CISuccess
     CISuccess -->|main ブランチ対象の push / PR| DryRun
     DryRun --> FirestoreIndex
@@ -163,7 +163,7 @@ flowchart LR
 | **Backend tests** | push / PR | `PYTHONPATH=apps/backend` で `pytest` を実行し、`pytest.ini` の `addopts` に揃えた `apps/backend/backend` のカバレッジが 60% 以上であることを検証 |
 | **Security headers tests** | push / PR | セキュリティヘッダー検証（HSTS, CSP, etc.） |
 | **Frontend tests** | push / PR | `vitest --coverage` によるフロントエンドテストと、lines/statements 80%、branches 70%、functions 66% のカバレッジ閾値チェック（functions は段階的に 70%→75%→80% へ引き上げ予定） |
-| **UI smoke test** | Backend / Frontend テスト成功後 | Chrome DevTools MCP を用いた E2E スモークテスト |
+| **Playwright smoke** | `pull_request`（Backend / Frontend テスト成功後） | Playwright の主要導線スモークテスト（`auth.spec.ts` / `guest.spec.ts` / `wordpack.spec.ts`） |
 | **Visual regression** | `pull_request`（UI 変更のみ） | UI 変更が検知された場合に Playwright の視覚回帰 (`tests/e2e/visual.spec.ts`) を実行 |
 | **Cloud Run config guard** | Security headers 成功後 | デプロイスクリプトの lint と dry-run 検証 |
 | **Cloud Run dry-run** | CI 成功後の workflow_run（main 向け push / PR のみ） | CI が成功した際に `make release-cloud-run` の dry-run モードを実行。fork からの PR でシークレットが無い場合は notice を残してスキップ |
@@ -200,7 +200,7 @@ sequenceDiagram
 
     Dev->>GitHub: git push main
     GitHub->>Actions: CI トリガー
-    Actions->>Actions: pytest / vitest / smoke test
+    Actions->>Actions: pytest / vitest / Playwright smoke
     Actions->>GCloud: dry-run 検証
     GCloud-->>Actions: 設定 OK
 

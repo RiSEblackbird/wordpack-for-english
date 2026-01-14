@@ -7,7 +7,6 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "smoke": "npm run smoke --prefix tests/ui/mcp-smoke",
     "e2e": "playwright test -c tests/e2e/playwright.config.ts",
     "prepare:frontend-env": "node ./scripts/prepare-frontend-env.mjs"
   },
