@@ -264,7 +264,21 @@
 - 性能計測の閾値は `E2E_ACTION_THRESHOLD_MS`（ミリ秒、既定 15000ms）で調整できます。
 - 詳細は `docs/testing/playwright-e2e.md` を参照してください。
 
-### B-1-5. Firestore インデックス同期フロー
+### B-1-5. バックエンド性能回帰チェック（p95）
+- 目的: `/healthz` と WordPack 生成の p95 応答時間を測定し、回帰を早期に検知します。
+- 実行例:
+  - 正例:
+    ```bash
+    API_P95_THRESHOLD_MS=1500 PYTHONPATH=apps/backend pytest -q --no-cov tests/test_api_performance.py
+    ```
+  - 負例（閾値が厳しすぎると回帰が無くても落ちる）:
+    ```bash
+    API_P95_THRESHOLD_MS=10 PYTHONPATH=apps/backend pytest -q --no-cov tests/test_api_performance.py
+    ```
+- CI は `.github/workflows/perf-backend.yml` で週次実行し、本番前の手動実行にも使用します。
+- 詳細は `docs/testing/backend-performance.md` を参照してください。
+
+### B-1-6. Firestore インデックス同期フロー
 - `firestore.indexes.json` に `word_packs` / `examples` 用の複合インデックスを定義済みです。Cloud Firestore / Firebase エミュレータ / Firebase CLI で同じファイルを読み込めるようにしてあり、Web コンソールでの手作業登録は不要です。
 - 例文コレクションは `created_at` / `pack_updated_at` / `search_en` / `search_en_reversed` / `search_terms` を組み合わせたインデックスを持ち、`order_by` + `start_after` + `limit` によるページングで 1 リクエスト最大 50 件だけを読み出します。`search_en` は小文字化、`search_en_reversed` は逆順文字列、`search_terms` は 1〜3 文字の N-gram + トークン配列で、`prefix`/`suffix`/`contains` いずれの検索モードもサーバー側で絞り込みます。`offset` はカーソル計算専用で全件読み込みは行いません。
 - 本番/検証へのデプロイ:
