@@ -31,10 +31,96 @@ interface SettingsErrorInfo {
   detail?: string;
 }
 
+interface SettingsSyncNoticeProps {
+  status: SettingsStatus;
+  errorInfo: SettingsErrorInfo | null;
+  autoRetrySecondsLeft: number | null;
+  onRetry: () => void;
+}
+
+/**
+ * 設定同期中の状態を「非ブロッキング通知」として表示する。
+ * なぜ: 初期ロード中でもログイン導線を塞がないため。
+ */
+const SettingsSyncNotice: React.FC<SettingsSyncNoticeProps> = ({
+  status,
+  errorInfo,
+  autoRetrySecondsLeft,
+  onRetry,
+}) => {
+  if (status === 'ready') {
+    return null;
+  }
+  const isError = status === 'error';
+  const heading = isError ? 'バックエンド設定の同期に失敗しました' : 'バックエンド設定を同期中';
+  return (
+    <div
+      role={isError ? 'alert' : 'status'}
+      aria-live={isError ? 'assertive' : 'polite'}
+      style={{
+        position: 'fixed',
+        right: '1rem',
+        bottom: '1rem',
+        zIndex: 1000,
+        maxWidth: '360px',
+        width: 'min(360px, 90vw)',
+        padding: '1rem 1.1rem',
+        borderRadius: '0.75rem',
+        border: isError ? '1px solid #f87171' : '1px solid #cbd5e1',
+        background: isError ? '#fef2f2' : '#f8fafc',
+        color: '#111827',
+        lineHeight: 1.6,
+        boxShadow: '0 12px 30px rgba(15, 23, 42, 0.12)'
+      }}
+    >
+      <h2 style={{ marginTop: 0, marginBottom: '0.75rem', fontSize: '1rem' }}>{heading}</h2>
+      {status === 'loading' && !errorInfo ? (
+        <p style={{ marginBottom: 0 }}>バックエンドの `/api/config` に接続して設定を取得しています…</p>
+      ) : null}
+      {isError && errorInfo ? (
+        <div>
+          <p style={{ marginTop: 0 }}>`/api/config` から設定を取得できませんでした。バックエンドが起動しているか、ネットワーク経路をご確認ください。</p>
+          <details style={{ marginTop: '0.5rem' }}>
+            <summary style={{ cursor: 'pointer' }}>詳細エラーを表示</summary>
+            <p style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace', fontSize: '0.8rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fee2e2', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #fecaca' }}>
+              エラー: {errorInfo.message}
+              {errorInfo.detail ? `\n${errorInfo.detail}` : ''}
+            </p>
+          </details>
+          {autoRetrySecondsLeft != null ? (
+            <p style={{ marginTop: '0.75rem', marginBottom: 0, color: '#b91c1c' }}>
+              {autoRetrySecondsLeft > 0 ? `${autoRetrySecondsLeft}秒後に自動再試行します。` : 'まもなく自動再試行します…'}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={onRetry}
+            style={{
+              marginTop: '0.75rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem 1.1rem',
+              borderRadius: '0.5rem',
+              border: '1px solid #ef4444',
+              background: '#fee2e2',
+              color: '#b91c1c',
+              fontWeight: 600,
+              cursor: 'pointer'
+            }}
+          >
+            再試行
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 export const AUTO_RETRY_INTERVAL_MS = 5000;
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, authMode } = useAuth();
   const [settings, setSettings] = useState<Settings>(() => {
     const savedTheme = (() => {
       try { return localStorage.getItem('wp.theme') || undefined; } catch { return undefined; }
@@ -191,65 +277,21 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     try { localStorage.setItem('wp.ttsVolume', String(settings.ttsVolume)); } catch { /* ignore */ }
   }, [settings.ttsVolume]);
+  /**
+   * 設定同期が完了していなくても、匿名状態ならログイン導線を優先して描画する。
+   * なぜ: ログイン UI を塞がず、初期設定は既定値のまま先に体験できるようにするため。
+   */
+  const shouldRenderChildren = status === 'ready' || authMode === 'anonymous';
+
   return (
     <SettingsContext.Provider value={{ settings, setSettings }}>
-      {status === 'ready' ? (
-        children
-      ) : (
-        <div
-          role={status === 'error' ? 'alert' : 'status'}
-          aria-live={status === 'error' ? 'assertive' : 'polite'}
-          style={{
-            padding: '1.5rem',
-            maxWidth: '520px',
-            margin: '2rem auto',
-            borderRadius: '0.75rem',
-            border: status === 'error' ? '1px solid #f87171' : '1px solid #cbd5e1',
-            background: status === 'error' ? '#fef2f2' : '#f8fafc',
-            color: '#111827',
-            lineHeight: 1.6,
-            boxShadow: '0 10px 30px rgba(15, 23, 42, 0.08)'
-          }}
-        >
-          <h2 style={{ marginTop: 0, marginBottom: '0.75rem', fontSize: '1.2rem' }}>バックエンド設定を同期中</h2>
-          {status === 'loading' && !errorInfo ? (
-            <p style={{ marginBottom: 0 }}>バックエンドの `/api/config` に接続して設定を取得しています…</p>
-          ) : null}
-          {status === 'error' && errorInfo ? (
-            <div>
-              <p style={{ marginTop: 0 }}>`/api/config` から設定を取得できませんでした。バックエンドが起動しているか、ネットワーク経路をご確認ください。</p>
-              <p style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace', fontSize: '0.85rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fee2e2', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid #fecaca' }}>
-                エラー: {errorInfo.message}
-                {errorInfo.detail ? `\n${errorInfo.detail}` : ''}
-              </p>
-              {autoRetrySecondsLeft != null ? (
-                <p style={{ marginTop: '0.75rem', marginBottom: 0, color: '#b91c1c' }}>
-                  {autoRetrySecondsLeft > 0 ? `${autoRetrySecondsLeft}秒後に自動再試行します。` : 'まもなく自動再試行します…'}
-                </p>
-              ) : null}
-              <button
-                type="button"
-                onClick={retrySync}
-                style={{
-                  marginTop: '1rem',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  padding: '0.45rem 1.1rem',
-                  borderRadius: '0.5rem',
-                  border: '1px solid #ef4444',
-                  background: '#fee2e2',
-                  color: '#b91c1c',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                再試行
-              </button>
-            </div>
-          ) : null}
-        </div>
-      )}
+      {shouldRenderChildren ? children : null}
+      <SettingsSyncNotice
+        status={status}
+        errorInfo={errorInfo}
+        autoRetrySecondsLeft={autoRetrySecondsLeft}
+        onRetry={retrySync}
+      />
     </SettingsContext.Provider>
   );
 };
