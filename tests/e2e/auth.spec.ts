@@ -15,7 +15,8 @@ test.describe('認証導線', () => {
     });
 
     await test.step('When: アプリを初期表示する', async () => {
-      await expect(page.getByRole('button', { name: 'メニューを開く' })).toBeVisible();
+      // メニューの開閉で aria-label が変わるため、aria-controls でトグルボタンを特定する。
+      await expect(page.locator('button[aria-controls="app-sidebar"]')).toBeVisible();
     });
 
     await test.step('Then: ログイン済み UI が表示される', async () => {
@@ -29,7 +30,7 @@ test.describe('認証導線', () => {
     });
 
     await test.step('Then: サイドバーが閉じており aria-hidden-focus の a11y 違反がない', async () => {
-      const menuButton = page.getByRole('button', { name: 'メニューを開く' });
+      const menuButton = page.locator('button[aria-controls="app-sidebar"]');
       await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
       await runA11yCheck(page);
     });
@@ -40,7 +41,7 @@ test.describe('認証導線', () => {
 
     await test.step('Then: キーボード操作でメニューを開ける', async () => {
       await page.keyboard.press('Tab');
-      const menuButton = page.getByRole('button', { name: 'メニューを開く' });
+      const menuButton = page.locator('button[aria-controls="app-sidebar"]');
       await expect(menuButton).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(menuButton).toHaveAttribute('aria-expanded', 'true');

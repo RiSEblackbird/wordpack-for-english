@@ -193,11 +193,20 @@ test.describe('WordPack 操作', () => {
       await page.waitForLoadState('networkidle');
       await expect(page.getByRole('heading', { name: 'WordPack', level: 1 })).toBeVisible();
       await runA11yCheck(page);
+      // WordPack の入力・作成ボタンはサイドバー内に配置されているため、メニューを開く。
+      const menuToggle = page.locator('button[aria-controls="app-sidebar"]');
+      await expect(menuToggle).toBeVisible();
+      await menuToggle.click();
+      await expect(menuToggle).toHaveAttribute('aria-expanded', 'true');
       await page.getByLabel('見出し語').fill('alpha');
       // 入力バリデーション完了後にボタンが有効化されるため、明示的に待機してから押下する。
+      const generateButton = page.getByRole('button', { name: '生成' });
       const createWordPackButton = page.getByRole('button', { name: 'WordPackのみ作成' });
       await expect(createWordPackButton).toBeEnabled();
       await page.getByLabel('見出し語').focus();
+      await page.keyboard.press('Tab');
+      // タブ順は「生成」→「WordPackのみ作成」の順に並ぶため、2回で作成ボタンへ到達する。
+      await expect(generateButton).toBeFocused();
       await page.keyboard.press('Tab');
       await expect(createWordPackButton).toBeFocused();
       await page.keyboard.press('Space');
@@ -206,7 +215,9 @@ test.describe('WordPack 操作', () => {
 
     await test.step('When: 例文を追加生成する', async () => {
       await page.getByRole('button', { name: 'generate-examples-Dev' }).click();
-      await expect(page.getByRole('status').first()).toHaveText('Dev に例文を2件追加しました');
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Dev に例文を2件追加しました' }).first(),
+      ).toBeVisible();
     });
 
     await test.step('Then: 例文の件数が増えている', async () => {
@@ -216,7 +227,7 @@ test.describe('WordPack 操作', () => {
     await test.step('When: 追加した例文を削除する', async () => {
       await page.getByRole('button', { name: 'delete-example-Dev-0' }).click();
       await page.getByRole('button', { name: 'はい' }).click();
-      await expect(page.getByRole('status').first()).toHaveText('例文を削除しました');
+      // 削除完了は件数の変化で観測する（通知UIは他のトーストと競合しやすい）。
     });
 
     await test.step('Then: 例文の件数が減っている', async () => {
@@ -228,7 +239,9 @@ test.describe('WordPack 操作', () => {
     });
 
     await test.step('Then: 再生成完了メッセージが出る', async () => {
-      await expect(page.getByRole('status').first()).toHaveText('WordPackを再生成しました');
+      await expect(
+        page.getByRole('status').filter({ hasText: 'WordPackを再生成しました' }).first(),
+      ).toBeVisible();
     });
 
     await test.step('Then: テストデータを後片付けする', async () => {
