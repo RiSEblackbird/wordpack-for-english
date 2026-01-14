@@ -34,6 +34,32 @@ type WordPack = {
   confidence: string;
 };
 
+const DEFAULT_E2E_ACTION_THRESHOLD_MS = 15000;
+
+// CI/ローカル差分によるフレークを避けるため、環境変数で閾値を調整できるようにする。
+const getE2eActionThresholdMs = (): number => {
+  const rawValue = process.env.E2E_ACTION_THRESHOLD_MS;
+  const parsedValue = rawValue ? Number(rawValue) : DEFAULT_E2E_ACTION_THRESHOLD_MS;
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return DEFAULT_E2E_ACTION_THRESHOLD_MS;
+  }
+  return parsedValue;
+};
+
+// 主要操作の計測結果を CI で集計しやすくするために、最小限の統計情報を出す。
+const summarizeDurations = (durations: number[]) => {
+  const count = durations.length;
+  if (count === 0) {
+    return { count: 0, averageMs: 0, maxMs: 0 };
+  }
+  const total = durations.reduce((acc, value) => acc + value, 0);
+  return {
+    count,
+    averageMs: total / count,
+    maxMs: Math.max(...durations),
+  };
+};
+
 const createBaseWordPack = (lemma: string): WordPack => ({
   lemma,
   sense_title: `${lemma} 概説`,
@@ -131,6 +157,8 @@ const createWordPackStore = () => {
 test.describe('WordPack 操作', () => {
   test('例文の追加/削除/再生成を1本のシナリオで完結できる', async ({ page, context }) => {
     const store = createWordPackStore();
+    const actionDurationsMs: number[] = [];
+    const actionThresholdMs = getE2eActionThresholdMs();
 
     await seedAuthenticatedSession(context, page);
     await mockConfig(page, { requestTimeoutMs: 20000 });
@@ -209,8 +237,47 @@ test.describe('WordPack 操作', () => {
       await expect(generateButton).toBeFocused();
       await page.keyboard.press('Tab');
       await expect(createWordPackButton).toBeFocused();
+      const actionStartTime = await page.evaluate(() => {
+        performance.clearMarks('wordpack-generate-start');
+        performance.clearMarks('wordpack-generate-end');
+        performance.clearMeasures('wordpack-generate');
+        performance.mark('wordpack-generate-start');
+        return performance.now();
+      });
       await page.keyboard.press('Space');
       await expect(page.getByRole('heading', { name: /例文/ })).toBeVisible();
+      const actionEnd = await page.evaluate(() => {
+        performance.mark('wordpack-generate-end');
+        const measure = performance.measure(
+          'wordpack-generate',
+          'wordpack-generate-start',
+          'wordpack-generate-end',
+        );
+        const endTime = performance.now();
+        const measureEntry = performance.getEntriesByName('wordpack-generate').pop();
+        const durationMs = measureEntry?.duration ?? measure.duration;
+        performance.clearMarks('wordpack-generate-start');
+        performance.clearMarks('wordpack-generate-end');
+        performance.clearMeasures('wordpack-generate');
+        return { endTime, durationMs };
+      });
+      const actionDurationMs = actionEnd.endTime - actionStartTime;
+      const measureDurationMs = actionEnd.durationMs;
+      actionDurationsMs.push(actionDurationMs);
+      expect(actionDurationMs).toBeLessThan(actionThresholdMs);
+      const stats = summarizeDurations(actionDurationsMs);
+      // CI で機械的に集計できるよう、JSON 形式でログを出力する。
+      console.info(
+        '[e2e-metric]',
+        JSON.stringify({
+          event: 'wordpack_generate_render_time',
+          count: stats.count,
+          average_ms: Number(stats.averageMs.toFixed(2)),
+          max_ms: Number(stats.maxMs.toFixed(2)),
+          measure_ms: Number(measureDurationMs.toFixed(2)),
+          threshold_ms: actionThresholdMs,
+        }),
+      );
     });
 
     await test.step('When: 例文を追加生成する', async () => {

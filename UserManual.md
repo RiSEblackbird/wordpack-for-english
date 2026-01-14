@@ -261,6 +261,7 @@
     npx playwright test
     ```
 - テスト成果物は `playwright-report/` と `test-results/` に保存されます。
+- 性能計測の閾値は `E2E_ACTION_THRESHOLD_MS`（ミリ秒、既定 15000ms）で調整できます。
 - 詳細は `docs/testing/playwright-e2e.md` を参照してください。
 
 ### B-1-5. Firestore インデックス同期フロー

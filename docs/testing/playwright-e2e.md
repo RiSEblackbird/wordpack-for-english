@@ -39,6 +39,27 @@ npm run e2e
 - CI の成果物は GitHub Actions の該当ワークフロー実行ページ → Artifacts から取得できます。
   - `playwright-report/` と `test-results/` を保存し、保持期間は 90 日です。
 
+## 性能系のE2E計測
+- 主要導線の「操作 → 結果描画」までの所要時間を計測し、回帰がないかを確認します。
+- 閾値は `E2E_ACTION_THRESHOLD_MS`（ミリ秒）で調整できます。既定値は 15000ms です。
+- 計測結果は `[e2e-metric]` の JSON ログで出力され、CI のログ集計で可視化できます。
+
+出力例:
+```
+[e2e-metric] {"event":"wordpack_generate_render_time","count":1,"average_ms":1234.56,"max_ms":1234.56,"measure_ms":1234.20,"threshold_ms":15000}
+```
+
+### 正例（閾値を緩めて計測）
+```
+E2E_ACTION_THRESHOLD_MS=20000 E2E_BASE_URL=http://127.0.0.1:5173 npm run e2e
+```
+
+### 負例（閾値が小さすぎてフレークになり得る）
+```
+E2E_ACTION_THRESHOLD_MS=200 E2E_BASE_URL=http://127.0.0.1:5173 npm run e2e
+# → 環境差で 200ms を超えやすく、不要な失敗が増える
+```
+
 ## 補足
 - `tests/e2e/playwright.config.ts` に `baseURL` や `timeout`、成果物の出力先を集約しています。
 - `BACKEND_PROXY_TARGET` は Vite のプロキシ先を固定するために `127.0.0.1:8000` を使用します。
