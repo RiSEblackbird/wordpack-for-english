@@ -175,6 +175,22 @@ describe('App navigation', () => {
     expect(screen.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeInTheDocument();
   });
 
+  it('renders the login screen while settings sync is still in progress', () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return new Promise<Response>(() => {});
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    renderWithProviders();
+
+    expect(screen.getByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Google.?でログイン/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'ゲスト閲覧モード' })).toBeInTheDocument();
+  });
+
   it('renders configuration guidance when the Google client ID is missing', async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = resolveUrl(input);
@@ -399,6 +415,7 @@ describe('App navigation', () => {
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/\/api\/config.*設定を取得できませんでした/);
+    expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
 
     const retryButton = screen.getByRole('button', { name: '再試行' });
     const user = userEvent.setup();
