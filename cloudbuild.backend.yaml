@@ -12,3 +12,20 @@ steps:
 
 images:
   - $_IMAGE_URI
+
+steps:
+  # Cloud Run 用のバックエンドイメージを Dockerfile.backend でビルドします。
+  # repo-root の Dockerfile がアップロードに含まれないケースでも、こちらは明示指定で動作します。
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.backend
+      - -t
+      - $_IMAGE_URI
+      - .
+
+images:
+  - $_IMAGE_URI
+
+
