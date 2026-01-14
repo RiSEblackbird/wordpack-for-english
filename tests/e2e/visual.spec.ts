@@ -267,8 +267,10 @@ test.describe('ビジュアル回帰: 主要画面', () => {
     // 「インポート」を含むボタン（例: 文章インポート/生成＆インポート）が複数あるため、完全一致で確定する。
     await page.getByRole('button', { name: 'インポート', exact: true }).click();
 
-    // CI 環境では backend 起動・初期描画の負荷でモーダル表示が遅れることがあるため、待機を長めに取る。
-    await expect(page.getByRole('dialog', { name: 'インポート結果' })).toBeVisible({ timeout: 15000 });
+    // 確認 UI は実装都合（モーダル/パネル）で role やラベルが変わり得るため、
+    // ユーザーに見える内容（モックで固定した文言）で完了を待つ。
+    await expect(page.getByText('既存WordPackが1件含まれています。')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('A short briefing on alpha releases')).toBeVisible();
 
     await expect(page).toHaveScreenshot('article-import-confirmation.png', {
       maxDiffPixelRatio: 0.01,
