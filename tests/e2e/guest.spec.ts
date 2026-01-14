@@ -43,6 +43,11 @@ test.describe('ゲストモード', () => {
 
     await test.step('Then: ゲストバッジと操作制限が表示される', async () => {
       await expect(page.getByText('ゲスト閲覧モード')).toBeVisible();
+      // 生成ボタンはサイドバー内のため、メニューを開いてからゲストロックを確認する。
+      const menuToggle = page.locator('button[aria-controls="app-sidebar"]');
+      await expect(menuToggle).toBeVisible();
+      await menuToggle.click();
+      await expect(menuToggle).toHaveAttribute('aria-expanded', 'true');
       await expect(page.getByRole('button', { name: '生成' })).toBeDisabled();
     });
   });

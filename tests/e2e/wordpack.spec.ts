@@ -215,7 +215,9 @@ test.describe('WordPack 操作', () => {
 
     await test.step('When: 例文を追加生成する', async () => {
       await page.getByRole('button', { name: 'generate-examples-Dev' }).click();
-      await expect(page.getByRole('status').first()).toHaveText('Dev に例文を2件追加しました');
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Dev に例文を2件追加しました' }).first(),
+      ).toBeVisible();
     });
 
     await test.step('Then: 例文の件数が増えている', async () => {
@@ -225,7 +227,9 @@ test.describe('WordPack 操作', () => {
     await test.step('When: 追加した例文を削除する', async () => {
       await page.getByRole('button', { name: 'delete-example-Dev-0' }).click();
       await page.getByRole('button', { name: 'はい' }).click();
-      await expect(page.getByRole('status').first()).toHaveText('例文を削除しました');
+      await expect(
+        page.getByRole('status').filter({ hasText: '例文を削除しました' }).first(),
+      ).toBeVisible();
     });
 
     await test.step('Then: 例文の件数が減っている', async () => {
@@ -237,7 +241,9 @@ test.describe('WordPack 操作', () => {
     });
 
     await test.step('Then: 再生成完了メッセージが出る', async () => {
-      await expect(page.getByRole('status').first()).toHaveText('WordPackを再生成しました');
+      await expect(
+        page.getByRole('status').filter({ hasText: 'WordPackを再生成しました' }).first(),
+      ).toBeVisible();
     });
 
     await test.step('Then: テストデータを後片付けする', async () => {
