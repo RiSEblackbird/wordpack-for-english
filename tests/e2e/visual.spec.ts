@@ -269,7 +269,7 @@ test.describe('ビジュアル回帰: 主要画面', () => {
 
     // サイドバーは z-index が高く、開いたままだと結果モーダルが背面に隠れることがあるため閉じる。
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('button', { name: 'メニューを開く' })).toBeVisible();
+    await expect(page.locator('#app-sidebar')).toHaveAttribute('aria-hidden', 'true');
 
     // 確認 UI は実装都合（モーダル/パネル）で role やラベルが変わり得るため、
     // ユーザーに見える内容（モックで固定した文言）で完了を待つ。
