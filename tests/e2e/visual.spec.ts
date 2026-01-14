@@ -267,6 +267,10 @@ test.describe('ビジュアル回帰: 主要画面', () => {
     // 「インポート」を含むボタン（例: 文章インポート/生成＆インポート）が複数あるため、完全一致で確定する。
     await page.getByRole('button', { name: 'インポート', exact: true }).click();
 
+    // サイドバーは z-index が高く、開いたままだと結果モーダルが背面に隠れることがあるため閉じる。
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'メニューを開く' })).toBeVisible();
+
     // 確認 UI は実装都合（モーダル/パネル）で role やラベルが変わり得るため、
     // ユーザーに見える内容（モックで固定した文言）で完了を待つ。
     await expect(page.getByText('既存WordPackが1件含まれています。')).toBeVisible({ timeout: 15000 });
