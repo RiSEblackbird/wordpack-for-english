@@ -2,6 +2,13 @@ name: Deploy to production
 
 on:
   workflow_dispatch:
+  # CI の成功後にのみ、本番デプロイを自動実行する。
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches:
+      - main
 
 concurrency:
   group: deploy-production-${{ github.workflow }}-${{ github.ref }}
@@ -13,16 +20,22 @@ permissions:
 
 jobs:
   deploy:
-    name: Manual deploy to production
+    name: Deploy to production
     runs-on: ubuntu-latest
+    # CI の成功完了時、または手動実行のみ受け付ける。
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     env:
       CLOUD_RUN_PROJECT_ID: ${{ secrets.GCP_SA_PROJECT_ID }}
       CLOUD_RUN_REGION: asia-northeast1
       CLOUD_RUN_ENV_FILE: .env.deploy
       SKIP_FIRESTORE_INDEX_SYNC: "false"
+      TRIGGER_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+      TRIGGER_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TRIGGER_SHA }}
 
       - name: Materialize production env file
         # シークレットに保存した base64 文字列から .env.deploy を復元し、後続の検証に備える。
@@ -129,8 +142,8 @@ jobs:
           {
             echo "## Production deployment"
             echo "- Status: ${ICON} ${STATUS}"
-            echo "- Commit: ${{ github.sha }}"
-            echo "- Trigger branch: ${{ github.ref_name }}"
+            echo "- Commit: ${TRIGGER_SHA}"
+            echo "- Trigger branch: ${TRIGGER_BRANCH}"
             echo "- Actor: ${{ github.actor }}"
             echo "- Target project: ${CLOUD_RUN_PROJECT_ID}"
             echo "- Region: ${CLOUD_RUN_REGION}"

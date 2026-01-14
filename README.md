@@ -249,7 +249,9 @@ OPENAI_API_KEY=sk-xxxxx
 
 GitHub Actions では `deploy-dry-run.yml` が pull_request と main ブランチへの push で `make release-cloud-run` を `SKIP_FIRESTORE_INDEX_SYNC=true` / `DRY_RUN=true` 付きで実行し、`configs/cloud-run/ci.env` を用いた設定検証を自動化します。GCP のサービスアカウントキーはリポジトリシークレット `GCP_SA_KEY` に保存し、`google-github-actions/auth` で ADC として読み込んでから `setup-gcloud` に引き渡してください。
 
-本番の自動デプロイは **CI ワークフロー（`.github/workflows/ci.yml`）内の `CD / Deploy to production (Cloud Run)` ジョブ**が担当します。CI のテストが全て成功した **main ブランチへの push（= develop→main のマージコミット含む）** のみを条件に `make release-cloud-run` を実行するため、Checks の一覧にも CD が表示されます。手動実行用のフォールバックとして `deploy-production.yml` も残しています（`workflow_dispatch` のみ）。
+本番の自動デプロイは **`deploy-production.yml` ワークフロー**が担当します。CI ワークフロー（`.github/workflows/ci.yml`）が success で完了した **main ブランチへの push（= develop→main のマージコミット含む）** を `workflow_run` で受け取り、`make release-cloud-run` を実行します。手動実行のフォールバックとして `workflow_dispatch` も併用します。
+  - 正例: CI が success で完了すると `Deploy to production` ワークフローが起動し、CI が検証した commit SHA をデプロイします。
+  - 負例: CI が失敗した場合は `Deploy to production` ワークフローが起動せず、本番デプロイは行われません。
 GitHub Actions で本番デプロイを有効にするには、少なくとも次のシークレットが必要です。
 
 - `GCP_SA_KEY`: 本番デプロイ用サービスアカウントキー（JSON）
