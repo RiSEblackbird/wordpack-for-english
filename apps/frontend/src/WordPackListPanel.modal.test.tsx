@@ -218,9 +218,12 @@ describe('WordPackListPanel modal preview', () => {
     // 例文未生成バッジ表示
     await waitFor(() => expect(screen.getByText('例文未生成')).toBeInTheDocument());
 
-    // カードをクリック
-    const cards = screen.getAllByTestId('wp-card');
+    const cards = await screen.findAllByTestId('wp-card');
+    const alphaCard = cards.find((el) => /alpha/.test(el.textContent || ''))!;
+    expect(within(alphaCard).getByText('CD')).toBeInTheDocument();
     expect(cards).toHaveLength(3);
+
+    // カードをクリック
     
     // カードがクリック可能になるまで少し待機
     await waitFor(() => expect(cards[0]).toBeInTheDocument());
@@ -583,4 +586,3 @@ describe('WordPackListPanel modal preview', () => {
     await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(3));
   }, 12000);
 });
-
