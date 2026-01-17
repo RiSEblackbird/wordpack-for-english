@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, vi } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { toHaveNoViolations } from 'vitest-axe/matchers';
+import { toHaveNoViolations } from 'vitest-axe/dist/matchers';
+import 'vitest-axe/extend-expect';
 
 // 統合テストでは実HTTPを使うため、MSW のモック層を明示的に無効化する。
 const isIntegrationTest = process.env.INTEGRATION_TEST === 'true';
