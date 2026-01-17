@@ -106,6 +106,12 @@ jobs:
         # firebase deploy --only firestore:indexes は GA であり、gcloud alpha より安定している。
         run: npm install -g firebase-tools
 
+      - name: Install frontend dependencies
+        # predeploy の tsc が @types などの devDependencies を必要とするため、事前に導入しておく。
+        env:
+          NPM_CONFIG_PRODUCTION: "false"
+        run: npm ci --prefix ./apps/frontend
+
       - name: Set up Python
         # デプロイスクリプトが python -m apps.backend.backend.config で設定を検証するため Python 環境を用意する。
         uses: actions/setup-python@v5
