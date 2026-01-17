@@ -118,6 +118,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck frontend (including tests)
+        run: npx tsc -p tsconfig.json
+
       - name: Run vitest
         run: npm test -- --coverage --silent
 
@@ -228,4 +231,3 @@ jobs:
 
       - name: Dry-run Cloud Run deployment
         run: ./scripts/deploy_cloud_run.sh --dry-run --env-file configs/cloud-run/ci.env --project-id ci-placeholder-project --region asia-northeast1 --service wordpack-backend
-
