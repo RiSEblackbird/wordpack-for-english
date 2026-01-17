@@ -104,15 +104,6 @@ type PersistedState = {
 const STORAGE_KEY = 'wp.list.ui_state.v1';
 const PAGE_LIMIT = 200;
 const MIN_COLUMN_WIDTH = 320;
-const EXAMPLE_CATEGORY_ORDER = ['Dev', 'CS', 'LLM', 'Business', 'Common'] as const;
-const EXAMPLE_CATEGORY_LABELS: Record<(typeof EXAMPLE_CATEGORY_ORDER)[number], string> = {
-  Dev: 'Dev',
-  CS: 'CS',
-  LLM: 'LLM',
-  Business: 'Business',
-  // 一覧のカテゴリバッジは省スペースのため Common を CD 表記に揃える。
-  Common: 'CD',
-};
 
 const DEFAULT_PERSISTED_STATE: PersistedState = {
   sortKey: 'updated_at',
@@ -909,25 +900,22 @@ export const WordPackListPanel: React.FC = () => {
                       ) : wp.examples_count && (
                         <div style={{ marginTop: '0.3rem', fontSize: '0.2em' }}>
                           <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
-                            {EXAMPLE_CATEGORY_ORDER.map((category) => {
-                              const count = wp.examples_count?.[category] ?? 0;
-                              return (
-                                <span key={category} style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '0.10rem',
-                                  padding: '0.1rem 0.2rem',
-                                  backgroundColor: count > 0 ? '#e3f2fd' : '#f5f5f5',
-                                  color: count > 0 ? '#1565c0' : '#666',
-                                  borderRadius: '3px',
-                                  border: `1px solid ${count > 0 ? '#1565c0' : '#ddd'}`,
-                                  fontSize: '0.40em'
-                                }}>
-                                  <span style={{ fontWeight: 'bold' }}>{EXAMPLE_CATEGORY_LABELS[category]}</span>
-                                  <span>{count}</span>
-                                </span>
-                              );
-                            })}
+                            {Object.entries(wp.examples_count).map(([category, count]) => (
+                              <span key={category} style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.10rem',
+                                padding: '0.1rem 0.2rem',
+                                backgroundColor: count > 0 ? '#e3f2fd' : '#f5f5f5',
+                                color: count > 0 ? '#1565c0' : '#666',
+                                borderRadius: '3px',
+                                border: `1px solid ${count > 0 ? '#1565c0' : '#ddd'}`,
+                                fontSize: '0.40em'
+                              }}>
+                                <span style={{ fontWeight: 'bold' }}>{category}</span>
+                                <span>{count}</span>
+                              </span>
+                            ))}
                           </div>
                         </div>
                       )}

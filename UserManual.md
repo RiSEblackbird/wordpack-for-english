@@ -113,7 +113,6 @@
 - 保存済みWordPack一覧（同ページ下部）:
   - 生成済みの WordPack をカード形式で一覧表示
   - 画面幅が狭い場合は、一覧ヘッダー（見出しと更新ボタン）が縦並びになり、更新ボタンが押しやすく表示されます。
-  - 例文数のカテゴリバッジは Dev/CS/LLM/Business/CD で表示され、CD は Common（日常）カテゴリを指します。
   - カードをクリックで大きめのモーダルでプレビュー
     - データ読み込み中も一覧から取得した見出し語を `.wp-modal-lemma strong` で表示し、同じ語を入力欄に表示したプレースホルダーを併
       置して読み込み状態を明示します。
@@ -385,9 +384,9 @@ curl -i -H "Cookie: wp_guest=<signed-token>" "http://127.0.0.1:8000/api/word?lem
   - `--dry-run` を付けると設定のロード（`python -m apps.backend.backend.config`）までを実行し、gcloud コマンドをスキップします。CI では `configs/cloud-run/ci.env` を入力にして dry-run を常時実行し、必須設定の欠落をブロックしています。
   - `--image-tag`（既定: `git rev-parse --short HEAD`）、`--build-arg KEY=VALUE`、`--machine-type`、`--timeout` などで Cloud Build のパラメータを細かく制御できます。`--artifact-repo` で Artifact Registry のリポジトリを差し替え可能です。
 - `make deploy-cloud-run PROJECT_ID=... REGION=...` を利用すれば、Makefile から同じスクリプトを呼び出せます。`gcloud config` に既定プロジェクト/リージョンを設定済みなら、Make 実行時の `PROJECT_ID` / `REGION` 省略も可能です。GitHub Actions の `Cloud Run config guard` ジョブでも `scripts/deploy_cloud_run.sh --dry-run` を実行しており、`shellcheck` でスクリプトの静的解析も同ジョブで通過させます。ローカルでスクリプトを更新した場合は `shellcheck scripts/deploy_cloud_run.sh` を必ず実行してください。
-- GitHub Actions の本番自動デプロイは **`deploy-production.yml` ワークフロー**が担当し、CI が success になった **main ブランチへの push（= develop→main マージコミットを含む）** を `workflow_run` で受け取って実行されます。`.env.deploy` はリポジトリへコミットせず、Actions 側で `CLOUD_RUN_ENV_FILE_BASE64`（base64 化した `.env.deploy`）から復元して利用します。手動実行用のフォールバックとして `workflow_dispatch` も併用します。
-  - 正例: CI 成功後に `Deploy to production` ワークフローが起動し、CI で検証済みの commit SHA を本番へデプロイします。
-  - 負例: CI が失敗した場合は `Deploy to production` ワークフローが起動しないため、本番デプロイは行われません。
+- GitHub Actions の本番自動デプロイは **`deploy-production.yml` ワークフロー**が担当し、**main ブランチへの push** をトリガーに実行されます。`.env.deploy` はリポジトリへコミットせず、Actions 側で `CLOUD_RUN_ENV_FILE_BASE64`（base64 化した `.env.deploy`）から復元して利用します。手動実行用のフォールバックとして `workflow_dispatch` も併用します。CI 成功を必須にする場合は main ブランチの保護ルールで CI チェックを必須化してください。
+  - 正例: main への push 後に `Deploy to production` ワークフローが起動し、同じ commit SHA を本番へデプロイします。
+  - 負例: main への push を行わない限り `Deploy to production` ワークフローは起動しません。
 
 ##### release-cloud-run ターゲット（本番リリースの順序制御）
 
