@@ -171,7 +171,7 @@ flowchart LR
 
 Cloud Run dry-run は CI の全ジョブが success になった後の workflow_run イベントでのみ起動し、main ブランチへの push または base が main の PR に限定される。fork からの PR などでシークレットを利用できない場合は CI 成功後でも dry-run をスキップし、notice ログで未検証であることを明示する。`Deploy to production` は main ブランチへの push を契機に起動するため、CI 成功を必須にする場合は main ブランチ保護でチェックを必須化する。
 
-Cloud Build は `cloudbuild.backend.yaml` 内で GitHub Checks API に結果を送信する。`deploy-production.yml` から `GITHUB_CHECKS_TOKEN` を渡すことで、Cloud Build の成功結果が GitHub 上のコミットチェック一覧に表示される。
+CD のチェック表示は GitHub Actions と Cloud Build の二経路で行う。`Deploy to production` は main への push をトリガーに実行される GitHub Actions ワークフローであり、ジョブ自体が GitHub のコミットチェック一覧に表示される。Cloud Build は `cloudbuild.backend.yaml` 内で GitHub Checks API に結果を送信する。`deploy-production.yml` から `GITHUB_CHECKS_TOKEN` を渡すことで、Cloud Build の成功結果もコミットチェック一覧に追加される。
 
 ### E2E 実行レイヤ（Playwright）
 
