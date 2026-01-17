@@ -241,7 +241,7 @@ OPENAI_API_KEY=sk-xxxxx
 - `--image-tag`（既定: `git rev-parse --short HEAD`）、`--build-arg KEY=VALUE`、`--machine-type`、`--timeout` で Cloud Build の詳細を調整できます。Artifact Registry のリポジトリパスは `--artifact-repo` で差し替えられます。
 - `make deploy-cloud-run PROJECT_ID=... REGION=...` を実行すると同じスクリプトが呼び出されます。`gcloud config set project ...` / `gcloud config set run/region ...` を済ませていれば、Makefile 実行時の `PROJECT_ID` / `REGION` も省略できます。CI/CD では `gcloud auth login` / `gcloud auth configure-docker` の完了を前提としてください。
 - デプロイスクリプトは Cloud Build を実行する前に `scripts/deploy_firestore_indexes.sh --tool firebase --project <PROJECT_ID>` を自動で叩き、`firestore.indexes.json` の内容を Firebase CLI 経由で本番プロジェクトへ反映します。`firebase-tools` が未インストールだとこの段階で停止するため、事前に導入しておくか、CI 等で同期済みの場合は `SKIP_FIRESTORE_INDEX_SYNC=true ./scripts/deploy_cloud_run.sh ...` のように環境変数を付けて同期フェーズをスキップしてください。
-  - Cloud Build のビルドは `cloudbuild.backend.yaml` を使い、`Dockerfile.backend` を明示指定して実行します（repo ルートの `Dockerfile` がアップロードに含まれない環境でもビルドが失敗しないようにするため）。
+  - Cloud Build のビルドは `cloudbuild.backend.yaml` を使い、`Dockerfile.backend` を明示指定して実行します（repo ルートの `Dockerfile` がアップロードに含まれない環境でもビルドが失敗しないようにするため）。GitHub Actions から `GITHUB_CHECKS_TOKEN` を渡すと、Cloud Build が GitHub Checks API にビルド結果を通知し、コミットのチェック一覧に CD の結果が表示されます。
 
 #### release-cloud-run（Firestore インデックス同期 + Cloud Run デプロイ）
 
@@ -249,9 +249,9 @@ OPENAI_API_KEY=sk-xxxxx
 
 GitHub Actions では `deploy-dry-run.yml` が pull_request と main ブランチへの push で `make release-cloud-run` を `SKIP_FIRESTORE_INDEX_SYNC=true` / `DRY_RUN=true` 付きで実行し、`configs/cloud-run/ci.env` を用いた設定検証を自動化します。GCP のサービスアカウントキーはリポジトリシークレット `GCP_SA_KEY` に保存し、`google-github-actions/auth` で ADC として読み込んでから `setup-gcloud` に引き渡してください。
 
-本番の自動デプロイは **`deploy-production.yml` ワークフロー**が担当します。CI ワークフロー（`.github/workflows/ci.yml`）が success で完了した **main ブランチへの push（= develop→main のマージコミット含む）** を `workflow_run` で受け取り、`make release-cloud-run` を実行します。手動実行のフォールバックとして `workflow_dispatch` も併用します。
-  - 正例: CI が success で完了すると `Deploy to production` ワークフローが起動し、CI が検証した commit SHA をデプロイします。
-  - 負例: CI が失敗した場合は `Deploy to production` ワークフローが起動せず、本番デプロイは行われません。
+本番の自動デプロイは **`deploy-production.yml` ワークフロー**が担当します。**main ブランチへの push** をトリガーに `make release-cloud-run` を実行し、手動実行のフォールバックとして `workflow_dispatch` も併用します。CI 成功を必須にする場合は main ブランチの保護ルールで CI チェックを必須化してください（マージ前に CI が通る運用を前提にするため）。
+  - 正例: main への push 後に `Deploy to production` ワークフローが起動し、同じ commit SHA を本番へデプロイします。
+  - 負例: main への push を行わない限り `Deploy to production` ワークフローは起動しません。
 GitHub Actions で本番デプロイを有効にするには、少なくとも次のシークレットが必要です。
 
 - `GCP_SA_KEY`: 本番デプロイ用サービスアカウントキー（JSON）

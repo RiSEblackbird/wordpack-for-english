@@ -167,9 +167,11 @@ flowchart LR
 | **Visual regression** | `pull_request`（UI 変更のみ） | UI 変更が検知された場合に Playwright の視覚回帰 (`tests/e2e/visual.spec.ts`) を実行 |
 | **Cloud Run config guard** | Security headers 成功後 | デプロイスクリプトの lint と dry-run 検証 |
 | **Cloud Run dry-run** | CI 成功後の workflow_run（main 向け push / PR のみ） | CI が成功した際に `make release-cloud-run` の dry-run モードを実行。fork からの PR でシークレットが無い場合は notice を残してスキップ |
-| **Deploy to production** | `deploy-production.yml` の workflow_run（main 向け push のみ） | CI が成功した際に、本番用シークレットから `.env.deploy` を復元して `make release-cloud-run` を実行（CI が検証した commit SHA をデプロイ） |
+| **Deploy to production** | `deploy-production.yml` の push（main のみ） | main への push を契機に、本番用シークレットから `.env.deploy` を復元して `make release-cloud-run` を実行（CI 成功を必須にする場合は main ブランチ保護でチェックを必須化） |
 
-Cloud Run dry-run は CI の全ジョブが success になった後の workflow_run イベントでのみ起動し、main ブランチへの push または base が main の PR に限定される。fork からの PR などでシークレットを利用できない場合は CI 成功後でも dry-run をスキップし、notice ログで未検証であることを明示する。`Deploy to production` も同じ workflow_run を契機に `deploy-production.yml` 側で起動し、CI が成功した commit SHA のみを本番へデプロイする。
+Cloud Run dry-run は CI の全ジョブが success になった後の workflow_run イベントでのみ起動し、main ブランチへの push または base が main の PR に限定される。fork からの PR などでシークレットを利用できない場合は CI 成功後でも dry-run をスキップし、notice ログで未検証であることを明示する。`Deploy to production` は main ブランチへの push を契機に起動するため、CI 成功を必須にする場合は main ブランチ保護でチェックを必須化する。
+
+Cloud Build は `cloudbuild.backend.yaml` 内で GitHub Checks API に結果を送信する。`deploy-production.yml` から `GITHUB_CHECKS_TOKEN` を渡すことで、Cloud Build の成功結果が GitHub 上のコミットチェック一覧に表示される。
 
 ### E2E 実行レイヤ（Playwright）
 

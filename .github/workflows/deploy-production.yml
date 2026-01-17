@@ -1,14 +1,12 @@
 name: Deploy to production
 
 on:
-  workflow_dispatch:
-  # CI の成功後にのみ、本番デプロイを自動実行する。
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
+  # main ブランチへの push を本番デプロイの起点とする。
+  push:
     branches:
       - main
+  # 手動実行のフォールバックを残しておく。
+  workflow_dispatch:
 
 concurrency:
   group: deploy-production-${{ github.workflow }}-${{ github.ref }}
@@ -17,21 +15,23 @@ concurrency:
 permissions:
   contents: read
   id-token: write
+  checks: write
 
 jobs:
   deploy:
     name: Deploy to production
     runs-on: ubuntu-latest
-    # CI の成功完了時、または手動実行のみ受け付ける。
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    environment: production
     env:
       CLOUD_RUN_PROJECT_ID: ${{ secrets.GCP_SA_PROJECT_ID }}
       CLOUD_RUN_REGION: asia-northeast1
       CLOUD_RUN_ENV_FILE: .env.deploy
       SKIP_FIRESTORE_INDEX_SYNC: "false"
       FIREBASE_PROJECT_ID: ${{ secrets.GCP_SA_PROJECT_ID }}
-      TRIGGER_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
-      TRIGGER_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      TRIGGER_BRANCH: ${{ github.ref_name }}
+      TRIGGER_SHA: ${{ github.sha }}
+      GITHUB_CHECKS_TOKEN: ${{ github.token }}
+      GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

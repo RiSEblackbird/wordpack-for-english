@@ -56,6 +56,8 @@ firestore-export-*.json
 .env.deploy.*
 !env.deploy.example
 .cloudrun.env.*
+# Cloud Build の一時生成 YAML は誤コミット防止のため除外
+.cloudbuild.backend.*.yaml
 configs/cloud-run/*.env.local
 configs/cloud-run/*.secrets
 apps/backend/.env
