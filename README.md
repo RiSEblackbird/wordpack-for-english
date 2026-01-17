@@ -347,6 +347,11 @@ Cloud Run の API を Firebase Hosting のフロントエンドと同一ドメ�
 }
 ```
 
+デプロイは GitHub Actions の `deploy-production` が自動で実行される場合、手動で `firebase deploy --only hosting` を叩く必要はありません（Cloud Run のリリース完了後に Hosting も更新されます）。自動デプロイを使う場合は、`GCP_SA_KEY` に格納するサービスアカウントに `Firebase Hosting Admin` を含む権限を付与し、`GCP_SA_PROJECT_ID` を Firebase プロジェクト ID と一致させておいてください。
+
+- **自動デプロイあり（推奨）**: `deploy-production` が Cloud Run → Firebase Hosting の順でデプロイします。フロントエンドの `hosting.predeploy` も CI 上で実行されるため、WSL 依存の手順は不要です。
+- **自動デプロイなし（手動）**: 以下の手順で `firebase deploy --only hosting` を実行します。緊急時や CI を使わない運用時に限定してください。
+
 1. `firebase deploy --only hosting`（WSL 上のリポジトリルートで実行）を叩くと、`hosting.predeploy` で `npm --prefix ./apps/frontend run build` が自動実行され、そのまま `/api` 配下のリライト設定と静的ファイルのアップロードまで完了します。
 2. 同一オリジンになるため、`CORS_ALLOWED_ORIGINS` に Hosting ドメイン（例: `https://<project>.web.app`）を列挙し、`ALLOWED_HOSTS` にも同じドメインを追加すれば Cookie を安全に共有できます。
 

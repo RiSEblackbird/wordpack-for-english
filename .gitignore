@@ -53,6 +53,7 @@ firestore-export-*/
 firestore-export-*.json
 # Cloud Run デプロイ用の秘密情報は必ずローカルファイル (.env.deploy など) に閉じ込める
 .env.deploy
+.env.deploy.*
 !env.deploy.example
 .cloudrun.env.*
 configs/cloud-run/*.env.local
