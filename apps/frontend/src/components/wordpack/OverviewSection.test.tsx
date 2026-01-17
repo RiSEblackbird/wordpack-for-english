@@ -40,6 +40,9 @@ describe('OverviewSection', () => {
         exampleStats={{ counts: [], total: 0 }}
         currentWordPackId="wp:1"
         isActionLoading={false}
+        guestPublic={false}
+        guestPublicUpdating={false}
+        onGuestPublicChange={() => {}}
         packCheckedCount={0}
         packLearnedCount={0}
         onRecordStudyProgress={() => {}}
@@ -54,4 +57,3 @@ describe('OverviewSection', () => {
     expect(wrapper).toHaveStyle({ marginLeft: 'auto' });
   });
 });
-
