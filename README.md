@@ -59,8 +59,10 @@ python -m venv .venv
 source .venv/bin/activate
 # Windows PowerShell
 # .venv\Scripts\Activate.ps1
-# Windows (Git Bash / WSL など)
+# Windows (Git Bash)
 # source .venv/Scripts/activate
+# WSL
+# source .venv/bin/activate
 pip install -r requirements.txt
 
 # Frontend
