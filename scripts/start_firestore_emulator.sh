@@ -72,6 +72,14 @@ ensure_java21() {
     return 0
   fi
 
+  local os_name
+  os_name="$(uname -s)"
+  if [[ "$os_name" != "Linux" ]]; then
+    echo "[${SCRIPT_NAME}] Java 21+ が必要です。${os_name} では自動インストールできないため、手動で導入してください。" >&2
+    echo "[${SCRIPT_NAME}] macOS の例: brew install openjdk@21 && export PATH=\"/opt/homebrew/opt/openjdk@21/bin:\$PATH\"" >&2
+    exit 1
+  fi
+
   echo "[${SCRIPT_NAME}] Java 21+ is required. Installing Temurin 21 (Adoptium tarball, no apt)..."
   # 過去の失敗で残った外部 repo 設定を掃除（念のため）
   rm -f /etc/apt/sources.list.d/adoptium.list /usr/share/keyrings/adoptium.gpg || true

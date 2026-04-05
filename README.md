@@ -55,12 +55,29 @@
 ```bash
 # Python（リポジトリルートで）
 python -m venv .venv
-. .venv/Scripts/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
+# macOS / Linux
+source .venv/bin/activate
+# Windows PowerShell
+# .venv\Scripts\Activate.ps1
+# Windows (Git Bash / WSL など)
+# source .venv/Scripts/activate
 pip install -r requirements.txt
 
 # Frontend
 cd apps/frontend
 npm install
+```
+
+### macOS 追加セットアップ
+macOS で Firestore エミュレータを使う場合は、Java 21 を事前にインストールしてください（Linux コンテナ向けの自動インストール処理は macOS では動作しません）。
+
+```bash
+# Homebrew の例
+brew install openjdk@21
+export PATH="/opt/homebrew/opt/openjdk@21/bin:$PATH"
+
+# Firebase CLI（未インストールの場合）
+npm install -g firebase-tools
 ```
 
 ## ブランチ運用（開発/本番）
