@@ -377,8 +377,15 @@ def create_app() -> FastAPI:
     app.include_router(cfg.router, prefix="/api")
     app.include_router(tts.router, dependencies=protected_dependency)
 
-    app.add_event_handler("shutdown", _on_shutdown)
-    app.add_event_handler("startup", _on_startup_seed)
+    add_event_handler = getattr(app, "add_event_handler", None)
+    if callable(add_event_handler):
+        add_event_handler("shutdown", _on_shutdown)
+        add_event_handler("startup", _on_startup_seed)
+    else:
+        # FastAPI の新しいバージョンでは `FastAPI.add_event_handler` がなく、
+        # router 側の API を利用する必要がある。
+        app.router.add_event_handler("shutdown", _on_shutdown)
+        app.router.add_event_handler("startup", _on_startup_seed)
 
     return app
 
