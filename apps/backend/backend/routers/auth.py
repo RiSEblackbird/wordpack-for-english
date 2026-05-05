@@ -44,6 +44,21 @@ class GuestAuthResponse(BaseModel):
     mode: str = Field(default="guest", description="Guest mode marker")
 
 
+def _verify_google_id_token(token: str, audience: str, clock_skew_seconds: int) -> dict[str, object]:
+    """Verify a Google ID token through google-auth and return its claims."""
+
+    try:
+        return id_token.verify_oauth2_token(
+            token,
+            _google_request,
+            audience,
+            clock_skew_in_seconds=clock_skew_seconds,
+        )
+    except TypeError:
+        # Older google-auth versions do not accept clock_skew_in_seconds.
+        return id_token.verify_oauth2_token(token, _google_request, audience)
+
+
 @router.post("/api/auth/google", response_model=GoogleAuthResponse)
 async def authenticate_with_google(payload: GoogleAuthRequest, request: Request) -> JSONResponse:
     """Verify Google ID token, persist the user, and issue a signed session cookie."""
@@ -72,19 +87,11 @@ async def authenticate_with_google(payload: GoogleAuthRequest, request: Request)
     try:
         # 許容する時計ずれ（nbf/iat/exp の境界緩和）。古い google-auth 互換のため TypeError 時は従来呼び出しにフォールバック。
         _skew = max(0, int(getattr(settings, "google_clock_skew_seconds", 0) or 0))
-        try:
-            id_info = id_token.verify_oauth2_token(
-                payload.id_token,
-                _google_request,
-                settings.google_client_id,
-                clock_skew_in_seconds=_skew,
-            )
-        except TypeError:
-            id_info = id_token.verify_oauth2_token(
-                payload.id_token,
-                _google_request,
-                settings.google_client_id,
-            )
+        id_info = _verify_google_id_token(
+            payload.id_token,
+            settings.google_client_id,
+            _skew,
+        )
     except ValueError as exc:
         logger.warning(
             "google_auth_failed",

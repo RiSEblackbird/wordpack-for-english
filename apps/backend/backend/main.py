@@ -4,8 +4,9 @@ import asyncio
 import inspect
 import string
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Request
@@ -280,6 +281,17 @@ async def _on_startup_seed() -> None:
         logger.warning("auto_seed_failed", error=repr(exc))
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Run application startup/shutdown hooks through FastAPI's lifespan API."""
+
+    await _on_startup_seed()
+    try:
+        yield
+    finally:
+        await _on_shutdown()
+
+
 def _maybe_add_timeout_middleware(app: FastAPI) -> None:
     """Attach Starlette's timeout middleware when the dependency is available."""
     if TimeoutMiddleware is None:
@@ -296,7 +308,7 @@ def create_app() -> FastAPI:
         settings.allowed_hosts_raw,
         settings.allowed_hosts,
     )
-    app = FastAPI(title="WordPack API", version="0.3.1")
+    app = FastAPI(title="WordPack API", version="0.3.1", lifespan=_lifespan)
 
     configured_proxies = [value for value in settings.trusted_proxy_ips if value]
     if not configured_proxies:
@@ -376,16 +388,6 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(cfg.router, prefix="/api")
     app.include_router(tts.router, dependencies=protected_dependency)
-
-    add_event_handler = getattr(app, "add_event_handler", None)
-    if callable(add_event_handler):
-        add_event_handler("shutdown", _on_shutdown)
-        add_event_handler("startup", _on_startup_seed)
-    else:
-        # FastAPI の新しいバージョンでは `FastAPI.add_event_handler` がなく、
-        # router 側の API を利用する必要がある。
-        app.router.add_event_handler("shutdown", _on_shutdown)
-        app.router.add_event_handler("startup", _on_startup_seed)
 
     return app
 

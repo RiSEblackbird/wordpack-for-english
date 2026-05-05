@@ -23,15 +23,15 @@ from tests.firestore_fakes import (
 
 
 def _stub_google_verifier(monkeypatch, payload_factory):
-    """google.oauth2.id_token.verify_oauth2_token をテスト用に差し替える。"""
+    """Google ID token 検証境界をテスト用に差し替える。"""
 
-    from google.oauth2 import id_token
+    import backend.routers.auth as auth_router_module
 
-    def _verify(token: str, request: object, audience: str, **kwargs):
+    def _verify(token: str, audience: str, clock_skew_seconds: int):
         assert audience == settings.google_client_id
         return payload_factory()
 
-    monkeypatch.setattr(id_token, "verify_oauth2_token", _verify)
+    monkeypatch.setattr(auth_router_module, "_verify_google_id_token", _verify)
 
 
 @pytest.fixture()

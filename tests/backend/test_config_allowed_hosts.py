@@ -28,12 +28,17 @@ def test_production_rejects_wildcard_hosts() -> None:
     """本番環境でワイルドカードを含む設定は拒否される。"""
 
     with pytest.raises(ValueError):
-        Settings(environment="production", _env_file=None)
+        Settings(
+            environment="production",
+            admin_email_allowlist=("admin@example.com",),
+            _env_file=None,
+        )
 
     with pytest.raises(ValueError):
         Settings(
             environment="production",
             allowed_hosts=("*", _CLOUD_RUN_HOST),
+            admin_email_allowlist=("admin@example.com",),
             _env_file=None,
         )
 
@@ -42,7 +47,12 @@ def test_production_rejects_empty_hosts() -> None:
     """空配列のままでも create_app 側でワイルドカードにフォールバックするので拒否。"""
 
     with pytest.raises(ValueError):
-        Settings(environment="production", allowed_hosts=(), _env_file=None)
+        Settings(
+            environment="production",
+            allowed_hosts=(),
+            admin_email_allowlist=("admin@example.com",),
+            _env_file=None,
+        )
 
 
 def test_production_allows_explicit_hosts() -> None:
@@ -51,10 +61,11 @@ def test_production_allows_explicit_hosts() -> None:
     config = Settings(
         environment="production",
         allowed_hosts=(_CLOUD_RUN_HOST, "api.example.com"),
+        admin_email_allowlist=("admin@example.com",),
         _env_file=None,
     )
 
-    assert config.allowed_hosts == (_CLOUD_RUN_HOST, "api.example.com")
+    assert tuple(config.allowed_hosts) == (_CLOUD_RUN_HOST, "api.example.com")
 
 
 @pytest.mark.parametrize("environment", ["development", "staging"])
@@ -63,4 +74,4 @@ def test_non_production_can_keep_wildcard_hosts(environment: str) -> None:
 
     config = Settings(environment=environment, allowed_hosts=("*",), _env_file=None)
 
-    assert config.allowed_hosts == ("*",)
+    assert tuple(config.allowed_hosts) == ("*",)

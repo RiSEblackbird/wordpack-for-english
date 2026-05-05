@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "apps" / "backend")
 
 from backend.config import settings  # noqa: E402  # isort:skip
 from backend.main import create_app  # noqa: E402  # isort:skip
+from backend.middleware.host import ForwardedHostTrustedHostMiddleware  # noqa: E402  # isort:skip
 
 
 @pytest.fixture()
@@ -31,14 +32,15 @@ def proxy_app_factory(monkeypatch: pytest.MonkeyPatch):
             ("*",),
             raising=False,
         )
-        monkeypatch.setattr(
-            settings,
-            "allowed_hosts",
-            ("testserver",),
-            raising=False,
-        )
+        monkeypatch.setattr(settings, "allowed_hosts_raw", "testserver")
+        monkeypatch.setattr(settings, "_allowed_hosts_values", ("testserver",))
         for key, value in overrides.items():
-            monkeypatch.setattr(settings, key, value, raising=False)
+            if key == "allowed_hosts":
+                host_values = tuple(value) if not isinstance(value, str) else (value,)
+                monkeypatch.setattr(settings, "allowed_hosts_raw", ",".join(host_values))
+                monkeypatch.setattr(settings, "_allowed_hosts_values", host_values)
+            else:
+                monkeypatch.setattr(settings, key, value, raising=False)
         return create_app()
 
     return _factory
@@ -67,7 +69,7 @@ def test_access_log_reports_forwarded_ip(
     forwarded_ip = "203.0.113.42"
     observed: list[dict[str, object]] = []
 
-    def capture(event: str, **kwargs: object) -> None:
+    def capture(event: str, *args: object, **kwargs: object) -> None:
         observed.append({"event": event, **kwargs})
 
     monkeypatch.setattr("backend.main.logger.info", capture, raising=False)
@@ -147,10 +149,10 @@ def test_unlisted_host_rejected_with_warning(
 ) -> None:
     observed: list[dict[str, object]] = []
 
-    def capture(event: str, **kwargs: object) -> None:
+    def capture(event: str, *args: object, **kwargs: object) -> None:
         observed.append({"event": event, **kwargs})
 
-    monkeypatch.setattr("backend.middleware.host.logger.warning", capture, raising=False)
+    monkeypatch.setattr(ForwardedHostTrustedHostMiddleware.logger, "warning", capture)
 
     app = proxy_app_factory(
         trusted_proxy_ips=("10.0.0.0/8",),
@@ -167,5 +169,9 @@ def test_unlisted_host_rejected_with_warning(
         )
 
     assert response.status_code == 400
-    assert any(entry.get("event") == "host_not_allowed" for entry in observed)
-    assert any(entry.get("host") == "forbidden.example.com" for entry in observed)
+    assert any(entry.get("event") == "host_not_allowed context=%s" for entry in observed)
+    assert any(
+        entry.get("extra", {}).get("context", {}).get("selected_host")
+        == "forbidden.example.com"
+        for entry in observed
+    )

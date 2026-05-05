@@ -69,7 +69,11 @@ def test_cors_wildcard_disables_credentials() -> None:
     """許可オリジン未設定時はワイルドカードと `allow_credentials=false` を返す。"""
 
     client = _build_app_with_settings(
-        Settings(session_secret_key=_SAFE_SECRET, _env_file=None)
+        Settings(
+            allowed_cors_origins=(),
+            session_secret_key=_SAFE_SECRET,
+            _env_file=None,
+        )
     )
 
     preflight = client.options(
