@@ -104,13 +104,12 @@ def test_prefers_forwarded_host_from_trusted_proxy(host_app_factory: Callable[..
 
 def test_rejects_unlisted_host_with_warning_log(
     host_app_factory: Callable[..., FastAPI],
-    capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """許可されていないホストは 400 を返し、WARNING ログを必ず出力する。"""
 
     captured_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
-    original_warning = host_module.logger.warning
+    original_warning = host_module.ForwardedHostTrustedHostMiddleware.logger.warning
 
     def _capture_warning(*args: object, **kwargs: object) -> object:
         """WARNING ログの引数を保存しつつ元のロガーにも委譲する。"""
@@ -118,7 +117,11 @@ def test_rejects_unlisted_host_with_warning_log(
         captured_calls.append((args, kwargs))
         return original_warning(*args, **kwargs)
 
-    monkeypatch.setattr(host_module.logger, "warning", _capture_warning)
+    monkeypatch.setattr(
+        host_module.ForwardedHostTrustedHostMiddleware.logger,
+        "warning",
+        _capture_warning,
+    )
 
     app = host_app_factory(
         allowed_hosts=(
@@ -137,9 +140,6 @@ def test_rejects_unlisted_host_with_warning_log(
     assert response.status_code == 400
     assert len(captured_calls) == 1
     args, kwargs = captured_calls[0]
-    assert args[0] == "host_not_allowed"
-    assert kwargs.get("host") == "evil.example.com"
-    captured = capsys.readouterr()
-    log_output = (captured.out + captured.err).lower()
-    assert "host_not_allowed" in log_output
-    assert "warning" in log_output
+    assert args[0] == "host_not_allowed context=%s"
+    context = kwargs.get("extra", {}).get("context")
+    assert context["selected_host"] == "evil.example.com"

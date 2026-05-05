@@ -61,13 +61,13 @@ def test_client(monkeypatch) -> TestClient:
 
 
 def _stub_verifier(monkeypatch: pytest.MonkeyPatch, factory: Callable[[], dict[str, str]]) -> None:
-    from google.oauth2 import id_token
+    import backend.routers.auth as auth_router_module
 
-    def _verify(token: str, request: object, audience: str, **kwargs) -> dict[str, str]:
+    def _verify(token: str, audience: str, clock_skew_seconds: int) -> dict[str, str]:
         assert audience == settings.google_client_id
         return factory()
 
-    monkeypatch.setattr(id_token, "verify_oauth2_token", _verify)
+    monkeypatch.setattr(auth_router_module, "_verify_google_id_token", _verify)
 
 
 def _structlog_events(caplog: pytest.LogCaptureFixture, event: str) -> list[dict[str, Any]]:
@@ -271,12 +271,12 @@ def test_google_auth_invalid_signature(
 ) -> None:
     """Invalid token signature should produce HTTP 401."""
 
-    from google.oauth2 import id_token
+    import backend.routers.auth as auth_router_module
 
-    def _raise(token: str, request: object, audience: str, **kwargs) -> dict[str, str]:
+    def _raise(token: str, audience: str, clock_skew_seconds: int) -> dict[str, str]:
         raise ValueError("bad signature")
 
-    monkeypatch.setattr(id_token, "verify_oauth2_token", _raise)
+    monkeypatch.setattr(auth_router_module, "_verify_google_id_token", _raise)
 
     with caplog.at_level("WARNING"):
         resp = test_client.post("/api/auth/google", json={"id_token": "invalid"})
@@ -437,14 +437,12 @@ def test_google_auth_passes_clock_skew_to_verifier(
     # 設定を上書き
     monkeypatch.setattr(settings, "google_clock_skew_seconds", 120)
 
-    from google.oauth2 import id_token
+    import backend.routers.auth as auth_router_module
 
     captured: dict[str, int] = {}
 
-    def _verify(token: str, request: object, audience: str, **kwargs) -> dict[str, str]:
-        # 呼び出し時に clock_skew_in_seconds が渡されることを確認
-        if "clock_skew_in_seconds" in kwargs:
-            captured["clock_skew_in_seconds"] = kwargs["clock_skew_in_seconds"]
+    def _verify(token: str, audience: str, clock_skew_seconds: int) -> dict[str, str]:
+        captured["clock_skew_in_seconds"] = clock_skew_seconds
         return {
             "sub": "sub-skew",
             "email": "skew@example.com",
@@ -453,7 +451,7 @@ def test_google_auth_passes_clock_skew_to_verifier(
             "email_verified": True,
         }
 
-    monkeypatch.setattr(id_token, "verify_oauth2_token", _verify)
+    monkeypatch.setattr(auth_router_module, "_verify_google_id_token", _verify)
 
     resp = test_client.post("/api/auth/google", json={"id_token": "valid"})
     assert resp.status_code == 200

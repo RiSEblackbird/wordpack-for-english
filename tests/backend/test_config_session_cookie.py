@@ -36,6 +36,7 @@ def test_session_cookie_secure_defaults_to_true_in_production() -> None:
     config = Settings(
         environment="production",
         allowed_hosts=(_CLOUD_RUN_HOST,),
+        admin_email_allowlist=("admin@example.com",),
         _env_file=None,
     )
     assert config.session_cookie_secure is True
@@ -48,6 +49,7 @@ def test_session_cookie_secure_respects_explicit_override() -> None:
         environment="production",
         session_cookie_secure=False,
         allowed_hosts=(_CLOUD_RUN_HOST,),
+        admin_email_allowlist=("admin@example.com",),
         _env_file=None,
     )
     assert config.session_cookie_secure is False
