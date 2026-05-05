@@ -3,8 +3,6 @@ name: CD
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 concurrency:
   group: deploy-dry-run-${{ github.workflow }}-${{ github.ref }}
@@ -25,6 +23,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Python dependencies
+        # deploy_cloud_run.sh の Pydantic 設定検証に必要な依存を事前に入れる。
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Install prerequisite CLI packages
         # gcloud は setup-gcloud で導入するため、ここでは openssh-client 等の汎用ツールのみを明示インストールします。

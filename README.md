@@ -266,7 +266,7 @@ OPENAI_API_KEY=sk-xxxxx
 
 `make release-cloud-run` は Firestore インデックスの同期 → Cloud Run 用 dry-run → 本番デプロイの順序を固定し、`.env.deploy`（もしくは `ENV_FILE` で指定したファイル）が見つからない場合は即座に停止します。Dry-run で Pydantic 設定を検証してから Cloud Build/Run を実行するため、GitHub Actions でも設定ミスの検知が容易です。
 
-GitHub Actions では `deploy-dry-run.yml` が pull_request と main ブランチへの push で `make release-cloud-run` を `SKIP_FIRESTORE_INDEX_SYNC=true` / `DRY_RUN=true` 付きで実行し、`configs/cloud-run/ci.env` を用いた設定検証を自動化します。このワークフローはチェック一覧に `CD / Cloud Run dry-run` として表示されます。GCP のサービスアカウントキーはリポジトリシークレット `GCP_SA_KEY` に保存し、`google-github-actions/auth` で ADC として読み込んでから `setup-gcloud` に引き渡してください。
+GitHub Actions では `deploy-dry-run.yml` が main ブランチへの push で `make release-cloud-run` を `SKIP_FIRESTORE_INDEX_SYNC=true` / `DRY_RUN=true` 付きで実行し、`configs/cloud-run/ci.env` を用いた設定検証を自動化します。このワークフローは PR では実行せず、main に取り込まれた commit のチェック一覧に `CD / Cloud Run dry-run` として表示されます。GCP のサービスアカウントキーはリポジトリシークレット `GCP_SA_KEY` に保存し、`google-github-actions/auth` で ADC として読み込んでから `setup-gcloud` に引き渡してください。
 
 本番の自動デプロイは **`CI` ワークフロー内の `Deploy to production` job** が担当します。**main ブランチへの push** をトリガーに、Backend / Security headers / Frontend / Playwright smoke / Cloud Run config guard の成功後に `make release-cloud-run` を実行します。手動実行のフォールバックとして **`deploy-production.yml` ワークフロー**の `workflow_dispatch` も残しています。
   - 正例: main への push 後に `CI / Deploy to production` job が起動し、同じ commit SHA を本番へデプロイします。
