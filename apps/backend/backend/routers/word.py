@@ -111,70 +111,16 @@ async def lookup_word(
             updated_at=updated_at,
         )
 
-    # なぜ: GET /api/word は閲覧専用に寄せ、生成は POST 系 API に集約する。
-    # 認証済みユーザー（user または user_id が存在する）はゲスト Cookie が残存していても
-    # ゲスト扱いせず、未登録語に対して 404 を返す（生成は POST API で実施）。
-    has_authenticated_user = bool(
-        getattr(request.state, "user", None) or getattr(request.state, "user_id", None)
-    )
-
-    if has_authenticated_user:
-        # 認証済みユーザーは未登録語に対して 404 を返す
-        raise HTTPException(status_code=404, detail="WordPack not found")
-
-    # 認証済みユーザーが存在しない場合、ゲストモードをチェック
     is_guest = bool(getattr(request.state, "guest", False))
-
-    # なぜ: セッション認証が無効化された環境（disable_session_auth=True）でも、
-    #       ゲスト Cookie が存在する場合は読み取り専用として扱い、未登録語の生成を抑止する。
-    #       resolve_guest_session_cookie は副作用として request.state.guest = True を
-    #       設定するため、認証済みユーザーの判定後にのみ呼び出す。
     if not is_guest and resolve_guest_session_cookie(request):
         is_guest = True
-
     if is_guest:
         raise HTTPException(
             status_code=403, detail="Guest mode cannot generate WordPack"
         )
 
-    try:
-        lookup_req = WordPackRequest(lemma=normalized_lemma)
-        generated_pack, _ = await run_wordpack_flow(
-            lemma=normalized_lemma,
-            req_opts=lookup_req,
-            scope=lookup_req.regenerate_scope,
-        )
-    except HTTPException:
-        raise
-    except RuntimeError as exc:
-        handle_flow_runtime_error(exc, lemma=normalized_lemma)
-        raise
-
-    generated_data = generated_pack.model_dump(mode="json")
-    generated_examples = generated_data.get("examples") or {}
-    examples_total = 0
-    if isinstance(generated_examples, dict):
-        examples_total = sum(
-            len(items) for items in generated_examples.values() if isinstance(items, list)
-        )
-    if not generated_data.get("senses") and examples_total == 0:
-        raise HTTPException(status_code=404, detail="WordPack not found")
-
-    word_pack_id = generate_word_pack_id()
-    store.save_word_pack(
-        word_pack_id,
-        generated_pack.lemma,
-        generated_pack.model_dump_json(),
-    )
-    return build_lookup_response(
-        lemma=generated_pack.lemma,
-        sense_title=generated_pack.sense_title,
-        word_pack_id=word_pack_id,
-        word_pack_data=generated_data,
-        created_at=None,
-        updated_at=None,
-    )
-
+    # なぜ: GET /api/word は閲覧専用エンドポイントであり、
+    #       未登録語の生成・保存は POST 系 API に集約するため。
     raise HTTPException(status_code=404, detail="WordPack not found")
 
 
