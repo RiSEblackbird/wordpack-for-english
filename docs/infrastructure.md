@@ -128,11 +128,11 @@ flowchart LR
         FrontendTest["Frontend tests<br/>(vitest)"]
         PlaywrightSmoke["Playwright smoke<br/>(PR critical flows)"]
         CloudRunGuard["Cloud Run config guard<br/>(dry-run)"]
-        CISuccess["CI success<br/>(workflow_run hook)"]
     end
 
-    subgraph Deploy["デプロイ"]
-        DryRun["Cloud Run dry-run<br/>(CI success後)"]
+    subgraph CD["CD"]
+        DryRun["CD / Cloud Run dry-run<br/>(main push)"]
+        ProductionDeploy["Deploy to production<br/>(main push)"]
         FirestoreIndex["Firestore インデックス同期"]
         CloudBuild["Cloud Build"]
         CloudRun["Cloud Run デプロイ"]
@@ -145,13 +145,9 @@ flowchart LR
     BackendTest --> PlaywrightSmoke
     FrontendTest --> PlaywrightSmoke
     SecurityTest --> CloudRunGuard
-    BackendTest --> CISuccess
-    FrontendTest --> CISuccess
-    SecurityTest --> CISuccess
-    PlaywrightSmoke --> CISuccess
-    CloudRunGuard --> CISuccess
-    CISuccess -->|main ブランチ対象の push / PR| DryRun
-    DryRun --> FirestoreIndex
+    Actions -->|main push| DryRun
+    Actions -->|main push| ProductionDeploy
+    ProductionDeploy --> FirestoreIndex
     FirestoreIndex --> CloudBuild
     CloudBuild --> CloudRun
 ```
@@ -166,12 +162,12 @@ flowchart LR
 | **Playwright smoke** | `pull_request`（Backend / Frontend テスト成功後） | Playwright の主要導線スモークテスト（`auth.spec.ts` / `guest.spec.ts` / `wordpack.spec.ts`） |
 | **Visual regression** | `pull_request`（UI 変更のみ） | UI 変更が検知された場合に Playwright の視覚回帰 (`tests/e2e/visual.spec.ts`) を実行 |
 | **Cloud Run config guard** | Security headers 成功後 | デプロイスクリプトの lint と dry-run 検証 |
-| **Cloud Run dry-run** | CI 成功後の workflow_run（main 向け push / PR のみ） | CI が成功した際に `make release-cloud-run` の dry-run モードを実行。fork からの PR でシークレットが無い場合は notice を残してスキップ |
-| **Deploy to production** | CI の main push または `deploy-production.yml` の手動実行 | main への push では CI 内の `deploy_production` job が backend/frontend/Playwright/config guard 成功後に実行される。手動フォールバックとして `deploy-production.yml` の `workflow_dispatch` も残す |
+| **Cloud Run dry-run** | `main` push | `CD / Cloud Run dry-run` として main に取り込まれた commit のチェック一覧に表示し、`make release-cloud-run` の dry-run モードを実行 |
+| **Deploy to production** | `main` push / 手動実行 | `deploy-production.yml` が `make release-cloud-run` と Firebase Hosting deploy を実行。PR では本番デプロイ job を作らない |
 
-Cloud Run dry-run は CI の全ジョブが success になった後の workflow_run イベントでのみ起動し、main ブランチへの push または base が main の PR に限定される。fork からの PR などでシークレットを利用できない場合は CI 成功後でも dry-run をスキップし、notice ログで未検証であることを明示する。`Deploy to production` は main ブランチへの push を契機に起動するため、CI 成功を必須にする場合は main ブランチ保護でチェックを必須化する。
+Cloud Run dry-run と `Deploy to production` は `main` ブランチへの push で直接起動し、GitHub のコミットチェック一覧に CD の状態を表示する。PR では本番デプロイ job を作らず、マージ前のデプロイ検証は CI 内の Cloud Run config guard に限定する。CI 成功を必須にする場合は main ブランチ保護でチェックを必須化する。
 
-CD のチェック表示は GitHub Actions と Cloud Build の二経路で行う。main への push では CI ワークフロー内の `deploy_production` job が実行され、手動リリース時は `Deploy to production` ワークフローを `workflow_dispatch` で起動する。Cloud Build は `cloudbuild.backend.yaml` 内で GitHub Checks API に結果を送信する。手動リリースでは `deploy-production.yml` から `GITHUB_CHECKS_TOKEN` を渡すことで、Cloud Build の成功結果もコミットチェック一覧に追加される。
+CD のチェック表示は GitHub Actions と Cloud Build の二経路で行う。main への push または手動リリース時は `Deploy to production` ワークフローが起動する。Cloud Build は `cloudbuild.backend.yaml` 内で GitHub Checks API に結果を送信する。`deploy-production.yml` から `GITHUB_CHECKS_TOKEN` を渡すことで、Cloud Build の成功結果もコミットチェック一覧に追加される。
 
 ### E2E 実行レイヤ（Playwright）
 
