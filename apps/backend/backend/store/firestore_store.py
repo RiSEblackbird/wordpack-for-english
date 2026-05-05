@@ -10,12 +10,15 @@ from typing import Any
 
 from google.api_core import exceptions as gexc
 from google.api_core.exceptions import AlreadyExists
-from google.cloud import firestore
+from google.cloud import firestore as _firestore
 
+from ..infrastructure.firestore.google_module import resolve_firestore_module
 from ..logging import logger
 from .common import normalize_non_negative_int
 from .examples import EXAMPLE_CATEGORIES, iter_example_rows
 from .wordpacks import build_sense_title, merge_core_with_examples, split_examples_from_payload
+
+firestore = resolve_firestore_module(_firestore)
 
 
 def _now_iso() -> str:
@@ -973,7 +976,7 @@ class FirestoreExampleStore(FirestoreBaseStore):
         ordered = query.order_by(primary_order, direction=direction)
         if secondary_order and secondary_order != primary_order:
             ordered = ordered.order_by(secondary_order, direction=direction)
-        ordered = ordered.order_by("__name__", direction=direction)
+        ordered = ordered.order_by("__name__", direction=firestore.Query.ASCENDING)
         cursor: firestore.DocumentSnapshot | None = None
         if offset:
             cursor = None

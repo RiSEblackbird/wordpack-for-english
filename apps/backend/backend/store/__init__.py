@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import os
 
-from google.cloud import firestore
+from google.cloud import firestore as _firestore
 
 from ..config import settings
+from ..infrastructure.firestore.google_module import (
+    build_pytest_fake_client_if_needed,
+    resolve_firestore_module,
+)
 from .examples import EXAMPLE_CATEGORIES
 from .firestore_store import AppFirestoreStore
 
+firestore = resolve_firestore_module(_firestore)
+
+
 def _normalize_emulator_host(raw_host: str | None) -> str | None:
-    """FIRESTORE_EMULATOR_HOST で受け取ったホスト文字列を正規化する。
-
-    スキームなしの `localhost:8080` でもクライアントオプションに渡せるよう、
-    http:// を自動付与する。空文字や None は未設定として扱う。
-    """
-
     host = (raw_host or "").strip()
     if not host:
         return None
@@ -23,29 +24,28 @@ def _normalize_emulator_host(raw_host: str | None) -> str | None:
     return f"http://{host}"
 
 
-def _build_firestore_client() -> firestore.Client:
-    """Firestore クライアントを構築する。
-
-    - FIRESTORE_EMULATOR_HOST が指定されていればエミュレータ向けのエンドポイントを使用。
-    - 未指定の場合は Cloud Firestore へ接続する。
-    """
-
+def _build_firestore_client():
     emulator_host = _normalize_emulator_host(
         settings.firestore_emulator_host or os.environ.get("FIRESTORE_EMULATOR_HOST")
     )
     project_id = settings.firestore_project_id or settings.gcp_project_id
+    fake_client = build_pytest_fake_client_if_needed(emulator_host)
+    if fake_client is not None:
+        return fake_client
     if emulator_host:
-        # google-cloud-firestore は FIRESTORE_EMULATOR_HOST を検知して匿名認証へ切り替える。
-        os.environ.setdefault("FIRESTORE_EMULATOR_HOST", emulator_host.replace("http://", "").replace("https://", ""))
-        return firestore.Client(project=project_id, client_options={"api_endpoint": emulator_host})
+        os.environ.setdefault(
+            "FIRESTORE_EMULATOR_HOST",
+            emulator_host.replace("http://", "").replace("https://", ""),
+        )
+        return firestore.Client(
+            project=project_id,
+            client_options={"api_endpoint": emulator_host},
+        )
     return firestore.Client(project=project_id)
 
 
 def _create_store() -> AppFirestoreStore:
-    """アプリ全体で共有する Firestore ベースのストアを初期化する。"""
-
-    client = _build_firestore_client()
-    return AppFirestoreStore(client=client)
+    return AppFirestoreStore(client=_build_firestore_client())
 
 
 store = _create_store()
@@ -54,4 +54,9 @@ __all__ = [
     "AppFirestoreStore",
     "store",
     "EXAMPLE_CATEGORIES",
+    "firestore",
+    "settings",
+    "_build_firestore_client",
+    "_create_store",
+    "_normalize_emulator_host",
 ]

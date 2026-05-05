@@ -2,58 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNotifications } from '../NotificationsContext';
 import { useSettings } from '../SettingsContext';
 import { ApiError, fetchJson } from '../lib/fetcher';
-import { composeModelRequestFields, enqueueRegenerateWordPack, fetchRegenerateJobStatus, regenerateWordPackRequest, updateGuestPublicFlag } from '../lib/wordpack';
-
-export interface Pronunciation {
-  ipa_GA?: string | null;
-  ipa_RP?: string | null;
-  syllables?: number | null;
-  stress_index?: number | null;
-  linking_notes: string[];
-}
-
-export interface Sense {
-  id: string;
-  gloss_ja: string;
-  definition_ja?: string | null;
-  nuances_ja?: string | null;
-  term_overview_ja?: string | null;
-  term_core_ja?: string | null;
-  patterns: string[];
-  synonyms?: string[];
-  antonyms?: string[];
-  register?: string | null;
-  notes_ja?: string | null;
-}
-
-interface CollocationLists { verb_object: string[]; adj_noun: string[]; prep_noun: string[] }
-interface Collocations { general: CollocationLists; academic: CollocationLists }
-
-interface ContrastItem { with: string; diff_ja: string }
-
-export interface ExampleItem { en: string; ja: string; grammar_ja?: string; llm_model?: string; llm_params?: string }
-export interface Examples { Dev: ExampleItem[]; CS: ExampleItem[]; LLM: ExampleItem[]; Business: ExampleItem[]; Common: ExampleItem[] }
-
-interface Etymology { note: string; confidence: 'low' | 'medium' | 'high' }
-
-interface Citation { text: string; meta?: Record<string, any> }
-
-export interface WordPack {
-  lemma: string;
-  sense_title: string;
-  pronunciation: Pronunciation;
-  senses: Sense[];
-  collocations: Collocations;
-  contrast: ContrastItem[];
-  examples: Examples;
-  etymology: Etymology;
-  study_card: string;
-  citations: Citation[];
-  confidence: 'low' | 'medium' | 'high';
-  guest_public?: boolean;
-  checked_only_count?: number;
-  learned_count?: number;
-}
+import { composeModelRequestFields, enqueueRegenerateWordPack, fetchRegenerateJobStatus, regenerateWordPackRequest, updateGuestPublicFlag } from '../features/wordpack/api';
+export type { ExampleItem, Examples, Pronunciation, Sense, WordPack } from '../features/wordpack/types';
+import type { Examples, WordPack } from '../features/wordpack/types';
 
 export type WordPackMessage = { kind: 'status' | 'alert'; text: string } | null;
 
@@ -161,8 +112,6 @@ export const useWordPack = ({
   const loadWordPack = useCallback(
     async (wordPackId: string) => {
       // 前のリクエストをキャンセルして Race Condition を防止
-      // eslint-disable-next-line no-console
-      console.log('[loadWordPack] START', { wordPackId, abortRefExists: !!abortRef.current });
       abortRef.current?.abort();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
@@ -170,28 +119,18 @@ export const useWordPack = ({
       setMessage(null);
       setData(null);
       try {
-        // eslint-disable-next-line no-console
-        console.log('[loadWordPack] fetching...', { url: `${apiBase}/word/packs/${wordPackId}` });
         const res = await fetchJson<WordPack>(`${apiBase}/word/packs/${wordPackId}`, {
           signal: ctrl.signal,
           timeoutMs: requestTimeoutMs,
         });
-        // eslint-disable-next-line no-console
-        console.log('[loadWordPack] response received', { lemma: res?.lemma, hasData: !!res, mounted: mountedRef.current });
         if (!mountedRef.current) {
-          // eslint-disable-next-line no-console
-          console.log('[loadWordPack] SKIP: component unmounted');
           return;
         }
         const normalized = normalizeWordPack(res);
-        // eslint-disable-next-line no-console
-        console.log('[loadWordPack] setData', { lemma: normalized?.lemma });
         setData(normalized);
         setCurrentWordPackId(wordPackId);
         extractAiMeta(normalized);
       } catch (error) {
-        // eslint-disable-next-line no-console
-        console.log('[loadWordPack] CATCH', { aborted: ctrl.signal.aborted, error });
         if (ctrl.signal.aborted) return;
         let text = error instanceof ApiError ? error.message : 'WordPackの読み込みに失敗しました';
         if (error instanceof ApiError && error.status === 0 && /aborted|timed out/i.test(error.message)) {
@@ -199,8 +138,6 @@ export const useWordPack = ({
         }
         setMessage({ kind: 'alert', text });
       } finally {
-        // eslint-disable-next-line no-console
-        console.log('[loadWordPack] FINALLY', { wordPackId });
         setLoading(false);
       }
     },

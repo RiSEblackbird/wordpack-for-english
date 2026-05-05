@@ -1,29 +1,36 @@
-# 付録: LangGraph ベースのAI処理フロー
+# 付録: AI処理フロー
 
 ## WordPackFlow（語彙パック生成）
 ```mermaid
 graph TD
-    A[Client: POST /api/word/pack] --> B[WordPackFlow];
-    B --> C["retrieve(lemma) - OpenAI LLMでJSON生成/解析"];
+    A[Client: POST /api/word/pack] --> U[GenerateWordPackUseCase];
+    U --> B[WordPackFlow];
+    B --> P["wordpack prompt builder"];
+    P --> C["retrieve(lemma) - OpenAI LLMでJSON生成/解析"];
+    C --> JP["shared JSON parser - code fence除去/control char sanitize"];
     C --> D["synthesize(...) - 発音/語義タイトル/語義/共起/対比/例文/語源/学習カードを構成"];
     D --> E["examples(generate per category) - Dev/CS/LLM/Business/Common"];
+    E --> EP["examples prompt builder"];
+    E --> JP;
     E --> F["WordPack Response（citations/confidence 付与）"];
-
-    subgraph LangGraph_StateGraph
-        G[generate per category]
-        G --> G
-    end
 ```
+
+`WordPackFlow` は外部からの呼び出し互換を維持したまま、prompt 構築を
+`backend.infrastructure.llm.prompts`、JSON 解析を `backend.infrastructure.llm.json_response_parser`、
+生成後の構成を flow 内の orchestration へ分離している。例文生成はカテゴリごとの独立した LLM 呼び出しで、
+停止条件を明確にするため逐次実行する。
 
 ## ArticleImportFlow（文章インポート）
 ```mermaid
 graph TD
-    A[Client: POST /api/article/import] --> B[ArticleImportFlow];
+    A[Client: POST /api/article/import] --> U[Article import router/usecase boundary];
+    U --> B[ArticleImportFlow];
     B --> T[Title Subgraph: generate_title];
     T --> TR[Translation Subgraph: generate_translation];
     TR --> EX[Explanation Subgraph: generate_explanation];
     EX --> LM[Lemma Subgraph: generate_lemmas];
-    LM --> FL[filter_lemmas: 句優先/機能語除外/記号除外/重複排除];
+    LM --> JP["shared JSON parser - code fence除去/control char sanitize"];
+    LM --> FL["domain.article.lemma_filter: 句優先/機能語除外/記号除外/重複排除"];
     FL --> LC[link_or_create: 既存WordPack紐付け/なければ空パック作成];
     LC --> SA[save_article: 記事保存・メタ取得（llm_model/llm_params/生成カテゴリ/開始・終了時刻を含む）];
     SA --> R[ArticleDetailResponse];

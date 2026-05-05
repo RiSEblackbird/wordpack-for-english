@@ -1,10 +1,6 @@
 name: Deploy to production
 
 on:
-  # main ブランチへの push を本番デプロイの起点とする。
-  push:
-    branches:
-      - main
   # 手動実行のフォールバックを残しておく。
   workflow_dispatch:
 

@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ValidationError
 
 from ..config import settings
+from ..domain.article.lemma_filter import STOP_LEMMAS, filter_article_lemmas
 from ..logging import logger
 from ..models.article import (
     ARTICLE_IMPORT_TEXT_MAX_LENGTH,
@@ -22,7 +23,8 @@ from ..models.article import (
 )
 from ..models.word import WordPack
 from ..providers import get_llm_provider
-from ..store import store
+from ..store import store as _default_store
+from ..store.proxy import CurrentStoreProxy
 from ..observability import request_trace, span
 from ..flows.article_import import ArticleImportFlow
 from ..models.word import ExampleCategory
@@ -33,6 +35,7 @@ from functools import partial
 
 
 router = APIRouter(tags=["article"])
+store = CurrentStoreProxy(_default_store)
 
 
 def _prompt_for_article_import(text: str) -> str:
@@ -53,135 +56,12 @@ def _prompt_for_article_import(text: str) -> str:
     )
 
 
-# 英語の機能語など最低限の除外語（小文字）
-_STOP_LEMMAS: set[str] = {
-    "a",
-    "an",
-    "the",
-    "i",
-    "you",
-    "he",
-    "she",
-    "it",
-    "we",
-    "they",
-    "me",
-    "him",
-    "her",
-    "us",
-    "them",
-    "my",
-    "your",
-    "his",
-    "her",
-    "its",
-    "our",
-    "their",
-    "mine",
-    "yours",
-    "hers",
-    "ours",
-    "theirs",
-    "am",
-    "is",
-    "are",
-    "was",
-    "were",
-    "be",
-    "been",
-    "being",
-    "do",
-    "does",
-    "did",
-    "done",
-    "doing",
-    "have",
-    "has",
-    "had",
-    "having",
-    "will",
-    "would",
-    "shall",
-    "should",
-    "can",
-    "could",
-    "may",
-    "might",
-    "must",
-    "to",
-    "of",
-    "in",
-    "on",
-    "for",
-    "at",
-    "by",
-    "with",
-    "about",
-    "as",
-    "into",
-    "like",
-    "through",
-    "after",
-    "over",
-    "between",
-    "out",
-    "against",
-    "during",
-    "without",
-    "before",
-    "under",
-    "around",
-    "among",
-    "and",
-    "or",
-    "but",
-    "if",
-    "because",
-    "so",
-    "than",
-    "too",
-    "very",
-    "not",
-    "no",
-    "nor",
-    "also",
-    "then",
-    "there",
-    "here",
-}
+_STOP_LEMMAS: set[str] = STOP_LEMMAS
 
 
 def _post_filter_lemmas(raw: list[str]) -> list[str]:
     """LLM抽出結果に対しルールベースで簡易フィルタを適用。"""
-    uniq: list[str] = []
-    seen: set[str] = set()
-    for t in raw:
-        s = (t or "").strip()
-        if not s:
-            continue
-        # 句はそのまま（空白を含むものは優先的に残す）
-        if " " in s:
-            key = s.lower()
-            if key not in seen:
-                uniq.append(s)
-                seen.add(key)
-            continue
-        # 単語: 英字/ハイフン/アポストロフィのみ許容
-        token = s.strip()
-        if not all(ch.isalpha() or ch in {"-", "'"} for ch in token):
-            continue
-        low = token.lower()
-        if low in _STOP_LEMMAS:
-            continue
-        # 極端に短い（2文字以下）は除外（大文字略語2-4文字は許容: AI, ML, NLPなど）
-        if len(token) <= 2 and not (token.isupper() and 2 <= len(token) <= 4):
-            continue
-        key = low
-        if key not in seen:
-            norm = token if token.isupper() else low
-            uniq.append(norm)
-            seen.add(key)
-    return uniq
+    return filter_article_lemmas(raw)
 
 
 def _build_text_too_long_error() -> dict[str, Any]:

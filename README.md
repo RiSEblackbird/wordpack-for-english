@@ -545,6 +545,7 @@ docs/                   # 詳細ドキュメント
 
 ## 追加ドキュメント
 - 詳細な API・フロー・モデルは `docs/flows.md`, `docs/models.md`, `docs/環境変数の意味.md`, `docs/guest_public_api.md` を参照してください。
+- backend/frontend の内部責務配置は `docs/architecture.md` を参照してください。
 - インフラ構成図は `docs/infrastructure.md` を参照してください。
 - フロントエンドの Vitest カバレッジ測定は `docs/testing/vitest-coverage.md` を参照してください。
 - Playwright による E2E 実行手順は `docs/testing/playwright-e2e.md` を参照してください。
