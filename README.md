@@ -268,8 +268,8 @@ OPENAI_API_KEY=sk-xxxxx
 
 GitHub Actions では `deploy-dry-run.yml` が main ブランチへの push で `make release-cloud-run` を `SKIP_FIRESTORE_INDEX_SYNC=true` / `DRY_RUN=true` 付きで実行し、`configs/cloud-run/ci.env` を用いた設定検証を自動化します。このワークフローは PR では実行せず、main に取り込まれた commit のチェック一覧に `CD / Cloud Run dry-run` として表示されます。GCP のサービスアカウントキーはリポジトリシークレット `GCP_SA_KEY` に保存し、`google-github-actions/auth` で ADC として読み込んでから `setup-gcloud` に引き渡してください。
 
-本番の自動デプロイは **`CI` ワークフロー内の `Deploy to production` job** が担当します。**main ブランチへの push** をトリガーに、Backend / Security headers / Frontend / Playwright smoke / Cloud Run config guard の成功後に `make release-cloud-run` を実行します。手動実行のフォールバックとして **`deploy-production.yml` ワークフロー**の `workflow_dispatch` も残しています。
-  - 正例: main への push 後に `CI / Deploy to production` job が起動し、同じ commit SHA を本番へデプロイします。
+本番の自動デプロイは **`deploy-production.yml` ワークフロー**が担当します。**main ブランチへの push** をトリガーに `make release-cloud-run` を実行し、手動実行のフォールバックとして `workflow_dispatch` も残しています。PR 上では本番デプロイ job を作らず、マージ前のデプロイ関連検証は CI 内の Cloud Run config guard で扱います。CI 成功を必須にする場合は main ブランチの保護ルールで CI チェックを必須化してください。
+  - 正例: main への push 後に `Deploy to production / Deploy to production` job が起動し、同じ commit SHA を本番へデプロイします。
   - 負例: main への push を行わない限り、本番向けの自動デプロイ job は起動しません。
 GitHub Actions で本番デプロイを有効にするには、少なくとも次のシークレットが必要です。
 
