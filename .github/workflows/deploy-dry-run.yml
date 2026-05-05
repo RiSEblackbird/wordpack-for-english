@@ -1,25 +1,21 @@
-name: Cloud Run dry-run (CI workflow_run)
+name: CD
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 concurrency:
   group: deploy-dry-run-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   dry-run-release:
-    name: Validate Cloud Run release via dry-run
-    # CI 完了後に main ブランチ向けイベントが成功した場合のみ dry-run 検証を行う
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      (
-        (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main') ||
-        (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.pull_requests[0].base.ref == 'main')
-      )
+    name: Cloud Run dry-run
     runs-on: ubuntu-latest
     env:
       CLOUD_RUN_PROJECT_ID: ci-placeholder-project
@@ -29,9 +25,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          repository: ${{ github.event.workflow_run.head_repository.full_name }}
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Install prerequisite CLI packages
         # gcloud は setup-gcloud で導入するため、ここでは openssh-client 等の汎用ツールのみを明示インストールします。
