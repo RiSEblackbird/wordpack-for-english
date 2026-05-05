@@ -1,0 +1,39 @@
+{
+  "task": "large-architecture-refactor",
+  "branch": "codex/backend-frontend-architecture-refactor",
+  "base_branch": "main",
+  "status": "ready_for_review",
+  "completed": [
+    "repo_scan",
+    "compatibility_layers",
+    "ci_toolchain",
+    "backend_app_split",
+    "backend_settings_split",
+    "backend_store_repository_boundary",
+    "backend_wordpack_article_services",
+    "backend_llm_prompt_parser_split",
+    "frontend_app_shell_split",
+    "frontend_wordpack_feature_split",
+    "tests_and_docs",
+    "pr_body"
+  ],
+  "in_progress": [],
+  "pending": [],
+  "verification": {
+    "backend_pytest": "passed: SESSION_SECRET_KEY=... FIRESTORE_PROJECT_ID=wordpack-ci FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 PYTHONPATH=apps/backend .data/codex-test-venv/bin/pytest -q",
+    "frontend_npm_ci": "passed: cd apps/frontend && npm ci --cache /private/tmp/wordpack-npm-cache",
+    "frontend_typecheck": "passed: cd apps/frontend && npx tsc -p tsconfig.json",
+    "frontend_tests": "passed: cd apps/frontend && npm test -- --coverage --silent",
+    "frontend_build": "passed: cd apps/frontend && npm run build",
+    "root_npm_ci": "passed: npm ci --cache /private/tmp/wordpack-root-npm-cache",
+    "e2e": "not_run: Playwright Chromium binary is not installed locally; backend/frontend web servers started with venv PATH, but tests failed before page execution at browser launch"
+  },
+  "risks": [
+    "middleware order",
+    "Firestore store compatibility",
+    "regeneration polling",
+    "article lemma filtering",
+    "sidebar focus management",
+    "legacy import paths"
+  ]
+}

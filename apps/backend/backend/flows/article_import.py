@@ -9,8 +9,10 @@ from typing import Any, Optional, TypedDict
 from fastapi import HTTPException
 
 from ..config import settings
+from ..domain.article.lemma_filter import STOP_LEMMAS, filter_article_lemmas
 from ..flows.word_pack import WordPackFlow
 from ..id_factory import generate_word_pack_id
+from ..infrastructure.llm.json_response_parser import parse_json_response, strip_code_fences
 from ..logging import logger
 from ..models.article import (
     ArticleDetailResponse,
@@ -21,8 +23,11 @@ from ..models.word import WordPack
 from ..observability import span
 from ..providers import get_llm_provider
 from ..sense_title import choose_sense_title
-from ..store import store
+from ..store import store as _default_store
+from ..store.proxy import CurrentStoreProxy
 from . import StateGraph, create_state_graph
+
+store = CurrentStoreProxy(_default_store)
 
 
 class _ArticleState(TypedDict, total=False):
@@ -52,101 +57,7 @@ class ArticleImportFlow:
     記事データとして保存する。
     """
 
-    _STOP_LEMMAS: set[str] = {
-        "a",
-        "an",
-        "the",
-        "i",
-        "you",
-        "he",
-        "she",
-        "it",
-        "we",
-        "they",
-        "me",
-        "him",
-        "her",
-        "us",
-        "them",
-        "my",
-        "your",
-        "his",
-        "her",
-        "its",
-        "our",
-        "their",
-        "mine",
-        "yours",
-        "hers",
-        "ours",
-        "theirs",
-        "am",
-        "is",
-        "are",
-        "was",
-        "were",
-        "be",
-        "been",
-        "being",
-        "do",
-        "does",
-        "did",
-        "done",
-        "doing",
-        "have",
-        "has",
-        "had",
-        "having",
-        "will",
-        "would",
-        "shall",
-        "should",
-        "can",
-        "could",
-        "may",
-        "might",
-        "must",
-        "to",
-        "of",
-        "in",
-        "on",
-        "for",
-        "at",
-        "by",
-        "with",
-        "about",
-        "as",
-        "into",
-        "like",
-        "through",
-        "after",
-        "over",
-        "between",
-        "out",
-        "against",
-        "during",
-        "without",
-        "before",
-        "under",
-        "around",
-        "among",
-        "and",
-        "or",
-        "but",
-        "if",
-        "because",
-        "so",
-        "than",
-        "too",
-        "very",
-        "not",
-        "no",
-        "nor",
-        "also",
-        "then",
-        "there",
-        "here",
-    }
+    _STOP_LEMMAS: set[str] = STOP_LEMMAS
 
     _BASIC_LEMMAS: set[str] = {
         "about",
@@ -510,50 +421,10 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
 
         入力文字列の前後に存在する Markdown のコードフェンスを取り除く。
         """
-        t = str(text or "").strip()
-        if t.startswith("```"):
-            # 先頭フェンス（言語指定を含む行）を除去
-            t2 = t[3:]
-            nl = t2.find("\n")
-            if nl != -1:
-                t2 = t2[nl + 1 :]
-            else:
-                t2 = t2
-            # 末尾フェンスを除去
-            if t2.endswith("```"):
-                t2 = t2[:-3]
-            t = t2.strip()
-        return t
+        return strip_code_fences(text, prefer_json_object=False)
 
     def _post_filter_lemmas(self, raw: list[str]) -> list[str]:
-        uniq: list[str] = []
-        seen: set[str] = set()
-        for t in raw:
-            s = (t or "").strip()
-            if not s:
-                continue
-            if " " in s:
-                key = s.lower()
-                if key not in seen:
-                    uniq.append(s)
-                    seen.add(key)
-                continue
-            token = s.strip()
-            if not all(ch.isalpha() or ch in {"-", "'"} for ch in token):
-                continue
-            low = token.lower()
-            if low in self._STOP_LEMMAS:
-                continue
-            if low in self._BASIC_LEMMAS:
-                continue
-            if len(token) <= 2 and not (token.isupper() and 2 <= len(token) <= 4):
-                continue
-            key = low
-            if key not in seen:
-                norm = token if token.isupper() else low
-                uniq.append(norm)
-                seen.add(key)
-        return uniq
+        return filter_article_lemmas(raw, basic_lemmas=self._BASIC_LEMMAS)
 
     def _link_or_create_wordpacks_state(
         self, lemmas: list[str]
@@ -842,8 +713,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
 
             def _parse_lemmas_json(raw: str) -> list[str]:
                 try:
-                    cleaned = self._strip_code_fences(str(raw))
-                    data = json.loads(cleaned)
+                    data = parse_json_response(str(raw), prefer_json_object=False)
                     if isinstance(data, list):
                         return [str(x) for x in data]
                     if isinstance(data, dict) and isinstance(data.get("lemmas"), list):

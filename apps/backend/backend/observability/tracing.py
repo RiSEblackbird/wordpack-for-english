@@ -4,8 +4,8 @@ import time
 from contextlib import contextmanager
 from typing import Any, ContextManager
 
-from .config import settings
-from .logging import logger
+from ..config import settings
+from ..logging import logger
 
 try:  # pragma: no cover - optional dependency in tests
     from langfuse import Langfuse

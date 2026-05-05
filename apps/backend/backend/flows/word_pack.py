@@ -3,11 +3,13 @@ from __future__ import annotations
 """WordPack 生成フロー。backend.providers のモジュラ構造を前提に動作する。"""
 
 import json
-import re
 from typing import Any
 
 from . import create_state_graph
 
+from ..infrastructure.llm.json_response_parser import parse_json_response
+from ..infrastructure.llm.prompts.examples import build_examples_prompt
+from ..infrastructure.llm.prompts.wordpack import build_wordpack_prompt
 from ..models.word import (
     DEFAULT_ETYMOLOGY_PLACEHOLDER,
     WordPack,
@@ -29,57 +31,6 @@ from ..sense_title import choose_sense_title
 
 
 # --- 例文生成プロンプト: Notes 分割（共通/カテゴリ別） ---
-def _examples_common_notes_text() -> str:
-    """カテゴリ共通の Notes。カテゴリ固有の規定は含めない。"""
-    return (
-        "注意事項:\n"
-        "- gloss_ja / definition_ja / nuances_ja / grammar_ja / notes_ja は日本語。\n"
-        "- もし対象語が名詞（一般名詞/固有名詞）や専門用語である場合、\n"
-        "  term_overview_ja（3〜5文の概要）と term_core_ja（3〜5文の本質）を必ず日本語で記述する。\n"
-        "  名詞以外（動詞/形容詞など）の場合、これら2つのキーは省略してよい。\n"
-        "- 例文は自然で、約50語（±5語）の英文にする。各英例文には必ず対象語（lemma）を含める。\n"
-        "- 本リクエストでは Target category のみを生成し、件数は末尾の Override 指示に厳密に従う。\n"
-        "- 各例文の grammar_ja は2段落の詳細解説にする：\n"
-        "  1) 品詞分解：形態素/句を『／』で区切り、語の後に【品詞/統語役割】を付す。必要に応じて句の内部構造も『＝』で示す（例：I【代/主】／sent【動/過去】／the documents【名/目】／via email【前置詞句＝via(前)+email(名)：手段】／to ensure quick delivery【不定詞句＝to+ensure(動)+quick(形)+delivery(名)：目的】）。\n"
-        "  2) 解説：文の核（S/V/O/C）、修飾関係（手段/目的/時/理由など）、冠詞・可算/不可算の扱い等を日本語で簡潔に説明。\n"
-        "- 『動詞+前置詞』のような表層的ラベルだけの説明は禁止。具体的に機能・役割まで述べる。\n"
-    )
-
-
-def _examples_category_notes_text(category: ExampleCategory) -> str:
-    """カテゴリ固有の Notes（対象カテゴリのみに適用）。"""
-    base_map: dict[ExampleCategory, str] = {
-        ExampleCategory.Dev: (
-            "カテゴリ別ガイドライン（Target のみに適用）：\n"
-            "- Dev: ソフトウェア開発の文脈。実務的で具体、学術調は避ける。メジャーな題材だけでなく、マイナーな題材も含める。\n"
-        ),
-        ExampleCategory.CS: (
-            "カテゴリ別ガイドライン（Target のみに適用）：\n"
-            "- CS: 計算機科学の学術文脈。精密・中立・フォーマル。メジャーな題材だけでなく、マイナーな題材も含める。\n"
-        ),
-        ExampleCategory.LLM: (
-            "カテゴリ別ガイドライン（Target のみに適用）：\n"
-            "- LLM: 機械学習/LLM 文脈。用語は技術的/学術的に正確、マーケ調は避ける。メジャーな題材だけでなく、マイナーな題材も含める。\n"
-        ),
-        ExampleCategory.Business: (
-            "カテゴリ別ガイドライン（Target のみに適用）：\n"
-            "- Business: ビジネス文脈（関係者/指標/KPI/スケジュール/トレードオフ/調整/戦略/財務/マーケティング）。丁寧で簡潔、スラング禁止。メジャーな題材だけでなく、マイナーな題材も含める。\n"
-        ),
-        ExampleCategory.Common: (
-            "カテゴリ別ガイドライン（Target のみに適用）：\n"
-            "- Common: とても様々な日常会話（友人/同僚とのチャット・通話/待ち合わせ/日常の小さな出来事/小さなやり取り）。ビジネス/過度なフォーマル語彙は避け、軽い口語を適度に用いる（下品表現は不可）。\n"
-        ),
-    }
-    extra_common: str = (
-        "- Common の英例文は“ビジネス英語ではなく”カジュアルな日常会話のトーンで。友達/家族/同僚との軽いチャット想定。丁寧すぎる表現やフォーマルな語彙（therefore, thus, regarding, via など）は避け、口語（gonna, kinda, hey などは過度に使いすぎない範囲で可）、よくあるシーン（メッセ/通話/待ち合わせ/日常の小さな出来事）を取り入れる。\n"
-        "- Common は短い感嘆や相づち・依頼も自然に含めてよい（例: Could you shoot me a text?, Mind sending me the link?）。ただしスラングや下品な表現は避ける。\n"
-    )
-    text = base_map.get(category, "")
-    if category is ExampleCategory.Common:
-        text += extra_common
-    return text
-
-
 class WordPackFlow:
     """Word pack generation flow (no dummy outputs).
 
@@ -156,82 +107,11 @@ class WordPackFlow:
         citations: list[Citation] = []
         llm_data: dict[str, Any] | None = None
 
-        def _strip_code_fences(text: str) -> str:
-            t = text.strip()
-            # ```json ... ``` を除去
-            t = re.sub(r"^```(?:json)?\s*", "", t, flags=re.IGNORECASE)
-            t = re.sub(r"```\s*$", "", t)
-            # 先頭の最初の { から末尾の最後の } までを抜き出し
-            m1 = t.find("{")
-            m2 = t.rfind("}")
-            if m1 != -1 and m2 != -1 and m2 > m1:
-                return t[m1 : m2 + 1]
-            return t
-
-        def _sanitize_control_chars(text: str) -> str:
-            """JSON 文字列リテラル内に素で含まれた制御文字 (U+0000〜U+001F) を \\uXXXX に正規化する。
-
-            目的: OpenAI などの応答がコードフェンス外し後も未エスケープの制御文字を含み、
-                 json.loads で "Invalid control character" を起こすケースを回避する。
-            """
-            if not text:
-                return text
-            out_chars: list[str] = []
-            in_string = False
-            escaped = False
-            for ch in text:
-                if in_string:
-                    if escaped:
-                        out_chars.append(ch)
-                        escaped = False
-                        continue
-                    if ch == "\\":
-                        out_chars.append(ch)
-                        escaped = True
-                        continue
-                    if ch == '"':
-                        out_chars.append(ch)
-                        in_string = False
-                        continue
-                    code = ord(ch)
-                    if 0 <= code <= 0x1F:
-                        out_chars.append(f"\\u{code:04x}")
-                    else:
-                        out_chars.append(ch)
-                else:
-                    out_chars.append(ch)
-                    if ch == '"' and not escaped:
-                        in_string = True
-                        escaped = False
-            return "".join(out_chars)
-
         # OpenAI LLM を使用して語の詳細情報を生成
         try:
             if self.llm is not None and hasattr(self.llm, "complete"):
                 logger.info("wordpack_llm_prompt_built", lemma=lemma)
-                prompt = (
-                    "あなたは辞書編集者である。必ず JSON オブジェクト1件のみを返し、説明文は書かないこと。\n"
-                    "対象語: "
-                    f"{lemma}\n\n"
-                    "スキーマ（キーと型は完全一致させること）:\n"
-                    "{\n"
-                    '  "senses": [ { "id": "s1", "gloss_ja": "...", "definition_ja": "...", "nuances_ja": "...", "patterns": ["..."], "synonyms": ["..."], "antonyms": ["..."], "register": "...", "notes_ja": "...", "term_overview_ja": "...", "term_core_ja": "..." } ],\n'
-                    '  "sense_title": "10文字前後で語義全体の見出しになる短い日本語タイトル",\n'
-                    '  "collocations": {\n'
-                    '    "general": { "verb_object": ["..."], "adj_noun": ["..."], "prep_noun": ["..."] },\n'
-                    '    "academic": { "verb_object": ["..."], "adj_noun": ["..."], "prep_noun": ["..."] }\n'
-                    "  },\n"
-                    '  "contrast": [ { "with": "...", "diff_ja": "..." } ],\n'
-                    '  "etymology": { "note": "...", "confidence": "low|medium|high" },\n'
-                    '  "study_card": "1文の要点(日本語)",\n'
-                    '  "pronunciation": { "ipa_RP": "/.../" }\n'
-                    "}\n"
-                    "注意事項:\n"
-                    "- gloss_ja / definition_ja / nuances_ja / notes_ja は日本語。\n"
-                    "- もし対象語が名詞（一般名詞/固有名詞）や専門用語である場合、\n"
-                    "  term_overview_ja（3〜5文の概要）と term_core_ja（3〜5文の本質）を必ず日本語で記述する。\n"
-                    "  名詞以外（動詞/形容詞など）の場合、これら2つのキーは省略してよい。\n"
-                )
+                prompt = build_wordpack_prompt(lemma)
 
                 out = self.llm.complete(prompt)  # type: ignore[attr-defined]
                 logger.info(
@@ -240,11 +120,8 @@ class WordPackFlow:
                     output_chars=len(out or ""),
                 )
                 if isinstance(out, str) and out.strip():
-                    raw = _strip_code_fences(out)
-                    # 制御文字の未エスケープで失敗するケースを事前に回避
-                    raw = _sanitize_control_chars(raw)
                     try:
-                        llm_data = json.loads(raw)
+                        llm_data = parse_json_response(out)
                         logger.info(
                             "wordpack_llm_json_parsed",
                             lemma=lemma,
@@ -608,31 +485,7 @@ class WordPackFlow:
         - 例文スキーマは examples 配列のみ
         - 件数は既定の記述を尊重しつつ、最後に count 件のオーバーライド制約を追加
         """
-        # 英語ヘッダ＋スキーマの枠は "正" の冒頭に揃える
-        header = (
-            "あなたは辞書編集者である。必ず JSON オブジェクト1件のみを返し、説明文は書かないこと。\n"
-            "対象語: "
-            f"{lemma}\n\n"
-            "スキーマ（キーと型は完全一致させること）:\n"
-            "{\n"
-            '  "examples": [ { "en": "...", "ja": "...", "grammar_ja": "..." } ]\n'
-            "}\n"
-        )
-
-        # Notes を共通とカテゴリ別に分割
-        notes_common = _examples_common_notes_text()
-        category_notes = _examples_category_notes_text(category)
-        enforce = "カテゴリ別ガイドラインは Target category のみに適用すること。\n"
-
-        # カテゴリを明示し、このリクエストでは当該カテゴリのみ生成する旨を指定
-        # 件数は最後に厳密指定（正の文言は保持しつつ上書き制約）
-        tail = (
-            f"対象カテゴリ: {category.value}\n"
-            "出力は JSON オブジェクト1件に厳密に限定し、説明文やコードフェンスを含めないこと。\n"
-            f"上書き指示: 例文数は必ず {count} 件とする。\n"
-        )
-
-        prompt = header + notes_common + category_notes + enforce + tail
+        prompt = build_examples_prompt(lemma, category, count)
         # プロンプト長だけをログ（全文は Langfuse オプションで別途制御）
         try:
             logger.info(
@@ -647,60 +500,9 @@ class WordPackFlow:
         return prompt
 
     def _parse_examples_json(self, raw: str) -> list[dict[str, str]]:
-        import json as _json
-        import re as _re
-
-        def _strip_code_fences(text: str) -> str:
-            t = text.strip()
-            t = _re.sub(r"^```(?:json)?\\s*", "", t, flags=_re.IGNORECASE)
-            t = _re.sub(r"```\\s*$", "", t)
-            # 先頭の { から末尾の } のみを抜き出す（過剰出力の保険）
-            m1 = t.find("{")
-            m2 = t.rfind("}")
-            if m1 != -1 and m2 != -1 and m2 > m1:
-                t = t[m1 : m2 + 1]
-            return t.strip()
-
-        def _sanitize_control_chars(text: str) -> str:
-            # JSON 文字列リテラル内に素で含まれた制御文字（U+0000〜U+001F）のみを \uXXXX に正規化する。
-            if not text:
-                return text
-            out_chars: list[str] = []
-            in_string = False
-            escaped = False
-            for ch in text:
-                if in_string:
-                    if escaped:
-                        out_chars.append(ch)
-                        escaped = False
-                        continue
-                    if ch == "\\":
-                        out_chars.append(ch)
-                        escaped = True
-                        continue
-                    if ch == '"':
-                        out_chars.append(ch)
-                        in_string = False
-                        continue
-                    code = ord(ch)
-                    if 0 <= code <= 0x1F:
-                        out_chars.append(f"\\u{code:04x}")
-                    else:
-                        out_chars.append(ch)
-                else:
-                    out_chars.append(ch)
-                    if ch == '"' and not escaped:
-                        in_string = True
-                        escaped = False
-            return "".join(out_chars)
-
-        # 1) フェンス除去
-        text = _strip_code_fences(raw or "")
-        # 2) 制御文字を \uXXXX に正規化（Invalid control character を回避）
-        text = _sanitize_control_chars(text)
         try:
-            obj = _json.loads(text)
-        except _json.JSONDecodeError as exc:
+            obj = parse_json_response(raw or "", prefer_json_object=False)
+        except json.JSONDecodeError as exc:
             # LLM からの出力が JSON として壊れている場合は、上流に 500 を伝播させずに
             # 「例文ゼロ」として扱う。呼び出し側では len(items) < required で 502 等へ
             # マッピングされる設計のため、ここではログのみ残して空配列を返す。
@@ -708,7 +510,7 @@ class WordPackFlow:
                 "wordpack_examples_json_parse_failed",
                 error=str(exc),
                 error_class=exc.__class__.__name__,
-                raw_preview=text[:200],
+                raw_preview=str(raw or "")[:200],
             )
             return []
         except Exception as exc:  # pragma: no cover - defensive guard
@@ -716,7 +518,7 @@ class WordPackFlow:
                 "wordpack_examples_json_parse_failed",
                 error=str(exc),
                 error_class=exc.__class__.__name__,
-                raw_preview=text[:200],
+                raw_preview=str(raw or "")[:200],
             )
             return []
         if isinstance(obj, list):
@@ -727,123 +529,44 @@ class WordPackFlow:
         logger.warning(
             "wordpack_examples_json_invalid_shape",
             obj_type=type(obj).__name__,
-            raw_preview=text[:200],
+            raw_preview=str(raw or "")[:200],
         )
         return []
 
     def generate_examples_for_categories(
         self, lemma: str, plan: dict[ExampleCategory, int]
     ) -> dict[ExampleCategory, list[Examples.ExampleItem]]:
-        """カテゴリごとの要求数に従って例文を生成する（LangGraph相当の逐次計画、フォールバック実装あり）。"""
-        # 生成結果
+        """カテゴリごとの要求数に従って例文を生成する。
+
+        WordPack 本体の生成フローは LangGraph 初期化を維持するが、例文生成は
+        カテゴリごとの独立した LLM 呼び出しであり、逐次実行の方が停止条件を明確に保てる。
+        """
         results: dict[ExampleCategory, list[Examples.ExampleItem]] = {
             k: [] for k in plan.keys()
         }
+        model_name = str(self._llm_info.get("model") or "").strip() or None
+        params_str = str(self._llm_info.get("params") or "").strip() or None
 
-        # LangGraph が利用可能なら軽量なノードを組み立て、失敗したら順次実行
-        try:
-            graph = create_state_graph()
-            state: dict[str, object] = {
-                "queue": [(k, int(v)) for k, v in plan.items()],
-                "lemma": lemma,
-                "outputs": [],
-            }
-
-            def _generate_node(s: dict[str, object]) -> dict[str, object]:
-                q: list[tuple[ExampleCategory, int]] = s.get("queue", [])  # type: ignore[assignment]
-                if not q:
-                    return s
-                cat, num = q.pop(0)
-                prompt = self._build_examples_prompt(lemma, cat, num)
-                out = self.llm.complete(prompt) if self.llm is not None else "{}"  # type: ignore[attr-defined]
-                parsed = self._parse_examples_json(
-                    out if isinstance(out, str) else "{}"
-                )
-
-                # メタ付与
-                def _llm_meta_values() -> tuple[str | None, str | None]:
-                    try:
-                        return (
-                            str(self._llm_info.get("model") or "").strip() or None,
-                            str(self._llm_info.get("params") or "").strip() or None,
-                        )
-                    except Exception:
-                        return (None, None)
-
-                m, p = _llm_meta_values()
-                items: list[Examples.ExampleItem] = []
-                for it in parsed[:num]:
-                    en = str(it.get("en") or "").strip()
-                    ja = str(it.get("ja") or "").strip()
-                    if not en or not ja:
-                        continue
-                    grammar_ja = str(it.get("grammar_ja") or "").strip() or None
-                    items.append(
-                        Examples.ExampleItem(
-                            en=en,
-                            ja=ja,
-                            grammar_ja=grammar_ja,
-                            category=cat,
-                            llm_model=m,
-                            llm_params=p,
-                        )
+        for cat, num in plan.items():
+            prompt = self._build_examples_prompt(lemma, cat, int(num))
+            out = self.llm.complete(prompt) if self.llm is not None else "{}"  # type: ignore[attr-defined]
+            parsed = self._parse_examples_json(out if isinstance(out, str) else "{}")
+            items: list[Examples.ExampleItem] = []
+            for it in parsed[: int(num)]:
+                en = str(it.get("en") or "").strip()
+                ja = str(it.get("ja") or "").strip()
+                if not en or not ja:
+                    continue
+                grammar_ja = str(it.get("grammar_ja") or "").strip() or None
+                items.append(
+                    Examples.ExampleItem(
+                        en=en,
+                        ja=ja,
+                        grammar_ja=grammar_ja,
+                        category=cat,
+                        llm_model=model_name,
+                        llm_params=params_str,
                     )
-                s.setdefault("outputs", []).append((cat, items))  # type: ignore[assignment]
-                return s
-
-            # 可能なAPIに合わせてノードを追加
-            try:
-                graph.add_node("generate", _generate_node)  # type: ignore[attr-defined]
-                graph.set_entry_point("generate")  # type: ignore[attr-defined]
-                # 自己ループでキューが空になるまで
-                graph.add_edge("generate", "generate")  # type: ignore[attr-defined]
-                compiled = graph.compile()  # type: ignore[attr-defined]
-                out_state = compiled.invoke(state)  # type: ignore[attr-defined]
-                outs = (
-                    out_state.get("outputs", [])
-                    if isinstance(out_state, dict)
-                    else state.get("outputs", [])
                 )
-            except Exception:
-                # グラフAPI不一致時は順次実行にフォールバック
-                outs = []
-                s = state
-                while s.get("queue"):
-                    s = _generate_node(s)  # type: ignore[assignment]
-                outs = s.get("outputs", [])
-        except Exception:
-            # グラフ初期化に失敗した場合の安全フォールバック（順次）
-            outs = []
-            for cat, num in plan.items():
-                prompt = self._build_examples_prompt(lemma, cat, num)
-                out = self.llm.complete(prompt) if self.llm is not None else "{}"  # type: ignore[attr-defined]
-                parsed = self._parse_examples_json(
-                    out if isinstance(out, str) else "{}"
-                )
-                # メタ
-                model_name = str(self._llm_info.get("model") or "").strip() or None
-                params_str = str(self._llm_info.get("params") or "").strip() or None
-                items: list[Examples.ExampleItem] = []
-                for it in parsed[:num]:
-                    en = str(it.get("en") or "").strip()
-                    ja = str(it.get("ja") or "").strip()
-                    if not en or not ja:
-                        continue
-                    grammar_ja = str(it.get("grammar_ja") or "").strip() or None
-                    items.append(
-                        Examples.ExampleItem(
-                            en=en,
-                            ja=ja,
-                            grammar_ja=grammar_ja,
-                            category=cat,
-                            llm_model=model_name,
-                            llm_params=params_str,
-                        )
-                    )
-                outs.append((cat, items))
-
-        # 結果反映
-        for cat, items in outs:  # type: ignore[assignment]
-            if cat in results:
-                results[cat] = items
+            results[cat] = items
         return results

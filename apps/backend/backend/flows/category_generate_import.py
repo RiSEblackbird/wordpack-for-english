@@ -16,7 +16,10 @@ from ..models.word import ExampleCategory, WordPack
 from ..observability import span
 from ..providers import get_llm_provider
 from ..sense_title import choose_sense_title
-from ..store import store
+from ..store import store as _default_store
+from ..store.proxy import CurrentStoreProxy
+
+store = CurrentStoreProxy(_default_store)
 
 
 class CategoryGenerateAndImportFlow:

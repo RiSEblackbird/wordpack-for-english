@@ -1,14 +1,32 @@
 import json
-from datetime import UTC, datetime
 """Word エンドポイント。backend.providers パッケージ経由で LLM を取得する。"""
 
-from functools import partial
-from typing import Any, Callable, Mapping, Optional
+from typing import Any, Optional
 
-import anyio  # オフロード用
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from ..application.wordpack.create_empty_wordpack import build_empty_wordpack
+from ..application.wordpack.errors import handle_flow_runtime_error
+from ..application.wordpack.generate_wordpack import (
+    build_llm_info,
+    get_override_value,
+    run_wordpack_flow,
+)
+from ..application.wordpack.guest_public import update_guest_public_flag
+from ..application.wordpack.lookup_wordpack import (
+    WordLookupResponse,
+    build_lookup_response,
+)
+from ..application.wordpack.regenerate_jobs import (
+    RegenerateJob,
+    _regenerate_jobs,
+    _regenerate_lock,
+    enqueue_regenerate_job,
+    get_regenerate_job,
+)
+from ..application.wordpack import regenerate_jobs as regenerate_jobs_module
+from ..application.wordpack.study_progress import study_progress_increments
 from ..config import settings
 from ..flows.word_pack import WordPackFlow
 from ..id_factory import generate_word_pack_id
@@ -16,7 +34,6 @@ from ..auth import get_current_user, resolve_guest_session_cookie
 from ..providers import get_llm_provider
 from ..logging import logger
 from ..models.word import (
-    DEFAULT_ETYMOLOGY_PLACEHOLDER,
     WordPack,
     ExampleCategory,
     ExampleListItem,
@@ -37,162 +54,11 @@ from ..models.word import (
     ExampleStudyProgressResponse,
     _validate_lemma,
 )
-from ..store import store
-from ..sense_title import choose_sense_title
-import asyncio
-from uuid import uuid4
-from typing import Literal
+from ..store import store as _default_store
+from ..store.proxy import CurrentStoreProxy
 
 router = APIRouter(tags=["word"])
-
-
-# --- Regenerate async job registry (in-memory) ---
-class RegenerateJob(BaseModel):
-    job_id: str
-    word_pack_id: str
-    status: Literal["pending", "running", "succeeded", "failed"]
-    result: WordPack | None = None
-    error: str | None = None
-
-
-_regenerate_jobs: dict[str, RegenerateJob] = {}
-_regenerate_lock = asyncio.Lock()
-
-
-class WordLookupExample(BaseModel):
-    """WordPack 内の例文をレスポンス用に整形するモデル。"""
-
-    en: str
-    ja: str
-    grammar_ja: str | None = None
-    category: ExampleCategory
-
-
-class WordLookupResponse(BaseModel):
-    """`GET /api/word` の返却スキーマ。"""
-
-    lemma: str
-    sense_title: str | None
-    definition: str | None
-    word_pack_id: str | None = None
-    examples: list[WordLookupExample] = Field(default_factory=list)
-    llm_model: str | None = None
-    llm_params: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
-def _get_override_value(source: object, key: str) -> Any:
-    """Pydantic モデル/辞書の双方から値を取り出す内部ユーティリティ。"""
-
-    if hasattr(source, key):
-        return getattr(source, key)
-    if isinstance(source, Mapping):
-        return source.get(key)
-    return None
-
-
-def build_llm_info(overrides: object) -> dict[str, Any]:
-    """LLM の使用モデル名と主要パラメータを抽出する。
-
-    backend.providers の階層化後も API 利用者に返す情報形式を変えないため、
-    ここで辞書化してメタ情報を統一している。
-    """
-
-    # なぜ: LLM オプションを追加するたびに各エンドポイントへ重複修正が波及するのを防ぐため、
-    #       build_llm_info でメタ情報の組み立てを一元化している。将来オプションが増えたら
-    #       ここを調整すればよい。
-    model = _get_override_value(overrides, "model") or settings.llm_model
-    params: str | None = None
-    try:
-        parts: list[str] = []
-        temperature = _get_override_value(overrides, "temperature")
-        if temperature is not None:
-            parts.append(f"temperature={float(temperature):.2f}")
-        reasoning = _get_override_value(overrides, "reasoning") or {}
-        if isinstance(reasoning, Mapping):
-            effort = reasoning.get("effort")
-            if effort:
-                parts.append(f"reasoning.effort={effort}")
-        text_opts = _get_override_value(overrides, "text") or {}
-        if isinstance(text_opts, Mapping):
-            verbosity = text_opts.get("verbosity")
-            if verbosity:
-                parts.append(f"text.verbosity={verbosity}")
-        params = ";".join(parts) if parts else None
-    except Exception:
-        params = None
-    return {"model": model, "params": params}
-
-
-def _resolve_http_exception(
-    mapping: Mapping[str, Callable[..., HTTPException]] | None,
-    key: str,
-    **kwargs: Any,
-) -> HTTPException | None:
-    """カスタム HTTPException を生成する。失敗時は None を返す。"""
-
-    if not mapping:
-        return None
-    handler = mapping.get(key)
-    if handler is None:
-        return None
-    try:
-        return handler(**kwargs)
-    except HTTPException as exc:
-        return exc
-    except Exception as exc:  # 生成処理自体が失敗してもログだけ残し既定処理へ委譲
-        logger.warning(
-            "wordpack_error_mapping_failed",
-            key=key,
-            error=str(exc),
-        )
-        return None
-
-
-def _extract_definition_from_senses(data: Mapping[str, Any]) -> str | None:
-    """語義配列から定義/グロスを優先順に抽出する。"""
-
-    senses = data.get("senses") or []
-    for sense in senses if isinstance(senses, list) else []:
-        if not isinstance(sense, Mapping):
-            continue
-        definition = str(sense.get("definition_ja") or "").strip()
-        if definition:
-            return definition
-        gloss = str(sense.get("gloss_ja") or "").strip()
-        if gloss:
-            return gloss
-    return None
-
-
-def _collect_examples_for_lookup(data: Mapping[str, Any]) -> list[WordLookupExample]:
-    """WordPack の例文をカテゴリ付きで平坦化する。"""
-
-    examples: list[WordLookupExample] = []
-    raw_examples = data.get("examples") or {}
-    if not isinstance(raw_examples, Mapping):
-        return examples
-
-    for category, items in raw_examples.items():
-        if not isinstance(items, list):
-            continue
-        try:
-            cat_enum = ExampleCategory(category)
-        except ValueError:
-            continue
-        for item in items:
-            if not isinstance(item, Mapping):
-                continue
-            examples.append(
-                WordLookupExample(
-                    en=str(item.get("en") or ""),
-                    ja=str(item.get("ja") or ""),
-                    grammar_ja=(item.get("grammar_ja") or None),
-                    category=cat_enum,
-                )
-            )
-    return examples
+store = CurrentStoreProxy(_default_store)
 
 
 async def _require_authenticated_user(request: Request) -> dict[str, str]:
@@ -203,169 +69,6 @@ async def _require_authenticated_user(request: Request) -> dict[str, str]:
     if settings.disable_session_auth:
         return {"mode": "test"}
     return await get_current_user(request)
-
-
-def _handle_flow_runtime_error(
-    exc: RuntimeError,
-    *,
-    lemma: str,
-    http_error_mapping: Mapping[str, Callable[..., HTTPException]] | None,
-) -> None:
-    """Flow 実行失敗を HTTPException にマップする。"""
-
-    msg = str(exc)
-    low = msg.lower()
-    if "failed to parse llm json" in low and settings.strict_mode:
-        custom_exc = _resolve_http_exception(http_error_mapping, "llm_json_parse", lemma=lemma)
-        if custom_exc:
-            raise custom_exc from exc
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "message": "LLM output JSON parse failed (strict mode)",
-                "reason_code": "LLM_JSON_PARSE",
-                "diagnostics": {"lemma": lemma},
-                "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
-            },
-        ) from exc
-
-    if "reason_code=" in msg:
-        if "reason_code=TIMEOUT" in msg:
-            raise HTTPException(
-                status_code=504,
-                detail={
-                    "message": "LLM request timed out",
-                    "reason_code": "TIMEOUT",
-                    "hint": "LLM_TIMEOUT_MS を増やす（例: 90000）、HTTP全体のタイムアウトは +5秒。リトライも検討。",
-                },
-            ) from exc
-        if "reason_code=RATE_LIMIT" in msg:
-            raise HTTPException(
-                status_code=429,
-                detail={
-                    "message": "LLM provider rate limited",
-                    "reason_code": "RATE_LIMIT",
-                    "hint": "少し待って再試行。モデル/アカウントのレート制限を確認。リトライ上限を増やす。",
-                },
-            ) from exc
-        if (
-            "reason_code=AUTH" in msg
-            or "invalid api key" in low
-            or "unauthorized" in low
-        ):
-            raise HTTPException(
-                status_code=401,
-                detail={
-                    "message": "LLM provider authentication failed",
-                    "reason_code": "AUTH",
-                    "hint": "OPENAI_API_KEY を確認（有効/権限/課金）。コンテナ環境変数に反映されているか確認。",
-                },
-            ) from exc
-        if "reason_code=PARAM_UNSUPPORTED" in msg:
-            raise HTTPException(
-                status_code=400,
-                detail={
-                    "message": "LLM parameter not supported by model",
-                    "reason_code": "PARAM_UNSUPPORTED",
-                    "hint": "モデルの仕様変更により 'max_tokens' 非対応の可能性。最新SDK/パラメータを使用してください。",
-                },
-            ) from exc
-
-    reason_code = getattr(exc, "reason_code", None)
-    diagnostics = getattr(exc, "diagnostics", None)
-    if reason_code == "EMPTY_CONTENT":
-        custom_exc = _resolve_http_exception(
-            http_error_mapping,
-            "empty_content",
-            lemma=lemma,
-            diagnostics=diagnostics or {},
-        )
-        if custom_exc:
-            raise custom_exc from exc
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "message": "WordPack generation returned empty content (no senses/examples)",
-                "reason_code": reason_code,
-                "diagnostics": diagnostics or {},
-                "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
-            },
-        ) from exc
-
-
-async def run_wordpack_flow(
-    *,
-    lemma: str,
-    req_opts: object,
-    scope: Any,
-    http_error_mapping: Mapping[str, Callable[..., HTTPException]] | None = None,
-) -> tuple[WordPack, dict[str, Any]]:
-    """WordPackFlow を構築して実行し、生成結果と LLM メタを返す。
-
-    backend.providers の LLM パッケージ化に伴い、ここで `get_llm_provider` を
-    呼び出してから Flow へ依存性注入する設計にそろえている。
-    """
-
-    # なぜ: Flow 実行・例外分類・LLM メタ設定を単一関数にまとめておくことで、
-    #       将来の流用時に1箇所の修正で全エンドポイントへ反映できるようにする。
-    llm = get_llm_provider(
-        model_override=_get_override_value(req_opts, "model"),
-        temperature_override=_get_override_value(req_opts, "temperature"),
-        reasoning_override=_get_override_value(req_opts, "reasoning"),
-        text_override=_get_override_value(req_opts, "text"),
-    )
-    llm_info = build_llm_info(req_opts)
-    flow = WordPackFlow(chroma_client=None, llm=llm, llm_info=llm_info)
-    try:
-        word_pack = await anyio.to_thread.run_sync(
-            partial(
-                flow.run,
-                lemma,
-                pronunciation_enabled=_get_override_value(req_opts, "pronunciation_enabled")
-                if _get_override_value(req_opts, "pronunciation_enabled") is not None
-                else True,
-                regenerate_scope=scope,
-            )
-        )
-    except RuntimeError as exc:
-        _handle_flow_runtime_error(
-            exc,
-            lemma=lemma,
-            http_error_mapping=http_error_mapping,
-        )
-        raise
-
-    try:
-        setattr(word_pack, "llm_model", llm_info.get("model"))
-        setattr(word_pack, "llm_params", llm_info.get("params"))
-    except Exception:
-        pass
-    return word_pack, llm_info
-
-def _build_lookup_response(
-    *,
-    lemma: str,
-    sense_title: str | None,
-    word_pack_id: str | None,
-    word_pack_data: Mapping[str, Any],
-    created_at: str | None,
-    updated_at: str | None,
-) -> WordLookupResponse:
-    """語義と例文をレスポンススキーマへ整形する共通ユーティリティ。"""
-
-    definition = _extract_definition_from_senses(word_pack_data)
-    examples = _collect_examples_for_lookup(word_pack_data)
-    return WordLookupResponse(
-        lemma=lemma,
-        sense_title=str(sense_title or word_pack_data.get("sense_title") or "") or None,
-        definition=definition,
-        word_pack_id=word_pack_id,
-        examples=examples,
-        llm_model=word_pack_data.get("llm_model"),
-        llm_params=word_pack_data.get("llm_params"),
-        created_at=created_at,
-        updated_at=updated_at,
-    )
 
 
 @router.get("/", response_model=WordLookupResponse, response_model_exclude_none=True)
@@ -399,7 +102,7 @@ async def lookup_word(
             data_dict = json.loads(data_json) if data_json else {}
         except json.JSONDecodeError:
             data_dict = {}
-        return _build_lookup_response(
+        return build_lookup_response(
             lemma=lemma_from_store,
             sense_title=stored_sense_title,
             word_pack_id=word_pack_id,
@@ -408,32 +111,16 @@ async def lookup_word(
             updated_at=updated_at,
         )
 
-    # なぜ: GET /api/word は閲覧専用に寄せ、生成は POST 系 API に集約する。
-    # 認証済みユーザー（user または user_id が存在する）はゲスト Cookie が残存していても
-    # ゲスト扱いせず、未登録語に対して 404 を返す（生成は POST API で実施）。
-    has_authenticated_user = bool(
-        getattr(request.state, "user", None) or getattr(request.state, "user_id", None)
-    )
-
-    if has_authenticated_user:
-        # 認証済みユーザーは未登録語に対して 404 を返す
-        raise HTTPException(status_code=404, detail="WordPack not found")
-
-    # 認証済みユーザーが存在しない場合、ゲストモードをチェック
     is_guest = bool(getattr(request.state, "guest", False))
-
-    # なぜ: セッション認証が無効化された環境（disable_session_auth=True）でも、
-    #       ゲスト Cookie が存在する場合は読み取り専用として扱い、未登録語の生成を抑止する。
-    #       resolve_guest_session_cookie は副作用として request.state.guest = True を
-    #       設定するため、認証済みユーザーの判定後にのみ呼び出す。
     if not is_guest and resolve_guest_session_cookie(request):
         is_guest = True
-
     if is_guest:
         raise HTTPException(
             status_code=403, detail="Guest mode cannot generate WordPack"
         )
 
+    # なぜ: GET /api/word は閲覧専用エンドポイントであり、
+    #       未登録語の生成・保存は POST 系 API に集約するため。
     raise HTTPException(status_code=404, detail="WordPack not found")
 
 
@@ -457,67 +144,7 @@ async def create_empty_word_pack(
     if not lemma:
         raise HTTPException(status_code=400, detail="lemma is required")
 
-    # 短い日本語の語義タイトルを LLM で生成（説明なし・1行・最大12文字程度）
-    generated_title: str | None = None
-    try:
-        llm = get_llm_provider()
-        prompt = (
-            "次の英語の見出し語に対して、日本語の短い語義タイトルを1つだけ返してください。\n"
-            "条件: 最大12文字、名詞句ベース、日本語のみ、説明文や引用符や記号は不要。\n"
-            "見出し語: "
-            f"{lemma}\n"
-            "出力:"
-        )
-        try:
-            out: str = llm.complete(prompt)  # type: ignore[attr-defined]
-        except Exception as exc:  # LLM 呼出し失敗
-            if settings.strict_mode:
-                raise HTTPException(
-                    status_code=502,
-                    detail={
-                        "message": "LLM failed to generate sense_title (strict mode)",
-                        "reason_code": "LLM_FAILURE",
-                        "diagnostics": {"lemma": lemma, "error": str(exc)[:200]},
-                    },
-                ) from exc
-            out = ""
-        cand = (out or "").strip().splitlines()[0] if isinstance(out, str) else ""
-        # 余分な引用符や記号を簡易除去
-        cand = cand.strip().strip('"').strip("'")
-        if cand:
-            generated_title = cand[:20]
-    except HTTPException:
-        # strict のみ再送出。それ以外はフォールバック
-        raise
-    except Exception:
-        # 非 strict: 静かにフォールバック
-        generated_title = None
-
-    # スキーマ準拠の空WordPackを構築
-    empty_word_pack = WordPack(
-        lemma=lemma,
-        sense_title=(
-            generated_title or choose_sense_title(None, [], lemma=lemma, limit=20)
-        ),
-        pronunciation={
-            "ipa_GA": None,
-            "ipa_RP": None,
-            "syllables": None,
-            "stress_index": None,
-            "linking_notes": [],
-        },
-        senses=[],
-        collocations={
-            "general": {"verb_object": [], "adj_noun": [], "prep_noun": []},
-            "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []},
-        },
-        contrast=[],
-        examples={"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []},
-        etymology={"note": DEFAULT_ETYMOLOGY_PLACEHOLDER, "confidence": "low"},
-        study_card="",
-        citations=[],
-        confidence="low",
-    )
+    empty_word_pack = build_empty_wordpack(lemma)
 
     word_pack_id = generate_word_pack_id()
     store.save_word_pack(word_pack_id, lemma, empty_word_pack.model_dump_json())
@@ -670,27 +297,11 @@ async def update_word_pack_guest_public(
 ) -> WordPackGuestPublicResponse:
     """WordPack単位のゲスト公開フラグを更新する。"""
 
-    metadata = store.get_word_pack_metadata(word_pack_id)
-    if metadata is None:
-        raise HTTPException(status_code=404, detail="WordPack not found")
-
-    now = datetime.now(UTC).isoformat()
-    store.update_word_pack_metadata(
-        word_pack_id,
-        updated_at=now,
-        guest_public=req.guest_public,
-    )
-
-    logger.info(
-        "wordpack_guest_public_updated",
+    return update_guest_public_flag(
+        request=request,
+        repository=store,
         word_pack_id=word_pack_id,
-        user_id=getattr(request.state, "user_id", None),
-        guest_public=req.guest_public,
-    )
-
-    return WordPackGuestPublicResponse(
-        word_pack_id=word_pack_id,
-        guest_public=req.guest_public,
+        req=req,
     )
 
 
@@ -708,12 +319,7 @@ async def update_word_pack_study_progress(
     # kind に応じて加算対象を明示的に切り替える。
     # - checked: 確認のみ。checked_only_count を +1、learned_count は変化なし。
     # - learned: 学習完了。learned_count のみ +1。checked_only_count は「確認止まり」の回数を維持する。
-    if req.kind == "checked":
-        checked_increment = 1
-        learned_increment = 0
-    else:  # req.kind == "learned" のみ通過（Pydantic Literal で保証）
-        checked_increment = 0
-        learned_increment = 1
+    checked_increment, learned_increment = study_progress_increments(req.kind)
     result = store.update_word_pack_study_progress(
         word_pack_id, checked_increment, learned_increment
     )
@@ -808,80 +414,6 @@ async def regenerate_word_pack(
         raise
 
 
-# --- Async regenerate endpoints ---
-async def _run_regenerate_job(
-    job_id: str, word_pack_id: str, req: WordPackRegenerateRequest
-) -> None:
-    """Background coroutine to regenerate WordPack and update job registry."""
-
-    async with _regenerate_lock:
-        job = _regenerate_jobs.get(job_id)
-        if not job:
-            return
-        job.status = "running"
-        _regenerate_jobs[job_id] = job
-    try:
-        result = store.get_word_pack(word_pack_id)
-        if result is None:
-            raise HTTPException(status_code=404, detail="WordPack not found")
-        lemma, _, _, _ = result
-        word_pack, _ = await run_wordpack_flow(
-            lemma=lemma,
-            req_opts=req,
-            scope=req.regenerate_scope,
-            http_error_mapping={
-                "llm_json_parse": lambda *, lemma, **__: HTTPException(
-                    status_code=502,
-                    detail={
-                        "message": "LLM output JSON parse failed (strict mode)",
-                        "reason_code": "LLM_JSON_PARSE",
-                        "diagnostics": {"lemma": lemma},
-                        "hint": "モデル/プロンプトの安定化、text.verbosity を lower に、または strict_mode を無効化して挙動を確認してください。ログの wordpack_llm_json_parse_failed を参照。",
-                    },
-                ),
-                "empty_content": lambda *, lemma, diagnostics, **__: HTTPException(
-                    status_code=502,
-                    detail={
-                        "message": "WordPack regeneration returned empty content (no senses/examples)",
-                        "reason_code": "EMPTY_CONTENT",
-                        "diagnostics": diagnostics or {},
-                        "hint": "LLM_TIMEOUT_MS/LLM_MAX_TOKENS/モデル安定タグを調整してください。ログの wordpack_llm_* を確認。",
-                    },
-                ),
-            },
-        )
-        word_pack_data = word_pack.model_dump_json()
-        store.save_word_pack(word_pack_id, lemma, word_pack_data)
-        job_result = word_pack
-        async with _regenerate_lock:
-            job = _regenerate_jobs.get(job_id)
-            if job:
-                job.status = "succeeded"
-                job.result = job_result
-                _regenerate_jobs[job_id] = job
-        logger.info(
-            "wordpack_regenerate_async_succeeded",
-            word_pack_id=word_pack_id,
-            lemma=lemma,
-            job_id=job_id,
-        )
-    except Exception as exc:
-        err_msg = str(exc)
-        async with _regenerate_lock:
-            job = _regenerate_jobs.get(job_id)
-            if job:
-                job.status = "failed"
-                job.error = err_msg[:500]
-                _regenerate_jobs[job_id] = job
-        logger.error(
-            "wordpack_regenerate_async_failed",
-            word_pack_id=word_pack_id,
-            job_id=job_id,
-            error_type=exc.__class__.__name__,
-            error_message=err_msg[:200],
-        )
-
-
 @router.post(
     "/packs/{word_pack_id}/regenerate/async",
     response_model=RegenerateJob,
@@ -895,22 +427,11 @@ async def enqueue_regenerate_word_pack(
 ) -> RegenerateJob:
     """Enqueue an async regenerate job and return job ID immediately."""
 
-    if store.get_word_pack(word_pack_id) is None:
-        raise HTTPException(status_code=404, detail="WordPack not found")
-    job_id = uuid4().hex
-    job = RegenerateJob(
-        job_id=job_id, word_pack_id=word_pack_id, status="pending", result=None
-    )
-    async with _regenerate_lock:
-        _regenerate_jobs[job_id] = job
-    asyncio.create_task(_run_regenerate_job(job_id, word_pack_id, req))
-    logger.info(
-        "wordpack_regenerate_async_enqueued",
-        word_pack_id=word_pack_id,
-        job_id=job_id,
-        regenerate_scope=req.regenerate_scope,
-    )
-    return job
+    regenerate_jobs_module.store = store
+    regenerate_jobs_module.run_wordpack_flow = run_wordpack_flow
+    regenerate_jobs_module._regenerate_jobs = _regenerate_jobs
+    regenerate_jobs_module._regenerate_lock = _regenerate_lock
+    return await enqueue_regenerate_job(word_pack_id, req)
 
 
 @router.get(
@@ -923,11 +444,9 @@ async def get_regenerate_job_status(
 ) -> RegenerateJob:
     """Return current job status and result when available."""
 
-    async with _regenerate_lock:
-        job = _regenerate_jobs.get(job_id)
-    if job is None or job.word_pack_id != word_pack_id:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    regenerate_jobs_module._regenerate_jobs = _regenerate_jobs
+    regenerate_jobs_module._regenerate_lock = _regenerate_lock
+    return await get_regenerate_job(word_pack_id, job_id)
 
 
 @router.delete(
@@ -1008,10 +527,10 @@ async def generate_examples_for_word_pack(
 
     req = req or ExamplesGenerateRequest()
     llm = get_llm_provider(
-        model_override=_get_override_value(req, "model"),
-        temperature_override=_get_override_value(req, "temperature"),
-        reasoning_override=_get_override_value(req, "reasoning"),
-        text_override=_get_override_value(req, "text"),
+        model_override=get_override_value(req, "model"),
+        temperature_override=get_override_value(req, "temperature"),
+        reasoning_override=get_override_value(req, "reasoning"),
+        text_override=get_override_value(req, "text"),
     )
 
     # 統合フロー（LangGraph駆動）でカテゴリ別の例文を生成して即保存
@@ -1045,7 +564,7 @@ async def generate_examples_for_word_pack(
             "items": items,
         }
     except RuntimeError as exc:
-        _handle_flow_runtime_error(
+        handle_flow_runtime_error(
             exc,
             lemma=lemma,
             http_error_mapping={
@@ -1169,12 +688,7 @@ async def update_example_study_progress(
     """例文単位の確認/学習済みカウントを更新する。"""
 
     # WordPack と同様に、確認操作と学習完了を明確に分離する。
-    if req.kind == "checked":
-        checked_increment = 1
-        learned_increment = 0
-    else:
-        checked_increment = 0
-        learned_increment = 1
+    checked_increment, learned_increment = study_progress_increments(req.kind)
     result = store.update_example_study_progress(
         example_id, checked_increment, learned_increment
     )
