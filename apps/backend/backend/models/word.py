@@ -54,11 +54,6 @@ class WordPackCreateRequest(BaseModel):
     def ensure_lemma_safe(cls, value: str) -> str:
         return _validate_lemma(value)
 
-    @field_validator("model")
-    @classmethod
-    def ensure_model_supported(cls, value: str | None) -> str | None:
-        return ensure_supported_llm_model(value) if value else value
-
 
 class WordPackRequest(BaseModel):
     """Request model for generating a word pack (MVP).
@@ -128,6 +123,11 @@ class WordPackRequest(BaseModel):
     @classmethod
     def ensure_lemma_safe(cls, value: str) -> str:
         return _validate_lemma(value)
+
+    @field_validator("model")
+    @classmethod
+    def ensure_model_supported(cls, value: str | None) -> str | None:
+        return ensure_supported_llm_model(value) if value else value
 
 
 class Sense(BaseModel):
