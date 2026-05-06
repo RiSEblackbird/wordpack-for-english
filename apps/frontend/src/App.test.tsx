@@ -93,7 +93,7 @@ const createMatchMediaMock =
 
 const configSuccess = () =>
   new Response(
-    JSON.stringify({ request_timeout_ms: 60000, llm_model: 'gpt-5-mini' }),
+    JSON.stringify({ request_timeout_ms: 60000, llm_model: 'gpt-5.4-mini' }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },
   );
 
@@ -438,7 +438,7 @@ describe('App navigation', () => {
         }
         return Promise.resolve(
           new Response(
-            JSON.stringify({ request_timeout_ms: 120000, llm_model: 'gpt-auto' }),
+            JSON.stringify({ request_timeout_ms: 120000, llm_model: 'gpt-5.4-mini' }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
           ),
         );
@@ -509,7 +509,7 @@ describe('App navigation', () => {
       await user.keyboard('{Alt>}{2}{/Alt}');
     });
     expect(await screen.findByLabelText('発音を有効化')).toBeInTheDocument();
-    expect(await screen.findByLabelText('temperature')).toBeInTheDocument();
+    expect(screen.queryByLabelText('temperature')).not.toBeInTheDocument();
   });
 
   it('opens the sidebar with the hamburger button and keeps it visible after selecting a tab', async () => {

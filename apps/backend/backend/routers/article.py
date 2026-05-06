@@ -8,11 +8,12 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query, status
 from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..config import settings
 from ..domain.article.lemma_filter import STOP_LEMMAS, filter_article_lemmas
 from ..logging import logger
+from ..llm_models import ensure_supported_llm_model
 from ..models.article import (
     ARTICLE_IMPORT_TEXT_MAX_LENGTH,
     ArticleImportRequest,
@@ -216,9 +217,13 @@ async def delete_article(article_id: str) -> dict[str, str]:
 class CategoryGenerateImportRequest(BaseModel):
     category: ExampleCategory = Field(description="例文カテゴリ")
     model: str | None = None
-    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
     reasoning: dict | None = None
     text: dict | None = None
+
+    @field_validator("model")
+    @classmethod
+    def ensure_model_supported(cls, value: str | None) -> str | None:
+        return ensure_supported_llm_model(value) if value else value
 
 
 @router.post("/generate_and_import")
@@ -230,7 +235,6 @@ async def generate_and_import_examples(
     """
     flow = CategoryGenerateAndImportFlow(
         model=getattr(req, "model", None),
-        temperature=getattr(req, "temperature", None),
         reasoning=getattr(req, "reasoning", None),
         text=getattr(req, "text", None),
     )

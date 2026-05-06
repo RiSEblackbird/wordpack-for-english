@@ -1,5 +1,6 @@
 import React, { useCallback, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
+import { normalizeLlmModel } from './lib/wordpack';
 
 export interface Settings {
   apiBase: string;
@@ -9,7 +10,6 @@ export interface Settings {
   requestTimeoutMs: number;
   // 選択中のLLMモデル（UI全体で共有）。未設定時はサーバの既定を同期。
   model?: string;
-  temperature: number;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   textVerbosity?: 'low' | 'medium' | 'high';
   theme: 'light' | 'dark';
@@ -126,7 +126,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try { return localStorage.getItem('wp.theme') || undefined; } catch { return undefined; }
     })();
     const savedModel = (() => {
-      try { return localStorage.getItem('wp.model') || undefined; } catch { return undefined; }
+      try { return normalizeLlmModel(localStorage.getItem('wp.model')); } catch { return undefined; }
     })();
     const savedTtsPlaybackRate = (() => {
       try {
@@ -164,7 +164,6 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // 初期描画直後のズレを避けるため、保守的に長めの既定値。実値は /api/config で即同期。
       requestTimeoutMs: 360000,
       model: savedModel,
-      temperature: 0.6,
       reasoningEffort: 'minimal',
       textVerbosity: 'medium',
       theme: savedTheme === 'light' ? 'light' : 'dark',
@@ -218,7 +217,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
         const m = (json as any).llm_model;
         if (!aborted && typeof m === 'string' && m) {
-          setSettings((prev) => ({ ...prev, model: prev.model || m }));
+          setSettings((prev) => ({ ...prev, model: prev.model || normalizeLlmModel(m) }));
         }
         if (!aborted) {
           setStatus('ready');
@@ -266,7 +265,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // モデルの永続化
   useEffect(() => {
     if (settings.model) {
-      try { localStorage.setItem('wp.model', settings.model); } catch { /* ignore */ }
+      try { localStorage.setItem('wp.model', normalizeLlmModel(settings.model)); } catch { /* ignore */ }
     }
   }, [settings.model]);
   // 音声再生スピードの永続化

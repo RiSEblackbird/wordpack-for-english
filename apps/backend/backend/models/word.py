@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 import re
 
+from ..llm_models import ensure_supported_llm_model
 from .common import Citation, ConfidenceLevel
 
 
@@ -67,21 +68,24 @@ class WordPackRequest(BaseModel):
                     "lemma": "converge",
                     "pronunciation_enabled": True,
                     "regenerate_scope": "all",
-                    "model": "gpt-4o-mini",
-                    "temperature": 0.6,
+                    "model": "gpt-5.4-mini",
+                    "reasoning": {"effort": "minimal"},
+                    "text": {"verbosity": "medium"},
                 },
                 {
                     "lemma": "converge",
                     "pronunciation_enabled": False,
                     "regenerate_scope": "examples",
-                    "model": "gpt-4o-mini",
-                    "temperature": 0.6,
+                    "model": "gpt-5.4-mini",
+                    "reasoning": {"effort": "minimal"},
+                    "text": {"verbosity": "medium"},
                 },
                 {
                     "lemma": "converge",
                     "regenerate_scope": "collocations",
-                    "model": "gpt-4o-mini",
-                    "temperature": 0.6,
+                    "model": "gpt-5.4-nano",
+                    "reasoning": {"effort": "minimal"},
+                    "text": {"verbosity": "medium"},
                 },
             ],
             "x-schema-version": "0.3.0",
@@ -107,13 +111,6 @@ class WordPackRequest(BaseModel):
         default=None,
         description="LLMモデル名の上書き（未指定なら既定 settings.llm_model）",
     )
-    temperature: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="生成の温度。未指定時は実装既定値を使用",
-    )
-    # gpt-5-mini 等の推論系モデル向けパラメータ
     reasoning: dict | None = Field(
         default=None,
         description="reasoning オプション（例: {effort: minimal|low|medium|high}）",
@@ -126,6 +123,11 @@ class WordPackRequest(BaseModel):
     @classmethod
     def ensure_lemma_safe(cls, value: str) -> str:
         return _validate_lemma(value)
+
+    @field_validator("model")
+    @classmethod
+    def ensure_model_supported(cls, value: str | None) -> str | None:
+        return ensure_supported_llm_model(value) if value else value
 
 
 class Sense(BaseModel):
@@ -493,6 +495,10 @@ class WordPackRegenerateRequest(BaseModel):
         default=None,
         description="LLMモデル名の上書き（未指定なら既定 settings.llm_model）",
     )
-    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
     reasoning: dict | None = Field(default=None)
     text: dict | None = Field(default=None)
+
+    @field_validator("model")
+    @classmethod
+    def ensure_model_supported(cls, value: str | None) -> str | None:
+        return ensure_supported_llm_model(value) if value else value

@@ -176,7 +176,7 @@ def test_upsert_reuses_normalized_id_and_updates_legacy_doc():
             "label": "Legacy",
             "normalized_label": "legacy",
             "sense_title": "existing",
-            "llm_model": "gpt-1",
+            "llm_model": "gpt-5.4-mini",
             "llm_params": "{}",
         }
     )
@@ -191,7 +191,7 @@ def test_upsert_reuses_normalized_id_and_updates_legacy_doc():
 
     assert updated_id == "legacy-id"
     assert lemmas[updated_id]["sense_title"] == "existing"
-    assert lemmas[updated_id]["llm_model"] == "gpt-1"
+    assert lemmas[updated_id]["llm_model"] == "gpt-5.4-mini"
     assert lemmas[updated_id]["normalized_label"] == "legacy"
 
 

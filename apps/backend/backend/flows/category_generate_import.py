@@ -34,13 +34,11 @@ class CategoryGenerateAndImportFlow:
         self,
         *,
         model: Optional[str] = None,
-        temperature: Optional[float] = None,
         reasoning: Optional[dict] = None,
         text: Optional[dict] = None,
     ) -> None:
         self._llm = get_llm_provider(
             model_override=model,
-            temperature_override=temperature,
             reasoning_override=reasoning,
             text_override=text,
         )
@@ -52,7 +50,6 @@ class CategoryGenerateAndImportFlow:
         }
         self._overrides = {
             "model": model,
-            "temperature": temperature,
             "reasoning": reasoning,
             # ArticleImportFlow は text_opts というキー名を採用しているため、ここで変換
             "text_opts": text,
@@ -291,7 +288,6 @@ class CategoryGenerateAndImportFlow:
                     req_payload = ArticleImportRequest(
                         text=str(ex.get("en") or ""),
                         model=self._overrides.get("model"),
-                        temperature=self._overrides.get("temperature"),
                         reasoning=self._overrides.get("reasoning"),
                         text_opts=self._overrides.get("text_opts"),
                         generation_category=category,

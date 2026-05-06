@@ -47,7 +47,7 @@ export const useWordPack = ({
 }: UseWordPackOptions): UseWordPackResult => {
   const { settings } = useSettings();
   const { add: addNotification, update: updateNotification } = useNotifications();
-  const { apiBase, pronunciationEnabled, regenerateScope, requestTimeoutMs, temperature, reasoningEffort, textVerbosity } = settings;
+  const { apiBase, pronunciationEnabled, regenerateScope, requestTimeoutMs, reasoningEffort, textVerbosity } = settings;
 
   const [data, setData] = useState<WordPack | null>(null);
   const [currentWordPackId, setCurrentWordPackId] = useState<string | null>(null);
@@ -75,12 +75,11 @@ export const useWordPack = ({
       ...base,
       ...composeModelRequestFields({
         model,
-        temperature,
         reasoningEffort,
         textVerbosity,
       }),
     }),
-    [model, reasoningEffort, temperature, textVerbosity],
+    [model, reasoningEffort, textVerbosity],
   );
 
   const extractAiMeta = useCallback((pack: WordPack) => {
@@ -326,7 +325,6 @@ export const useWordPack = ({
             pronunciationEnabled,
             regenerateScope,
             requestTimeoutMs,
-            temperature,
             reasoningEffort,
             textVerbosity,
           },
@@ -401,7 +399,6 @@ export const useWordPack = ({
       regenerateScope,
       reasoningEffort,
       requestTimeoutMs,
-      temperature,
       textVerbosity,
       updateNotification,
     ],

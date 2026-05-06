@@ -5,6 +5,8 @@ from pydantic import AliasChoices, Field, PrivateAttr, field_validator, model_va
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources.types import NoDecode
 
+from ..llm_models import DEFAULT_LLM_MODEL
+
 
 _MIN_SESSION_SECRET_KEY_LENGTH = 32
 # ローカル開発環境で `uvicorn` を直接叩くときは 127.0.0.1 のみを信頼する。
@@ -143,7 +145,7 @@ class Settings(BaseSettings):
         description="Embedding service provider / 利用する埋め込みプロバイダ",
     )
     llm_model: str = Field(
-        default="gpt-4o-mini",
+        default=DEFAULT_LLM_MODEL,
         description="LLM model name / 利用するLLMモデル名",
     )
     embedding_model: str = Field(

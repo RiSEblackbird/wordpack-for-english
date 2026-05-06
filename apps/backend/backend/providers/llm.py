@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import contextvars
-import inspect
 import time
 from concurrent.futures import TimeoutError as FuturesTimeout
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional
 
 from ..config import settings
+from ..llm_models import ensure_supported_llm_model
 from ..logging import logger
 from ..observability import get_langfuse, span
 from . import _get_llm_executor, _get_llm_instance, _set_llm_instance
@@ -106,18 +106,16 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
         *,
         api_key: str,
         model: str,
-        temperature: float | None = None,
         reasoning: Optional[dict] = None,
         text: Optional[dict] = None,
     ) -> None:
         if OpenAI is None:
             raise RuntimeError("openai package not installed")
         self._client = OpenAI(api_key=api_key)
-        self._model = model
+        self._model = ensure_supported_llm_model(model)
         self._api_key = api_key
-        self._temperature = 0.2 if temperature is None else float(max(0.0, min(1.0, temperature)))
-        self._reasoning = reasoning
-        self._text = text
+        self._reasoning = reasoning or {"effort": "minimal"}
+        self._text = text or {"verbosity": "medium"}
 
     def _extract_text(self, resp: Any) -> str:
         """OpenAI Responses API のレスポンスから本文を抜き出す。"""
@@ -151,134 +149,23 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
             pass
         return (str(resp) or "").strip()
 
-    def _create_with_params(
+    def _create_response(
         self,
         *,
         prompt: str,
         use_json: bool,
-        token_param: str,
-        include_temperature: bool,
-        include_reasoning_text: bool,
     ) -> Any:
-        try:
-            sig = inspect.signature(self._client.responses.create)  # type: ignore[attr-defined]
-            param_names = set(sig.parameters.keys())
-        except Exception:
-            param_names = set()
-
-        def supports(name: str) -> bool:
-            return name in param_names
-
         kwargs: dict[str, Any] = {
             "model": self._model,
             "input": prompt,
+            "reasoning": self._reasoning,
+            "text": self._text,
+            "max_output_tokens": int(getattr(settings, "llm_max_tokens", 900)),
+            "timeout": settings.llm_timeout_ms / 1000.0,
         }
-        timeout_sec = settings.llm_timeout_ms / 1000.0
-        max_tokens_value = int(getattr(settings, "llm_max_tokens", 900))
-        if supports("timeout"):
-            kwargs["timeout"] = timeout_sec
-        if include_temperature and supports("temperature"):
-            kwargs["temperature"] = self._temperature
-        if include_reasoning_text:
-            if self._reasoning and supports("reasoning"):
-                kwargs["reasoning"] = self._reasoning
-            if self._text and supports("text"):
-                kwargs["text"] = self._text
-        if token_param == "max_output_tokens" and supports("max_output_tokens"):
-            kwargs["max_output_tokens"] = max_tokens_value
-        elif token_param == "max_tokens" and supports("max_tokens"):
-            kwargs["max_tokens"] = max_tokens_value
-        elif token_param == "max_completion_tokens" and supports("max_completion_tokens"):
-            kwargs["max_completion_tokens"] = max_tokens_value
-        if use_json and supports("response_format"):
+        if use_json:
             kwargs["response_format"] = {"type": "json_object"}
         return self._client.responses.create(**kwargs)
-
-    def _call_with_param_fallback(
-        self,
-        *,
-        prompt: str,
-        use_json: bool,
-        token_param: str,
-        include_temperature: bool,
-        include_reasoning_text: bool,
-    ) -> Any:
-        try:
-            return self._create_with_params(
-                prompt=prompt,
-                use_json=use_json,
-                token_param=token_param,
-                include_temperature=include_temperature,
-                include_reasoning_text=include_reasoning_text,
-            )
-        except Exception as exc:
-            text = (str(exc) or "").lower()
-            if (
-                include_temperature
-                and "temperature" in text
-                and (
-                    "unsupported" in text
-                    or "only the default" in text
-                    or "unsupported_value" in text
-                )
-            ):
-                logger.info(
-                    "llm_complete_retry_without_temperature",
-                    provider="openai",
-                    model=self._model,
-                    reason=str(exc)[:200],
-                )
-                return self._create_with_params(
-                    prompt=prompt,
-                    use_json=use_json,
-                    token_param=token_param,
-                    include_temperature=False,
-                    include_reasoning_text=include_reasoning_text,
-                )
-            if (
-                include_reasoning_text
-                and ("reasoning" in text or "text" in text)
-                and (
-                    "unsupported" in text
-                    or "not supported" in text
-                    or "unrecognized" in text
-                )
-            ):
-                logger.info(
-                    "llm_complete_retry_without_reasoning_text",
-                    provider="openai",
-                    model=self._model,
-                    reason=str(exc)[:200],
-                )
-                return self._create_with_params(
-                    prompt=prompt,
-                    use_json=use_json,
-                    token_param=token_param,
-                    include_temperature=include_temperature,
-                    include_reasoning_text=False,
-                )
-            if (
-                include_reasoning_text
-                and (
-                    "unexpected keyword argument" in text
-                    or "got an unexpected keyword argument" in text
-                )
-                and ("reasoning" in text or "text" in text)
-            ):
-                logger.info(
-                    "llm_complete_retry_without_reasoning_text_unexpected_kw",
-                    provider="openai",
-                    model=self._model,
-                    reason=str(exc)[:200],
-                )
-                return self._create_with_params(
-                    prompt=prompt,
-                    use_json=use_json,
-                    token_param=token_param,
-                    include_temperature=include_temperature,
-                    include_reasoning_text=False,
-                )
-            raise
 
     def complete(self, prompt: str) -> str:
         logger.info(
@@ -297,73 +184,44 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
             )
             return out
 
-        try:
-            sig0 = inspect.signature(self._client.responses.create)  # type: ignore[attr-defined]
-            param_names = set(sig0.parameters.keys())
-        except Exception:
-            param_names = set()
-        token_candidates: list[str] = []
-        if "max_output_tokens" in param_names:
-            token_candidates.append("max_output_tokens")
-        if "max_tokens" in param_names:
-            token_candidates.append("max_tokens")
-        if "max_completion_tokens" in param_names:
-            token_candidates.append("max_completion_tokens")
-        if not token_candidates:
-            token_candidates.append("max_output_tokens")
-        use_json_pref = "response_format" in param_names
-
-        is_reasoning_model = (self._model or "").lower() in {"gpt-5-mini", "gpt-5-nano"}
         last_exc: Exception | None = None
         with _langfuse_span("openai.responses.create", self._model, prompt) as current_span:
-            for use_json_flag in [use_json_pref, False] if use_json_pref else [False]:
-                for token_param in token_candidates:
+            for use_json_flag in [True, False]:
+                try:
+                    resp = self._create_response(prompt=prompt, use_json=use_json_flag)
+                    content = self._extract_text(resp)
                     try:
-                        resp = self._call_with_param_fallback(
-                            prompt=prompt,
-                            use_json=use_json_flag,
-                            token_param=token_param,
-                            include_temperature=not is_reasoning_model,
-                            include_reasoning_text=is_reasoning_model,
-                        )
-                        content = self._extract_text(resp)
-                        try:
-                            import hashlib as hf
+                        import hashlib as hf
 
-                            logger.info(
-                                "llm_complete_preview",
-                                provider="openai",
-                                model=self._model,
-                                preview=(content or "")[:120],
-                                content_chars=len(content or ""),
-                                content_sha256=hf.sha256(
-                                    (content or "").encode("utf-8", errors="ignore")
-                                ).hexdigest(),
-                                json_forced=bool(use_json_flag),
-                                param=token_param,
-                            )
-                        except Exception:
-                            pass
-                        _update_span_output(current_span, content)
                         logger.info(
-                            "llm_complete_result",
+                            "llm_complete_preview",
                             provider="openai",
                             model=self._model,
-                            content_chars=len(content),
+                            preview=(content or "")[:120],
+                            content_chars=len(content or ""),
+                            content_sha256=hf.sha256(
+                                (content or "").encode("utf-8", errors="ignore")
+                            ).hexdigest(),
                             json_forced=bool(use_json_flag),
-                            param=token_param,
+                            param="max_output_tokens",
                         )
-                        return content
-                    except Exception as exc:
-                        last_exc = exc
-                        low = (str(exc) or "").lower()
-                        if (
-                            "unsupported parameter" in low
-                            or "not supported" in low
-                            or "unexpected keyword" in low
-                        ):
-                            continue
-                        raise
+                    except Exception:
+                        pass
+                    _update_span_output(current_span, content)
+                    logger.info(
+                        "llm_complete_result",
+                        provider="openai",
+                        model=self._model,
+                        content_chars=len(content),
+                        json_forced=bool(use_json_flag),
+                        param="max_output_tokens",
+                    )
+                    return content
+                except Exception as exc:
+                    last_exc = exc
+                    if use_json_flag and "response_format" in (str(exc) or "").lower():
+                        continue
+                    raise
         raise last_exc if last_exc else RuntimeError("LLM call failed with unsupported params")
 
 
@@ -433,9 +291,7 @@ def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
                     or "401" in low
                 ):
                     reason_code = "AUTH"
-                elif (
-                    "unsupported parameter" in low or "not supported" in low
-                ) and ("max_tokens" in low or "parameter" in low):
+                elif "unsupported parameter" in low or "not supported" in low:
                     reason_code = "PARAM_UNSUPPORTED"
                 elif (
                     "unexpected keyword argument" in low
@@ -454,7 +310,6 @@ def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
 def get_llm_provider(
     *,
     model_override: str | None = None,
-    temperature_override: float | None = None,
     reasoning_override: Optional[dict] = None,
     text_override: Optional[dict] = None,
 ) -> Any:
@@ -462,7 +317,7 @@ def get_llm_provider(
 
     has_override = any(
         value is not None
-        for value in (model_override, temperature_override, reasoning_override, text_override)
+        for value in (model_override, reasoning_override, text_override)
     )
     instance = _get_llm_instance()
     if not has_override and instance is not None:
@@ -493,17 +348,11 @@ def get_llm_provider(
                 return fallback
 
             base_model = getattr(settings, "llm_model", None)
-            base_temperature = getattr(settings, "llm_temperature", None)
             base_reasoning = getattr(settings, "llm_reasoning", None)
             base_text_opts = getattr(settings, "llm_text_options", None)
             llm = _OpenAILLM(
                 api_key=api_key,
                 model=model_override or base_model,
-                temperature=(
-                    temperature_override
-                    if temperature_override is not None
-                    else base_temperature
-                ),
                 reasoning=(
                     reasoning_override
                     if reasoning_override is not None

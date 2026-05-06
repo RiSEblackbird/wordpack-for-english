@@ -26,9 +26,6 @@ def build_llm_info(overrides: object) -> dict[str, Any]:
     params: str | None = None
     try:
         parts: list[str] = []
-        temperature = get_override_value(overrides, "temperature")
-        if temperature is not None:
-            parts.append(f"temperature={float(temperature):.2f}")
         reasoning = get_override_value(overrides, "reasoning") or {}
         if isinstance(reasoning, Mapping):
             effort = reasoning.get("effort")
@@ -54,7 +51,6 @@ async def run_wordpack_flow(
 ) -> tuple[WordPack, dict[str, Any]]:
     llm = get_llm_provider(
         model_override=get_override_value(req_opts, "model"),
-        temperature_override=get_override_value(req_opts, "temperature"),
         reasoning_override=get_override_value(req_opts, "reasoning"),
         text_override=get_override_value(req_opts, "text"),
     )

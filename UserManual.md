@@ -61,7 +61,6 @@
 - 「設定」タブで次を切替できます
   - 発音を有効化（ON/OFF）
   - 再生成スコープ（全体/例文のみ/コロケのみ）
-  - temperature（0.0〜1.0、デフォルト 0.6）
   - カラーテーマ（ダーク/ライト）
   - ログアウト（Google セッションを終了）ボタン … 現在のセッションを即座に破棄し、バックエンド側で Cookie を無効化したうえでログイン画面に戻ります
 
@@ -152,7 +151,7 @@
 - ボタンを押しても進まない: 少し時間を置いて再試行（通信中はメッセージが表示されます）
 - エラー帯が出た: 画面の指示に従って操作をやり直すか、必要に応じて管理者に連絡（画面右上などに表示されるリクエストIDがあれば併記）
 - 「ID トークンを取得できませんでした。ブラウザを更新して再試行してください。」と表示された: いったんブラウザを再読み込みしてから再度ログインを試してください。何度試しても解消しない場合は、管理者に Google ログイン設定の確認を依頼してください（管理者側ではバックエンドのログに `google_login_missing_id_token` という診断メッセージが出力されています）。
-- 「生成＆インポート完了」と通知されたのに記事や WordPack が増えていない: 生成された2件の例文すべてが記事化に失敗した場合は右下の通知がエラーに変わり、モーダルにも「例文を記事化できませんでした（reason_code=CATEGORY_IMPORT_FAILED_ALL）」という内容が表示されます。カテゴリ用に作成された WordPack の例文自体は保存済みなので、WordPackタブから該当語彙を開いて例文カードの「インポート」ボタンで個別に記事化するか、モデル/temperature などの設定を調整してから再度「生成＆インポート」を実行してください（片方だけ失敗した場合は 1 件だけ記事が追加され、通知には「一部失敗」と記録されます）。
+- 「生成＆インポート完了」と通知されたのに記事や WordPack が増えていない: 生成された2件の例文すべてが記事化に失敗した場合は右下の通知がエラーに変わり、モーダルにも「例文を記事化できませんでした（reason_code=CATEGORY_IMPORT_FAILED_ALL）」という内容が表示されます。カテゴリ用に作成された WordPack の例文自体は保存済みなので、WordPackタブから該当語彙を開いて例文カードの「インポート」ボタンで個別に記事化するか、モデルや reasoning/text の設定を調整してから再度「生成＆インポート」を実行してください（片方だけ失敗した場合は 1 件だけ記事が追加され、通知には「一部失敗」と記録されます）。
 - 「セッションの有効期限が切れました。もう一度ログインしてください。」と表示された: ログインから一定時間が経過したか、ブラウザ設定によりログイン情報が破棄されています。右上のログインボタンから再度 Google アカウントでサインインすると、WordPack やインポート済み文章の一覧が再び表示されます。
 
 ### A-14. 保存済みWordPack一覧の使い方（索引リスト表示）
@@ -585,7 +584,7 @@ base64 -w 0 .env.deploy  # 出力を手動コピー
   - チェックリスト:
     1) `.env` の `OPENAI_API_KEY`（`llm_provider_select` が `local` だと空出力）
     2) `LLM_MAX_TOKENS` を 1200–1800 に（JSON 途中切れ対策）
-    3) モデルを `gpt-4o-mini` など安定モデルへ
+    3) モデルを `gpt-5.4-mini` など安定モデルへ
     4) `STRICT_MODE=true` でパース失敗を例外化して原因特定
   - strict モード:
     - LLM 失敗/空出力/パース不能で `senses`/`examples` が得られない場合は 5xx
@@ -630,10 +629,9 @@ base64 -w 0 .env.deploy  # 出力を手動コピー
     docker compose build --no-cache && docker compose up
     ```
 
-- 500 Internal Server Error（WordPack 生成時）で `TypeError: Responses.create() got an unexpected keyword argument 'reasoning'`
-  - 原因: SDK/モデルの組み合わせで `reasoning`/`text` 未サポート
-  - 現行: 当該パラメータを自動で外して再試行（strict では最終失敗時に `reason_code=PARAM_UNSUPPORTED`）
-  - 対応: モデルを `gpt-4o-mini` 等へ変更、または `pip install -U openai`
+- 500 Internal Server Error（WordPack 生成時）で `reason_code=PARAM_UNSUPPORTED`
+  - 原因: SDK が現行の Responses API パラメータに追従していない可能性があります。
+  - 対応: `pip install -U openai` 後に再起動してください。
 
 - 500 Internal Server Error で `ValidationError: 1 validation error for ContrastItem with Field required`
   - 原因: Pydantic v2 のエイリアス設定未適用により `with` → `with_` マッピング不全
@@ -652,17 +650,16 @@ base64 -w 0 .env.deploy  # 出力を手動コピー
    - 1回のインポートで扱えるのは最大 4,000 文字です。超過するとボタンが無効化され、警告文が表示されます。
    - API に直接リクエストする場合も同じ制限が適用され、`413 Request Entity Too Large` として `error=article_import_text_too_long` が返ります。
 3. モデルとパラメータを選択します。
-   - モデル: 「gpt-5-mini / gpt-5-nano / gpt-4.1-mini / gpt-4o-mini」から選択
-   - gpt-5-mini / gpt-5-nano を選ぶと `reasoning.effort` と `text.verbosity` の選択欄が表示されます（推論系）。
-   - それ以外のモデルは `temperature`（設定タブの値）で制御されます（sampling系）。
+   - モデル: 「gpt-5.4-mini / gpt-5.4-nano」から選択
+   - どちらのモデルでも `reasoning.effort` と `text.verbosity` を指定します。
 4. 「インポート」をクリックします。
 5. 右下に進捗通知が表示され、完了後にモーダルで詳細が開きます。
    - 英語タイトル、英語本文（原文そのまま）、日本語訳、解説が表示されます。
    - 下部に関連するWordPackがカードで並びます。
    - Firestore への接続が不安定な場合、モーダル上部に警告欄が出ます。プレースホルダー生成済みかスキップされたレマを確認し、必要に応じて「生成」ボタンや再インポートで復旧してください。
      - 「生成」ボタンで当該WordPackの内容を生成できます（既存は再生成）。
-       - 通信エラー時の注意: サーバの厳格モードでは LLM 出力の JSON が壊れていると 502 になります（詳細メッセージに `reason_code=LLM_JSON_PARSE` とヒントが表示されます）。時間を置く、モデル/設定（verbosity/temperature）を見直すなどで再試行してください。
+       - 通信エラー時の注意: サーバの厳格モードでは LLM 出力の JSON が壊れていると 502 になります（詳細メッセージに `reason_code=LLM_JSON_PARSE` とヒントが表示されます）。時間を置く、モデル/設定（reasoning.effort/text.verbosity）を見直すなどで再試行してください。
      - カードの語彙名をクリックするとWordPack詳細モーダルが開きます。
 6. 「インポート済み文章」一覧から、保存済みの文章を再表示できます。不要になった記事は削除してください（削除ボタンを押すと画面中央に「【該当記事の英語タイトル】について削除しますか？」が表示され、「はい」「いいえ」で判断します）。
 
-補足: 「生成＆インポート」ボタン（カテゴリ指定で例文を自動生成して記事化）でも、上記で選択したモデル/パラメータが反映されます。gpt-5-mini / gpt-5-nano は `reasoning`/`text`、その他は `temperature` が送信されます。
+補足: 「生成＆インポート」ボタン（カテゴリ指定で例文を自動生成して記事化）でも、上記で選択したモデル/パラメータが反映されます。

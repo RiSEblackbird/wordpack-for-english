@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from ..llm_models import ensure_supported_llm_model
 from .word import ExampleCategory
 
 
@@ -25,7 +26,6 @@ class ArticleImportRequest(BaseModel):
     )
     # 任意のLLM指定（word endpoints と整合）
     model: str | None = Field(default=None)
-    temperature: float | None = Field(default=None, ge=0.0, le=1.0)
     reasoning: dict | None = Field(default=None)
     text_opts: dict | None = Field(default=None)
     generation_category: ExampleCategory | None = Field(
@@ -34,6 +34,11 @@ class ArticleImportRequest(BaseModel):
     )
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("model")
+    @classmethod
+    def ensure_model_supported(cls, value: str | None) -> str | None:
+        return ensure_supported_llm_model(value) if value else value
 
 
 class ArticleWordPackLink(BaseModel):

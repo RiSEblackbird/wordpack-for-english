@@ -12,6 +12,7 @@ import { SidebarPortal } from './SidebarPortal';
 import { ARTICLE_IMPORT_TEXT_MAX_LENGTH } from '../constants/article';
 import { useAuth } from '../AuthContext';
 import { GuestLock } from './GuestLock';
+import { DEFAULT_LLM_MODEL, SUPPORTED_LLM_MODELS, normalizeLlmModel } from '../lib/wordpack';
 
 interface ArticleWordPackLink {
   word_pack_id: string;
@@ -39,7 +40,7 @@ export const ArticleImportPanel: React.FC = () => {
   const [category, setCategory] = useState<'Dev'|'CS'|'LLM'|'Business'|'Common'>('Common');
   const abortRef = useRef<AbortController | null>(null);
 
-  const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
+  const [model, setModel] = useState<string>(normalizeLlmModel(settings.model || DEFAULT_LLM_MODEL));
 
   const trimmedText = useMemo(() => text.trim(), [text]);
   const isTextTooLong = useMemo(
@@ -48,14 +49,12 @@ export const ArticleImportPanel: React.FC = () => {
   );
   const importDisabled = loading || !trimmedText || isTextTooLong;
 
-  const showAdvancedModelOptions = useMemo(() => {
-    const lower = (model || '').toLowerCase();
-    return lower === 'gpt-5-mini' || lower === 'gpt-5-nano';
-  }, [model]);
+  const showAdvancedModelOptions = useMemo(() => SUPPORTED_LLM_MODELS.includes(model as any), [model]);
 
   const handleChangeModel = (value: string) => {
-    setModel(value);
-    setSettings((prev) => ({ ...prev, model: value }));
+    const normalized = normalizeLlmModel(value);
+    setModel(normalized);
+    setSettings((prev) => ({ ...prev, model: normalized }));
   };
 
   const importArticle = async () => {
@@ -78,14 +77,9 @@ export const ArticleImportPanel: React.FC = () => {
     const notifId = addNotification({ title: '文章インポート中...', message: 'LLMで要約と語彙抽出を実行しています', status: 'progress', model: selectedModel });
     try {
       const body: any = { text: trimmedText, generation_category: selectedCategory };
-      // WordPackPanel と同様のモデル選択ロジック
       body.model = selectedModel;
-      if ((selectedModel || '').toLowerCase() === 'gpt-5-mini' || (selectedModel || '').toLowerCase() === 'gpt-5-nano') {
-        body.reasoning = { effort: settings.reasoningEffort || 'minimal' };
-        body.text_opts = { verbosity: settings.textVerbosity || 'medium' };
-      } else {
-        body.temperature = settings.temperature;
-      }
+      body.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+      body.text_opts = { verbosity: settings.textVerbosity || 'medium' };
       const res = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/import`, {
         method: 'POST',
         body,
@@ -128,7 +122,6 @@ export const ArticleImportPanel: React.FC = () => {
           pronunciationEnabled: settings.pronunciationEnabled,
           regenerateScope: settings.regenerateScope,
           requestTimeoutMs: settings.requestTimeoutMs,
-          temperature: settings.temperature,
           reasoningEffort: settings.reasoningEffort,
           textVerbosity: settings.textVerbosity,
         },
@@ -239,12 +232,8 @@ export const ArticleImportPanel: React.FC = () => {
                   try {
                     const reqBody: any = { category: selectedCategory };
                     reqBody.model = selectedModel;
-                    if ((selectedModel || '').toLowerCase() === 'gpt-5-mini' || (selectedModel || '').toLowerCase() === 'gpt-5-nano') {
-                      reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
-                      reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
-                    } else {
-                      reqBody.temperature = settings.temperature;
-                    }
+                    reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+                    reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
                     const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
                       method: 'POST',
                       body: reqBody,
@@ -276,10 +265,9 @@ export const ArticleImportPanel: React.FC = () => {
                 onChange={(e) => handleChangeModel(e.target.value)}
                 disabled={loading}
               >
-                <option value="gpt-5-mini">gpt-5-mini</option>
-                <option value="gpt-5-nano">gpt-5-nano</option>
-                <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                {SUPPORTED_LLM_MODELS.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
               </select>
             </GuestLock>
           </div>

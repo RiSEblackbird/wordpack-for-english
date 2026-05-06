@@ -1,66 +1,26 @@
-# 付録: OpenAIモデルの比較情報（Responses API）
+# 付録: OpenAIモデル設定（Responses API）
 
-- 本プロジェクトのバックエンドは Responses API を使用します。推論系の `reasoning`/`text` パラメータはモデルに応じて適用され、未対応エラー時は自動でパラメータを外して再試行します。
+本プロジェクトで選択できる LLM は `gpt-5.4-mini` と `gpt-5.4-nano` の 2 種だけです。バックエンドは Responses API に対して常に `reasoning` / `text` / `max_output_tokens` を送信し、旧世代向けの `temperature`、`max_tokens`、`max_completion_tokens` は使用しません。
 
-## 本プロジェクトで制御できるパラメータ（Responses API）
-- gpt-4o-mini / gpt-4.1-mini: `temperature`, `max_output_tokens`（= `.env: LLM_MAX_TOKENS`）
-- gpt-5-mini / gpt-5-nano: `reasoning.effort`, `text.verbosity`, `max_output_tokens`（`temperature` は通常無効）
+## 制御できるパラメータ
 
-**結論**: gpt-5-mini / gpt-5-nano は推論系（reasoning）モデルで、Responses API で `reasoning`/`text` を利用します。gpt-4.1-mini と gpt-4o-mini は従来どおり `temperature` が有効です。
+- `model`: `gpt-5.4-mini` または `gpt-5.4-nano`
+- `reasoning.effort`: `minimal` / `low` / `medium` / `high`
+- `text.verbosity`: `low` / `medium` / `high`
+- `max_output_tokens`: `.env` の `LLM_MAX_TOKENS`
 
-UI補足: フロントで `gpt-5-mini` または `gpt-5-nano` を選択した場合は `reasoning.effort`/`text.verbosity` がバックエンドに渡され有効化されます。非推論系では `temperature` が有効です。
+## 設定例
 
----
-
-## モデル別の設定例
-
-### gpt-5-mini / gpt-5-nano（reasoning系：`temperature`は通常無効）
 ```json
 {
-  "model": "gpt-5-mini",
-  "max_output_tokens": 1600
+  "model": "gpt-5.4-mini",
+  "reasoning": { "effort": "minimal" },
+  "text": { "verbosity": "medium" }
 }
 ```
 
-### gpt-4.1-mini（従来型テキスト：sampling系が有効）
-```json
-{
-  "model": "gpt-4.1-mini",
-  "temperature": 0.45,
-  "max_tokens": 1600
-}
-```
+## 運用メモ
 
-### gpt-4o-mini（高コスパ量産：sampling系が有効）
-```json
-{
-  "model": "gpt-4o-mini",
-  "temperature": 0.60,
-  "max_tokens": 1600
-}
-```
-
----
-
-## 80語×10文タスク向けの微調整ヒント
-- 語数の安定化: Responses API の Structured Outputs や JSON スキーマで `minItems=10`/`maxItems=10`、各文 `word_count` を 70–90 などで制約すると安定します（どのモデルでも可）。
-- gpt-5-mini / gpt-5-nano を使うときは `temperature` ではなく `reasoning.effort` を段階的に上げ下げして文のまとまり・一貫性を調整（例: `minimal`→高速量産、`low/medium`→表現の精緻化）。
-
----
-
-## SDK差異への対応（1回呼び出し最適化）
-- OpenAI SDK の `responses.create` はバージョンにより受理する引数が異なることがあります（例: `response_format`, `max_output_tokens`）。
-- 本プロジェクトでは実行時に `inspect.signature(client.responses.create)` で受理可能な引数名を動的に検出し、未対応の引数は最初から付与しません。
-- そのため通常は1回のAPI呼び出しで完了し、未対応エラーによる再試行を避けます。必要に応じて `max_output_tokens`/`max_tokens`/`max_completion_tokens` の順で最小限の内部切替を行います。
-
----
-
-## 参考：なぜ `temperature` が「廃止扱い」なのか
-- 推論系モデル（o3/o4-mini/GPT-5系）では内部で思考トークンを別勘定し、その振る舞いを `reasoning.effort` 等で制御する設計に移行。多くの推論系で `temperature` は未サポート。
-- 非推論モデル（GPT-4.1系・4o系）では `temperature`/`top_p` が引き続きサポートされ、APIリファレンスでも調整指針（どちらか片方を調整）が示されています。
-
-参考リンク:
-- [Azure OpenAI reasoning models - GPT-5 series, o3-mini, o1, o1-mini - Microsoft Learn](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning)
-- [OpenAI API Reference (Responses)](https://platform.openai.com/docs/api-reference/responses-streaming/response/function_call_arguments)
-- [OpenAI Cookbook: GPT-4.1 Prompting Guide](https://cookbook.openai.com/examples/gpt4-1_prompting_guide)
-- [OpenAI Cookbook: GPT-5 New Params and Tools](https://cookbook.openai.com/examples/gpt-5/gpt-5_new_params_and_tools)
+- 通常は `gpt-5.4-mini` を使い、軽量化したい場合に `gpt-5.4-nano` を選びます。
+- 出力のまとまりや一貫性は `reasoning.effort`、文量や詳細度は `text.verbosity` で調整します。
+- JSON 途中切れが疑われる場合は `LLM_MAX_TOKENS` を増やします。

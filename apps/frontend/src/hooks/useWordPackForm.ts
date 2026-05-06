@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Settings } from '../SettingsContext';
+import { DEFAULT_LLM_MODEL, SUPPORTED_LLM_MODELS, normalizeLlmModel } from '../lib/wordpack';
 
 type LemmaValidationResult = {
   valid: boolean;
@@ -59,19 +60,19 @@ export const useWordPackForm = ({ settings, setSettings }: UseWordPackFormParams
   }, [normalizedLemma]);
 
   // モデル選択はフォームのローカル状態で即時反映し、同時にSettingsContextへ同期して他画面と整合させる。
-  const [model, setModel] = useState<string>(settings.model || 'gpt-5-mini');
+  const [model, setModel] = useState<string>(normalizeLlmModel(settings.model || DEFAULT_LLM_MODEL));
   const handleChangeModel = useCallback(
     (value: string) => {
-      setModel(value);
-      setSettings((prev) => ({ ...prev, model: value }));
+      const normalized = normalizeLlmModel(value);
+      setModel(normalized);
+      setSettings((prev) => ({ ...prev, model: normalized }));
     },
     [setSettings],
   );
 
-  // 高度設定の表示可否は選択中モデルに紐づくため、レンダー毎の条件分岐を減らすようメモ化する。
+  // 現行ラインナップはすべて reasoning/text 指定を使うため、高度設定は常時表示する。
   const showAdvancedModelOptions = useMemo(() => {
-    const lower = (model || '').toLowerCase();
-    return lower === 'gpt-5-mini' || lower === 'gpt-5-nano';
+    return SUPPORTED_LLM_MODELS.includes(model as any);
   }, [model]);
 
   // LLM設定の詳細はSettingsContextに一元化し、フォーム変更と永続化を揃える。
