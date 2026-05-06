@@ -598,6 +598,43 @@ describe('App navigation', () => {
     });
   });
 
+  it('returns to the login screen when signing out from guest mode', async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(configSuccess());
+      }
+      if (url.endsWith('/api/auth/logout')) {
+        return Promise.resolve(logoutSuccess());
+      }
+      if (url.endsWith('/api/auth/guest')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ mode: 'guest' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        );
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    renderWithProviders();
+
+    const user = userEvent.setup();
+    const guestButton = await screen.findByRole('button', { name: 'ゲスト閲覧モード' });
+    await act(async () => {
+      await user.click(guestButton);
+    });
+
+    const logoutButton = await screen.findByRole('button', { name: 'ログアウト' });
+    await act(async () => {
+      await user.click(logoutButton);
+    });
+
+    expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
+    const logoutCalls = (fetchMock.mock.calls as FetchCall[]).filter(([input]) =>
+      resolveUrl(input).endsWith('/api/auth/logout'),
+    );
+    expect(logoutCalls.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('renders the main content without a shift animation', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     renderWithProviders();

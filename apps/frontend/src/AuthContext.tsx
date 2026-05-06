@@ -44,7 +44,9 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const STORAGE_KEY = 'wordpack.auth.v1';
 
 const PRIMARY_SESSION_COOKIE = (import.meta.env.VITE_SESSION_COOKIE_NAME || 'wp_session').trim() || 'wp_session';
-const SESSION_COOKIE_NAMES = Array.from(new Set([PRIMARY_SESSION_COOKIE, '__session']));
+const PRIMARY_GUEST_SESSION_COOKIE =
+  (import.meta.env.VITE_GUEST_SESSION_COOKIE_NAME || 'wp_guest').trim() || 'wp_guest';
+const AUTH_COOKIE_NAMES = Array.from(new Set([PRIMARY_SESSION_COOKIE, '__session', PRIMARY_GUEST_SESSION_COOKIE]));
 
 const AUTH_BYPASS_USER: AuthenticatedUser = {
   google_sub: 'dev-bypass',
@@ -246,7 +248,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
    */
   const clearSessionCookie = useCallback(() => {
     if (typeof document === 'undefined') return;
-    SESSION_COOKIE_NAMES.forEach((name) => {
+    AUTH_COOKIE_NAMES.forEach((name) => {
       document.cookie = `${name}=; Max-Age=0; Path=/; SameSite=Lax`;
     });
   }, []);

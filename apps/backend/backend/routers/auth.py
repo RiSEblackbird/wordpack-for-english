@@ -4,19 +4,23 @@ import hashlib
 from datetime import UTC, datetime
 from http import HTTPStatus
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
+from itsdangerous import BadSignature, SignatureExpired
 from pydantic import BaseModel, Field
 
 from ..auth import (
-    get_current_user,
     guest_session_cookie_max_age,
     guest_session_cookie_name,
     issue_guest_session_token,
     issue_session_token,
+    resolve_guest_session_cookie,
+    resolve_session_cookie,
     session_cookie_names,
+    verify_guest_session_token,
+    verify_session_token,
 )
 from ..config import settings
 from ..logging import logger
@@ -228,15 +232,17 @@ async def authenticate_as_guest(request: Request) -> JSONResponse:
 
 
 @router.post("/api/auth/logout", status_code=HTTPStatus.NO_CONTENT)
-async def logout(response: Response, user: dict[str, str] = Depends(get_current_user)) -> Response:
-    """Invalidate the session cookie so subsequent requests become anonymous.
+async def logout(request: Request, response: Response) -> Response:
+    """Invalidate auth cookies so subsequent requests become anonymous.
 
     新メンバー向け補足: フロントエンドはバックエンドにログアウトを通知し、ここで
-    HttpOnly Cookie を削除することでセッションを終了させる。追加のクリーンアップが
-    必要になった場合もこのハンドラーで一元管理する。"""
+    HttpOnly Cookie を削除することでセッションを終了させる。ゲスト閲覧モードも
+    HttpOnly Cookie を使うため、このハンドラーで通常セッションと同じように失効させる。"""
+
+    user_id, logout_mode = _resolve_logout_context(request)
 
     response.status_code = HTTPStatus.NO_CONTENT
-    for cookie_name in session_cookie_names():
+    for cookie_name in dict.fromkeys((*session_cookie_names(), guest_session_cookie_name())):
         response.delete_cookie(
             key=cookie_name,
             httponly=True,
@@ -245,10 +251,41 @@ async def logout(response: Response, user: dict[str, str] = Depends(get_current_
         )
     logger.info(
         "logout_completed",
-        user_id=user.get("google_sub"),
-        reason="logout",
+        user_id=user_id,
+        reason=logout_mode,
     )
     return response
+
+
+def _resolve_logout_context(request: Request) -> tuple[str | None, str]:
+    """Return log context for an authenticated or guest logout request."""
+
+    _cookie_name, session_token = resolve_session_cookie(request)
+    if session_token:
+        try:
+            payload = verify_session_token(session_token)
+        except (SignatureExpired, BadSignature, RuntimeError):
+            return None, "logout_invalid_session"
+        sub = payload.get("sub") if isinstance(payload, dict) else None
+        if not sub:
+            return None, "logout_invalid_session"
+        return str(sub), "logout"
+
+    guest_token = resolve_guest_session_cookie(request)
+    if guest_token:
+        try:
+            payload = verify_guest_session_token(guest_token)
+        except (SignatureExpired, BadSignature, RuntimeError):
+            return None, "guest_logout_invalid"
+        if not isinstance(payload, dict) or payload.get("mode") != "guest":
+            return None, "guest_logout_invalid"
+        request.state.guest = True
+        return None, "guest_logout"
+
+    raise HTTPException(
+        status_code=HTTPStatus.UNAUTHORIZED,
+        detail="Session or guest cookie is missing",
+    )
 
 
 def _session_cookie_max_age() -> int:

@@ -9,6 +9,7 @@ import type { RefObject } from 'react';
 const setSettingsMock = vi.fn();
 const signOutMock = vi.fn();
 let currentSettings: Settings;
+let currentIsGuest = false;
 
 vi.mock('../SettingsContext', () => ({
   useSettings: () => ({ settings: currentSettings, setSettings: setSettingsMock }),
@@ -22,8 +23,8 @@ vi.mock('../AuthContext', () => ({
     error: null,
     clearError: vi.fn(),
     authBypassActive: false,
-    authMode: 'authenticated',
-    isGuest: false,
+    authMode: currentIsGuest ? 'guest' : 'authenticated',
+    isGuest: currentIsGuest,
     enterGuestMode: vi.fn().mockResolvedValue(undefined),
     missingClientId: false,
     googleClientId: 'test-client',
@@ -47,6 +48,7 @@ describe('SettingsPanel', () => {
     };
     setSettingsMock.mockReset();
     signOutMock.mockReset();
+    currentIsGuest = false;
   });
 
   it('toggle pronunciation setting from checkbox', async () => {
@@ -69,5 +71,13 @@ describe('SettingsPanel', () => {
     await user.click(logoutButton);
 
     expect(signOutMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a guest-specific logout label in guest mode', () => {
+    currentIsGuest = true;
+    const focusRef = { current: null } as RefObject<HTMLElement>;
+    render(<SettingsPanel focusRef={focusRef} />);
+
+    expect(screen.getByRole('button', { name: 'ログアウト（ゲスト閲覧を終了）' })).toBeInTheDocument();
   });
 });

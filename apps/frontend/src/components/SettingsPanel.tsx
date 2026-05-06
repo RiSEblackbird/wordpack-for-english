@@ -8,7 +8,8 @@ interface Props {
 
 export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
   const { settings, setSettings } = useSettings();
-  const { signOut, isAuthenticating } = useAuth();
+  const { signOut, isAuthenticating, isGuest } = useAuth();
+  const signOutLabel = isGuest ? 'ログアウト（ゲスト閲覧を終了）' : 'ログアウト（Google セッションを終了）';
 
   /**
    * ユーザーが手動でセッションを破棄できるようにする。
@@ -72,7 +73,7 @@ export const SettingsPanel: React.FC<Props> = ({ focusRef }) => {
       </div>
       <div>
         <button type="button" onClick={handleSignOut} disabled={isAuthenticating}>
-          ログアウト（Google セッションを終了）
+          {signOutLabel}
         </button>
       </div>
     </section>
