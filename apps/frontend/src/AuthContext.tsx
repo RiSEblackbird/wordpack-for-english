@@ -137,6 +137,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
    * 成功済みセッションを誤って anonymous に戻す競合を防止する。
    */
   const isReissuingGuestRef = useRef<boolean>(false);
+  const shouldWaitForRuntimeClientId = buildTimeClientId.length === 0 && !authConfigResolved;
   const missingClientId = normalizedClientId.length === 0;
 
   useEffect(() => {
@@ -440,6 +441,10 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       normalizedClientId,
     ],
   );
+
+  if (shouldWaitForRuntimeClientId) {
+    return null;
+  }
 
   const contextNode = <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 
