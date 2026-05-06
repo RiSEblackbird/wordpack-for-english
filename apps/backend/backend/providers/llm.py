@@ -161,6 +161,7 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
             "reasoning": self._reasoning,
             "text": self._text,
             "max_output_tokens": int(getattr(settings, "llm_max_tokens", 900)),
+            "timeout": settings.llm_timeout_ms / 1000.0,
         }
         if use_json:
             kwargs["response_format"] = {"type": "json_object"}
