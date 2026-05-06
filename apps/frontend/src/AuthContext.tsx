@@ -54,6 +54,14 @@ const AUTH_BYPASS_USER: AuthenticatedUser = {
   display_name: 'WordPack Dev User',
 };
 
+function readRuntimeGoogleClientId(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const value = (payload as { google_client_id?: unknown }).google_client_id;
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 /**
  * ローカルストレージから最後に成功した認証情報を読み取る。
  * 副作用: window が存在しない環境では何もしない。
@@ -111,13 +119,15 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authBypassActive, setAuthBypassActive] = useState(false);
+  const [runtimeGoogleClientId, setRuntimeGoogleClientId] = useState<string | null>(null);
   /**
    * /api/config の初期ロードが完了したかを記録する。
    * 新参メンバー向けに補足すると、このフラグが true になるまでは
    * Google クライアント ID の警告ログを抑制し、誤検知による混乱を避ける。
    */
   const [authConfigResolved, setAuthConfigResolved] = useState(false);
-  const normalizedClientId = useMemo(() => clientId.trim(), [clientId]);
+  const buildTimeClientId = useMemo(() => clientId.trim(), [clientId]);
+  const normalizedClientId = runtimeGoogleClientId ?? buildTimeClientId;
   const clientIdRef = useRef(normalizedClientId);
   const authModeRef = useRef<AuthMode>(authMode);
   /**
@@ -172,8 +182,12 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
         if (!res.ok) return;
         const json = (await res
           .json()
-          .catch(() => null)) as { session_auth_disabled?: boolean } | null;
+          .catch(() => null)) as { session_auth_disabled?: boolean; google_client_id?: string } | null;
         if (aborted) return;
+        const runtimeClientId = readRuntimeGoogleClientId(json);
+        if (runtimeClientId) {
+          setRuntimeGoogleClientId(runtimeClientId);
+        }
         if (json?.session_auth_disabled) {
           setAuthBypassActive(true);
           setUser((prev) => (authModeRef.current === 'guest' ? prev : prev ?? AUTH_BYPASS_USER));
@@ -410,7 +424,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
       clearError,
       authBypassActive,
       missingClientId,
-      googleClientId: clientIdRef.current,
+      googleClientId: normalizedClientId,
     }),
     [
       user,
@@ -437,7 +451,7 @@ export const AuthProvider: React.FC<{ clientId: string; children: React.ReactNod
     return contextNode;
   }
 
-  return <GoogleOAuthProvider clientId={clientIdRef.current}>{contextNode}</GoogleOAuthProvider>;
+  return <GoogleOAuthProvider clientId={normalizedClientId}>{contextNode}</GoogleOAuthProvider>;
 };
 
 export const useAuth = (): AuthContextValue => {

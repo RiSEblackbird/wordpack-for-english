@@ -180,7 +180,7 @@ npm run prepare:frontend-env
 # 既に .env がある場合や手動で書き換える場合は apps/frontend/.env.example を直接編集してください
 ```
 
-`VITE_GOOGLE_CLIENT_ID` はバックエンドの `GOOGLE_CLIENT_ID` と一致している必要があります。Google Console で発行した OAuth 2.0 Web クライアント ID を指定してください。`AuthContext.tsx` は `VITE_SESSION_COOKIE_NAME` が未設定でも `wp_session`/`__session` の両方をフォールバックで削除するため、FastAPI 側の `SESSION_COOKIE_NAME` をカスタマイズしたときだけ `.env` を更新すれば十分です。
+`VITE_GOOGLE_CLIENT_ID` はバックエンドの `GOOGLE_CLIENT_ID` と一致している必要があります。Google Console で発行した OAuth 2.0 Web クライアント ID を指定してください。本番ビルドで `VITE_GOOGLE_CLIENT_ID` が空だった場合でも、フロントエンドは起動時に `/api/config` から `GOOGLE_CLIENT_ID` を取得して Google ログインを初期化します。`AuthContext.tsx` は `VITE_SESSION_COOKIE_NAME` が未設定でも `wp_session`/`__session` の両方をフォールバックで削除するため、FastAPI 側の `SESSION_COOKIE_NAME` をカスタマイズしたときだけ `.env` を更新すれば十分です。
 
 バックエンド・フロントエンドのどちらも起動前に `.env` と `apps/frontend/.env` を用意し、`GOOGLE_CLIENT_ID`（必要に応じて `GOOGLE_ALLOWED_HD` や `ADMIN_EMAIL_ALLOWLIST`）、`SESSION_SECRET_KEY`、`VITE_GOOGLE_CLIENT_ID`、（必要なら）`VITE_SESSION_COOKIE_NAME` を設定しておくと、初回起動から Google ログインが有効になります。
 
@@ -398,6 +398,7 @@ Cloud Run や Firebase Hosting へ出荷する前に、上記の手順で Firest
 ### 認証フロー
 - フロントエンドへアクセスすると、まず Google アカウントでのサインイン画面が表示されます。
 - 「Googleでログイン」ボタンは Google Identity Services の `GoogleLogin` コンポーネントを用いており、承認後に `credential`（ID トークン）を取得して `/api/auth/google` へ送信し、セッション Cookie を受け取ります。credential が欠落した場合は直ちにエラー帯を表示し、`/api/diagnostics/oauth-telemetry` へ状況を送信して原因調査に活用します。
+- ビルド時の `VITE_GOOGLE_CLIENT_ID` が未設定でも、`/api/config` が `google_client_id` を返す環境では、その値で Google ログインボタンを表示します。バックエンド側の `GOOGLE_CLIENT_ID` も空の場合のみ設定案内を表示します。
 - サインイン画面の「ゲスト閲覧モード」ボタンを押すとログイン不要でアプリの閲覧ができます。ゲスト中は右上にバッジが固定表示され、ヘッダー右側の「ログアウト」ボタンからゲスト閲覧を終了できます。ブラウザを再読み込みしても同じ状態が復元されます。
 - ゲスト閲覧モードではAI機能（生成/再生成/削除などの操作ボタン）が無効化され、ボタンにマウスを重ねると「ゲストモードではAI機能は使用できません」と表示されます。例: ログイン後は「生成」ボタンで処理開始 / ゲストでは同じボタンが押せずツールチップが表示されます。
 - バックエンド側で `ADMIN_EMAIL_ALLOWLIST` を設定している場合、リストに含まれないメールアドレスは検証後でも即座に 403 となり、構造化ログには `google_auth_denied` / `email_not_allowlisted` が記録されます。利用者を追加したい場合はリストへメールアドレスを追記して再起動してください。

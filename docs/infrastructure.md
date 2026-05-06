@@ -57,7 +57,7 @@ flowchart TB
 | **Artifact Registry** | Cloud Build でビルドした Docker イメージを保存。 |
 | **Cloud Load Balancer** | HTTPS 終端と `X-Forwarded-For` によるクライアント IP 復元。 |
 | **OpenAI API** | WordPack 生成（gpt-5.4-mini）と音声読み上げ（gpt-4o-mini-tts）。 |
-| **Google OAuth 2.0** | フロントエンドでの Google ログイン。バックエンドで ID トークンを検証しセッション発行。 |
+| **Google OAuth 2.0** | フロントエンドでの Google ログイン。バックエンドは `/api/config` でクライアント ID を配布し、受け取った ID トークンを検証してセッションを発行する。 |
 | **Langfuse** | LLM のプロンプト・レスポンスをトレース（任意設定）。 |
 
 ---
