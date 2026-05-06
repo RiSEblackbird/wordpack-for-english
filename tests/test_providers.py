@@ -47,7 +47,7 @@ def test_get_llm_provider_openai_with_key(monkeypatch):
     # OpenAI provider with test key
     monkeypatch.setenv("STRICT_MODE", "false")
     monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("LLM_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5.4-mini")
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
 
     # Reload settings to pick env
@@ -117,68 +117,11 @@ def test_embedding_provider_default_is_callable(monkeypatch):
     assert isinstance(vecs, list) and len(vecs) == 2
 
 
-def test_openai_reasoning_param_fallback_on_unexpected_keyword(monkeypatch):
-    """SDKが reasoning/text を未サポートで TypeError: unexpected keyword argument を返した場合、
-    自動的に当該パラメータを外して再試行することを検証する。
-    """
-    # 環境を OpenAI + gpt-5-mini（reasoning/text を付ける対象）に設定
+def test_openai_request_uses_reasoning_text_params(monkeypatch):
+    """OpenAI 呼び出しで現行モデル用の reasoning/text/max_output_tokens だけを送る。"""
     monkeypatch.setenv("STRICT_MODE", "false")
     monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("LLM_MODEL", "gpt-5-mini")
-    # 'test-key' だと早期固定応答になるため、別キー名にして実際の分岐を通す
-    monkeypatch.setenv("OPENAI_API_KEY", "dummy-realistic-key")
-
-    # モジュールをリロード
-    from importlib import reload
-    import backend.config
-    import backend.providers
-    reload(backend.config)
-    reload(backend.providers)
-
-    # Dummy OpenAI クライアントを注入（reasoning 付きでは TypeError を投げ、
-    # reasoning を外すと JSON 文字列を返す）
-    class _DummyMessage:
-        def __init__(self, content: str) -> None:
-            self.content = content
-
-    class _DummyChoice:
-        def __init__(self, content: str) -> None:
-            self.message = _DummyMessage(content)
-
-    class _DummyResp:
-        def __init__(self, content: str) -> None:
-            self.choices = [_DummyChoice(content)]
-
-    class _DummyResponses:
-        def create(self, **kwargs):  # type: ignore[no-untyped-def]
-            # 初回: reasoning/text が含まれていれば SDK 未対応エラーを模倣
-            if "reasoning" in kwargs or "text" in kwargs:
-                raise TypeError("Responses.create() got an unexpected keyword argument 'reasoning'")
-            # 再試行: reasoning/text を外してくれれば成功（Responses API 互換: output_text を返す）
-            return _DummyResp('{"senses": [{"id": "s1", "gloss_ja": "ok"}], "examples": {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}}')
-
-    class DummyOpenAI:
-        def __init__(self, api_key: str) -> None:  # type: ignore[no-untyped-def]
-            self.responses = _DummyResponses()
-
-    backend.providers.llm.OpenAI = DummyOpenAI  # type: ignore[attr-defined, assignment]
-
-    # 実行：reasoning/text オプションを与えてプロバイダを取得
-    from backend.providers import get_llm_provider
-    llm = get_llm_provider(
-        reasoning_override={"effort": "high"},
-        text_override={"verbosity": "high"},
-    )
-
-    out = llm.complete("ping")
-    assert isinstance(out, str) and "\"senses\"" in out
-
-
-def test_openai_reasoning_param_fallback_on_unexpected_keyword_nano(monkeypatch):
-    """gpt-5-nano でも reasoning/text を付与→SDK未対応なら自動で外して再試行する。"""
-    monkeypatch.setenv("STRICT_MODE", "false")
-    monkeypatch.setenv("LLM_PROVIDER", "openai")
-    monkeypatch.setenv("LLM_MODEL", "gpt-5-nano")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5.4-mini")
     monkeypatch.setenv("OPENAI_API_KEY", "dummy-realistic-key")
 
     from importlib import reload
@@ -186,6 +129,8 @@ def test_openai_reasoning_param_fallback_on_unexpected_keyword_nano(monkeypatch)
     import backend.providers
     reload(backend.config)
     reload(backend.providers)
+
+    calls: list[dict] = []
 
     class _DummyMessage:
         def __init__(self, content: str) -> None:
@@ -201,8 +146,64 @@ def test_openai_reasoning_param_fallback_on_unexpected_keyword_nano(monkeypatch)
 
     class _DummyResponses:
         def create(self, **kwargs):  # type: ignore[no-untyped-def]
-            if "reasoning" in kwargs or "text" in kwargs:
-                raise TypeError("Responses.create() got an unexpected keyword argument 'reasoning'")
+            calls.append(kwargs)
+            return _DummyResp('{"senses": [{"id": "s1", "gloss_ja": "ok"}], "examples": {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}}')
+
+    class DummyOpenAI:
+        def __init__(self, api_key: str) -> None:  # type: ignore[no-untyped-def]
+            self.responses = _DummyResponses()
+
+    backend.providers.llm.OpenAI = DummyOpenAI  # type: ignore[attr-defined, assignment]
+
+    from backend.providers import get_llm_provider
+    llm = get_llm_provider(
+        reasoning_override={"effort": "high"},
+        text_override={"verbosity": "high"},
+    )
+
+    out = llm.complete("ping")
+    assert isinstance(out, str) and "\"senses\"" in out
+    assert calls
+    first = calls[0]
+    assert first["model"] == "gpt-5.4-mini"
+    assert first["reasoning"] == {"effort": "high"}
+    assert first["text"] == {"verbosity": "high"}
+    assert first["max_output_tokens"] > 0
+    assert "temperature" not in first
+    assert "max_tokens" not in first
+    assert "max_completion_tokens" not in first
+
+
+def test_openai_request_uses_nano_model(monkeypatch):
+    """gpt-5.4-nano でも同じ現行パラメータを送る。"""
+    monkeypatch.setenv("STRICT_MODE", "false")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5.4-nano")
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy-realistic-key")
+
+    from importlib import reload
+    import backend.config
+    import backend.providers
+    reload(backend.config)
+    reload(backend.providers)
+
+    calls: list[dict] = []
+
+    class _DummyMessage:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class _DummyChoice:
+        def __init__(self, content: str) -> None:
+            self.message = _DummyMessage(content)
+
+    class _DummyResp:
+        def __init__(self, content: str) -> None:
+            self.choices = [_DummyChoice(content)]
+
+    class _DummyResponses:
+        def create(self, **kwargs):  # type: ignore[no-untyped-def]
+            calls.append(kwargs)
             return _DummyResp('{"senses": [{"id": "s1", "gloss_ja": "ok"}], "examples": {"Dev": [], "CS": [], "LLM": [], "Business": [], "Common": []}}')
 
     class DummyOpenAI:
@@ -218,3 +219,7 @@ def test_openai_reasoning_param_fallback_on_unexpected_keyword_nano(monkeypatch)
     )
     out = llm.complete("ping")
     assert isinstance(out, str) and "\"senses\"" in out
+    assert calls[0]["model"] == "gpt-5.4-nano"
+    assert calls[0]["reasoning"] == {"effort": "high"}
+    assert calls[0]["text"] == {"verbosity": "high"}
+    assert "temperature" not in calls[0]

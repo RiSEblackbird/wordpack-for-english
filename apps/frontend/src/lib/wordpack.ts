@@ -1,35 +1,39 @@
 import { fetchJson, ApiError } from './fetcher';
 
+export const SUPPORTED_LLM_MODELS = ['gpt-5.4-mini', 'gpt-5.4-nano'] as const;
+export type SupportedLlmModel = (typeof SUPPORTED_LLM_MODELS)[number];
+export const DEFAULT_LLM_MODEL: SupportedLlmModel = 'gpt-5.4-mini';
+
+export const normalizeLlmModel = (model?: string | null): SupportedLlmModel => {
+  const selected = (model || '').trim();
+  return SUPPORTED_LLM_MODELS.includes(selected as SupportedLlmModel)
+    ? (selected as SupportedLlmModel)
+    : DEFAULT_LLM_MODEL;
+};
+
 export interface ModelRequestConfig {
   model?: string;
-  temperature: number;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   textVerbosity?: 'low' | 'medium' | 'high';
 }
 
 export const composeModelRequestFields = ({
   model,
-  temperature,
   reasoningEffort,
   textVerbosity,
 }: ModelRequestConfig): Record<string, unknown> => {
-  if (!model) return {};
-  const normalized = model.toLowerCase();
-  if (normalized === 'gpt-5-mini' || normalized === 'gpt-5-nano') {
-    return {
-      model,
-      reasoning: { effort: reasoningEffort || 'minimal' },
-      text: { verbosity: textVerbosity || 'medium' },
-    };
-  }
-  return { model, temperature };
+  const normalizedModel = normalizeLlmModel(model || DEFAULT_LLM_MODEL);
+  return {
+    model: normalizedModel,
+    reasoning: { effort: reasoningEffort || 'minimal' },
+    text: { verbosity: textVerbosity || 'medium' },
+  };
 };
 
 export interface RegenerateSettings {
   pronunciationEnabled: boolean;
   regenerateScope: 'all' | 'examples' | 'collocations';
   requestTimeoutMs: number;
-  temperature: number;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   textVerbosity?: 'low' | 'medium' | 'high';
 }
@@ -140,7 +144,6 @@ export async function enqueueRegenerateWordPack(params: {
     regenerate_scope: settings.regenerateScope,
     ...composeModelRequestFields({
       model,
-      temperature: settings.temperature,
       reasoningEffort: settings.reasoningEffort,
       textVerbosity: settings.textVerbosity,
     }),
@@ -183,4 +186,3 @@ export async function updateGuestPublicFlag(params: {
     timeoutMs,
   });
 }
-

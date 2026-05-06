@@ -11,8 +11,7 @@ const mockSettings = vi.hoisted(() => ({
     regenerateScope: 'all',
     autoAdvanceAfterGrade: false,
     requestTimeoutMs: 30000,
-    model: 'gpt-4o-mini',
-    temperature: 0.6,
+    model: 'gpt-5.4-mini',
     reasoningEffort: 'minimal',
     textVerbosity: 'medium',
     theme: 'dark',
@@ -108,7 +107,7 @@ describe('useWordPack.loadWordPack', () => {
       return d.promise as any;
     });
 
-    const { result } = renderHook(() => useWordPack({ model: 'gpt-4o-mini' }));
+    const { result } = renderHook(() => useWordPack({ model: 'gpt-5.4-mini' }));
 
     let p1!: Promise<void>;
     act(() => {

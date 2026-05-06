@@ -190,8 +190,8 @@ const mockArticleImport = async (page: Page): Promise<void> => {
     body_en: 'Alpha releases validate core workflows for early adopters.',
     body_ja: 'アルファ版は初期利用者向けに主要なワークフローを検証します。',
     notes_ja: '例文抽出はDevカテゴリを優先。',
-    llm_model: 'gpt-4o-mini',
-    llm_params: 'temperature=0.6',
+    llm_model: 'gpt-5.4-mini',
+    llm_params: 'reasoning.effort=minimal;text.verbosity=medium',
     generation_category: 'Dev',
     related_word_packs: [
       { word_pack_id: 'wp:e2e:alpha', lemma: 'alpha', status: 'existing' },

@@ -4,7 +4,7 @@ import json
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from ..application.wordpack.create_empty_wordpack import build_empty_wordpack
 from ..application.wordpack.errors import handle_flow_runtime_error
@@ -28,6 +28,7 @@ from ..application.wordpack.regenerate_jobs import (
 from ..application.wordpack import regenerate_jobs as regenerate_jobs_module
 from ..application.wordpack.study_progress import study_progress_increments
 from ..config import settings
+from ..llm_models import ensure_supported_llm_model
 from ..flows.word_pack import WordPackFlow
 from ..id_factory import generate_word_pack_id
 from ..auth import get_current_user, resolve_guest_session_cookie
@@ -501,9 +502,13 @@ class ExamplesGenerateRequest(BaseModel):
     """例文追加生成のための任意パラメータ。"""
 
     model: Optional[str] = Field(default=None, description="LLMモデル名の上書き")
-    temperature: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     reasoning: Optional[dict] = Field(default=None)
     text: Optional[dict] = Field(default=None)
+
+    @field_validator("model")
+    @classmethod
+    def ensure_model_supported(cls, value: str | None) -> str | None:
+        return ensure_supported_llm_model(value) if value else value
 
 
 @router.post(
@@ -528,7 +533,6 @@ async def generate_examples_for_word_pack(
     req = req or ExamplesGenerateRequest()
     llm = get_llm_provider(
         model_override=get_override_value(req, "model"),
-        temperature_override=get_override_value(req, "temperature"),
         reasoning_override=get_override_value(req, "reasoning"),
         text_override=get_override_value(req, "text"),
     )

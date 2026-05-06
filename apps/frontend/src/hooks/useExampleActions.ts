@@ -10,7 +10,6 @@ interface UseExampleActionsParams {
   currentWordPackId: string | null;
   data: WordPack | null;
   model: string;
-  temperature: number;
   reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   textVerbosity?: 'low' | 'medium' | 'high';
   setStatusMessage: (next: WordPackMessage) => void;
@@ -36,7 +35,6 @@ export const useExampleActions = ({
   currentWordPackId,
   data,
   model,
-  temperature,
   reasoningEffort,
   textVerbosity,
   setStatusMessage,
@@ -76,11 +74,10 @@ export const useExampleActions = ({
     () =>
       composeModelRequestFields({
         model,
-        temperature,
         reasoningEffort,
         textVerbosity,
       }),
-    [model, reasoningEffort, temperature, textVerbosity],
+    [model, reasoningEffort, textVerbosity],
   );
 
   const deleteExample = useCallback(

@@ -17,6 +17,7 @@ import { SensesSection } from './wordpack/SensesSection';
 import { ExamplesSection } from './wordpack/ExamplesSection';
 import { useAuth } from '../AuthContext';
 import { GuestLock } from './GuestLock';
+import { SUPPORTED_LLM_MODELS } from '../lib/wordpack';
 
 export interface WordPackPreviewMeta {
   id: string;
@@ -52,7 +53,7 @@ export const WordPackPanel: React.FC<Props> = ({
   const { setModalOpen } = useModal();
   const { add: addNotification, update: updateNotification } = useNotifications();
   const confirmDialog = useConfirmDialog();
-  const { apiBase, pronunciationEnabled, requestTimeoutMs, temperature } = settings;
+  const { apiBase, pronunciationEnabled, requestTimeoutMs } = settings;
   const { lemma, setLemma, lemmaValidation, model, showAdvancedModelOptions, handleChangeModel, advancedSettings } = useWordPackForm({ settings, setSettings });
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -90,7 +91,6 @@ export const WordPackPanel: React.FC<Props> = ({
     currentWordPackId,
     data,
     model,
-    temperature,
     reasoningEffort: advancedSettings.reasoningEffort,
     textVerbosity: advancedSettings.textVerbosity,
     setStatusMessage,
@@ -449,10 +449,9 @@ export const WordPackPanel: React.FC<Props> = ({
                   onChange={(e) => handleChangeModel(e.target.value)}
                   disabled={isActionLoading}
                 >
-                  <option value="gpt-5-mini">gpt-5-mini</option>
-                  <option value="gpt-5-nano">gpt-5-nano</option>
-                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                  <option value="gpt-4o-mini">gpt-4o-mini</option>
+                  {SUPPORTED_LLM_MODELS.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
                 </select>
               </GuestLock>
             </div>

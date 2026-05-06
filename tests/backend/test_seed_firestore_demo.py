@@ -122,8 +122,8 @@ def _prepare_demo_sqlite(tmp_path: Path) -> Path:
             "Resolve the bottleneck in the pipeline.",
             "パイプラインのボトルネックを解消する。",
             "grammar note",
-            "gpt-4o-mini",
-            '{"temperature":0.1}',
+            "gpt-5.4-mini",
+            '{"reasoning":{"effort":"minimal"},"text":{"verbosity":"medium"}}',
             "2024-01-02T00:00:00+00:00",
             1,
             0,
@@ -141,7 +141,7 @@ def _prepare_demo_sqlite(tmp_path: Path) -> Path:
             "Body EN",
             "Body JA",
             "note",
-            "gpt-4o-mini",
+            "gpt-5.4-mini",
             "{}",
             "demo",
             "2024-01-03T00:00:00+00:00",
@@ -183,7 +183,7 @@ def test_seed_firestore_from_sqlite_moves_wordpacks_and_articles(tmp_path: Path)
     assert payload["checked_only_count"] == 2
     assert payload["learned_count"] == 1
     assert payload["examples"]["Dev"][0]["en"] == "Resolve the bottleneck in the pipeline."
-    assert payload["examples"]["Dev"][0]["llm_model"] == "gpt-4o-mini"
+    assert payload["examples"]["Dev"][0]["llm_model"] == "gpt-5.4-mini"
     article = store.articles.get_article("article-1")
     assert article is not None
     assert article[0] == "Demo Article"

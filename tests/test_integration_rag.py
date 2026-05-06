@@ -12,9 +12,9 @@ os.environ.setdefault("STRICT_MODE", "false")
 def client_with_openai_llm():
     """OpenAI LLMを使用するテストクライアント"""
     os.environ["LLM_PROVIDER"] = "openai"
-    os.environ["LLM_MODEL"] = "gpt-4o-mini"
+    os.environ["LLM_MODEL"] = "gpt-5.4-mini"
     os.environ["STRICT_MODE"] = "false"
-    
+
     # OpenAI APIキーが設定されていない場合はダミーキーを使用
     if not os.environ.get("OPENAI_API_KEY"):
         os.environ["OPENAI_API_KEY"] = "test-key"
@@ -42,13 +42,13 @@ def test_word_pack_integration_openai_llm(client_with_openai_llm):
     resp = client_with_openai_llm.post("/api/word/pack", json={"lemma": "converge"})
     assert resp.status_code == 200
     j = resp.json()
-    
+
     # 基本的な構造の確認
     assert "lemma" in j
     assert j["lemma"] == "converge"
     assert "confidence" in j
     assert "citations" in j
     assert isinstance(j["citations"], list)
-    
+
     # LLMが使用されている場合、confidenceはmedium以上になる
     assert j["confidence"] in ("medium", "high")

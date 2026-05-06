@@ -568,7 +568,6 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
 
         llm = get_llm_provider(
             model_override=getattr(req, "model", None),
-            temperature_override=getattr(req, "temperature", None),
             reasoning_override=getattr(req, "reasoning", None),
             text_override=getattr(req, "text_opts", None),
         )
@@ -578,8 +577,6 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
         def _fmt_llm_params() -> str | None:
             parts: list[str] = []
             try:
-                if getattr(req, "temperature", None) is not None:
-                    parts.append(f"temperature={float(req.temperature):.2f}")
                 r = getattr(req, "reasoning", None) or {}
                 if isinstance(r, dict) and r.get("effort"):
                     parts.append(f"reasoning.effort={r.get('effort')}")

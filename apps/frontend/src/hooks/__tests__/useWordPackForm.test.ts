@@ -10,8 +10,7 @@ const baseSettings: Settings = {
   regenerateScope: 'all',
   autoAdvanceAfterGrade: false,
   requestTimeoutMs: 30000,
-  model: 'gpt-4o-mini',
-  temperature: 0.6,
+  model: 'gpt-5.4-mini',
   reasoningEffort: 'minimal',
   textVerbosity: 'medium',
   theme: 'light',
@@ -57,14 +56,14 @@ describe('useWordPackForm', () => {
       return { form, currentSettings };
     }, { initialProps: { settings: baseSettings } });
 
-    expect(result.current.form.showAdvancedModelOptions).toBe(false);
+    expect(result.current.form.showAdvancedModelOptions).toBe(true);
 
     act(() => {
-      result.current.form.handleChangeModel('gpt-5-mini');
+      result.current.form.handleChangeModel('gpt-5.4-mini');
     });
-    expect(result.current.form.model).toBe('gpt-5-mini');
+    expect(result.current.form.model).toBe('gpt-5.4-mini');
     expect(result.current.form.showAdvancedModelOptions).toBe(true);
-    expect(result.current.currentSettings.model).toBe('gpt-5-mini');
+    expect(result.current.currentSettings.model).toBe('gpt-5.4-mini');
 
     act(() => {
       result.current.form.advancedSettings.handleChangeReasoningEffort('high');

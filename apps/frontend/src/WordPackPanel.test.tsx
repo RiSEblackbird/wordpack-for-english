@@ -238,9 +238,9 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     expect(input).toBeInTheDocument();
     // モデルドロップダウンが表示されている
     expect(screen.getByLabelText('モデル')).toBeInTheDocument();
-    // 1回目の生成は sampling 系モデルを選択（temperature を送る前提）
+    // 1回目の生成は mini モデルを選択する
     await act(async () => {
-      await user.selectOptions(screen.getByLabelText('モデル'), 'gpt-4o-mini');
+      await user.selectOptions(screen.getByLabelText('モデル'), 'gpt-5.4-mini');
     });
     await act(async () => {
       await user.type(input, 'delta');
@@ -256,16 +256,16 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     expect(urls.some((u) => u.endsWith('/api/word/pack'))).toBe(true);
     expect(urls.some((u) => u.endsWith('/api/review/grade_by_lemma'))).toBe(false);
 
-    // リクエストボディに model/temperature が含まれていること（非 reasoning モデルの場合）
+    // リクエストボディに model/reasoning/text が含まれていること
     const bodies = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
-    expect(bodies.some((b) => typeof b.model === 'string' && typeof b.temperature === 'number')).toBe(true);
+    expect(bodies.some((b) => b.model === 'gpt-5.4-mini' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
 
-    // gpt-5-mini を選択時は reasoning/text が入ること
+    // gpt-5.4-mini を選択時は reasoning/text が入ること
     const user2 = userEvent.setup();
     await act(async () => {
-      await user2.selectOptions(screen.getByLabelText('モデル'), 'gpt-5-mini');
+      await user2.selectOptions(screen.getByLabelText('モデル'), 'gpt-5.4-mini');
       const lemmaInput = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
       lemmaInput.value = '';
       await user2.type(lemmaInput, 'alpha');
@@ -274,12 +274,12 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     const bodies2 = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
-    expect(bodies2.some((b) => b.model === 'gpt-5-mini' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
+    expect(bodies2.some((b) => b.model === 'gpt-5.4-mini' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
 
-    // gpt-5-nano でも reasoning/text が入ること
+    // gpt-5.4-nano でも reasoning/text が入ること
     const user3 = userEvent.setup();
     await act(async () => {
-      await user3.selectOptions(screen.getByLabelText('モデル'), 'gpt-5-nano');
+      await user3.selectOptions(screen.getByLabelText('モデル'), 'gpt-5.4-nano');
       const lemmaInput2 = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
       lemmaInput2.value = '';
       await user3.type(lemmaInput2, 'beta');
@@ -288,7 +288,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     const bodies3 = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
-    expect(bodies3.some((b) => b.model === 'gpt-5-nano' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
+    expect(bodies3.some((b) => b.model === 'gpt-5.4-nano' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
   });
 
   it('creates empty WordPack via the new button and shows it', async () => {

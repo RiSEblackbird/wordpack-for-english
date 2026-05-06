@@ -22,15 +22,15 @@ def test_upsert_preserves_original_label():
     lemma_id = store._upsert_lemma(  # pylint: disable=protected-access
         label="Converge",
         sense_title="Sense Title",
-        llm_model="gpt-x",
-        llm_params='{"temperature": 0.2}',
+        llm_model="gpt-5.4-mini",
+        llm_params='{"reasoning":{"effort":"minimal"},"text":{"verbosity":"medium"}}',
         now=now,
     )
     payload = _lemma_payload(store, lemma_id)
     assert payload["label"] == "Converge"
     assert payload["sense_title"] == "Sense Title"
-    assert payload["llm_model"] == "gpt-x"
-    assert payload["llm_params"] == '{"temperature": 0.2}'
+    assert payload["llm_model"] == "gpt-5.4-mini"
+    assert payload["llm_params"] == '{"reasoning":{"effort":"minimal"},"text":{"verbosity":"medium"}}'
 
     store._upsert_lemma(  # pylint: disable=protected-access
         label="converge",
@@ -42,8 +42,8 @@ def test_upsert_preserves_original_label():
     updated = _lemma_payload(store, lemma_id)
     assert updated["label"] == "Converge"
     assert updated["sense_title"] == "Sense Title"
-    assert updated["llm_model"] == "gpt-x"
-    assert updated["llm_params"] == '{"temperature": 0.2}'
+    assert updated["llm_model"] == "gpt-5.4-mini"
+    assert updated["llm_params"] == '{"reasoning":{"effort":"minimal"},"text":{"verbosity":"medium"}}'
 
 
 def test_upsert_does_not_override_existing_sense_title():
@@ -62,7 +62,7 @@ def test_upsert_does_not_override_existing_sense_title():
     store._upsert_lemma(  # pylint: disable=protected-access
         label="accelerate",
         sense_title="速度を増す",
-        llm_model="gpt-5",
+        llm_model="gpt-5.4-nano",
         llm_params='{"foo": 1}',
         now=now,
     )
@@ -70,5 +70,5 @@ def test_upsert_does_not_override_existing_sense_title():
     payload = _lemma_payload(store, lemma_id)
     assert payload["label"] == "Accelerate"
     assert payload["sense_title"] == "初速を上げる"
-    assert payload["llm_model"] == "gpt-5"
+    assert payload["llm_model"] == "gpt-5.4-nano"
     assert payload["llm_params"] == '{"foo": 1}'

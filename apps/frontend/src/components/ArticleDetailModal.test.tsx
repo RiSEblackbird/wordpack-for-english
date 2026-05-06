@@ -20,7 +20,7 @@ describe('ArticleDetailModal', () => {
       body_en: 'English body',
       body_ja: '日本語本文',
       notes_ja: '補足',
-      llm_model: 'gpt-5-mini',
+      llm_model: 'gpt-5.4-mini',
       llm_params: 'reasoning.effort=minimal;text.verbosity=medium',
       generation_category: 'Dev',
       created_at: '2024-05-01T10:00:00+09:00',
@@ -52,7 +52,7 @@ describe('ArticleDetailModal', () => {
     expect(meta).toHaveTextContent('生成カテゴリ');
     expect(meta).toHaveTextContent('AIモデル');
     expect(meta).toHaveTextContent('AIパラメータ');
-    expect(meta).toHaveTextContent('gpt-5-mini');
+    expect(meta).toHaveTextContent('gpt-5.4-mini');
     expect(meta).toHaveTextContent('reasoning.effort=minimal;text.verbosity=medium');
     expect(meta).toHaveTextContent('2024/05/01 10:00');
     expect(meta).toHaveTextContent('1分5秒');

@@ -343,17 +343,15 @@ def test_word_pack_llm_model_updates_on_generate_and_regenerate(client):
         "/api/word/pack",
         json={
             "lemma": "alpha",
-            "model": "gpt-4o-mini",
-            "temperature": 0.5,
+            "model": "gpt-5.4-mini",
             "reasoning": {"effort": "medium"},
             "text": {"verbosity": "low"},
         },
     )
     assert r_gen.status_code == 200
     wp = r_gen.json()
-    assert wp.get("llm_model") == "gpt-4o-mini"
+    assert wp.get("llm_model") == "gpt-5.4-mini"
     assert wp.get("llm_params")
-    assert "temperature=0.50" in wp["llm_params"]
     assert "reasoning.effort=medium" in wp["llm_params"]
     assert "text.verbosity=low" in wp["llm_params"]
     assert isinstance(wp.get("sense_title"), str) and wp["sense_title"].strip()
@@ -371,16 +369,14 @@ def test_word_pack_llm_model_updates_on_generate_and_regenerate(client):
     r_regen = client.post(f"/api/word/packs/{pack_id}/regenerate", json={
         "pronunciation_enabled": True,
         "regenerate_scope": "all",
-        "model": "gpt-5-nano",
-        "temperature": 0.3,
+        "model": "gpt-5.4-nano",
         "reasoning": {"effort": "minimal"},
         "text": {"verbosity": "medium"},
     })
     assert r_regen.status_code == 200
     wp2 = r_regen.json()
-    assert wp2.get("llm_model") == "gpt-5-nano"
+    assert wp2.get("llm_model") == "gpt-5.4-nano"
     assert wp2.get("llm_params")
-    assert "temperature=0.30" in wp2["llm_params"]
     assert "reasoning.effort=minimal" in wp2["llm_params"]
     assert "text.verbosity=medium" in wp2["llm_params"]
     assert isinstance(wp2.get("sense_title"), str) and wp2["sense_title"].strip()
@@ -458,8 +454,7 @@ def test_generate_examples_uses_llm_meta(client, monkeypatch):
     resp = client.post(
         f"/api/word/packs/{pack_id}/examples/Dev/generate",
         json={
-            "model": "gpt-example-mini",
-            "temperature": 0.25,
+            "model": "gpt-5.4-mini",
             "reasoning": {"effort": "low"},
             "text": {"verbosity": "medium"},
         },
@@ -470,8 +465,7 @@ def test_generate_examples_uses_llm_meta(client, monkeypatch):
     assert payload.get("added") == 2
     assert payload["items"]
     first = payload["items"][0]
-    assert first["llm_model"] == "gpt-example-mini"
-    assert "temperature=0.25" in first["llm_params"]
+    assert first["llm_model"] == "gpt-5.4-mini"
     assert "reasoning.effort=low" in first["llm_params"]
     assert "text.verbosity=medium" in first["llm_params"]
     assert first.get("transcription_typing_count", 0) == 0
@@ -481,8 +475,7 @@ def test_generate_examples_uses_llm_meta(client, monkeypatch):
     detail = r_detail.json()
     examples = detail.get("examples", {}).get("Dev", [])
     assert len(examples) >= 2
-    assert examples[-1]["llm_model"] == "gpt-example-mini"
-    assert "temperature=0.25" in examples[-1]["llm_params"]
+    assert examples[-1]["llm_model"] == "gpt-5.4-mini"
     assert examples[-1]["transcription_typing_count"] == 0
 def test_word_lookup(client: TestClient, monkeypatch: pytest.MonkeyPatch):
     from backend.models.word import WordPack
@@ -1289,8 +1282,7 @@ def test_article_import_includes_llm_metadata(monkeypatch):
 
     payload = {
         "text": "Resilience keeps systems available.",
-        "model": "gpt-test-alpha",
-        "temperature": 0.42,
+        "model": "gpt-5.4-mini",
         "reasoning": {"effort": "focused"},
         "text_opts": {"verbosity": "medium"},
     }
@@ -1298,9 +1290,8 @@ def test_article_import_includes_llm_metadata(monkeypatch):
     r_imp = client.post("/api/article/import", json=payload)
     assert r_imp.status_code == 200
     data = r_imp.json()
-    assert data["llm_model"] == "gpt-test-alpha"
+    assert data["llm_model"] == "gpt-5.4-mini"
     assert data["llm_params"]
-    assert "temperature=0.42" in data["llm_params"]
     assert "reasoning.effort=focused" in data["llm_params"]
     assert "text.verbosity=medium" in data["llm_params"]
     # generation_category は明示指定していないため None のままでよい
@@ -1312,7 +1303,7 @@ def test_article_import_includes_llm_metadata(monkeypatch):
     r_get = client.get(f"/api/article/{art_id}")
     assert r_get.status_code == 200
     detail = r_get.json()
-    assert detail["llm_model"] == "gpt-test-alpha"
+    assert detail["llm_model"] == "gpt-5.4-mini"
     assert detail["llm_params"] == data["llm_params"]
     _assert_iso_utc(detail["generation_started_at"])
     _assert_iso_utc(detail["generation_completed_at"])
@@ -1348,8 +1339,7 @@ def test_article_import_category_and_zero_duration(monkeypatch):
 
     payload = {
         "text": "text",
-        "model": "gpt-x",
-        "temperature": 0.0,
+        "model": "gpt-5.4-mini",
         "generation_category": "Common",
     }
 
