@@ -104,6 +104,24 @@ def test_guest_session_cookie_is_issued(guest_test_client: tuple[TestClient, App
     assert client.cookies.get(cookie_name)
 
 
+def test_guest_logout_deletes_guest_session_cookie(
+    guest_test_client: tuple[TestClient, AppFirestoreStore],
+) -> None:
+    """ゲスト閲覧モードからのログアウトでゲスト Cookie を失効させる。"""
+
+    client, _store = guest_test_client
+
+    response = client.post("/api/auth/guest")
+    assert response.status_code == HTTPStatus.OK
+    cookie_name = settings.guest_session_cookie_name
+    assert client.cookies.get(cookie_name)
+
+    logout = client.post("/api/auth/logout")
+    assert logout.status_code == HTTPStatus.NO_CONTENT
+    assert client.cookies.get(cookie_name) is None
+    assert f"{cookie_name}=" in (logout.headers.get("set-cookie") or "")
+
+
 def test_guest_can_access_readonly_endpoint(guest_test_client: tuple[TestClient, AppFirestoreStore]) -> None:
     """ゲストセッションで WordPack の閲覧系 API が利用できることを確認する。"""
 
