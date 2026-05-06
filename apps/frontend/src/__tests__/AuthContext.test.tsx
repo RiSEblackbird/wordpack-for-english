@@ -5,10 +5,11 @@ import { vi } from 'vitest';
 import type { MockedFunction } from 'vitest';
 import { AuthProvider, useAuth } from '../AuthContext';
 
-const googleProviderMock = vi.fn(({ children }: { children: React.ReactNode }) => <>{children}</>);
+const googleProviderMock = vi.fn(({ children }: { clientId?: string; children: React.ReactNode }) => <>{children}</>);
 
 vi.mock('@react-oauth/google', () => ({
-  GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => googleProviderMock({ children }),
+  GoogleOAuthProvider: ({ clientId, children }: { clientId: string; children: React.ReactNode }) =>
+    googleProviderMock({ clientId, children }),
 }));
 
 const MissingFlagProbe: React.FC = () => {
@@ -83,6 +84,28 @@ describe('AuthProvider logging behaviour', () => {
 
     expect(await screen.findByTestId('client-flag')).toHaveTextContent('missing');
     expect(googleProviderMock).not.toHaveBeenCalled();
+  });
+
+  it('uses Google client ID from runtime config when build-time env is empty', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ google_client_id: 'runtime-client.apps.googleusercontent.com' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    render(
+      <AuthProvider clientId="">
+        <MissingFlagProbe />
+      </AuthProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('client-flag')).toHaveTextContent('ok');
+    });
+    expect(googleProviderMock).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: 'runtime-client.apps.googleusercontent.com' }),
+    );
   });
 
   it('prefers console.warn when bypass mode supplies a development credential', async () => {

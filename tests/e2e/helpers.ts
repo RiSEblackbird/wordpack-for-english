@@ -55,9 +55,9 @@ export const seedAuthenticatedSession = async (
 
 export const mockConfig = async (
   page: Page,
-  options: { requestTimeoutMs?: number; sessionAuthDisabled?: boolean } = {},
+  options: { requestTimeoutMs?: number; sessionAuthDisabled?: boolean; googleClientId?: string } = {},
 ): Promise<void> => {
-  const { requestTimeoutMs = 60000, sessionAuthDisabled = false } = options;
+  const { requestTimeoutMs = 60000, sessionAuthDisabled = false, googleClientId = 'e2e-client' } = options;
   await page.route('**/api/config', (route) =>
     route.fulfill({
       status: 200,
@@ -65,6 +65,7 @@ export const mockConfig = async (
       body: JSON.stringify({
         request_timeout_ms: requestTimeoutMs,
         session_auth_disabled: sessionAuthDisabled,
+        google_client_id: googleClientId,
       }),
     }),
   );

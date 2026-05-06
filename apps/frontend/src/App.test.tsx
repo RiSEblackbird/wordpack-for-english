@@ -93,7 +93,11 @@ const createMatchMediaMock =
 
 const configSuccess = () =>
   new Response(
-    JSON.stringify({ request_timeout_ms: 60000, llm_model: 'gpt-5.4-mini' }),
+    JSON.stringify({
+      request_timeout_ms: 60000,
+      llm_model: 'gpt-5.4-mini',
+      google_client_id: 'test-client',
+    }),
     { status: 200, headers: { 'Content-Type': 'application/json' } },
   );
 
@@ -195,7 +199,12 @@ describe('App navigation', () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = resolveUrl(input);
       if (url.endsWith('/api/config')) {
-        return Promise.resolve(configSuccess());
+        return Promise.resolve(
+          new Response(JSON.stringify({ request_timeout_ms: 60000, llm_model: 'gpt-5.4-mini' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        );
       }
       return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
     });
@@ -216,6 +225,22 @@ describe('App navigation', () => {
     const guidanceCard = screen.getByRole('alert');
     expect(guidanceCard).toHaveAttribute('aria-live', 'polite');
     expect(await axe(container)).toHaveNoViolations();
+  });
+
+  it('renders Google login when runtime config supplies the client ID', async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = resolveUrl(input);
+      if (url.endsWith('/api/config')) {
+        return Promise.resolve(configSuccess());
+      }
+      return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+
+    renderWithProviders('');
+
+    expect(await screen.findByRole('heading', { name: 'WordPack にサインイン' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Google.?でログイン/ })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Google ログインの設定が必要です' })).not.toBeInTheDocument();
   });
 
   it('shows the login screen when /api/config responds with 401', async () => {
