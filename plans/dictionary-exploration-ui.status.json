@@ -2,7 +2,7 @@
   "task": "dictionary-exploration-ui",
   "branch": "codex/dictionary-exploration-ui",
   "base_branch": "main",
-  "status": "ready_for_pr",
+  "status": "ci_green",
   "completed": [
     "repo_scan",
     "redesign_package_scan",
@@ -18,7 +18,8 @@
     "wordpack_detail",
     "guest_admin_notifications",
     "docs",
-    "tests_docs_pr"
+    "tests_docs_pr",
+    "ci_green"
   ],
   "in_progress": [],
   "pending": [],
@@ -29,15 +30,15 @@
     "wordpack_detail_tests": "passed: cd apps/frontend && npm test -- WordPackPanel.test.tsx WordPackListPanel.modal.test.tsx components/wordpack/OverviewSection.test.tsx",
     "route_shelves_tests": "passed: cd apps/frontend && npm test -- app/routes.test.ts pages/ShelvesPage/ShelvesPage.test.tsx",
     "frontend_full_tests": "passed: cd apps/frontend && npm test",
+    "frontend_ci_coverage": "passed: cd apps/frontend && npm test -- --coverage --silent",
     "frontend_build": "passed: cd apps/frontend && npm run build",
-    "backend_pytest": "failed: SESSION_SECRET_KEY=codex-test-secret-key-32-characters FIRESTORE_PROJECT_ID=wordpack-ci FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 PYTHONPATH=apps/backend .data/codex-test-venv/bin/pytest -q (existing/out-of-scope failures: tests/test_api.py::test_word_lookup, tests/test_github_actions_branch_policy.py::test_deploy_dry_run_is_main_only, tests/test_github_actions_branch_policy.py::test_deploy_production_runs_only_on_main_push_and_deploys_tested_commit)",
-    "e2e": "blocked: PATH=$PWD/.data/codex-test-venv/bin:$PATH npm run e2e starts servers, but Playwright Chromium is not installed under /Users/Taishi/Library/Caches/ms-playwright/chromium-1134"
+    "local_playwright_smoke": "passed: PATH=$PWD/.data/codex-test-venv/bin:$PATH npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts",
+    "github_actions_ci": "passed: CI run 25933762608 on head 3f6909a83bd5eba98fd64b305ced39371dc896da",
+    "github_actions_visual": "passed: Playwright visual regression run 25933762559 on head 3f6909a83bd5eba98fd64b305ced39371dc896da"
   },
   "risks": [
     "Explore and Shelves are initial dictionary surfaces; shelves currently persist local drafts only",
     "routing uses a lightweight custom router rather than react-router",
-    "WordPack list modal behavior remains while direct /wordpacks/:id detail routing is added",
-    "backend pytest has pre-existing branch-policy/API failures outside this UI slice",
-    "browser E2E is blocked until Playwright Chromium is installed"
+    "WordPack list modal behavior remains while direct /wordpacks/:id detail routing is added"
   ]
 }

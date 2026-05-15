@@ -57,6 +57,7 @@
 
 - 既存のゲスト読み取り専用制約、`guest_public`、通知、カスタムイベントの接続は維持
 - 管理系・認証系の挙動は今回のUI刷新で変更していない
+- CI対応として、新規辞書UI部品のcoverageを追加し、カード/リスト表示トグルのコントラスト不足を修正
 
 ## Preserved behavior
 
@@ -75,23 +76,18 @@
 
 - [x] `cd apps/frontend && npx tsc -p tsconfig.json`
 - [x] `cd apps/frontend && npm test`
+- [x] `cd apps/frontend && npm test -- --coverage --silent`
 - [x] `cd apps/frontend && npm run build`
-- [ ] `SESSION_SECRET_KEY=codex-test-secret-key-32-characters FIRESTORE_PROJECT_ID=wordpack-ci FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 PYTHONPATH=apps/backend .data/codex-test-venv/bin/pytest -q`
-- [ ] `PATH="$PWD/.data/codex-test-venv/bin:$PATH" npm run e2e`
+- [x] `PATH="$PWD/.data/codex-test-venv/bin:$PATH" npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts`
+- [x] GitHub Actions `CI` run `25933762608`
+- [x] GitHub Actions `Playwright visual regression` run `25933762559`
 
 ## Not run
 
-- Backend pytestは実行したが、今回のUI変更範囲外の既存失敗で完走しなかった。
-  - `tests/test_api.py::test_word_lookup`
-  - `tests/test_github_actions_branch_policy.py::test_deploy_dry_run_is_main_only`
-  - `tests/test_github_actions_branch_policy.py::test_deploy_production_runs_only_on_main_push_and_deploys_tested_commit`
-- E2Eは実行したが、Playwright Chromiumが `/Users/Taishi/Library/Caches/ms-playwright/chromium-1134` に未インストールのためブラウザ起動前に停止した。
-- フルブラウザのaxe確認はE2E環境未整備のため未実施。既存コンポーネントテスト内のaxeチェックは通過している。
+- なし。Linuxのvisual regressionはGitHub Actionsで確認済み。
 
 ## Risk areas
 
 - ExploreとShelvesは初期UIで、Shelvesはローカルの棚ドラフト保存まで。
 - ルーティングは軽量な独自ルーターで、react-router等への移行は含めていない。
 - WordPack一覧の既存モーダル/プレビュー挙動は維持し、詳細ページへの直接URLを追加した形。
-- Backend pytestには今回のUI刷新と独立した既存失敗が残っている。
-- E2E確認はPlaywright Chromiumのインストール後に再実行が必要。
