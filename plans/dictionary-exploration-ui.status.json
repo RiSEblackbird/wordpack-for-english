@@ -2,7 +2,7 @@
   "task": "dictionary-exploration-ui",
   "branch": "codex/dictionary-exploration-ui",
   "base_branch": "main",
-  "status": "in_progress",
+  "status": "ready_for_pr",
   "completed": [
     "repo_scan",
     "redesign_package_scan",
@@ -10,33 +10,34 @@
     "plan",
     "design_system",
     "app_shell_routing",
-    "docs"
-  ],
-  "in_progress": [
     "lexicon",
     "reader",
     "examples",
     "explore",
-    "shelves"
-  ],
-  "pending": [
+    "shelves",
     "wordpack_detail",
     "guest_admin_notifications",
+    "docs",
     "tests_docs_pr"
   ],
+  "in_progress": [],
+  "pending": [],
   "verification": {
     "frontend_typecheck": "passed: cd apps/frontend && npx tsc -p tsconfig.json",
     "app_settings_tests": "passed: cd apps/frontend && npm test -- App.test.tsx components/SettingsPanel.test.tsx",
     "reader_examples_wordpack_tests": "passed: cd apps/frontend && npm test -- ArticleImportPanel.test.tsx ArticleListPanel.test.tsx ExampleListPanel.test.tsx WordPackListPanel.modal.test.tsx WordPackListPanel.guest-mode.test.tsx",
     "wordpack_detail_tests": "passed: cd apps/frontend && npm test -- WordPackPanel.test.tsx WordPackListPanel.modal.test.tsx components/wordpack/OverviewSection.test.tsx",
     "route_shelves_tests": "passed: cd apps/frontend && npm test -- app/routes.test.ts pages/ShelvesPage/ShelvesPage.test.tsx",
-    "frontend_build": "passed: cd apps/frontend && npm run build"
+    "frontend_full_tests": "passed: cd apps/frontend && npm test",
+    "frontend_build": "passed: cd apps/frontend && npm run build",
+    "backend_pytest": "failed: SESSION_SECRET_KEY=codex-test-secret-key-32-characters FIRESTORE_PROJECT_ID=wordpack-ci FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 PYTHONPATH=apps/backend .data/codex-test-venv/bin/pytest -q (existing/out-of-scope failures: tests/test_api.py::test_word_lookup, tests/test_github_actions_branch_policy.py::test_deploy_dry_run_is_main_only, tests/test_github_actions_branch_policy.py::test_deploy_production_runs_only_on_main_push_and_deploys_tested_commit)",
+    "e2e": "blocked: PATH=$PWD/.data/codex-test-venv/bin:$PATH npm run e2e starts servers, but Playwright Chromium is not installed under /Users/Taishi/Library/Caches/ms-playwright/chromium-1134"
   },
   "risks": [
-    "routing migration",
-    "existing panel compatibility",
-    "guest mode lock coverage",
-    "hover/click generation behavior",
-    "mobile layout"
+    "Explore and Shelves are initial dictionary surfaces; shelves currently persist local drafts only",
+    "routing uses a lightweight custom router rather than react-router",
+    "WordPack list modal behavior remains while direct /wordpacks/:id detail routing is added",
+    "backend pytest has pre-existing branch-policy/API failures outside this UI slice",
+    "browser E2E is blocked until Playwright Chromium is installed"
   ]
 }
