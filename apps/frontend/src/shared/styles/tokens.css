@@ -1,0 +1,50 @@
+:root {
+  color-scheme: dark;
+  --dict-bg: #08111f;
+  --dict-bg-subtle: #0d1727;
+  --dict-surface: #111c2e;
+  --dict-surface-raised: #152238;
+  --dict-surface-soft: #f7f2e8;
+  --dict-border: #2a3950;
+  --dict-border-strong: #6e859f;
+  --dict-text: #e7edf7;
+  --dict-muted: #9aa8bb;
+  --dict-faint: #6f7d91;
+  --dict-accent: #83cef8;
+  --dict-accent-strong: #51b4ec;
+  --dict-green: #91e0b6;
+  --dict-yellow: #e8d77b;
+  --dict-rose: #f2909b;
+  --dict-purple: #b7a6ff;
+  --dict-danger: #f87171;
+  --dict-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+  --dict-radius: 8px;
+  --dict-radius-sm: 6px;
+  --dict-focus: 0 0 0 3px rgba(131, 206, 248, 0.28);
+  --dict-font:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+body.theme-light {
+  color-scheme: light;
+  --dict-bg: #f6f2ea;
+  --dict-bg-subtle: #eee8dc;
+  --dict-surface: #fffaf1;
+  --dict-surface-raised: #ffffff;
+  --dict-surface-soft: #fffaf1;
+  --dict-border: #d8cebd;
+  --dict-border-strong: #8a7a64;
+  --dict-text: #1e2938;
+  --dict-muted: #687486;
+  --dict-faint: #8f9aaa;
+  --dict-accent: #1677a7;
+  --dict-accent-strong: #0e5e88;
+  --dict-green: #19794a;
+  --dict-yellow: #9c7c16;
+  --dict-rose: #b34d5b;
+  --dict-purple: #6650a6;
+  --dict-danger: #b42318;
+  --dict-shadow: 0 24px 70px rgba(58, 48, 33, 0.16);
+}
+

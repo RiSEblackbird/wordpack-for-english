@@ -15,6 +15,12 @@ export interface Settings {
   theme: 'light' | 'dark';
   ttsPlaybackRate: number;
   ttsVolume: number;
+  dictionaryInstantGenerate?: boolean;
+  hoverTooltipDelayMs?: number;
+  openGeneratedWordPackIn?: 'side-peek' | 'detail';
+  defaultWordPackDensity?: 'shelf' | 'dense' | 'table';
+  ttsEnabled?: boolean;
+  autoPlayAfterGeneration?: boolean;
 }
 
 interface SettingsValue {
@@ -169,6 +175,12 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       theme: savedTheme === 'light' ? 'light' : 'dark',
       ttsPlaybackRate: normalizedTtsPlaybackRate,
       ttsVolume: normalizedTtsVolume,
+      dictionaryInstantGenerate: true,
+      hoverTooltipDelayMs: 180,
+      openGeneratedWordPackIn: 'side-peek',
+      defaultWordPackDensity: 'shelf',
+      ttsEnabled: true,
+      autoPlayAfterGeneration: false,
     };
   });
   const [status, setStatus] = useState<SettingsStatus>('loading');

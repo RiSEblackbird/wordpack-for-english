@@ -7,22 +7,29 @@
     "repo_scan",
     "redesign_package_scan",
     "branch_created",
-    "plan"
-  ],
-  "in_progress": [],
-  "pending": [
+    "plan",
     "design_system",
-    "app_shell_routing",
+    "app_shell_routing"
+  ],
+  "in_progress": [
     "lexicon",
-    "wordpack_detail",
     "reader",
     "examples",
     "explore",
-    "shelves",
+    "shelves"
+  ],
+  "pending": [
+    "wordpack_detail",
     "guest_admin_notifications",
     "tests_docs_pr"
   ],
-  "verification": {},
+  "verification": {
+    "frontend_typecheck": "passed: cd apps/frontend && npx tsc -p tsconfig.json",
+    "app_settings_tests": "passed: cd apps/frontend && npm test -- App.test.tsx components/SettingsPanel.test.tsx",
+    "reader_examples_wordpack_tests": "passed: cd apps/frontend && npm test -- ArticleImportPanel.test.tsx ArticleListPanel.test.tsx ExampleListPanel.test.tsx WordPackListPanel.modal.test.tsx WordPackListPanel.guest-mode.test.tsx",
+    "wordpack_detail_tests": "passed: cd apps/frontend && npm test -- WordPackPanel.test.tsx WordPackListPanel.modal.test.tsx components/wordpack/OverviewSection.test.tsx",
+    "frontend_build": "passed: cd apps/frontend && npm run build"
+  },
   "risks": [
     "routing migration",
     "existing panel compatibility",
