@@ -655,8 +655,8 @@ export const WordPackListPanel: React.FC = () => {
         /* ダークテーマの空状態テキストはWCAG AAの可読性を確保する */
         body.theme-dark .wp-empty { color: #9aa4b2; }
         .wp-view-toggle { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; }
-        .wp-toggle-btn { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
-        .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; }
+        .wp-toggle-btn { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; color: #0f172a; cursor: pointer; }
+        .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; color: #0f4d73; }
         .wp-index-grid { display: grid; grid-template-columns: 1fr; gap: 0.55rem; padding: 0.5rem 0.0rem; }
         @media (min-width: 900px) and (max-width: 1199px) {
           .wp-index-grid { grid-template-columns: 1fr 1fr; }

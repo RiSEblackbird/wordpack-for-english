@@ -332,8 +332,8 @@ export const ExampleListPanel: React.FC = () => {
         .wp-example-header { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
         .wp-sort-controls { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.5rem; }
         .wp-view-toggle { display: flex; gap: 0.3rem; align-items: center; margin-bottom: 0.5rem; }
-        .wp-toggle-btn { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
-        .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; }
+        .wp-toggle-btn { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; color: #0f172a; cursor: pointer; }
+        .wp-toggle-btn[aria-pressed="true"] { background: #e3f2fd; border-color: #2196f3; color: #0f4d73; }
         .wp-pagination { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem; }
         .ex-selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0; font-size: 0.9em; }
         .ex-selection-bar button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
