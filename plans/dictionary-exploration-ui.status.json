@@ -28,6 +28,7 @@
     "app_settings_tests": "passed: cd apps/frontend && npm test -- App.test.tsx components/SettingsPanel.test.tsx",
     "reader_examples_wordpack_tests": "passed: cd apps/frontend && npm test -- ArticleImportPanel.test.tsx ArticleListPanel.test.tsx ExampleListPanel.test.tsx WordPackListPanel.modal.test.tsx WordPackListPanel.guest-mode.test.tsx",
     "wordpack_detail_tests": "passed: cd apps/frontend && npm test -- WordPackPanel.test.tsx WordPackListPanel.modal.test.tsx components/wordpack/OverviewSection.test.tsx",
+    "route_shelves_tests": "passed: cd apps/frontend && npm test -- app/routes.test.ts pages/ShelvesPage/ShelvesPage.test.tsx",
     "frontend_build": "passed: cd apps/frontend && npm run build"
   },
   "risks": [
