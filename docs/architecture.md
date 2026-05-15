@@ -41,10 +41,14 @@ function word/basic lemma の除外、多語句の保持、重複排除はこの
 | モジュール | 責務 |
 | --- | --- |
 | `src/app` | アプリ entrypoint、theme 適用、トップレベル構成 |
+| `src/app/routes.ts` | `/lexicon`、`/wordpacks/:id`、`/reader`、`/examples`、`/explore`、`/shelves`、`/settings` の軽量 route 互換 |
+| `src/pages/*Page` | Lexicon / WordPack Detail / Reader / Examples / Explore / Shelves / Settings の画面単位の構成 |
 | `src/features/auth` | Google OAuth telemetry と sanitization |
 | `src/features/wordpack` | WordPack domain types、API helper、feature hooks/components |
 | `src/shared/api` | `ApiError`、JSON fetch、FastAPI detail parse、401 event dispatch |
+| `src/shared/ui` / `src/shared/styles` | 辞書UI向けの共通コンポーネント、theme token、layout utility |
 | `src/lib/fetcher.ts` | 既存 import path 用の compatibility re-export |
 
 `auth:unauthorized`、`wordpack:updated`、`wordpack:study-progress` の custom event は公開契約として扱う。
 旧 import path は段階移行のため残し、feature 配下への直接 import を新規コードの標準とする。
+新しい画面は既存 API と既存 panel の責務を壊さず、外側の AppShell / page 構成で辞書探索型の情報設計へ寄せる。

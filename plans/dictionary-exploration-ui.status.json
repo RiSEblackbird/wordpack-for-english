@@ -9,7 +9,8 @@
     "branch_created",
     "plan",
     "design_system",
-    "app_shell_routing"
+    "app_shell_routing",
+    "docs"
   ],
   "in_progress": [
     "lexicon",
