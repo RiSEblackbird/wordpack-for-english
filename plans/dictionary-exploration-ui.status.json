@@ -1,0 +1,44 @@
+{
+  "task": "dictionary-exploration-ui",
+  "branch": "codex/dictionary-exploration-ui",
+  "base_branch": "main",
+  "status": "ci_green",
+  "completed": [
+    "repo_scan",
+    "redesign_package_scan",
+    "branch_created",
+    "plan",
+    "design_system",
+    "app_shell_routing",
+    "lexicon",
+    "reader",
+    "examples",
+    "explore",
+    "shelves",
+    "wordpack_detail",
+    "guest_admin_notifications",
+    "docs",
+    "tests_docs_pr",
+    "ci_green"
+  ],
+  "in_progress": [],
+  "pending": [],
+  "verification": {
+    "frontend_typecheck": "passed: cd apps/frontend && npx tsc -p tsconfig.json",
+    "app_settings_tests": "passed: cd apps/frontend && npm test -- App.test.tsx components/SettingsPanel.test.tsx",
+    "reader_examples_wordpack_tests": "passed: cd apps/frontend && npm test -- ArticleImportPanel.test.tsx ArticleListPanel.test.tsx ExampleListPanel.test.tsx WordPackListPanel.modal.test.tsx WordPackListPanel.guest-mode.test.tsx",
+    "wordpack_detail_tests": "passed: cd apps/frontend && npm test -- WordPackPanel.test.tsx WordPackListPanel.modal.test.tsx components/wordpack/OverviewSection.test.tsx",
+    "route_shelves_tests": "passed: cd apps/frontend && npm test -- app/routes.test.ts pages/ShelvesPage/ShelvesPage.test.tsx",
+    "frontend_full_tests": "passed: cd apps/frontend && npm test",
+    "frontend_ci_coverage": "passed: cd apps/frontend && npm test -- --coverage --silent",
+    "frontend_build": "passed: cd apps/frontend && npm run build",
+    "local_playwright_smoke": "passed: PATH=$PWD/.data/codex-test-venv/bin:$PATH npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts",
+    "github_actions_ci": "passed: GitHub Actions CI on the pushed PR head",
+    "github_actions_visual": "passed: GitHub Actions Playwright visual regression on the pushed PR head"
+  },
+  "risks": [
+    "Explore and Shelves are initial dictionary surfaces; shelves currently persist local drafts only",
+    "routing uses a lightweight custom router rather than react-router",
+    "WordPack list modal behavior remains while direct /wordpacks/:id detail routing is added"
+  ]
+}

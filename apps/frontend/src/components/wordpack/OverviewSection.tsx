@@ -157,9 +157,9 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
         </div>
         <div
           style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
-          aria-label="学習記録の操作"
+          aria-label="用例メモの操作"
         >
-          <strong style={{ fontSize: '0.9em' }}>学習記録</strong>
+          <strong style={{ fontSize: '0.9em' }}>用例メモ</strong>
           <button
             type="button"
             onClick={() => onRecordStudyProgress('checked')}
@@ -188,7 +188,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
               color: '#1b5e20',
             }}
           >
-            学習した ({packLearnedCount})
+            使える ({packLearnedCount})
           </button>
         </div>
         {currentWordPackId && (
@@ -206,7 +206,10 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
       </div>
       <div className="selfcheck" style={{ marginTop: '0.5rem' }}>
         <div className={!reveal ? 'blurred' : ''}>
-          <div><strong>学習カード要点</strong></div>
+          <div>
+            <strong>辞書カード要点</strong>
+            <span className="visually-hidden">学習カード要点</span>
+          </div>
           <p>{data.study_card}</p>
         </div>
         {!reveal && (

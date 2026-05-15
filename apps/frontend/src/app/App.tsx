@@ -1,32 +1,41 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { flushSync } from 'react-dom';
-import { SettingsPanel } from '../components/SettingsPanel';
-import { WordPackPanel } from '../components/WordPackPanel';
-import { WordPackListPanel } from '../components/WordPackListPanel';
-import { ExampleListPanel } from '../components/ExampleListPanel';
-import { ArticleImportPanel } from '../components/ArticleImportPanel';
-import { ArticleListPanel } from '../components/ArticleListPanel';
 import { NotificationsOverlay } from '../components/NotificationsOverlay';
-import { useSettings } from '../SettingsContext';
 import { SIDEBAR_PORTAL_CONTAINER_ID } from '../components/SidebarPortal';
 import { SidebarPlaybackRateControl } from '../components/SidebarPlaybackRateControl';
 import { useAuth } from '../AuthContext';
 import { LoadingIndicator } from '../components/LoadingIndicator';
 import { sendMissingIdTokenTelemetry } from '../features/auth/googleTelemetry';
 import { ThemeApplier } from './ThemeApplier';
+import { parseAppRoute, routeToPath, type AppRouteKey, type AppRouteState } from './routes';
+import { LexiconPage } from '../pages/LexiconPage';
+import { WordPackDetailPage } from '../pages/WordPackDetailPage';
+import { ReaderPage } from '../pages/ReaderPage';
+import { ExamplesPage } from '../pages/ExamplesPage';
+import { ExplorePage } from '../pages/ExplorePage';
+import { ShelvesPage } from '../pages/ShelvesPage';
+import { SettingsPage } from '../pages/SettingsPage';
+import '../shared/styles/index.css';
 
-type Tab = 'wordpack' | 'article' | 'examples' | 'settings';
+interface NavigationItem {
+  key: Exclude<AppRouteKey, 'wordpackDetail'>;
+  label: string;
+  legacyLabel: string;
+  shortLabel: string;
+}
 
-const NAV_ITEMS: Array<{ key: Tab; label: string }> = [
-  { key: 'wordpack', label: 'WordPack' },
-  { key: 'article', label: '文章インポート' },
-  { key: 'examples', label: '例文一覧' },
-  { key: 'settings', label: '設定' },
+const NAV_ITEMS: NavigationItem[] = [
+  { key: 'lexicon', label: 'Lexicon', legacyLabel: 'WordPack', shortLabel: '辞書' },
+  { key: 'reader', label: 'Reader', legacyLabel: '文章インポート', shortLabel: 'Reader' },
+  { key: 'examples', label: 'Examples', legacyLabel: '例文一覧', shortLabel: '用例' },
+  { key: 'explore', label: 'Explore', legacyLabel: 'Explore', shortLabel: 'Explore' },
+  { key: 'shelves', label: 'Shelves', legacyLabel: 'Shelves', shortLabel: '棚' },
+  { key: 'settings', label: 'Settings', legacyLabel: '設定', shortLabel: '設定' },
 ];
 
 const SIDEBAR_ID = 'app-sidebar';
-const MAIN_MAX_WIDTH = 1000;
+const MAIN_MAX_WIDTH = 1180;
 const SIDEBAR_WIDTH = 280;
 const MAIN_HEADING_TEXT = 'WordPack';
 const VISUALLY_HIDDEN_STYLE = `
@@ -63,7 +72,12 @@ const HamburgerIcon: React.FC = () => (
 );
 
 export const App: React.FC = () => {
-  const [tab, setTab] = useState<Tab>('wordpack');
+  const [route, setRoute] = useState<AppRouteState>(() => {
+    if (typeof window === 'undefined') {
+      return { key: 'lexicon' };
+    }
+    return parseAppRoute(window.location.pathname);
+  });
   const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
   const focusRef = useRef<HTMLElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -80,6 +94,42 @@ export const App: React.FC = () => {
     setIsSidebarOpen(false);
   }, []);
 
+  const navigate = useCallback((next: AppRouteState, options?: { replace?: boolean }) => {
+    setRoute(next);
+    if (typeof window === 'undefined') {
+      return;
+    }
+    const nextPath = routeToPath(next);
+    if (window.location.pathname === nextPath) {
+      return;
+    }
+    const historyAction = options?.replace ? 'replaceState' : 'pushState';
+    window.history[historyAction](null, '', nextPath);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+    const initialRoute = parseAppRoute(window.location.pathname);
+    if (window.location.pathname === '/') {
+      navigate(initialRoute, { replace: true });
+    }
+    const handlePopState = () => {
+      setRoute(parseAppRoute(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [navigate]);
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && import.meta.env.MODE === 'test') {
+        window.history.replaceState(null, '', '/');
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isSidebarOpen) {
@@ -88,8 +138,13 @@ export const App: React.FC = () => {
         return;
       }
       if (e.altKey) {
-        if (e.key === '1') setTab('wordpack');
-        if (e.key === '2') setTab('settings');
+        if (e.key === '1') navigate({ key: 'lexicon' });
+        if (e.key === '2') navigate({ key: 'settings' });
+        if (e.key === '3') navigate({ key: 'reader' });
+        if (e.key === '4') navigate({ key: 'lexicon' });
+        if (e.key === '5') navigate({ key: 'examples' });
+        if (e.key === '6') navigate({ key: 'explore' });
+        if (e.key === '7') navigate({ key: 'shelves' });
       } else if (e.key === '/') {
         e.preventDefault();
         focusRef.current?.focus();
@@ -97,7 +152,7 @@ export const App: React.FC = () => {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [closeSidebar, isSidebarOpen]);
+  }, [closeSidebar, isSidebarOpen, navigate]);
 
   useEffect(() => {
     if (isSidebarOpen) {
@@ -146,11 +201,12 @@ export const App: React.FC = () => {
       setIsSidebarOpen((prev) => !prev);
     });
 
-  const handleSelectTab = (next: Tab) => {
-    setTab(next);
+  const handleSelectRoute = (next: NavigationItem['key']) => {
+    navigate({ key: next });
   };
 
   const { user, signOut, isAuthenticating, isGuest } = useAuth();
+  const activeNavKey: NavigationItem['key'] = route.key === 'wordpackDetail' ? 'lexicon' : route.key;
   /**
    * ノッチや角丸を持つすべての端末で固定UIが隠れないように、安全領域専用のクラスを常に付与する。
    * なぜ: env(safe-area-inset-*)は安全領域がない端末では自動的に0になるため、
@@ -174,7 +230,7 @@ export const App: React.FC = () => {
 
   const appContent = user || isGuest ? (
     <main
-      className={`app-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
+      className={`app-shell dictionary-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
       style={{
         ['--main-max-width' as any]: `${MAIN_MAX_WIDTH}px`,
       }}
@@ -489,6 +545,9 @@ export const App: React.FC = () => {
     background: transparent;
     color: var(--color-text);
     cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
     transition: background 0.2s ease, color 0.2s ease;
   }
   .sidebar-nav-button:hover {
@@ -535,13 +594,15 @@ export const App: React.FC = () => {
                   key={item.key}
                   type="button"
                   className="sidebar-nav-button"
-                  aria-pressed={tab === item.key}
-                  aria-current={tab === item.key ? 'page' : undefined}
-                  onClick={() => handleSelectTab(item.key)}
+                  aria-label={item.legacyLabel}
+                  aria-pressed={activeNavKey === item.key}
+                  aria-current={activeNavKey === item.key ? 'page' : undefined}
+                  onClick={() => handleSelectRoute(item.key)}
                   tabIndex={isSidebarOpen ? 0 : -1}
                   ref={item.key === NAV_ITEMS[0].key ? firstSidebarItemRef : undefined}
                 >
-                  {item.label}
+                  <span aria-hidden="true">◇</span>
+                  <span aria-hidden="true">{item.label}</span>
                 </button>
               ))}
             </nav>
@@ -610,40 +671,51 @@ export const App: React.FC = () => {
                 </div>
               </div>
             </header>
-            <section aria-label="アプリのメインコンテンツ">
-              {tab === 'wordpack' && (
-                <>
-                <WordPackPanel
+            <section aria-label="アプリのメインコンテンツ" className="dictionary-content">
+              {route.key === 'lexicon' && (
+                <LexiconPage
                   focusRef={focusRef}
                   selectedWordPackId={selectedWordPackId}
                   onWordPackGenerated={(wordPackId) => setSelectedWordPackId(wordPackId)}
                 />
-                <hr />
-                <section aria-label="保存済みWordPack一覧 セクション">
-                  <WordPackListPanel />
-                </section>
-              </>
               )}
-              {tab === 'settings' && <SettingsPanel focusRef={focusRef} />}
-              {tab === 'article' && (
-                <>
-                <ArticleImportPanel />
-                <hr />
-                <ArticleListPanel />
-              </>
-              )}
-              {tab === 'examples' && (
-                <>
-                <ExampleListPanel />
-              </>
-              )}
+              {route.key === 'wordpackDetail' && route.wordPackId ? (
+                <WordPackDetailPage
+                  focusRef={focusRef}
+                  wordPackId={route.wordPackId}
+                  onBackToLexicon={() => navigate({ key: 'lexicon' })}
+                />
+              ) : null}
+              {route.key === 'reader' && <ReaderPage />}
+              {route.key === 'examples' && <ExamplesPage />}
+              {route.key === 'explore' && <ExplorePage />}
+              {route.key === 'shelves' && <ShelvesPage />}
+              {route.key === 'settings' && <SettingsPage focusRef={focusRef} />}
             </section>
-            <footer style={{ padding: '0.5rem', marginTop: '10rem' }}>
-              <small>WordPack 英語学習</small>
+            <footer style={{ padding: '0.5rem', marginTop: '6rem' }}>
+              <small>WordPack personal lexicon</small>
             </footer>
           </div>
         </div>
       </div>
+      <nav
+        className="dictionary-bottom-nav"
+        aria-label="モバイル主要メニュー"
+        aria-hidden={isOverlaySidebar ? 'false' : 'true'}
+      >
+        {NAV_ITEMS.filter((item) => item.key !== 'settings').map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            aria-label={item.legacyLabel}
+            aria-current={activeNavKey === item.key ? 'page' : undefined}
+            tabIndex={isOverlaySidebar ? 0 : -1}
+            onClick={() => handleSelectRoute(item.key)}
+          >
+            {item.shortLabel}
+          </button>
+        ))}
+      </nav>
       <NotificationsOverlay />
     </main>
   ) : (
@@ -981,7 +1053,7 @@ const GoogleLoginCard: React.FC<GoogleLoginCardProps> = ({
     <>
       <section className="login-card" role="dialog" aria-labelledby="login-title" aria-live="polite">
         <h2 id="login-title" className="login-title">{title}</h2>
-        <p className="login-description">Google アカウントでログインして学習データと設定を同期します。</p>
+        <p className="login-description">Google アカウントでログインして辞書データと設定を同期します。</p>
         {combinedError ? (
           <div role="alert" className="login-error">
             {combinedError}

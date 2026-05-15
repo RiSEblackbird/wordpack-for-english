@@ -1,0 +1,439 @@
+.dictionary-shell {
+  --main-max-width: min(1180px, calc(100vw - 2rem));
+  background:
+    linear-gradient(180deg, rgba(131, 206, 248, 0.06), transparent 280px),
+    var(--dict-bg);
+  color: var(--dict-text);
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.dictionary-main {
+  width: 100%;
+  display: grid;
+  gap: 1rem;
+}
+
+.dictionary-page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 0 0.75rem;
+  border-bottom: 1px solid rgba(131, 206, 248, 0.2);
+}
+
+.dictionary-page-title {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.dictionary-page-title h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1;
+}
+
+.dictionary-page-title p {
+  margin: 0;
+  color: var(--dict-muted);
+  font-size: 0.98rem;
+}
+
+.dictionary-top-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dictionary-searchbar {
+  min-width: min(100%, 360px);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--dict-border);
+  border-radius: var(--dict-radius);
+  background: var(--dict-surface);
+  color: var(--dict-muted);
+}
+
+.dictionary-searchbar input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--dict-text);
+}
+
+.dictionary-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.dictionary-grid.two-column {
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.9fr);
+  align-items: start;
+}
+
+.dictionary-section,
+.dictionary-card {
+  border: 1px solid var(--dict-border);
+  border-radius: var(--dict-radius);
+  background: color-mix(in srgb, var(--dict-surface) 94%, transparent);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+}
+
+.dictionary-section {
+  padding: 1rem;
+}
+
+.dictionary-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.dictionary-section-header h3,
+.dictionary-section-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.dictionary-section-header p {
+  margin: 0.2rem 0 0;
+  color: var(--dict-muted);
+}
+
+.dictionary-meta-row {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.dictionary-panel-bridge {
+  display: grid;
+  gap: 1rem;
+}
+
+.dictionary-panel-bridge > hr {
+  display: none;
+}
+
+.dictionary-reader-canvas {
+  min-height: 420px;
+  padding: 1.5rem;
+  border-radius: var(--dict-radius);
+  background: var(--dict-surface-soft);
+  color: #202938;
+  line-height: 1.75;
+  font-size: 1.08rem;
+}
+
+body.theme-dark .dictionary-reader-canvas {
+  color: #202938;
+}
+
+.dictionary-bottom-nav {
+  display: none;
+}
+
+.explore-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
+  gap: 1rem;
+}
+
+.explore-graph {
+  min-height: 440px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--dict-border);
+  border-radius: var(--dict-radius);
+  background:
+    linear-gradient(90deg, rgba(131, 206, 248, 0.06) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(131, 206, 248, 0.06) 1px, transparent 1px),
+    var(--dict-bg-subtle);
+  background-size: 54px 54px;
+}
+
+.explore-node {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  gap: 0.15rem;
+  width: 7rem;
+  height: 7rem;
+  border: 2px solid var(--dict-accent);
+  border-radius: 999px;
+  background: rgba(131, 206, 248, 0.14);
+  color: var(--dict-text);
+  cursor: pointer;
+}
+
+.explore-node span {
+  color: var(--dict-muted);
+  font-size: 0.72rem;
+}
+
+.explore-node.center {
+  left: calc(50% - 3.5rem);
+  top: calc(50% - 3.5rem);
+  width: 8rem;
+  height: 8rem;
+}
+
+.explore-node.purple {
+  left: 24%;
+  top: 28%;
+  border-color: var(--dict-purple);
+}
+
+.explore-node.green {
+  left: 18%;
+  top: 62%;
+  border-color: var(--dict-green);
+}
+
+.explore-node.yellow {
+  right: 16%;
+  top: 15%;
+  border-color: var(--dict-yellow);
+}
+
+.explore-node.rose {
+  right: -2.5rem;
+  top: 32%;
+  border-color: var(--dict-rose);
+}
+
+.explore-node.empty {
+  left: 46%;
+  bottom: 10%;
+  width: 5.5rem;
+  height: 5.5rem;
+  border-style: dashed;
+}
+
+.explore-node[aria-pressed='true'] {
+  background: rgba(131, 206, 248, 0.24);
+  box-shadow: var(--dict-focus);
+}
+
+.explore-side {
+  padding: 1rem;
+  border: 1px solid var(--dict-border);
+  border-radius: var(--dict-radius);
+  background: var(--dict-surface);
+}
+
+.explore-side h3 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.explore-side h4 {
+  margin-bottom: 0.4rem;
+  color: var(--dict-accent);
+}
+
+.explore-side ul {
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+  padding: 0;
+}
+
+.explore-side li {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--dict-border);
+  border-radius: var(--dict-radius-sm);
+  background: var(--dict-surface-raised);
+}
+
+.shelf-create-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) auto;
+  gap: 0.6rem;
+}
+
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.shelf-card {
+  min-height: 170px;
+  display: grid;
+  gap: 0.5rem;
+  align-content: space-between;
+  padding: 1rem;
+  border: 1px solid var(--dict-border);
+  border-left: 7px solid var(--dict-accent);
+  border-radius: var(--dict-radius);
+  background: var(--dict-surface);
+}
+
+.shelf-card h3 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.shelf-card p {
+  margin: 0;
+  color: var(--dict-muted);
+}
+
+.shelf-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--dict-faint);
+}
+
+.shelf-card.yellow,
+.shelf-card.gold {
+  border-left-color: var(--dict-yellow);
+}
+
+.shelf-card.rose {
+  border-left-color: var(--dict-rose);
+}
+
+.shelf-card.green {
+  border-left-color: var(--dict-green);
+}
+
+.shelf-card.purple {
+  border-left-color: var(--dict-purple);
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.settings-card {
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid var(--dict-border);
+  border-radius: var(--dict-radius);
+  background: var(--dict-surface);
+}
+
+.settings-card h3 {
+  margin: 0;
+}
+
+.settings-card p {
+  margin: 0;
+  color: var(--dict-muted);
+  line-height: 1.55;
+}
+
+.settings-field,
+.settings-switch {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--dict-muted);
+}
+
+.settings-switch {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.settings-field input,
+.settings-field select,
+.settings-card select {
+  width: 100%;
+  border: 1px solid var(--dict-border);
+  border-radius: var(--dict-radius-sm);
+  background: var(--dict-surface-raised);
+  color: var(--dict-text);
+  padding: 0.5rem 0.65rem;
+}
+
+@media (max-width: 860px) {
+  .dictionary-page-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .dictionary-top-actions {
+    justify-content: flex-start;
+  }
+
+  .dictionary-grid.two-column {
+    grid-template-columns: 1fr;
+  }
+
+  .explore-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .explore-graph {
+    min-height: 340px;
+  }
+
+  .shelf-create-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .dictionary-shell .main-inner {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
+  .dictionary-page-title h2 {
+    font-size: 1.7rem;
+  }
+
+  .dictionary-section {
+    padding: 0.85rem;
+  }
+
+  .dictionary-bottom-nav {
+    position: fixed;
+    left: calc(0.75rem + env(safe-area-inset-left));
+    right: calc(0.75rem + env(safe-area-inset-right));
+    bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    z-index: 850;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.25rem;
+    padding: 0.45rem;
+    border: 1px solid var(--dict-border);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--dict-surface) 92%, black 8%);
+    box-shadow: var(--dict-shadow);
+  }
+
+  .dictionary-bottom-nav button {
+    min-width: 0;
+    border: 0;
+    border-radius: 8px;
+    padding: 0.45rem 0.25rem;
+    background: transparent;
+    color: var(--dict-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .dictionary-bottom-nav button[aria-current='page'] {
+    background: rgba(131, 206, 248, 0.16);
+    color: var(--dict-text);
+  }
+}

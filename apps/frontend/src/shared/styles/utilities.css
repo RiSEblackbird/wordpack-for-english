@@ -1,0 +1,100 @@
+.dictionary-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.18rem 0.55rem;
+  border: 1px solid var(--dict-border);
+  border-radius: 999px;
+  color: var(--dict-muted);
+  background: rgba(131, 206, 248, 0.06);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.dictionary-badge.accent {
+  color: var(--dict-accent);
+  border-color: color-mix(in srgb, var(--dict-accent) 45%, transparent);
+  background: rgba(131, 206, 248, 0.12);
+}
+
+.dictionary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+  border: 1px solid var(--dict-border);
+  border-radius: var(--dict-radius-sm);
+  padding: 0.45rem 0.8rem;
+  background: var(--dict-surface-raised);
+  color: var(--dict-text);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dictionary-button.primary {
+  border-color: color-mix(in srgb, var(--dict-accent) 55%, transparent);
+  background: var(--dict-accent);
+  color: #102033;
+}
+
+.dictionary-button.subtle {
+  color: var(--dict-muted);
+  background: transparent;
+}
+
+.dictionary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.dictionary-link-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--dict-accent);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dictionary-chip-list {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.dictionary-segmented {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid var(--dict-border);
+  border-radius: var(--dict-radius);
+  background: var(--dict-bg-subtle);
+}
+
+.dictionary-segmented button {
+  border: 0;
+  border-radius: 6px;
+  padding: 0.35rem 0.7rem;
+  background: transparent;
+  color: var(--dict-muted);
+  cursor: pointer;
+}
+
+.dictionary-segmented button[aria-pressed='true'] {
+  background: rgba(131, 206, 248, 0.16);
+  color: var(--dict-text);
+}
+
+.dictionary-empty {
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  border: 1px dashed var(--dict-border);
+  border-radius: var(--dict-radius);
+  color: var(--dict-muted);
+  text-align: center;
+  padding: 1.5rem;
+}
+
