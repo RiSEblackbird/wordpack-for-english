@@ -79,8 +79,8 @@
 - [x] `cd apps/frontend && npm test -- --coverage --silent`
 - [x] `cd apps/frontend && npm run build`
 - [x] `PATH="$PWD/.data/codex-test-venv/bin:$PATH" npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts`
-- [x] GitHub Actions `CI` run `25933762608`
-- [x] GitHub Actions `Playwright visual regression` run `25933762559`
+- [x] GitHub Actions `CI`
+- [x] GitHub Actions `Playwright visual regression`
 
 ## Not run
 

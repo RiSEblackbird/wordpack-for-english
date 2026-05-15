@@ -33,8 +33,8 @@
     "frontend_ci_coverage": "passed: cd apps/frontend && npm test -- --coverage --silent",
     "frontend_build": "passed: cd apps/frontend && npm run build",
     "local_playwright_smoke": "passed: PATH=$PWD/.data/codex-test-venv/bin:$PATH npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts",
-    "github_actions_ci": "passed: CI run 25933762608 on head 3f6909a83bd5eba98fd64b305ced39371dc896da",
-    "github_actions_visual": "passed: Playwright visual regression run 25933762559 on head 3f6909a83bd5eba98fd64b305ced39371dc896da"
+    "github_actions_ci": "passed: GitHub Actions CI on the pushed PR head",
+    "github_actions_visual": "passed: GitHub Actions Playwright visual regression on the pushed PR head"
   },
   "risks": [
     "Explore and Shelves are initial dictionary surfaces; shelves currently persist local drafts only",
