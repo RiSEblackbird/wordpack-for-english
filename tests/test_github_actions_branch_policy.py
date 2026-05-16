@@ -68,33 +68,30 @@ def test_deploy_dry_run_is_main_only() -> None:
     _assert_contains_all(yml, ["google-github-actions/auth@v2", "setup-gcloud@v2"])
 
 
-def test_deploy_production_runs_only_on_main_push_and_deploys_tested_commit() -> None:
+def test_ci_does_not_embed_production_deploy_job() -> None:
     """
-    Contract: production deployment must appear as a check on the same commit (Checks UI),
-    so it must be implemented as a CI job that runs only for push-to-main after other CI jobs succeed.
+    Contract: production deployment is owned by deploy-production.yml.
+    CI may run guards and dry-runs, but it must not contain the production deploy job.
     """
     yml = _read_text(".github/workflows/ci.yml")
-    # Guardrails: run only on push-to-main.
-    _assert_contains_all(
+    _assert_contains_none(
         yml,
         [
             "deploy_production:",
-            "if: github.event_name == 'push' && github.ref == 'refs/heads/main'",
+            "environment: production",
         ],
     )
-    # Sanity: ensure this job is actually the one touching GCP.
-    _assert_contains_all(yml, ["google-github-actions/auth@v2", "setup-gcloud@v2"])
-    _assert_contains_all(yml, ["make release-cloud-run", "TOOL=firebase"])
+    _assert_contains_all(yml, ["cloud_run_guard:", "deploy_cloud_run.sh --dry-run"])
 
 
-def test_deploy_production_workflow_is_manual_fallback_only() -> None:
+def test_deploy_production_workflow_runs_on_main_push_or_manual_only() -> None:
     """
-    Contract: automatic production deploy runs as a CI job.
-    The standalone deploy-production workflow must not auto-trigger from workflow_run (avoid double deploys).
+    Contract: automatic production deploy runs from the standalone workflow on main push.
+    workflow_dispatch remains as the manual fallback, and workflow_run is not used.
     """
     yml = _read_text(".github/workflows/deploy-production.yml")
     on_block = _extract_on_block(yml)
-    _assert_contains_all(on_block, ["workflow_dispatch:"])
-    _assert_contains_none(on_block, ["workflow_run:"])
+    _assert_contains_all(on_block, ["push:", "branches:", "main", "workflow_dispatch:"])
+    _assert_contains_none(on_block, ["workflow_run:", "pull_request:"])
     _assert_contains_none(yml, ["github.event.workflow_run."])
 

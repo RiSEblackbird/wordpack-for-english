@@ -22,8 +22,8 @@ jobs:
     env:
       FIRESTORE_PROJECT_ID: wordpack-ci
       FIRESTORE_EMULATOR_PORT: 8080
-      FIRESTORE_EMULATOR_HOST: ""
-      ENABLE_FIRESTORE_EMULATOR: "false"
+      FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080"
+      ENABLE_FIRESTORE_EMULATOR: "true"
     strategy:
       matrix:
         python-version: ['3.13']
