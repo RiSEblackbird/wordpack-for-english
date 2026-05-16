@@ -632,8 +632,8 @@ base64 -w 0 .env.deploy  # 出力を手動コピー
     ```
 
 - 500 Internal Server Error（WordPack 生成時）で `reason_code=PARAM_UNSUPPORTED`
-  - 原因: SDK が現行の Responses API パラメータに追従していない可能性があります。
-  - 対応: `pip install -U openai` 後に再起動してください。
+  - 原因: Responses API へ送る任意パラメータが、選択モデルの現行仕様で拒否されている可能性があります。
+  - 対応: 最新版では `response_format` を送らず `text.format` を使い、`reasoning` / `text.verbosity` が拒否された場合は自動で外して再試行します。古い環境では最新版へ更新し、必要なら `pip install -U openai` 後に再起動してください。
 
 - 500 Internal Server Error で `ValidationError: 1 validation error for ContrastItem with Field required`
   - 原因: Pydantic v2 のエイリアス設定未適用により `with` → `with_` マッピング不全

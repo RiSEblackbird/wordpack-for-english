@@ -91,7 +91,7 @@ def handle_flow_runtime_error(
                 detail={
                     "message": "LLM parameter not supported by model",
                     "reason_code": "PARAM_UNSUPPORTED",
-                    "hint": "モデルの仕様変更により Responses API パラメータが非対応の可能性。最新SDK/パラメータを使用してください。",
+                    "hint": "任意の reasoning/text 指定を外しても失敗しました。モデル名、OpenAI SDK、Responses API の対応状況を確認してください。",
                 },
             ) from exc
 

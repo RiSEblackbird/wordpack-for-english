@@ -154,18 +154,63 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
         *,
         prompt: str,
         use_json: bool,
+        include_reasoning: bool,
+        include_text_options: bool,
     ) -> Any:
         kwargs: dict[str, Any] = {
             "model": self._model,
             "input": prompt,
-            "reasoning": self._reasoning,
-            "text": self._text,
             "max_output_tokens": int(getattr(settings, "llm_max_tokens", 900)),
             "timeout": settings.llm_timeout_ms / 1000.0,
         }
+        if include_reasoning and self._reasoning:
+            kwargs["reasoning"] = self._reasoning
+        text_options: dict[str, Any] = {}
+        if include_text_options and isinstance(self._text, dict):
+            text_options = dict(self._text)
         if use_json:
-            kwargs["response_format"] = {"type": "json_object"}
+            text_options["format"] = {"type": "json_object"}
+        if text_options:
+            kwargs["text"] = text_options
         return self._client.responses.create(**kwargs)
+
+    @staticmethod
+    def _is_param_unsupported_error(exc: Exception) -> bool:
+        text = (str(exc) or "").lower()
+        error_type = type(exc).__name__.lower()
+        return (
+            "unsupported parameter" in text
+            or "unknown parameter" in text
+            or "unrecognized parameter" in text
+            or "invalid parameter" in text
+            or "not supported" in text
+            or "unexpected keyword argument" in text
+            or "got an unexpected keyword argument" in text
+            or "unsupported" in error_type
+        )
+
+    @staticmethod
+    def _response_attempts() -> list[dict[str, Any]]:
+        return [
+            {
+                "use_json": True,
+                "include_reasoning": True,
+                "include_text_options": True,
+                "label": "json_with_controls",
+            },
+            {
+                "use_json": True,
+                "include_reasoning": False,
+                "include_text_options": False,
+                "label": "json_without_optional_controls",
+            },
+            {
+                "use_json": False,
+                "include_reasoning": False,
+                "include_text_options": False,
+                "label": "plain_without_optional_controls",
+            },
+        ]
 
     def complete(self, prompt: str) -> str:
         logger.info(
@@ -186,9 +231,15 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
 
         last_exc: Exception | None = None
         with _langfuse_span("openai.responses.create", self._model, prompt) as current_span:
-            for use_json_flag in [True, False]:
+            attempts = self._response_attempts()
+            for attempt_index, attempt in enumerate(attempts):
                 try:
-                    resp = self._create_response(prompt=prompt, use_json=use_json_flag)
+                    resp = self._create_response(
+                        prompt=prompt,
+                        use_json=bool(attempt["use_json"]),
+                        include_reasoning=bool(attempt["include_reasoning"]),
+                        include_text_options=bool(attempt["include_text_options"]),
+                    )
                     content = self._extract_text(resp)
                     try:
                         import hashlib as hf
@@ -202,8 +253,8 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
                             content_sha256=hf.sha256(
                                 (content or "").encode("utf-8", errors="ignore")
                             ).hexdigest(),
-                            json_forced=bool(use_json_flag),
-                            param="max_output_tokens",
+                            json_forced=bool(attempt["use_json"]),
+                            param_profile=str(attempt["label"]),
                         )
                     except Exception:
                         pass
@@ -213,13 +264,25 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
                         provider="openai",
                         model=self._model,
                         content_chars=len(content),
-                        json_forced=bool(use_json_flag),
-                        param="max_output_tokens",
+                        json_forced=bool(attempt["use_json"]),
+                        param_profile=str(attempt["label"]),
                     )
                     return content
                 except Exception as exc:
                     last_exc = exc
-                    if use_json_flag and "response_format" in (str(exc) or "").lower():
+                    if (
+                        self._is_param_unsupported_error(exc)
+                        and attempt_index < len(attempts) - 1
+                    ):
+                        logger.info(
+                            "llm_complete_param_fallback",
+                            provider="openai",
+                            model=self._model,
+                            failed_profile=str(attempt["label"]),
+                            next_profile=str(attempts[attempt_index + 1]["label"]),
+                            error_type=type(exc).__name__,
+                            error=str(exc)[:256],
+                        )
                         continue
                     raise
         raise last_exc if last_exc else RuntimeError("LLM call failed with unsupported params")

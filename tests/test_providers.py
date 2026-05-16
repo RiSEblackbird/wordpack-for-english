@@ -167,8 +167,12 @@ def test_openai_request_uses_reasoning_text_params(monkeypatch):
     first = calls[0]
     assert first["model"] == "gpt-5.4-mini"
     assert first["reasoning"] == {"effort": "high"}
-    assert first["text"] == {"verbosity": "high"}
+    assert first["text"] == {
+        "verbosity": "high",
+        "format": {"type": "json_object"},
+    }
     assert first["max_output_tokens"] > 0
+    assert "response_format" not in first
     assert "temperature" not in first
     assert "max_tokens" not in first
     assert "max_completion_tokens" not in first
@@ -221,5 +225,133 @@ def test_openai_request_uses_nano_model(monkeypatch):
     assert isinstance(out, str) and "\"senses\"" in out
     assert calls[0]["model"] == "gpt-5.4-nano"
     assert calls[0]["reasoning"] == {"effort": "high"}
-    assert calls[0]["text"] == {"verbosity": "high"}
+    assert calls[0]["text"] == {
+        "verbosity": "high",
+        "format": {"type": "json_object"},
+    }
+    assert "response_format" not in calls[0]
     assert "temperature" not in calls[0]
+
+
+def test_openai_request_retries_without_optional_controls(monkeypatch):
+    """モデルが reasoning/text.verbosity を拒否したら JSON 形式だけ残して再試行する。"""
+    monkeypatch.setenv("STRICT_MODE", "false")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5.4-mini")
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy-realistic-key")
+
+    from importlib import reload
+    import backend.config
+    import backend.providers
+    reload(backend.config)
+    reload(backend.providers)
+
+    calls: list[dict] = []
+
+    class _DummyMessage:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class _DummyChoice:
+        def __init__(self, content: str) -> None:
+            self.message = _DummyMessage(content)
+
+    class _DummyResp:
+        def __init__(self, content: str) -> None:
+            self.choices = [_DummyChoice(content)]
+
+    class _DummyResponses:
+        def create(self, **kwargs):  # type: ignore[no-untyped-def]
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise RuntimeError(
+                    "Unsupported parameter: 'text.verbosity' is not supported by this model"
+                )
+            return _DummyResp('{"senses": [{"id": "s1", "gloss_ja": "ok"}]}')
+
+    class DummyOpenAI:
+        def __init__(self, api_key: str) -> None:  # type: ignore[no-untyped-def]
+            self.responses = _DummyResponses()
+
+    backend.providers.llm.OpenAI = DummyOpenAI  # type: ignore[attr-defined, assignment]
+
+    from backend.providers import get_llm_provider
+    llm = get_llm_provider(
+        reasoning_override={"effort": "minimal"},
+        text_override={"verbosity": "high"},
+    )
+
+    out = llm.complete("ping")
+
+    assert "\"senses\"" in out
+    assert len(calls) == 2
+    assert calls[0]["reasoning"] == {"effort": "minimal"}
+    assert calls[0]["text"] == {
+        "verbosity": "high",
+        "format": {"type": "json_object"},
+    }
+    assert "reasoning" not in calls[1]
+    assert calls[1]["text"] == {"format": {"type": "json_object"}}
+    assert all("response_format" not in call for call in calls)
+
+
+def test_openai_request_retries_without_json_format_when_needed(monkeypatch):
+    """JSON mode 自体が拒否された場合は、プロンプト指示に委ねて通常出力で再試行する。"""
+    monkeypatch.setenv("STRICT_MODE", "false")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5.4-mini")
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy-realistic-key")
+
+    from importlib import reload
+    import backend.config
+    import backend.providers
+    reload(backend.config)
+    reload(backend.providers)
+
+    calls: list[dict] = []
+
+    class _DummyMessage:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+    class _DummyChoice:
+        def __init__(self, content: str) -> None:
+            self.message = _DummyMessage(content)
+
+    class _DummyResp:
+        def __init__(self, content: str) -> None:
+            self.choices = [_DummyChoice(content)]
+
+    class _DummyResponses:
+        def create(self, **kwargs):  # type: ignore[no-untyped-def]
+            calls.append(kwargs)
+            if len(calls) <= 2:
+                raise RuntimeError(
+                    "The json_object response format is not supported by this model"
+                )
+            return _DummyResp('{"senses": [{"id": "s1", "gloss_ja": "ok"}]}')
+
+    class DummyOpenAI:
+        def __init__(self, api_key: str) -> None:  # type: ignore[no-untyped-def]
+            self.responses = _DummyResponses()
+
+    backend.providers.llm.OpenAI = DummyOpenAI  # type: ignore[attr-defined, assignment]
+
+    from backend.providers import get_llm_provider
+    llm = get_llm_provider(
+        reasoning_override={"effort": "minimal"},
+        text_override={"verbosity": "high"},
+    )
+
+    out = llm.complete("ping")
+
+    assert "\"senses\"" in out
+    assert len(calls) == 3
+    assert calls[0]["text"] == {
+        "verbosity": "high",
+        "format": {"type": "json_object"},
+    }
+    assert calls[1]["text"] == {"format": {"type": "json_object"}}
+    assert "text" not in calls[2]
+    assert "reasoning" not in calls[2]
+    assert all("response_format" not in call for call in calls)
