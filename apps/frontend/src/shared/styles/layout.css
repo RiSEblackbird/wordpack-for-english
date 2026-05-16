@@ -146,87 +146,70 @@ body.theme-dark .dictionary-reader-canvas {
 
 .explore-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1.25fr) minmax(260px, 0.8fr);
   gap: 1rem;
 }
 
-.explore-graph {
+.explore-list,
+.explore-connections {
   min-height: 440px;
-  position: relative;
-  overflow: hidden;
+  display: grid;
+  align-content: start;
+  gap: 0.6rem;
+  overflow: auto;
   border: 1px solid var(--dict-border);
   border-radius: var(--dict-radius);
-  background:
-    linear-gradient(90deg, rgba(131, 206, 248, 0.06) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(131, 206, 248, 0.06) 1px, transparent 1px),
-    var(--dict-bg-subtle);
-  background-size: 54px 54px;
+  background: var(--dict-bg-subtle);
+  padding: 0.65rem;
 }
 
-.explore-node {
-  position: absolute;
+.explore-list-item,
+.explore-connection-card,
+.shelf-wordpack-card {
   display: grid;
-  place-items: center;
-  gap: 0.15rem;
-  width: 7rem;
-  height: 7rem;
-  border: 2px solid var(--dict-accent);
-  border-radius: 999px;
-  background: rgba(131, 206, 248, 0.14);
+  gap: 0.45rem;
+  border: 1px solid var(--dict-border);
+  border-radius: var(--dict-radius-sm);
+  background: var(--dict-surface);
   color: var(--dict-text);
+}
+
+.explore-list-item {
+  width: 100%;
+  grid-template-columns: 1fr;
+  text-align: left;
+  padding: 0.65rem 0.75rem;
   cursor: pointer;
 }
 
-.explore-node span {
+.explore-list-item span,
+.explore-connection-card p,
+.shelf-wordpack-card p {
+  margin: 0;
   color: var(--dict-muted);
-  font-size: 0.72rem;
 }
 
-.explore-node.center {
-  left: calc(50% - 3.5rem);
-  top: calc(50% - 3.5rem);
-  width: 8rem;
-  height: 8rem;
-}
-
-.explore-node.purple {
-  left: 24%;
-  top: 28%;
-  border-color: var(--dict-purple);
-}
-
-.explore-node.green {
-  left: 18%;
-  top: 62%;
-  border-color: var(--dict-green);
-}
-
-.explore-node.yellow {
-  right: 16%;
-  top: 15%;
-  border-color: var(--dict-yellow);
-}
-
-.explore-node.rose {
-  right: -2.5rem;
-  top: 32%;
-  border-color: var(--dict-rose);
-}
-
-.explore-node.empty {
-  left: 46%;
-  bottom: 10%;
-  width: 5.5rem;
-  height: 5.5rem;
-  border-style: dashed;
-}
-
-.explore-node[aria-pressed='true'] {
+.explore-list-item[aria-pressed='true'] {
   background: rgba(131, 206, 248, 0.24);
   box-shadow: var(--dict-focus);
 }
 
+.explore-connection-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  padding: 0.85rem;
+}
+
+.explore-connection-card h3,
+.shelf-wordpack-card h3 {
+  margin: 0.45rem 0 0.25rem;
+  overflow-wrap: anywhere;
+}
+
 .explore-side {
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
   padding: 1rem;
   border: 1px solid var(--dict-border);
   border-radius: var(--dict-radius);
@@ -235,7 +218,8 @@ body.theme-dark .dictionary-reader-canvas {
 
 .explore-side h3 {
   margin: 0;
-  font-size: 2rem;
+  font-size: 1.7rem;
+  overflow-wrap: anywhere;
 }
 
 .explore-side h4 {
@@ -281,6 +265,10 @@ body.theme-dark .dictionary-reader-canvas {
   background: var(--dict-surface);
 }
 
+.shelf-card[aria-current='true'] {
+  box-shadow: var(--dict-focus);
+}
+
 .shelf-card h3 {
   margin: 0;
   font-size: 1.4rem;
@@ -314,6 +302,17 @@ body.theme-dark .dictionary-reader-canvas {
 
 .shelf-card.purple {
   border-left-color: var(--dict-purple);
+}
+
+.shelf-wordpack-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.shelf-wordpack-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  padding: 0.85rem;
 }
 
 .settings-grid {
@@ -383,8 +382,10 @@ body.theme-dark .dictionary-reader-canvas {
     grid-template-columns: 1fr;
   }
 
-  .explore-graph {
-    min-height: 340px;
+  .explore-list,
+  .explore-connections {
+    min-height: auto;
+    max-height: none;
   }
 
   .shelf-create-row {

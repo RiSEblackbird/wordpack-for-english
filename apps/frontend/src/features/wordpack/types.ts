@@ -27,6 +27,8 @@ export interface ContrastItem { with: string; diff_ja: string }
 
 export interface ExampleItem { en: string; ja: string; grammar_ja?: string; llm_model?: string; llm_params?: string }
 export interface Examples { Dev: ExampleItem[]; CS: ExampleItem[]; LLM: ExampleItem[]; Business: ExampleItem[]; Common: ExampleItem[] }
+export type ExampleCategory = keyof Examples;
+export type ExampleCounts = Record<ExampleCategory, number>;
 
 export interface Etymology { note: string; confidence: 'low' | 'medium' | 'high' }
 
@@ -47,4 +49,24 @@ export interface WordPack {
   guest_public?: boolean;
   checked_only_count?: number;
   learned_count?: number;
+}
+
+export interface WordPackListItem {
+  id: string;
+  lemma: string;
+  sense_title?: string;
+  created_at: string;
+  updated_at: string;
+  is_empty?: boolean;
+  guest_public?: boolean;
+  examples_count?: ExampleCounts | null;
+  checked_only_count: number;
+  learned_count: number;
+}
+
+export interface WordPackListResponse {
+  items: WordPackListItem[];
+  total: number;
+  limit: number;
+  offset: number;
 }
