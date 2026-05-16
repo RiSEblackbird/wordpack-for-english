@@ -38,6 +38,44 @@ def firestore_store() -> AppFirestoreStore:
     return AppFirestoreStore(client=FakeFirestoreClient())
 
 
+def test_firestore_repository_import_paths_and_composition() -> None:
+    from backend.infrastructure.firestore.repositories import (
+        AppFirestoreRepository,
+        FirestoreArticleRepository,
+        FirestoreExampleRepository,
+        FirestoreUserRepository,
+        FirestoreWordPackRepository,
+    )
+    from backend.store import AppFirestoreStore as StorePackageAppFirestoreStore
+    from backend.store.firestore_store import (
+        AppFirestoreStore as LegacyAppFirestoreStore,
+        FirestoreArticleStore,
+        FirestoreBaseStore,
+        FirestoreExampleStore,
+        FirestoreUserStore,
+        FirestoreWordPackStore,
+    )
+
+    assert StorePackageAppFirestoreStore is LegacyAppFirestoreStore
+    assert issubclass(FirestoreWordPackStore, FirestoreBaseStore)
+    assert issubclass(FirestoreWordPackStore, FirestoreWordPackRepository)
+    assert issubclass(FirestoreExampleStore, FirestoreExampleRepository)
+    assert issubclass(FirestoreArticleStore, FirestoreArticleRepository)
+    assert issubclass(FirestoreUserStore, FirestoreUserRepository)
+
+    legacy_store = LegacyAppFirestoreStore(client=FakeFirestoreClient())
+    assert isinstance(legacy_store.users, FirestoreUserStore)
+    assert isinstance(legacy_store.wordpacks, FirestoreWordPackStore)
+    assert isinstance(legacy_store.examples, FirestoreExampleStore)
+    assert isinstance(legacy_store.articles, FirestoreArticleStore)
+
+    repository_store = AppFirestoreRepository(client=FakeFirestoreClient())
+    assert type(repository_store.users) is FirestoreUserRepository
+    assert type(repository_store.wordpacks) is FirestoreWordPackRepository
+    assert type(repository_store.examples) is FirestoreExampleRepository
+    assert type(repository_store.articles) is FirestoreArticleRepository
+
+
 def test_firestore_word_pack_roundtrip(firestore_store: AppFirestoreStore) -> None:
     payload = {
         "lemma": "Converge",

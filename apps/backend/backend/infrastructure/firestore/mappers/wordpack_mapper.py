@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from ....store.examples import EXAMPLE_CATEGORIES
+from ..payloads import EXAMPLE_CATEGORIES
 
 
 def extract_example_total(metadata: Mapping[str, Any] | None) -> tuple[int, bool]:

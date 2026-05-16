@@ -5,8 +5,8 @@ import os
 from google.cloud import firestore as _firestore
 
 from ...config import settings
-from ...store.firestore_store import AppFirestoreStore
 from .google_module import build_pytest_fake_client_if_needed, resolve_firestore_module
+from .repositories import AppFirestoreRepository
 
 firestore = resolve_firestore_module(_firestore)
 
@@ -44,6 +44,6 @@ def build_firestore_client() -> firestore.Client:
     return firestore.Client(project=project_id)
 
 
-def create_store() -> AppFirestoreStore:
+def create_store() -> AppFirestoreRepository:
     client = build_firestore_client()
-    return AppFirestoreStore(client=client)
+    return AppFirestoreRepository(client=client)
