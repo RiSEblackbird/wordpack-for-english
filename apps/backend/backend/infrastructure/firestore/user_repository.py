@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from ...store.firestore_store import FirestoreUserStore
-
-FirestoreUserRepository = FirestoreUserStore
+from .repositories.users import FirestoreUserRepository
 
 __all__ = ["FirestoreUserRepository"]

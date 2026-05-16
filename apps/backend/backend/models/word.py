@@ -5,30 +5,16 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-import re
-
+from ..domain.wordpack.lemma import LEMMA_ALLOWED_PATTERN, validate_lemma
 from ..llm_models import ensure_supported_llm_model
 from .common import Citation, ConfidenceLevel
 
 
-LEMMA_ALLOWED_PATTERN = re.compile(r"^[A-Za-z0-9\-\' ]+$")
 DEFAULT_ETYMOLOGY_PLACEHOLDER = "語源情報はまだ収集中です。"
 
 
 def _validate_lemma(value: str) -> str:
-    """Firestore に安全な見出し語だけを受け付ける。
-
-    Firestore の document ID は `/` や制御文字を含められないため、
-    lemma の許可文字を正規表現で固定し、制御文字も拒否する。
-    """
-
-    if not LEMMA_ALLOWED_PATTERN.match(value):
-        raise ValueError(
-            "lemma must match ^[A-Za-z0-9\\-\\' ]+$ (英数字・半角スペース・ハイフン・アポストロフィのみ)"
-        )
-    if any(ord(ch) < 0x20 for ch in value):
-        raise ValueError("lemma must not contain control characters")
-    return value
+    return validate_lemma(value)
 
 
 class RegenerateScope(str, Enum):

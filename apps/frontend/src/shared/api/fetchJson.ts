@@ -1,4 +1,5 @@
 import { ApiError } from './ApiError';
+import { isProviderAuthenticationDetail } from './fastapiDetail';
 import { parseApiErrorMessage } from './parseApiErrorMessage';
 import { dispatchUnauthorizedEvent } from './unauthorizedEvent';
 
@@ -11,7 +12,7 @@ export interface FetchJsonOptions {
   credentials?: RequestCredentials;
 }
 
-export async function fetchJson<T = any>(url: string, options: FetchJsonOptions = {}): Promise<T> {
+export async function fetchJson<T = unknown>(url: string, options: FetchJsonOptions = {}): Promise<T> {
   const {
     method = 'GET',
     headers = {},
@@ -55,21 +56,22 @@ export async function fetchJson<T = any>(url: string, options: FetchJsonOptions 
     if (!res.ok) {
       const status = res.status;
       const message = parseApiErrorMessage(status, data);
-      if (status === 401) {
+      if (status === 401 && !isProviderAuthenticationDetail(data)) {
         dispatchUnauthorizedEvent(url, status, data);
       }
       throw new ApiError(message, status, data);
     }
 
     return data as T;
-  } catch (err: any) {
+  } catch (err: unknown) {
     if (ctrl.signal.aborted) {
       throw new ApiError('Request aborted or timed out', 0);
     }
     if (err instanceof ApiError) throw err;
-    throw new ApiError(err?.message || 'Network error', 0);
+    const message = err instanceof Error ? err.message : 'Network error';
+    throw new ApiError(message, 0);
   } finally {
-    if (signal) signal.removeEventListener('abort', onAbort as any);
+    if (signal) signal.removeEventListener('abort', onAbort);
     window.clearTimeout(timer);
   }
 }

@@ -4,7 +4,7 @@ import json
 import uuid
 from threading import Lock
 from collections import defaultdict
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 
@@ -12,7 +12,17 @@ from google.api_core import exceptions as gexc
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import firestore as _firestore
 
+from ..infrastructure.firestore.batch import (
+    coerce_firestore_snapshot,
+    extract_count_from_aggregation,
+)
 from ..infrastructure.firestore.google_module import resolve_firestore_module
+from ..infrastructure.firestore.mappers.example_mapper import (
+    build_search_payload,
+    extract_search_terms,
+    normalize_search_text,
+)
+from ..infrastructure.firestore.mappers.wordpack_mapper import extract_example_total
 from ..logging import logger
 from .common import normalize_non_negative_int
 from .examples import EXAMPLE_CATEGORIES, iter_example_rows
@@ -28,86 +38,31 @@ def _now_iso() -> str:
 def _extract_count_from_aggregation(
     aggregation: Sequence[Any] | None,
 ) -> int:
-    """Extracts the numeric count from Firestore aggregation results."""
-
-    if not aggregation:
-        return 0
-    result = aggregation[0]
-    count_value: Any | None = None
-    try:
-        count_value = result["count"]  # type: ignore[index]
-    except Exception:
-        aggregate_fields = getattr(result, "aggregate_fields", None)
-        if isinstance(aggregate_fields, Mapping):
-            count_value = aggregate_fields.get("count")
-    if count_value is None and getattr(result, "alias", None) == "count":
-        count_value = getattr(result, "value", None)
-    return int(count_value or 0)
+    return extract_count_from_aggregation(aggregation)
 
 
 def _normalize_search_text(text: str | None) -> str:
-    """検索用に英文を正規化（小文字化・前後空白除去）する。"""
-
-    return str((text or "").strip()).lower()
+    return normalize_search_text(text)
 
 
 def _extract_search_terms(normalized_text: str) -> list[str]:
-    """部分一致検索のために短いN-gramとトークンを抽出する。"""
-
-    compact = normalized_text.replace("\n", " ")
-    terms: set[str] = set()
-    for token in compact.replace("/", " ").replace(",", " ").split():
-        stripped = token.strip()
-        if stripped:
-            terms.add(stripped)
-    condensed = normalized_text.replace(" ", "")
-    for size in (1, 2, 3):
-        if len(condensed) < size:
-            continue
-        for idx in range(len(condensed) - size + 1):
-            terms.add(condensed[idx : idx + size])
-    return sorted(terms)
+    return extract_search_terms(normalized_text)
 
 
 def _build_search_payload(en: str) -> dict[str, Any]:
-    normalized = _normalize_search_text(en)
-    return {
-        "search_en": normalized,
-        "search_en_reversed": normalized[::-1],
-        "search_terms": _extract_search_terms(normalized),
-    }
+    return build_search_payload(en)
 
 
 def _extract_example_total(
     metadata: Mapping[str, Any] | None,
 ) -> tuple[int, bool]:
-    """examples_category_counts から合計件数を抽出し、信頼性の有無を返す。"""
-
-    raw_counts = (metadata or {}).get("examples_category_counts")
-    if not isinstance(raw_counts, Mapping):
-        return 0, False
-    try:
-        total = sum(int(raw_counts.get(cat, 0) or 0) for cat in EXAMPLE_CATEGORIES)
-    except Exception:
-        return 0, False
-    return max(0, total), True
+    return extract_example_total(metadata)
 
 
 def _coerce_firestore_snapshot(
     candidate: Any,
 ) -> firestore.DocumentSnapshot | None:
-    """Normalize Firestore transaction.get results (snapshot or generator) into a snapshot."""
-
-    if candidate is None:
-        return None
-    if hasattr(candidate, "exists"):
-        return candidate  # type: ignore[return-value]
-    if isinstance(candidate, Iterator):
-        return next(candidate, None)
-    if isinstance(candidate, Iterable) and not isinstance(candidate, (str, bytes, Mapping)):
-        iterator = iter(candidate)
-        return next(iterator, None)
-    return None
+    return coerce_firestore_snapshot(candidate)
 
 
 class FirestoreBaseStore:

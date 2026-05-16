@@ -30,6 +30,15 @@
 - WordPack プレビューの例文中ハイライト（lemma）にマウスオーバー約0.5秒で `sense_title` のツールチップを表示します。例文中の単語にマウスを重ねると、保存済み WordPack を検索して語義タイトルを表示します。未生成の単語はツールチップが「未生成」となり、下線付き表示になります。未生成の単語をクリックすると WordPack 生成が開始され、完了後に「WordPack概要」ウインドウが自動で開きます。
 - Settings では辞書操作として「未生成語クリックで即生成」、hover tooltip delay、生成後に開く場所、既定の表示密度を調整できます。
 
+## アーキテクチャの要点
+- Backend の WordPack API は `backend.routers.word` package で lookup / pack / generation / regeneration / examples / study progress / guest public / lemma lookup に分割しています。`backend.routers.word` 自体は旧 import path 互換の facade として残します。
+- Firestore は `AppFirestoreStore` を互換 facade として維持しつつ、検索語生成、aggregation/batch helper、mapper、repository alias を `backend.infrastructure.firestore` 配下へ寄せています。Firestore collection / document schema は変更していません。
+- Frontend の `src/app/App.tsx` は `ThemeApplier`、`AuthGate`、`AppShell` の composition を担当し、layout / sidebar / header / login / keyboard shortcut / CSS は `src/app` 配下に分離しています。
+- `WordPackPanel` と `ArticleImportPanel` は feature 配下へ移し、旧 `src/components/*Panel.tsx` は compatibility re-export として維持します。
+- Custom event 契約（`auth:unauthorized`、`wordpack:updated`、`wordpack:study-progress`、`article:updated`）は `src/shared/events/appEvents.ts` で typed helper 化しています。
+
+詳しい責務配置は `docs/architecture.md` を参照してください。
+
 ## ゲスト閲覧モード
 - **概要**: ログインせずに画面を閲覧できる読み取り専用モードです。ログイン画面の「ゲスト閲覧モード」ボタンから入り、ヘッダー右側の「ログアウト」ボタンで終了できます。
 - **制限事項**: AI の生成・再生成・削除は利用できません。音声再生も無効です。さらに **POST/DELETE のリクエスト（追加・更新・削除）** はすべて拒否され、閲覧用の GET のみ許可されます。
