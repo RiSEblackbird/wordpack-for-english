@@ -1,5 +1,12 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { json, mockConfig, seedAuthenticatedSession } from './helpers';
+
+const openWordPackSidebar = async (page: Page): Promise<void> => {
+  const menuToggle = page.locator('button[aria-controls="app-sidebar"]');
+  await expect(menuToggle).toBeVisible();
+  await menuToggle.click();
+  await expect(menuToggle).toHaveAttribute('aria-expanded', 'true');
+};
 
 test.describe('異常系ハンドリング', () => {
   test('API タイムアウト時に警告メッセージを表示する', async ({ page, context }) => {
@@ -14,6 +21,7 @@ test.describe('異常系ハンドリング', () => {
 
     await test.step('Given: WordPack 生成フォームが表示されている', async () => {
       await page.goto('/');
+      await openWordPackSidebar(page);
       await page.getByLabel('見出し語').fill('timeout-test');
     });
 
@@ -48,6 +56,7 @@ test.describe('異常系ハンドリング', () => {
 
     await test.step('Given: WordPack 生成フォームが表示されている', async () => {
       await page.goto('/');
+      await openWordPackSidebar(page);
       await page.getByLabel('見出し語').fill('auth-error');
     });
 

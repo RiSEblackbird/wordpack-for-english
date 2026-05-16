@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNotifications } from '../NotificationsContext';
 import { useSettings } from '../SettingsContext';
 import { ApiError, fetchJson } from '../lib/fetcher';
+import { APP_EVENTS, dispatchAppEvent } from '../shared/events/appEvents';
 import { composeModelRequestFields, enqueueRegenerateWordPack, fetchRegenerateJobStatus, regenerateWordPackRequest, updateGuestPublicFlag } from '../features/wordpack/api';
 export type { ExampleItem, Examples, Pronunciation, Sense, WordPack } from '../features/wordpack/types';
 import type { Examples, WordPack } from '../features/wordpack/types';
@@ -178,7 +179,7 @@ export const useWordPack = ({
           status: 'success',
           message: '新規生成が完了しました',
         });
-        try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+        dispatchAppEvent(APP_EVENTS.wordPackUpdated);
         try { onWordPackGenerated?.(null); } catch {}
       } catch (error) {
         if (ctrl.signal.aborted) return;
@@ -223,7 +224,7 @@ export const useWordPack = ({
         setCurrentWordPackId(res.id);
         await loadWordPack(res.id);
         try { onWordPackGenerated?.(res.id); } catch {}
-        try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+        dispatchAppEvent(APP_EVENTS.wordPackUpdated);
         updateNotification(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: '詳細読み込み完了' });
       } catch (error) {
         if (ctrl.signal.aborted) return;
@@ -264,7 +265,7 @@ export const useWordPack = ({
           learned_count: res.learned_count,
         };
         try { onStudyProgressRecorded?.(detail); } catch {}
-        try { window.dispatchEvent(new CustomEvent('wordpack:study-progress', { detail })); } catch {}
+        dispatchAppEvent(APP_EVENTS.wordPackStudyProgress, detail);
         setMessage({
           kind: 'status',
           text: kind === 'learned' ? '学習済みとして記録しました' : '確認済みとして記録しました',
@@ -295,7 +296,7 @@ export const useWordPack = ({
           kind: 'status',
           text: guestPublic ? 'ゲスト公開を有効にしました' : 'ゲスト公開を解除しました',
         });
-        try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+        dispatchAppEvent(APP_EVENTS.wordPackUpdated);
       } catch (error) {
         setData((prev) => (prev ? { ...prev, guest_public: previous } : prev));
         const text = error instanceof ApiError ? error.message : 'ゲスト公開の更新に失敗しました';

@@ -1,4 +1,5 @@
 import { fetchJson, ApiError } from './fetcher';
+import { APP_EVENTS, dispatchAppEvent } from '../shared/events/appEvents';
 
 export const SUPPORTED_LLM_MODELS = ['gpt-5.4-mini', 'gpt-5.4-nano'] as const;
 export type SupportedLlmModel = (typeof SUPPORTED_LLM_MODELS)[number];
@@ -109,7 +110,7 @@ export async function regenerateWordPackRequest(params: {
     }
 
     notify.update(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: messages?.success || '処理が完了しました', model: model || undefined });
-    try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+    dispatchAppEvent(APP_EVENTS.wordPackUpdated);
   } catch (e) {
     const m = messages?.failure || (e instanceof ApiError ? e.message : '処理に失敗しました');
     notify.update(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: m, model: model || undefined });

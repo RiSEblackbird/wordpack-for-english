@@ -12,6 +12,7 @@ import { useAbortableAsync, AbortError } from '../lib/hooks';
 import { assignSetValues, retainSetValues, toggleSetValue } from '../lib/set';
 import { useAuth } from '../AuthContext';
 import { GuestLock } from './GuestLock';
+import { APP_EVENTS, dispatchAppEvent } from '../shared/events/appEvents';
 
 interface ArticleListItem {
   id: string;
@@ -148,7 +149,7 @@ export const ArticleListPanel: React.FC = () => {
       const refreshed = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/${preview.id}`);
       setPreview(refreshed);
       setMsg({ kind: 'status', text: 'WordPackを削除しました' });
-      try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+      dispatchAppEvent(APP_EVENTS.wordPackUpdated);
     } catch (e) {
       const m = e instanceof ApiError ? e.message : 'WordPackの削除に失敗しました';
       setMsg({ kind: 'alert', text: m });

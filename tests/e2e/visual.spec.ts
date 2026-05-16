@@ -205,14 +205,14 @@ const mockArticleImport = async (page: Page): Promise<void> => {
     generation_duration_ms: 60000,
   };
 
-  await page.route('**/api/article/import', (route) => {
+  await page.route((url) => url.pathname === '/api/article/import', (route) => {
     if (route.request().method() !== 'POST') {
       return route.fulfill(json({ detail: 'Not found' }, 404));
     }
     return route.fulfill(json({ id: articleDetail.id }));
   });
 
-  await page.route('**/api/article?**', (route) =>
+  await page.route((url) => url.pathname === '/api/article', (route) =>
     route.fulfill(
       json({
         items: [
@@ -231,7 +231,10 @@ const mockArticleImport = async (page: Page): Promise<void> => {
   );
 
   // 記事IDにコロンが含まれるため、URL エンコード有無の差分を吸収してモックする。
-  await page.route('**/api/article/article*e2e*001', (route) => route.fulfill(json(articleDetail)));
+  await page.route(
+    (url) => url.pathname.startsWith('/api/article/article') && url.pathname.includes('e2e') && url.pathname.includes('001'),
+    (route) => route.fulfill(json(articleDetail)),
+  );
 };
 
 test.describe('ビジュアル回帰: 主要画面', () => {

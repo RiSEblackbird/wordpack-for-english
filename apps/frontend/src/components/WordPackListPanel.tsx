@@ -17,6 +17,7 @@ import { formatDateJst } from '../lib/date';
 import { useAuth } from '../AuthContext';
 import { GuestLock } from './GuestLock';
 import { GuestPublicToggle } from './GuestPublicToggle';
+import { APP_EVENTS, dispatchAppEvent } from '../shared/events/appEvents';
 
 // 削除ボタンの共通コンポーネント
 interface DeleteButtonProps {
@@ -366,7 +367,7 @@ export const WordPackListPanel: React.FC = () => {
           timeoutMs: requestTimeoutMs,
         });
         setMsg({ kind: 'status', text: nextValue ? 'ゲスト公開を有効にしました' : 'ゲスト公開を解除しました' });
-        try { window.dispatchEvent(new CustomEvent('wordpack:updated')); } catch {}
+        dispatchAppEvent(APP_EVENTS.wordPackUpdated);
       } catch (e) {
         setWordPacks((prev) =>
           prev.map((wp) => (wp.id === wordPackId ? { ...wp, guest_public: previous } : wp)),

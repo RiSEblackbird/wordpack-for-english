@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { ApiError, fetchJson } from '../lib/fetcher';
+import { APP_EVENTS, dispatchAppEvent } from '../shared/events/appEvents';
 import { composeModelRequestFields } from '../lib/wordpack';
 import { Examples, WordPack, WordPackMessage } from './useWordPack';
 import type { useNotifications } from '../NotificationsContext';
@@ -185,7 +186,7 @@ export const useExampleActions = ({
           timeoutMs: requestTimeoutMs,
         });
         notify.update(notifId, { title: '文章インポート完了', status: 'success', message: '記事一覧を更新しました' });
-        try { window.dispatchEvent(new CustomEvent('article:updated')); } catch {}
+        dispatchAppEvent(APP_EVENTS.articleUpdated);
         setStatusMessage({ kind: 'status', text: '例文から文章インポートを実行しました' });
       } catch (error) {
         if (ctrl.signal.aborted) {

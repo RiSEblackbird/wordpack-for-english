@@ -22,6 +22,21 @@ const installFetchMock = (responsePayload?: unknown): FetchMock => {
   return mock;
 };
 
+const installErrorFetchMock = (status: number, responsePayload: unknown): FetchMock => {
+  const mock = vi.fn<Parameters<typeof fetch>, ReturnType<typeof fetch>>();
+  mock.mockResolvedValue({
+    ok: false,
+    status,
+    headers: {
+      get: vi.fn().mockReturnValue('application/json'),
+    } as unknown as Headers,
+    json: vi.fn().mockResolvedValue(responsePayload),
+    text: vi.fn().mockResolvedValue(''),
+  } as unknown as Response);
+  globalThis.fetch = mock as unknown as typeof fetch;
+  return mock;
+};
+
 describe('fetchJson credential behavior', () => {
   const originalFetch = globalThis.fetch;
 
@@ -58,6 +73,48 @@ describe('fetchJson credential behavior', () => {
         credentials: 'omit',
       }),
     );
+  });
+});
+
+describe('fetchJson unauthorized dispatch', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    globalThis.fetch = originalFetch;
+  });
+
+  it('dispatches auth:unauthorized for session 401 responses', async () => {
+    installErrorFetchMock(401, { detail: 'Not authenticated' });
+    const listener = vi.fn();
+    window.addEventListener('auth:unauthorized', listener);
+
+    try {
+      await expect(fetchJson('/api/protected')).rejects.toMatchObject({ status: 401 });
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener('auth:unauthorized', listener);
+    }
+  });
+
+  it('keeps LLM provider authentication failures on the current screen', async () => {
+    installErrorFetchMock(401, {
+      detail: {
+        message: 'LLM provider authentication failed',
+        reason_code: 'AUTH',
+        hint: 'OPENAI_API_KEY を確認',
+      },
+    });
+    const listener = vi.fn();
+    window.addEventListener('auth:unauthorized', listener);
+
+    try {
+      await expect(fetchJson('/api/word/pack', { method: 'POST', body: { lemma: 'alpha' } }))
+        .rejects.toThrow('LLM provider authentication failed');
+      expect(listener).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener('auth:unauthorized', listener);
+    }
   });
 });
 
