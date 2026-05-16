@@ -4,7 +4,7 @@ import {
   regenerateWordPackRequest,
   updateGuestPublicFlag,
 } from '../../../lib/wordpack';
-import type { WordPack } from '../types';
+import type { WordPack, WordPackListResponse } from '../types';
 
 export { composeModelRequestFields, regenerateWordPackRequest, updateGuestPublicFlag };
 
@@ -15,6 +15,18 @@ export const fetchWordPack = (
 ): Promise<WordPack> => (
   fetchJson<WordPack>(`${apiBase}/word/packs/${wordPackId}`, options)
 );
+
+export const fetchWordPackList = (
+  apiBase: string,
+  options?: { limit?: number; offset?: number; signal?: AbortSignal; timeoutMs?: number },
+): Promise<WordPackListResponse> => {
+  const limit = options?.limit ?? 200;
+  const offset = options?.offset ?? 0;
+  return fetchJson<WordPackListResponse>(`${apiBase}/word/packs?limit=${limit}&offset=${offset}`, {
+    signal: options?.signal,
+    timeoutMs: options?.timeoutMs,
+  });
+};
 
 export const createEmptyWordPackRequest = (
   apiBase: string,

@@ -2,6 +2,7 @@ export {
   composeModelRequestFields,
   createEmptyWordPackRequest,
   fetchWordPack,
+  fetchWordPackList,
   generateWordPackRequest,
   regenerateWordPackRequest,
   updateGuestPublicFlag,

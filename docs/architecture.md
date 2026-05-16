@@ -70,6 +70,8 @@ repository alias は `backend.infrastructure.firestore.repositories.*` に集約
 | `src/app/styles/*` | app shell / login CSS。旧 inline CSS から移動 |
 | `src/app/routes.ts` | `/lexicon`、`/wordpacks/:id`、`/reader`、`/examples`、`/explore`、`/shelves`、`/settings` の軽量 route 互換 |
 | `src/pages/*Page` | Lexicon / WordPack Detail / Reader / Examples / Explore / Shelves / Settings の画面単位の構成 |
+| `src/pages/ExplorePage` | 既存WordPack詳細を読み取り、関連語・共起・対比・例文の接続カードへ変換する Connection Explorer |
+| `src/pages/ShelvesPage` | 既存WordPack一覧を条件別に自動分類する Smart Shelves |
 | `src/features/auth` | Google OAuth telemetry と sanitization |
 | `src/features/wordpack` | WordPack domain types、API helper、feature hooks/components。旧 `src/components/WordPackPanel.tsx` は re-export |
 | `src/features/article-import` | Article import API/type/hook/components。旧 `src/components/ArticleImportPanel.tsx` は re-export |

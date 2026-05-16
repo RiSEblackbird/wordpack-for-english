@@ -1,98 +1,110 @@
-import React, { useMemo, useState } from 'react';
-import { Badge, Button, Input, SearchBox, Tag } from '../../shared/ui';
-
-interface ShelfDraft {
-  name: string;
-  description: string;
-}
-
-const defaultShelves = [
-  { name: 'LLMまわり', description: 'prompt, context, latent, entail', count: 32, color: 'sky' },
-  { name: '仕事で使う', description: 'friction, robust, alignment', count: 18, color: 'yellow' },
-  { name: '似ていて混乱', description: 'brittle / fragile / delicate', count: 11, color: 'rose' },
-  { name: '文章から拾った', description: 'API reliability notes', count: 24, color: 'green' },
-  { name: '音が好き', description: 'curious, mellow, crisp', count: 7, color: 'purple' },
-  { name: 'まだ掴めてない', description: 'granular, elusive', count: 9, color: 'gold' },
-];
+import React, { useEffect, useMemo, useState } from 'react';
+import { WordPackPreviewModal } from '../../components/WordPackPreviewModal';
+import { useWordPackList } from '../../features/wordpack/hooks/useWordPackList';
+import { Badge, Button, EmptyState, SearchBox } from '../../shared/ui';
+import { ShelfWordPackList } from './ShelfWordPackList';
+import { useSmartShelves } from './useSmartShelves';
 
 export const ShelvesPage: React.FC = () => {
-  const [draft, setDraft] = useState<ShelfDraft>({ name: '', description: '' });
-  const [customShelves, setCustomShelves] = useState<typeof defaultShelves>(() => {
-    try {
-      const raw = localStorage.getItem('wp.localShelves.v1');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
+  const [query, setQuery] = useState('');
+  const [activeShelfId, setActiveShelfId] = useState('recent');
+  const [previewWordPackId, setPreviewWordPackId] = useState<string | null>(null);
+  const { applyStudyProgress, loading, message, reload, wordPacks } = useWordPackList();
+  const shelves = useSmartShelves(wordPacks);
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleShelves = useMemo(() => {
+    if (!normalizedQuery) return shelves;
+    return shelves.filter((shelf) => (
+      shelf.title.toLowerCase().includes(normalizedQuery) ||
+      shelf.description.toLowerCase().includes(normalizedQuery) ||
+      shelf.items.some((wordPack) =>
+        wordPack.lemma.toLowerCase().includes(normalizedQuery) ||
+        (wordPack.sense_title ?? '').toLowerCase().includes(normalizedQuery)
+      )
+    ));
+  }, [normalizedQuery, shelves]);
+  const activeShelf = shelves.find((shelf) => shelf.id === activeShelfId) ?? shelves[0];
+  const activeItems = useMemo(() => {
+    if (!activeShelf) return [];
+    if (!normalizedQuery) return activeShelf.items;
+    return activeShelf.items.filter((wordPack) =>
+      wordPack.lemma.toLowerCase().includes(normalizedQuery) ||
+      (wordPack.sense_title ?? '').toLowerCase().includes(normalizedQuery)
+    );
+  }, [activeShelf, normalizedQuery]);
+
+  useEffect(() => {
+    if (shelves.length === 0) return;
+    if (!shelves.some((shelf) => shelf.id === activeShelfId)) {
+      setActiveShelfId(shelves[0].id);
     }
-  });
-  const shelves = useMemo(() => [...defaultShelves, ...customShelves], [customShelves]);
-  const addShelf = () => {
-    const name = draft.name.trim();
-    if (!name) return;
-    const next = [...customShelves, { name, description: draft.description.trim() || '自由分類', count: 0, color: 'sky' }];
-    setCustomShelves(next);
-    setDraft({ name: '', description: '' });
-    try { localStorage.setItem('wp.localShelves.v1', JSON.stringify(next)); } catch {}
-  };
+  }, [activeShelfId, shelves]);
+
   return (
     <div className="dictionary-main">
       <div className="dictionary-page-heading">
         <div className="dictionary-page-title">
           <h2>Shelves</h2>
-          <p>単元ではなく、自分で作る棚・タグ・ブックマーク。</p>
+          <p>保存済みWordPackを条件別に自動分類して眺める。</p>
         </div>
         <div className="dictionary-top-actions">
-          <SearchBox label="棚、タグ、メモを検索" placeholder="Search shelves, tags, notes" shortcut="⌘K" />
+          <SearchBox
+            label="棚とWordPackを検索"
+            placeholder="Search shelves and entries"
+            shortcut="⌘K"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <Button variant="subtle" onClick={() => { void reload(); }} disabled={loading}>
+            更新
+          </Button>
         </div>
       </div>
-      <section className="dictionary-section shelf-create">
+      <section className="dictionary-section">
         <div className="dictionary-section-header">
           <div>
-            <h3>棚を作る</h3>
-            <p>ローカルの下書き棚です。WordPack API 追加までは分類の入口として扱います。</p>
+            <h3>Smart Shelves</h3>
+            <p>一覧レスポンスだけを使い、保存や更新を行わずに自動分類します。</p>
           </div>
+          <Badge variant="accent">{wordPacks.length} entries</Badge>
         </div>
-        <div className="shelf-create-row">
-          <Input
-            aria-label="棚名"
-            placeholder="棚名"
-            value={draft.name}
-            onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))}
-          />
-          <Input
-            aria-label="棚の説明"
-            placeholder="説明や語のメモ"
-            value={draft.description}
-            onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))}
-          />
-          <Button onClick={addShelf}>追加</Button>
+        {message ? <div role="alert" className="dictionary-empty compact">{message.text}</div> : null}
+        {!message && visibleShelves.length === 0 ? <EmptyState>表示できる棚がありません。</EmptyState> : null}
+        <div className="shelf-grid" aria-label="棚一覧">
+          {visibleShelves.map((shelf) => (
+            <article key={shelf.id} className={`shelf-card ${shelf.accent}`} aria-current={activeShelfId === shelf.id ? 'true' : undefined}>
+              <h3>{shelf.title}</h3>
+              <p>{shelf.description}</p>
+              <div className="shelf-card-footer">
+                <span>{shelf.items.length} entries</span>
+                <Button variant="subtle" onClick={() => setActiveShelfId(shelf.id)}>Open</Button>
+              </div>
+            </article>
+          ))}
         </div>
-      </section>
-      <section className="shelf-grid" aria-label="棚一覧">
-        {shelves.map((shelf) => (
-          <article key={`${shelf.name}-${shelf.description}`} className={`shelf-card ${shelf.color}`}>
-            <h3>{shelf.name}</h3>
-            <p>{shelf.description}</p>
-            <div className="shelf-card-footer">
-              <span>{shelf.count} entries</span>
-              <Button variant="subtle">Open →</Button>
-            </div>
-          </article>
-        ))}
       </section>
       <section className="dictionary-section">
         <div className="dictionary-section-header">
           <div>
-            <h3>Tag cloud</h3>
+            <h3>{activeShelf?.title ?? '選択中の棚'}</h3>
+            <p>{activeShelf?.description ?? '棚を選ぶとWordPackを表示します。'}</p>
           </div>
+          {activeShelf ? <Badge variant="accent">{activeItems.length} shown</Badge> : null}
         </div>
-        <div className="dictionary-chip-list">
-          {['nuance', 'dev', 'business', 'formal', 'article-source', 'audio-good', 'compare', 'empty', 'guest-public', 'note'].map((tag) => (
-            <Tag key={tag}>{tag}</Tag>
-          ))}
-        </div>
+        {activeShelf ? (
+          <ShelfWordPackList items={activeItems} onOpenPreview={setPreviewWordPackId} />
+        ) : (
+          <EmptyState>棚データを読み込んでいます。</EmptyState>
+        )}
       </section>
+      <WordPackPreviewModal
+        isOpen={Boolean(previewWordPackId)}
+        onClose={() => setPreviewWordPackId(null)}
+        wordPackId={previewWordPackId}
+        wordPacks={wordPacks}
+        onWordPackUpdated={() => { void reload(); }}
+        onStudyProgressRecorded={applyStudyProgress}
+      />
     </div>
   );
 };
-

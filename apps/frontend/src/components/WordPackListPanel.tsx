@@ -18,6 +18,7 @@ import { useAuth } from '../AuthContext';
 import { GuestLock } from './GuestLock';
 import { GuestPublicToggle } from './GuestPublicToggle';
 import { APP_EVENTS, dispatchAppEvent } from '../shared/events/appEvents';
+import type { WordPackListItem, WordPackListResponse } from '../features/wordpack/types';
 
 // 削除ボタンの共通コンポーネント
 interface DeleteButtonProps {
@@ -60,25 +61,6 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false, 
     </GuestLock>
   );
 };
-
-interface WordPackListItem {
-  id: string;
-  lemma: string;
-  sense_title?: string;
-  created_at: string;
-  updated_at: string;
-  is_empty?: boolean;
-  guest_public?: boolean;
-  examples_count?: {
-    Dev: number;
-    CS: number;
-    LLM: number;
-    Business: number;
-    Common: number;
-  };
-  checked_only_count: number;
-  learned_count: number;
-}
 
 type SortKey = 'created_at' | 'updated_at' | 'lemma' | 'total_examples';
 type SortOrder = 'asc' | 'desc';
@@ -139,13 +121,6 @@ const matchString = (text: string, query: string, mode: SearchMode): boolean => 
   if (mode === 'suffix') return text.endsWith(query);
   return text.includes(query);
 };
-
-interface WordPackListResponse {
-  items: WordPackListItem[];
-  total: number;
-  limit: number;
-  offset: number;
-}
 
 export const WordPackListPanel: React.FC = () => {
   const { isGuest } = useAuth();
