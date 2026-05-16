@@ -61,6 +61,8 @@ describe('ExampleListPanel', () => {
     const selectAllButton = screen.getByRole('button', { name: '表示中を全選択' });
     expect(selectAllButton).toBeDisabled();
     expect(selectAllButton).toHaveAttribute('aria-disabled', 'true');
+    expect(window.getComputedStyle(selectAllButton).backgroundColor).toBe('rgb(229, 231, 235)');
+    expect(window.getComputedStyle(selectAllButton).color).toBe('rgb(55, 65, 81)');
 
     const checkbox = screen.getByRole('checkbox', { name: '例文 Sample example を選択' });
     expect(checkbox).toBeDisabled();

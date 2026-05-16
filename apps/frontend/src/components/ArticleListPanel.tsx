@@ -263,13 +263,37 @@ export const ArticleListPanel: React.FC = () => {
         .al-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem; background: var(--color-surface); cursor: pointer; }
         .al-card-header { display: flex; align-items: center; gap: 0.5rem; }
         .al-card-title-row { display: flex; align-items: center; gap: 0.5rem; flex: 1; }
+        .al-list-header { display: flex; align-items: center; justify-content: space-between; }
+        .al-pagination { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
+        .al-list-header > button,
+        .al-card-title-row button,
+        .al-pagination button {
+          padding: 0.25rem 0.75rem;
+          border: 1px solid #cbd5e1;
+          border-radius: 4px;
+          background: #ffffff;
+          color: #0f172a;
+          cursor: pointer;
+        }
+        .al-list-header > button:hover:not(:disabled),
+        .al-card-title-row button:hover:not(:disabled),
+        .al-pagination button:hover:not(:disabled) {
+          background: #f8fafc;
+        }
+        .al-list-header > button:disabled,
+        .al-card-title-row button:disabled,
+        .al-pagination button:disabled {
+          background: #e5e7eb;
+          color: #374151;
+          cursor: not-allowed;
+        }
         .wp-selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.75rem 0; font-size: 0.9em; }
-        .wp-selection-bar button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
-        .wp-selection-bar button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .wp-selection-bar button { padding: 0.25rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #0f172a; cursor: pointer; }
+        .wp-selection-bar button:disabled { background: #e5e7eb; color: #374151; cursor: not-allowed; }
         .wp-select-checkbox { display: inline-flex; align-items: center; justify-content: center; }
         .wp-select-checkbox input { width: 1rem; height: 1rem; cursor: pointer; }
       `}</style>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="al-list-header">
         <h2>インポート済み文章</h2>
         <button onClick={() => load(offset)} disabled={loading}>更新</button>
       </div>
@@ -321,7 +345,7 @@ export const ArticleListPanel: React.FC = () => {
         ))}
       </div>
       {(hasPrev || hasNext) && (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 8 }}>
+        <div className="al-pagination">
           <button onClick={() => load(offset - LIST_LIMIT)} disabled={!hasPrev || loading}>前へ</button>
           <span>{offset + 1}-{Math.min(offset + LIST_LIMIT, total)} / {total}件</span>
           <button onClick={() => load(offset + LIST_LIMIT)} disabled={!hasNext || loading}>次へ</button>

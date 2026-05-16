@@ -616,21 +616,53 @@ export const WordPackListPanel: React.FC = () => {
         .wp-list-container { max-width: 100%; }
         .wp-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; max-height: 40px; }
         .wp-sort-controls { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.5rem; }
-        .wp-sort-select { padding: 0.25rem; border: 1px solid #ccc; border-radius: 4px; background: white; }
-        .wp-sort-button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; display: flex; align-items: center; gap: 0.25rem; }
-        .wp-sort-button:hover { background: #f5f5f5; }
-        .wp-sort-button.active { background: #e3f2fd; border-color: #2196f3; }
-        .wp-filter-select { padding: 0.25rem; border: 1px solid #ccc; border-radius: 4px; background: white; }
-        .wp-search-input { padding: 0.25rem; border: 1px solid #ccc; border-radius: 4px; }
-        .wp-search-button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
-        .wp-search-button:hover { background: #f5f5f5; }
+        .wp-sort-select,
+        .wp-filter-select,
+        .wp-search-input {
+          padding: 0.25rem;
+          border: 1px solid #cbd5e1;
+          border-radius: 4px;
+          background: #ffffff;
+          color: #0f172a;
+        }
+        .wp-sort-button,
+        .wp-search-button,
+        .wp-pagination button,
+        .wp-list-header > button {
+          padding: 0.25rem 0.75rem;
+          border: 1px solid #cbd5e1;
+          border-radius: 4px;
+          background: #ffffff;
+          color: #0f172a;
+          cursor: pointer;
+        }
+        .wp-sort-button { display: flex; align-items: center; gap: 0.25rem; }
+        .wp-sort-button:hover:not(:disabled),
+        .wp-search-button:hover:not(:disabled),
+        .wp-pagination button:hover:not(:disabled),
+        .wp-list-header > button:hover:not(:disabled) {
+          background: #f8fafc;
+        }
+        .wp-sort-button.active {
+          background: #e3f2fd;
+          border-color: #2196f3;
+          color: #0f4d73;
+        }
+        .wp-sort-button:disabled,
+        .wp-search-button:disabled,
+        .wp-pagination button:disabled,
+        .wp-list-header > button:disabled {
+          background: #e5e7eb;
+          color: #374151;
+          cursor: not-allowed;
+        }
         .wp-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
         .wp-card { border: 1px solid #ddd; border-radius: 5px; padding: 0.2rem; background:rgb(173, 159, 211); box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; }
         .wp-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; gap: 0.5rem; }
         .wp-card-actions { display: grid; grid-template-rows: auto auto; gap: 0.15rem; margin-left: auto; }
         .wp-card-actions-upper { display: flex; gap: 0.15rem; align-items: center; }
         .wp-card-actions-lower { display: flex; gap: 0.15rem; align-items: center; justify-content: flex-end; }
-        .wp-card-tts-btn { font-size: 0.55em; padding: 0.1rem 0.4rem; border-radius: 4px; }
+        .wp-card-tts-btn { font-size: 0.55em; padding: 0.1rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #0f172a; cursor: pointer; }
         .wp-card-title { font-size: 0.8em; font-weight: bold; color: #333; margin: 0; }
         .wp-card-meta { font-size: 0.50em; color: #666; margin: 0.25rem 0; }
         .wp-progress-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.35rem; }
@@ -644,14 +676,19 @@ export const WordPackListPanel: React.FC = () => {
         .wp-sense-btn[aria-pressed="true"] { background: #e8eaf6; border-color: #3f51b5; color: #283593; }
         .wp-generate-btn { font-size: 0.55em; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid #2e7d32; background: #e8f5e9; color: #1b5e20; cursor: pointer; }
         .wp-generate-btn:hover:not(:disabled) { background: #d0f0d5; }
-        .wp-generate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .wp-sense-btn:disabled,
+        .wp-generate-btn:disabled,
+        .wp-card-tts-btn:disabled,
+        .wp-index-tts-btn:disabled {
+          border-color: #cbd5e1;
+          background: #e5e7eb;
+          color: #374151;
+          cursor: not-allowed;
+        }
         .wp-card-sense-title { margin: 0.35rem 0 0.2rem; font-size: 0.70em; color: #2f2f2f; background: rgba(255,255,255,0.86); padding: 0.25rem 0.35rem; border-left: 3px solid #5c6bc0; border-radius: 4px; line-height: 1.4; }
         .wp-badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 999px; font-size: 0.75em; margin-left: 0.5rem; }
         .wp-badge.empty { background: #fff3cd; color: #7a5b00; border: 1px solid #ffe08a; }
         .wp-pagination { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1rem; }
-        .wp-pagination button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
-        .wp-pagination button:disabled { opacity: 0.5; cursor: not-allowed; }
-        .wp-pagination button:hover:not(:disabled) { background: #f5f5f5; }
         .wp-empty { text-align: center; color: #666; padding: 2rem; }
         /* ダークテーマの空状態テキストはWCAG AAの可読性を確保する */
         body.theme-dark .wp-empty { color: #9aa4b2; }
@@ -671,13 +708,13 @@ export const WordPackListPanel: React.FC = () => {
         .wp-index-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0.3rem; border-bottom: 1px solid #eee; cursor: pointer; background: transparent; border-radius: 4px; }
         .wp-index-title-row { display: flex; align-items: baseline; gap: 0.4rem; flex: 1; min-width: 0; }
         .wp-index-actions { margin-left: auto; display: flex; gap: 0.25rem; align-items: center; }
-        .wp-index-tts-btn { font-size: 0.55em; padding: 0.05rem 0.3rem; border-radius: 4px; }
+        .wp-index-tts-btn { font-size: 0.55em; padding: 0.05rem 0.3rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #0f172a; cursor: pointer; }
         .wp-index-title { font-size: 0.75em; font-weight: bold; color:rgb(233, 233, 233); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .wp-index-sense { font-size: 0.55em; color: #212121; background: rgba(255,255,255,0.85); padding: 0.05rem 0.35rem; border-radius: 4px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .wp-index-meta { font-size: 0.10em; color: #666; }
         .wp-selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-size: 0.85em; }
-        .wp-selection-bar button { padding: 0.25rem 0.75rem; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; }
-        .wp-selection-bar button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .wp-selection-bar button { padding: 0.25rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #0f172a; cursor: pointer; }
+        .wp-selection-bar button:disabled { background: #e5e7eb; color: #374151; cursor: not-allowed; }
         .wp-select-checkbox { display: inline-flex; align-items: center; justify-content: center; }
         .wp-select-checkbox input { width: 1rem; height: 1rem; cursor: pointer; }
         @media (max-width: 640px) { 
