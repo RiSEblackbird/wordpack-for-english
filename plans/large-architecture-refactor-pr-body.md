@@ -63,7 +63,7 @@
 
 - Firestore repository 境界は互換 shim を残した段階的移行です。完全な store 解体は次段階の対象です。
 - WordPack regeneration job は in-memory registry のまま application service へ分離しています。複数 worker / 再起動耐性は従来どおりありません。
-- AppShell/sidebar CSS は構造分割後も既存挙動を維持しています。macOS で E2E を通すため Darwin visual snapshots を追加しました。
+- AppShell/sidebar CSS は構造分割後も既存挙動を維持しています。macOS で E2E を通すため Darwin visual snapshots を追加し、CI の visual regression 差分に合わせて Linux snapshots も更新しました。
 - `auth:unauthorized` event dispatch と custom event helper は shared API/events へ分離しています。イベント名は維持しています。
 - `npm ci` は成功しましたが、既存 dependency に npm audit 指摘があります。依存更新は今回のリファクタリング範囲外として未変更です。
 
