@@ -1,0 +1,30 @@
+{
+  "task": "firestore-repository-split",
+  "branch": "codex/firestore-repository-split",
+  "base_branch": "main",
+  "status": "in_progress",
+  "completed": [
+    "start_gate",
+    "plan",
+    "discovery",
+    "repository_split",
+    "compatibility_facade",
+    "tests_and_docs"
+  ],
+  "in_progress": [
+    "commit_push_pr_ci"
+  ],
+  "pending": [],
+  "verification": {
+    "targeted_import_check": "passed: legacy AppFirestoreStore composes legacy facade repository subclasses; infrastructure AppFirestoreRepository composes concrete repository classes",
+    "targeted_firestore_store_pytest": "passed: PYTHONPATH=apps/backend python -m pytest -q --no-cov tests/backend/test_firestore_store.py tests/backend/test_store_lemma.py tests/backend/test_firestore_lemma_store.py",
+    "backend_pytest": "passed: PYTHONPATH=apps/backend pytest",
+    "security_headers": "passed: PYTHONPATH=apps/backend pytest -q --no-cov tests/test_security_headers.py",
+    "diff_check": "passed: git diff --check"
+  },
+  "risks": [
+    "legacy import path compatibility",
+    "tests monkeypatching backend.store.firestore_store helpers",
+    "Firestore schema must remain unchanged"
+  ]
+}

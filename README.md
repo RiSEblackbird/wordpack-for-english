@@ -34,7 +34,7 @@
 
 ## アーキテクチャの要点
 - Backend の WordPack API は `backend.routers.word` package で lookup / pack / generation / regeneration / examples / study progress / guest public / lemma lookup に分割しています。`backend.routers.word` 自体は旧 import path 互換の facade として残します。
-- Firestore は `AppFirestoreStore` を互換 facade として維持しつつ、検索語生成、aggregation/batch helper、mapper、repository alias を `backend.infrastructure.firestore` 配下へ寄せています。Firestore collection / document schema は変更していません。
+- Firestore は `AppFirestoreStore` を互換 facade として維持しつつ、検索語生成、aggregation/batch helper、mapper、concrete repository を `backend.infrastructure.firestore` 配下へ寄せています。Firestore collection / document schema は変更していません。
 - Frontend の `src/app/App.tsx` は `ThemeApplier`、`AuthGate`、`AppShell` の composition を担当し、layout / sidebar / header / login / keyboard shortcut / CSS は `src/app` 配下に分離しています。
 - `WordPackPanel` と `ArticleImportPanel` は feature 配下へ移し、旧 `src/components/*Panel.tsx` は compatibility re-export として維持します。
 - Custom event 契約（`auth:unauthorized`、`wordpack:updated`、`wordpack:study-progress`、`article:updated`）は `src/shared/events/appEvents.ts` で typed helper 化しています。
