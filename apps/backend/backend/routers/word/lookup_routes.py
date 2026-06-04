@@ -3,12 +3,13 @@ from __future__ import annotations
 import json
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from itsdangerous import BadSignature, SignatureExpired
 
 from ...application.wordpack.lookup_wordpack import (
     WordLookupResponse,
     build_lookup_response,
 )
-from ...auth import resolve_guest_session_cookie
+from ...auth import resolve_guest_session_cookie, verify_guest_session_token
 from ...models.word import WordPackRequest, _validate_lemma
 from .dependencies import (
     get_run_wordpack_flow,
@@ -62,8 +63,15 @@ async def lookup_word(
         )
 
     is_guest = bool(getattr(request.state, "guest", False))
-    if not is_guest and resolve_guest_session_cookie(request):
-        is_guest = True
+    if not is_guest:
+        guest_token = resolve_guest_session_cookie(request)
+        if guest_token:
+            try:
+                verify_guest_session_token(guest_token)
+            except (SignatureExpired, BadSignature, RuntimeError):
+                pass
+            else:
+                is_guest = True
     if is_guest:
         raise HTTPException(
             status_code=403, detail="Guest mode cannot generate WordPack"

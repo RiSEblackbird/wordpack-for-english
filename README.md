@@ -139,7 +139,7 @@ npm run prepare:frontend-env  # apps/frontend/.env が無い場合に .env.examp
 # VITE_SESSION_COOKIE_NAME=wp_session  # バックエンドを変更しない場合は既定値のままでOK
 ```
 
-ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。Firebase Hosting から Cloud Run へリライティングする構成では、`wp_session` に加えて `__session` も同じトークンで自動配信されるため、Hosting の `__session` 制約を意識せずに認証を維持できます。
+ローカル開発（ENVIRONMENT=development など）では Secure 属性が既定で無効になり、HTTP サーバーでも `wp_session` Cookie が配信されます。本番で HTTPS を使う場合は `.env` または環境変数で `SESSION_COOKIE_SECURE=true` を指定してください。Firebase Hosting から Cloud Run へリライティングする構成では、ログイン用の `wp_session` とゲスト用の `wp_guest` に加えて `__session` も同じトークンで自動配信されるため、Hosting の `__session` 制約を意識せずに認証・ゲスト閲覧を維持できます。
 
 バックエンドは **全環境で Firestore を利用** します。`FIRESTORE_EMULATOR_HOST` が設定されている場合のみ Firestore エミュレータへ接続し、未設定なら環境に関わらず Cloud Firestore へ向かいます。ローカル/CI は課金を避けるため常にエミュレータを併走させ、Cloud Firestore を使う場合のみホスト指定を外して `FIRESTORE_PROJECT_ID`（または `GCP_PROJECT_ID`）とサービスアカウント資格情報（`GOOGLE_APPLICATION_CREDENTIALS` など）を明示してください。`ENVIRONMENT` は認証やセキュリティ関連のガード（allowlist 必須化や Secure 属性の既定値など）にのみ利用し、データベースの種類は切り替えません。  
 Docker Compose を使う場合は、コンテナ間通信のために `FIRESTORE_EMULATOR_HOST=firestore-emulator:8080` を指定してください（`127.0.0.1` は backend コンテナ自身を指すため接続エラーになります）。ホスト直起動時のみ `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080` を利用します。
@@ -147,8 +147,8 @@ Docker Compose を使う場合は、コンテナ間通信のために `FIRESTORE
 `ENVIRONMENT` と `ADMIN_EMAIL_ALLOWLIST` は連動させる前提でセットアップしてください。`ENVIRONMENT=production` で allowlist が空のままデプロイすると設定バリデーションで起動が止まり、Google ログインの許可メールアドレスがひとつも無い状態を防ぎます。テストや CI では本番同等の検証を通すために `ADMIN_EMAIL_ALLOWLIST=test@example.com` のようなダミー値を必ず設定し、実運用時のみ本当の許可リストへ差し替えてください。Firestore への接続先は allowlist の有無に関わらず Firestore 固定です。
 
 #### Firestore のインデックス要件
-Firestore に保存する主要コレクションは `firestore.indexes.json` で複合インデックスを一括管理しています。`word_packs`（`created_at` 降順 + `__name__`）、`examples`（`word_pack_id`/`category` フィルタ + `position` / `example_id` の組み合わせ）を固定することで、バックエンドのページネーションと `Aggregation Query` の `count()` が常に安定します。`lemma_label_lower` への等価フィルタと `updated_at` 降順の `order_by` を組み合わせるクエリ用のインデックスも追加済みで、lemma 重複チェック時に最新 1 件だけを取得します。JSON ファイルはそのまま Cloud Firestore / エミュレータ / Firebase CLI で流用できるようにしてあるため、手作業で Web Console に登録する必要はありません。
-`examples` ではページングと検索のために `created_at` / `pack_updated_at` / `search_en` / `search_en_reversed` / `search_terms` を組み合わせた追加インデックスを定義し、`order_by` + `start_after` + `limit` の組み合わせで常に 50 件までしか読み出さないようにしています（`offset` はカーソル取得のみに使用）。`search_en` は小文字化、`search_en_reversed` は逆順文字列、`search_terms` は 1〜3 文字の N-gram とトークン配列で、`prefix`/`suffix`/`contains` の各検索モードをサーバー側で絞り込みます。
+Firestore に保存する主要コレクションは `firestore.indexes.json` で複合インデックスを一括管理しています。`word_packs`（`created_at` 降順 + `__name__`）、`examples`（`word_pack_id`/`category` フィルタ + `position` / `example_id` の組み合わせ、横断一覧の `created_at` / `pack_updated_at` / `lemma` / `category` 降順 + `__name__`）を固定することで、バックエンドのページネーションと `Aggregation Query` の `count()` が常に安定します。`lemma_label_lower` への等価フィルタと `updated_at` 降順の `order_by` を組み合わせるクエリ用のインデックスも追加済みで、lemma 重複チェック時に最新 1 件だけを取得します。JSON ファイルはそのまま Cloud Firestore / エミュレータ / Firebase CLI で流用できるようにしてあるため、手作業で Web Console に登録する必要はありません。
+`examples` ではページングと検索のために `created_at` / `pack_updated_at` / `lemma` / `category` / `search_en` / `search_en_reversed` / `search_terms` を組み合わせた追加インデックスを定義し、`order_by` + `start_after` + `limit` の組み合わせで常に 50 件までしか読み出さないようにしています（`offset` はカーソル取得のみに使用）。`search_en` は小文字化、`search_en_reversed` は逆順文字列、`search_terms` は 1〜3 文字の N-gram とトークン配列で、`prefix`/`suffix`/`contains` の各検索モードをサーバー側で絞り込みます。
 
 | 操作 | コマンド | 補足 |
 | --- | --- | --- |
@@ -509,7 +509,7 @@ npx playwright test tests/e2e/visual.spec.ts
 詳細は `docs/testing/visual-regression.md` を参照してください。
 
 ## REST API（抜粋）
-- `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始
+- `POST /api/auth/guest` … 署名済みゲストセッション Cookie を発行し、閲覧専用モードを開始（Firebase Hosting 経由でも届くよう `__session` にも同じトークンを配信）
 - `POST /api/auth/logout` … 通常ログインまたはゲスト閲覧のセッション Cookie を失効させ、匿名状態へ戻す
 - `POST /api/word/pack` … WordPack を生成して語義タイトル・語義・例文・語源・学習カード要点を返却
 - `GET /api/word?lemma=...` … lemma を指定して保存済み WordPack から定義と例文を返却（未保存なら 404。ゲストは未登録語で 403。生成は `POST /api/word/pack` を使用）

@@ -293,7 +293,7 @@ flowchart TB
     TTSService -->|TTS| OpenAI
     Store --> Firestore
     Firestore --> Collections
-    AuthContext -->|Cookie: wp_session| Auth
+    AuthContext -->|Cookie: wp_session / wp_guest / __session| Auth
 ```
 
 ---

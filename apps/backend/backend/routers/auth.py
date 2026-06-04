@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from ..auth import (
     guest_session_cookie_max_age,
-    guest_session_cookie_name,
+    guest_session_cookie_names,
     issue_guest_session_token,
     issue_session_token,
     resolve_guest_session_cookie,
@@ -214,14 +214,15 @@ async def authenticate_as_guest(request: Request) -> JSONResponse:
 
     guest_token = issue_guest_session_token()
     response = JSONResponse(status_code=HTTPStatus.OK, content={"mode": "guest"})
-    response.set_cookie(
-        key=guest_session_cookie_name(),
-        value=guest_token,
-        httponly=True,
-        secure=settings.session_cookie_secure,
-        samesite="lax",
-        max_age=guest_session_cookie_max_age(),
-    )
+    for cookie_name in guest_session_cookie_names():
+        response.set_cookie(
+            key=cookie_name,
+            value=guest_token,
+            httponly=True,
+            secure=settings.session_cookie_secure,
+            samesite="lax",
+            max_age=guest_session_cookie_max_age(),
+        )
     request.state.guest = True
     logger.info(
         "guest_session_issued",
@@ -242,7 +243,7 @@ async def logout(request: Request, response: Response) -> Response:
     user_id, logout_mode = _resolve_logout_context(request)
 
     response.status_code = HTTPStatus.NO_CONTENT
-    for cookie_name in dict.fromkeys((*session_cookie_names(), guest_session_cookie_name())):
+    for cookie_name in dict.fromkeys((*session_cookie_names(), *guest_session_cookie_names())):
         response.delete_cookie(
             key=cookie_name,
             httponly=True,
@@ -261,15 +262,18 @@ def _resolve_logout_context(request: Request) -> tuple[str | None, str]:
     """Return log context for an authenticated or guest logout request."""
 
     _cookie_name, session_token = resolve_session_cookie(request)
+    session_invalid = False
     if session_token:
         try:
             payload = verify_session_token(session_token)
         except (SignatureExpired, BadSignature, RuntimeError):
-            return None, "logout_invalid_session"
-        sub = payload.get("sub") if isinstance(payload, dict) else None
-        if not sub:
-            return None, "logout_invalid_session"
-        return str(sub), "logout"
+            session_invalid = True
+        else:
+            sub = payload.get("sub") if isinstance(payload, dict) else None
+            if not sub:
+                session_invalid = True
+            else:
+                return str(sub), "logout"
 
     guest_token = resolve_guest_session_cookie(request)
     if guest_token:
@@ -281,6 +285,9 @@ def _resolve_logout_context(request: Request) -> tuple[str | None, str]:
             return None, "guest_logout_invalid"
         request.state.guest = True
         return None, "guest_logout"
+
+    if session_invalid:
+        return None, "logout_invalid_session"
 
     raise HTTPException(
         status_code=HTTPStatus.UNAUTHORIZED,
