@@ -1078,7 +1078,7 @@ def test_article_wordpack_link_persists_after_regeneration(monkeypatch: pytest.M
 
 
 def test_category_generate_and_import_endpoint(client, monkeypatch):
-    """カテゴリ別の生成＆インポートの簡易テスト。
+    """カテゴリ別の例文生成・記事化の簡易テスト。
 
     - LLM をスタブして決定的に動作させる
     - 返却値に lemma/word_pack_id/article_ids が含まれること

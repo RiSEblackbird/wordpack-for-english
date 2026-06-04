@@ -113,7 +113,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     const textarea = screen.getByPlaceholderText('文章を貼り付け（日本語/英語）');
     await act(async () => {
       await user.type(textarea, 'hello world');
-      await user.click(screen.getByRole('button', { name: 'インポート' }));
+      await user.click(screen.getByRole('button', { name: '文章をインポート' }));
     });
 
     // リクエスト検証
@@ -142,7 +142,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     const textarea = screen.getByPlaceholderText('文章を貼り付け（日本語/英語）');
     await act(async () => {
       await user.type(textarea, 'hello world 2');
-      await user.click(screen.getByRole('button', { name: 'インポート' }));
+      await user.click(screen.getByRole('button', { name: '文章をインポート' }));
     });
 
     const importBodies = fetchMock.mock.calls
@@ -150,9 +150,9 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(importBodies.some((b) => b.model === 'gpt-5.4-mini' && b.reasoning && b.text_opts && !('temperature' in b))).toBe(true);
 
-    // 生成＆インポートでも同様のパラメータ（text キー）
+    // 例文生成・記事化でも同様のパラメータ（text キー）
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: /生成＆インポート/ }));
+      await user.click(screen.getByRole('button', { name: '例文を生成して記事化' }));
     });
 
     const genBodies = fetchMock.mock.calls
@@ -176,7 +176,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     const textarea = screen.getByPlaceholderText('文章を貼り付け（日本語/英語）');
     await act(async () => {
       await user.type(textarea, 'hello cat');
-      await user.click(screen.getByRole('button', { name: 'インポート' }));
+      await user.click(screen.getByRole('button', { name: '文章をインポート' }));
     });
 
     const bodies = fetchMock.mock.calls
@@ -204,7 +204,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     const textarea = screen.getByPlaceholderText('文章を貼り付け（日本語/英語）');
     await act(async () => {
       await user.type(textarea, 'hello world nano');
-      await user.click(screen.getByRole('button', { name: 'インポート' }));
+      await user.click(screen.getByRole('button', { name: '文章をインポート' }));
     });
 
     const importBodies = fetchMock.mock.calls
@@ -213,7 +213,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     expect(importBodies.some((b) => b.model === 'gpt-5.4-nano' && b.reasoning && b.text_opts && !('temperature' in b))).toBe(true);
 
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: /生成＆インポート/ }));
+      await user.click(screen.getByRole('button', { name: '例文を生成して記事化' }));
     });
     const genBodies = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/generate_and_import') : ((c[0] as URL).toString().endsWith('/api/article/generate_and_import'))))
@@ -234,7 +234,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       fireEvent.change(textarea, { target: { value: overLimitText } });
     });
 
-    const importButton = screen.getByRole('button', { name: 'インポート' });
+    const importButton = screen.getByRole('button', { name: '文章をインポート' });
     expect(importButton).toBeDisabled();
     const warning = screen.getByText(
       `文章は${ARTICLE_IMPORT_TEXT_MAX_LENGTH}文字以内で入力してください（現在 ${overLimitText.length} 文字）`,
@@ -264,7 +264,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     expect((devCategory as HTMLInputElement).checked).toBe(true);
 
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: /生成＆インポート/ }));
+      await user.click(screen.getByRole('button', { name: '例文を生成して記事化' }));
     });
 
     const genBodies = fetchMock.mock.calls
@@ -285,7 +285,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     const allCategories = await screen.findByRole('checkbox', { name: /^すべて$/ });
     await act(async () => {
       await user.click(allCategories);
-      await user.click(screen.getByRole('button', { name: /生成＆インポート/ }));
+      await user.click(screen.getByRole('button', { name: '例文を生成して記事化' }));
     });
 
     const genBodies = fetchMock.mock.calls
@@ -310,7 +310,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     const textarea = screen.getByPlaceholderText('文章を貼り付け（日本語/英語）');
     await act(async () => {
       await user.type(textarea, 'hello regenerate');
-      await user.click(screen.getByRole('button', { name: 'インポート' }));
+      await user.click(screen.getByRole('button', { name: '文章をインポート' }));
     });
 
     const regenBtn = await screen.findByRole('button', { name: '生成' });
@@ -338,7 +338,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     const textarea = screen.getByPlaceholderText('文章を貼り付け（日本語/英語）');
     await act(async () => {
       await user.type(textarea, 'hello regenerate sampling');
-      await user.click(screen.getByRole('button', { name: 'インポート' }));
+      await user.click(screen.getByRole('button', { name: '文章をインポート' }));
     });
 
     const regenBtn = await screen.findByRole('button', { name: '生成' });

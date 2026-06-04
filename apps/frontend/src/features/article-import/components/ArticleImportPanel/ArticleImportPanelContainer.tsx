@@ -146,7 +146,7 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
 
     const results = await Promise.allSettled(
       categories.map(async (selectedCategory) => {
-        const notifId = addNotification({ title: `【${selectedCategory}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
+        const notifId = addNotification({ title: `【${selectedCategory}】の例文生成・記事化を開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
         try {
           const reqBody: any = { category: selectedCategory };
           reqBody.model = selectedModel;
@@ -157,11 +157,11 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
             body: reqBody,
             timeoutMs: settings.requestTimeoutMs,
           });
-          updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
+          updateNotification(notifId, { title: '例文生成・記事化完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
           return { category: selectedCategory, result: res };
         } catch (e) {
-          const message = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
-          updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message, model: selectedModel, category: selectedCategory });
+          const message = e instanceof ApiError ? e.message : '例文生成・記事化に失敗しました';
+          updateNotification(notifId, { title: '例文生成・記事化失敗', status: 'error', message, model: selectedModel, category: selectedCategory });
           throw { category: selectedCategory, message };
         } finally {
           setGenRunning((n) => Math.max(0, n - 1));
@@ -184,12 +184,12 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
     }
     if (failures.length > 0) {
       const prefix = successCount > 0
-        ? `${successCount}カテゴリで生成＆インポートを実行しましたが、一部失敗しました`
-        : '生成＆インポートに失敗しました';
+        ? `${successCount}カテゴリで例文生成・記事化を実行しましたが、一部失敗しました`
+        : '例文生成・記事化に失敗しました';
       setMsg({ kind: 'alert', text: `${prefix}: ${failures.join(' / ')}` });
       return;
     }
-    setMsg({ kind: 'status', text: `${successCount}カテゴリで生成＆インポートを実行しました` });
+    setMsg({ kind: 'status', text: `${successCount}カテゴリで例文生成・記事化を実行しました` });
   };
 
   const regenerateWordPack = async (wordPackId: string) => {
@@ -283,28 +283,18 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
               文章は{ARTICLE_IMPORT_TEXT_MAX_LENGTH}文字以内で入力してください（現在 {trimmedText.length} 文字）{sidebarSuffix}
             </p>
           ) : null}
-        </div>
-        <div className={actionsClass}>
-          <GuestLock isGuest={isGuest}>
-            <button
-              type="button"
-              onClick={importArticle}
-              disabled={importDisabled}
-              aria-label={isSidebar ? 'インポート（サイドバー）' : undefined}
-            >
-              インポート
-            </button>
-          </GuestLock>
-          <GuestLock isGuest={isGuest}>
-            <button
-              type="button"
-              onClick={generateAndImport}
-              disabled={generateDisabled}
-              aria-label={isSidebar ? `サイドバーの例文生成記事化${genRunning > 0 ? `、実行中 ${genRunning}` : ''}` : undefined}
-            >
-              生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
-            </button>
-          </GuestLock>
+          <div className={actionsClass}>
+            <GuestLock isGuest={isGuest}>
+              <button
+                type="button"
+                onClick={importArticle}
+                disabled={importDisabled}
+                aria-label={isSidebar ? '文章をインポート（サイドバー）' : undefined}
+              >
+                文章をインポート
+              </button>
+            </GuestLock>
+          </div>
         </div>
         <fieldset className={`${fieldClass} article-import-category-field`}>
           <legend>カテゴリ{sidebarSuffix}</legend>
@@ -335,6 +325,18 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
             </div>
           </GuestLock>
         </fieldset>
+        <div className={`${actionsClass} article-generated-example-actions`}>
+          <GuestLock isGuest={isGuest}>
+            <button
+              type="button"
+              onClick={generateAndImport}
+              disabled={generateDisabled}
+              aria-label={isSidebar ? `サイドバーの例文を生成して記事化${genRunning > 0 ? `、実行中 ${genRunning}` : ''}` : undefined}
+            >
+              例文を生成して記事化{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
+            </button>
+          </GuestLock>
+        </div>
         <div className={fieldClass}>
           <label htmlFor={`article-model-select-${suffix}`}>モデル{sidebarSuffix}</label>
           <GuestLock isGuest={isGuest}>
@@ -428,6 +430,10 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
         .article-import-actions button,
         .article-import-field select {
           min-height: 2.25rem;
+        }
+        .article-generated-example-actions button {
+          max-width: 100%;
+          white-space: normal;
         }
         .article-import-category-field {
           border: 0;

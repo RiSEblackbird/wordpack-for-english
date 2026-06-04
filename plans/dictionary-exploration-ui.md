@@ -9,7 +9,7 @@ Lexicon / WordPack Detail / Reader / Examples / Explore / Shelves / Settings を
 
 - `/`, `/lexicon`, `/wordpacks/:id`, `/reader`, `/examples`, `/explore`, `/shelves`, `/settings` が表示できる。
 - 既存の WordPack 生成、空 WordPack 作成、一覧、詳細、再生成、削除、`guest_public` 切替が維持される。
-- 文章インポート、記事詳細、関連 WordPack、生成＆インポート、4,000 文字上限通知が維持される。
+- 文章インポート、記事詳細、関連 WordPack、例文生成・記事化、4,000 文字上限通知が維持される。
 - 例文一覧、検索、カテゴリ絞り込み、訳表示、TTS、詳細モーダル、文字起こしタイピング、単体/複数削除が維持される。
 - 例文中 lemma hover/click 即生成導線が壊れていない。
 - ゲストモードで AI 生成、再生成、削除、POST/DELETE、音声再生、入力操作が読み取り専用として扱われる。
