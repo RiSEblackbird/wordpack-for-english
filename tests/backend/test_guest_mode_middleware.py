@@ -102,6 +102,7 @@ def test_guest_session_cookie_is_issued(guest_test_client: tuple[TestClient, App
 
     cookie_name = settings.guest_session_cookie_name
     assert client.cookies.get(cookie_name)
+    assert client.cookies.get("__session") == client.cookies.get(cookie_name)
 
 
 def test_guest_logout_deletes_guest_session_cookie(
@@ -119,7 +120,26 @@ def test_guest_logout_deletes_guest_session_cookie(
     logout = client.post("/api/auth/logout")
     assert logout.status_code == HTTPStatus.NO_CONTENT
     assert client.cookies.get(cookie_name) is None
+    assert client.cookies.get("__session") is None
     assert f"{cookie_name}=" in (logout.headers.get("set-cookie") or "")
+
+
+def test_guest_logout_deletes_firebase_cookie_alias(
+    guest_test_client: tuple[TestClient, AppFirestoreStore],
+) -> None:
+    """Firebase Hosting 経由で __session だけ届くゲストもログアウトできる。"""
+
+    client, _store = guest_test_client
+
+    response = client.post("/api/auth/guest")
+    assert response.status_code == HTTPStatus.OK
+    cookie_name = settings.guest_session_cookie_name
+    del client.cookies[cookie_name]
+    assert client.cookies.get("__session")
+
+    logout = client.post("/api/auth/logout")
+    assert logout.status_code == HTTPStatus.NO_CONTENT
+    assert client.cookies.get("__session") is None
 
 
 def test_guest_can_access_readonly_endpoint(guest_test_client: tuple[TestClient, AppFirestoreStore]) -> None:
@@ -136,6 +156,40 @@ def test_guest_can_access_readonly_endpoint(guest_test_client: tuple[TestClient,
     assert lookup.json()["lemma"] == "guest"
 
 
+def test_guest_can_access_readonly_endpoint_with_firebase_cookie_alias(
+    guest_test_client: tuple[TestClient, AppFirestoreStore],
+) -> None:
+    """Firebase Hosting 経由で __session だけ届いてもゲスト閲覧できる。"""
+
+    client, store = guest_test_client
+    _seed_public_wordpack(store, "guest-alias")
+
+    response = client.post("/api/auth/guest")
+    assert response.status_code == HTTPStatus.OK
+
+    cookie_name = settings.guest_session_cookie_name
+    assert client.cookies.get("__session")
+    del client.cookies[cookie_name]
+
+    lookup = client.get("/api/word/", params={"lemma": "guest-alias"})
+    assert lookup.status_code == HTTPStatus.OK
+    assert lookup.json()["lemma"] == "guest-alias"
+
+
+def test_invalid_firebase_session_alias_is_not_treated_as_guest(
+    guest_test_client: tuple[TestClient, AppFirestoreStore],
+) -> None:
+    """壊れた通常セッションを __session 経由のゲストとして誤認しない。"""
+
+    client, store = guest_test_client
+    _seed_public_wordpack(store, "guest-invalid")
+    client.cookies.set("__session", "not-a-signed-session")
+
+    lookup = client.get("/api/word/", params={"lemma": "guest-invalid"})
+    assert lookup.status_code == HTTPStatus.UNAUTHORIZED
+    assert lookup.json()["detail"] == "Invalid session token"
+
+
 def test_guest_write_is_denied(guest_test_client: tuple[TestClient, AppFirestoreStore]) -> None:
     """ゲストセッションは書き込み系の API を 403 で拒否される。"""
 
@@ -147,6 +201,24 @@ def test_guest_write_is_denied(guest_test_client: tuple[TestClient, AppFirestore
     assert client.cookies.get(settings.session_cookie_name) is None
 
     denied = client.post("/api/word/packs", json={"lemma": "blocked"})
+    assert denied.status_code == HTTPStatus.FORBIDDEN
+    assert denied.json()["detail"] == "Guest mode cannot perform write operations"
+
+
+def test_guest_write_is_denied_with_firebase_cookie_alias(
+    guest_test_client: tuple[TestClient, AppFirestoreStore],
+) -> None:
+    """__session にミラーされたゲスト Cookie だけでも書き込みを拒否する。"""
+
+    client, _store = guest_test_client
+
+    response = client.post("/api/auth/guest")
+    assert response.status_code == HTTPStatus.OK
+
+    cookie_name = settings.guest_session_cookie_name
+    del client.cookies[cookie_name]
+
+    denied = client.post("/api/word/packs", json={"lemma": "blocked-alias"})
     assert denied.status_code == HTTPStatus.FORBIDDEN
     assert denied.json()["detail"] == "Guest mode cannot perform write operations"
 

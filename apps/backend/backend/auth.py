@@ -164,11 +164,28 @@ def guest_session_cookie_name() -> str:
     return configured or "wp_guest"
 
 
+def guest_session_cookie_names() -> tuple[str, ...]:
+    """Return cookie names that may carry the signed guest session token.
+
+    Firebase Hosting forwards only `__session` to Cloud Run, so the guest token
+    must be mirrored there just like the authenticated user session token.
+    """
+
+    primary = guest_session_cookie_name()
+    names = [primary]
+    if _FIREBASE_SESSION_COOKIE not in names:
+        names.append(_FIREBASE_SESSION_COOKIE)
+    return tuple(dict.fromkeys(names))
+
+
 def resolve_guest_session_cookie(request: Request) -> str | None:
     """Return the signed guest session token when present."""
 
-    cookie_name = guest_session_cookie_name()
-    return read_session_cookie(request, cookie_name)
+    for cookie_name in guest_session_cookie_names():
+        token = read_session_cookie(request, cookie_name)
+        if token:
+            return token
+    return None
 
 
 def _guest_log_context(request: Request, *, reason: str) -> dict[str, object]:
@@ -198,6 +215,7 @@ def _resolve_authenticated_user(
     request: Request,
     *,
     log_missing: bool,
+    allow_invalid_session: bool = False,
 ) -> dict[str, str] | None:
     """Resolve an authenticated user from session cookies or return None."""
 
@@ -213,23 +231,31 @@ def _resolve_authenticated_user(
     try:
         payload = verify_session_token(raw_token)
     except SignatureExpired as exc:
+        session_error = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired",
+        )
         logger.warning(
             "session_validation_failed",
             **_session_log_context(request, reason="expired", user_id=None),
         )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session expired",
-        ) from exc
+        if allow_invalid_session:
+            request.state.session_validation_error = session_error
+            return None
+        raise session_error from exc
     except BadSignature as exc:
+        session_error = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid session token",
+        )
         logger.warning(
             "session_validation_failed",
             **_session_log_context(request, reason="bad_signature", user_id=None),
         )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid session token",
-        ) from exc
+        if allow_invalid_session:
+            request.state.session_validation_error = session_error
+            return None
+        raise session_error from exc
     except RuntimeError as exc:
         logger.error(
             "session_validation_failed",
@@ -282,12 +308,19 @@ async def get_current_user(request: Request) -> dict[str, str]:
 async def get_current_user_or_guest(request: Request) -> dict[str, str]:
     """Allow authenticated users or signed guest sessions for read-only access."""
 
-    user = _resolve_authenticated_user(request, log_missing=False)
+    user = _resolve_authenticated_user(
+        request,
+        log_missing=False,
+        allow_invalid_session=True,
+    )
     if user is not None:
         return user
 
     guest_token = resolve_guest_session_cookie(request)
     if not guest_token:
+        session_error = getattr(request.state, "session_validation_error", None)
+        if isinstance(session_error, HTTPException):
+            raise session_error
         logger.warning(
             "guest_session_invalid",
             **_guest_log_context(request, reason="missing_cookie"),
@@ -300,6 +333,9 @@ async def get_current_user_or_guest(request: Request) -> dict[str, str]:
     try:
         payload = verify_guest_session_token(guest_token)
     except SignatureExpired as exc:
+        session_error = getattr(request.state, "session_validation_error", None)
+        if isinstance(session_error, HTTPException):
+            raise session_error
         logger.warning(
             "guest_session_invalid",
             **_guest_log_context(request, reason="expired"),
@@ -309,6 +345,9 @@ async def get_current_user_or_guest(request: Request) -> dict[str, str]:
             detail="Guest session expired",
         ) from exc
     except BadSignature as exc:
+        session_error = getattr(request.state, "session_validation_error", None)
+        if isinstance(session_error, HTTPException):
+            raise session_error
         logger.warning(
             "guest_session_invalid",
             **_guest_log_context(request, reason="bad_signature"),

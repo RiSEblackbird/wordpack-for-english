@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 from typing import Any
 
 import uuid
@@ -204,6 +205,22 @@ def test_count_word_packs_uses_server_side_aggregation(
     total = firestore_store.count_word_packs()
     assert total == 2
     assert firestore_store.wordpacks._word_packs.count_calls == 1
+
+
+def test_extract_count_from_aggregation_accepts_sdk_value_tuple() -> None:
+    """本番 SDK の count 結果がネストした value 形でも件数を拾える。"""
+
+    aggregation = [[SimpleNamespace(value=130)]]
+
+    assert firestore_module._extract_count_from_aggregation(aggregation) == 130
+
+
+def test_extract_count_from_aggregation_accepts_non_count_alias() -> None:
+    """Firestore SDK が count 以外の alias で返しても単一値なら件数として扱う。"""
+
+    aggregation = [SimpleNamespace(aggregate_fields={"field_1": 130})]
+
+    assert firestore_module._extract_count_from_aggregation(aggregation) == 130
 
 
 def test_has_guest_demo_word_pack_uses_metadata_filter(
