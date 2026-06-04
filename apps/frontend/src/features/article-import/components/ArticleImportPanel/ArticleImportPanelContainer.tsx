@@ -26,6 +26,8 @@ interface ArticleImportPanelProps {
 }
 
 type ControlPlacement = 'inline' | 'sidebar';
+const EXAMPLE_CATEGORIES = ['Dev', 'CS', 'LLM', 'Business', 'Common'] as const;
+type ExampleCategory = (typeof EXAMPLE_CATEGORIES)[number];
 
 export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
   showInlineControls = true,
@@ -44,7 +46,7 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
   const [detailOpen, setDetailOpen] = useState(false);
   const [wpPreviewOpen, setWpPreviewOpen] = useState(false);
   const [wpPreviewId, setWpPreviewId] = useState<string | null>(null);
-  const [category, setCategory] = useState<'Dev'|'CS'|'LLM'|'Business'|'Common'>('Common');
+  const [selectedCategories, setSelectedCategories] = useState<ExampleCategory[]>(['Common']);
   const abortRef = useRef<AbortController | null>(null);
 
   const [model, setModel] = useState<string>(normalizeLlmModel(settings.model || DEFAULT_LLM_MODEL));
@@ -55,6 +57,9 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
     [trimmedText],
   );
   const importDisabled = loading || !trimmedText || isTextTooLong;
+  const hasSelectedCategories = selectedCategories.length > 0;
+  const allCategoriesSelected = selectedCategories.length === EXAMPLE_CATEGORIES.length;
+  const generateDisabled = loading || genRunning > 0 || !hasSelectedCategories;
 
   const showAdvancedModelOptions = useMemo(() => SUPPORTED_LLM_MODELS.includes(model as any), [model]);
 
@@ -66,7 +71,7 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
 
   const importArticle = async () => {
     const selectedModel = model;
-    const selectedCategory = category;
+    const selectedCategory = selectedCategories[0] || 'Common';
     if (!trimmedText) {
       return;
     }
@@ -115,33 +120,76 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
     }
   };
 
+  const toggleCategory = (nextCategory: ExampleCategory, checked: boolean) => {
+    setSelectedCategories((prev) => {
+      if (!checked) {
+        return prev.filter((categoryName) => categoryName !== nextCategory);
+      }
+      return [nextCategory, ...prev.filter((categoryName) => categoryName !== nextCategory)];
+    });
+  };
+
+  const toggleAllCategories = (checked: boolean) => {
+    setSelectedCategories(checked ? [...EXAMPLE_CATEGORIES] : []);
+  };
+
   const generateAndImport = async () => {
-    const selectedCategory = category;
+    const categories = [...selectedCategories];
+    if (categories.length === 0) {
+      setMsg({ kind: 'alert', text: 'カテゴリを選択してください' });
+      return;
+    }
     const selectedModel = model;
     setMsg(null);
     setArticle(null);
-    setGenRunning((n) => n + 1);
-    const notifId = addNotification({ title: `【${selectedCategory}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
-    try {
-      const reqBody: any = { category: selectedCategory };
-      reqBody.model = selectedModel;
-      reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
-      reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
-      const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
-        method: 'POST',
-        body: reqBody,
-        timeoutMs: settings.requestTimeoutMs,
+    setGenRunning((n) => n + categories.length);
+
+    const results = await Promise.allSettled(
+      categories.map(async (selectedCategory) => {
+        const notifId = addNotification({ title: `【${selectedCategory}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
+        try {
+          const reqBody: any = { category: selectedCategory };
+          reqBody.model = selectedModel;
+          reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+          reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
+          const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
+            method: 'POST',
+            body: reqBody,
+            timeoutMs: settings.requestTimeoutMs,
+          });
+          updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
+          return { category: selectedCategory, result: res };
+        } catch (e) {
+          const message = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
+          updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message, model: selectedModel, category: selectedCategory });
+          throw { category: selectedCategory, message };
+        } finally {
+          setGenRunning((n) => Math.max(0, n - 1));
+        }
+      }),
+    );
+
+    const successCount = results.filter((result) => result.status === 'fulfilled').length;
+    const failures = results
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map((result) => result.reason)
+      .map((reason) => {
+        const categoryName = typeof reason?.category === 'string' ? reason.category : 'カテゴリ';
+        const message = typeof reason?.message === 'string' ? reason.message : '失敗しました';
+        return `${categoryName}: ${message}`;
       });
-      updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
+
+    if (successCount > 0) {
       dispatchAppEvent(APP_EVENTS.articleUpdated);
-      setMsg({ kind: 'status', text: '生成＆インポートを実行しました' });
-    } catch (e) {
-      const m = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
-      setMsg({ kind: 'alert', text: m });
-      updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message: m, model: selectedModel, category: selectedCategory });
-    } finally {
-      setGenRunning((n) => Math.max(0, n - 1));
     }
+    if (failures.length > 0) {
+      const prefix = successCount > 0
+        ? `${successCount}カテゴリで生成＆インポートを実行しましたが、一部失敗しました`
+        : '生成＆インポートに失敗しました';
+      setMsg({ kind: 'alert', text: `${prefix}: ${failures.join(' / ')}` });
+      return;
+    }
+    setMsg({ kind: 'status', text: `${successCount}カテゴリで生成＆インポートを実行しました` });
   };
 
   const regenerateWordPack = async (wordPackId: string) => {
@@ -247,34 +295,46 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
               インポート
             </button>
           </GuestLock>
-          <div className={fieldClass}>
-            <label htmlFor={`article-category-select-${suffix}`}>カテゴリ{sidebarSuffix}</label>
-            <GuestLock isGuest={isGuest}>
-              <select
-                id={`article-category-select-${suffix}`}
-                value={category}
-                onChange={(e) => setCategory(e.target.value as any)}
-                disabled={loading}
-              >
-                <option value="Dev">Dev</option>
-                <option value="CS">CS</option>
-                <option value="LLM">LLM</option>
-                <option value="Business">Business</option>
-                <option value="Common">Common</option>
-              </select>
-            </GuestLock>
-          </div>
           <GuestLock isGuest={isGuest}>
             <button
               type="button"
               onClick={generateAndImport}
-              disabled={loading}
+              disabled={generateDisabled}
               aria-label={isSidebar ? `サイドバーの例文生成記事化${genRunning > 0 ? `、実行中 ${genRunning}` : ''}` : undefined}
             >
               生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
             </button>
           </GuestLock>
         </div>
+        <fieldset className={`${fieldClass} article-import-category-field`}>
+          <legend>カテゴリ{sidebarSuffix}</legend>
+          <GuestLock isGuest={isGuest}>
+            <div className="article-import-category-options">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={allCategoriesSelected}
+                  onChange={(e) => toggleAllCategories(e.target.checked)}
+                  disabled={loading || genRunning > 0}
+                  aria-label={isSidebar ? 'すべて（サイドバー）' : 'すべて'}
+                />
+                <span>すべて</span>
+              </label>
+              {EXAMPLE_CATEGORIES.map((categoryName) => (
+                <label key={`${suffix}-${categoryName}`}>
+                  <input
+                    type="checkbox"
+                    checked={selectedCategories.includes(categoryName)}
+                    onChange={(e) => toggleCategory(categoryName, e.target.checked)}
+                    disabled={loading || genRunning > 0}
+                    aria-label={isSidebar ? `${categoryName}（サイドバー）` : categoryName}
+                  />
+                  <span>{categoryName}</span>
+                </label>
+              ))}
+            </div>
+          </GuestLock>
+        </fieldset>
         <div className={fieldClass}>
           <label htmlFor={`article-model-select-${suffix}`}>モデル{sidebarSuffix}</label>
           <GuestLock isGuest={isGuest}>
@@ -368,6 +428,26 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
         .article-import-actions button,
         .article-import-field select {
           min-height: 2.25rem;
+        }
+        .article-import-category-field {
+          border: 0;
+          margin: 0;
+          padding: 0;
+        }
+        .article-import-category-field legend {
+          font-weight: 600;
+          padding: 0;
+        }
+        .article-import-category-options {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem 0.75rem;
+        }
+        .article-import-category-options label {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          font-weight: 500;
         }
         .article-import-inline {
           display: grid;

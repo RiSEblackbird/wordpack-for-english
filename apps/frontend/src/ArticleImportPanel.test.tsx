@@ -169,9 +169,9 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     await openTab(user, '文章インポート');
 
     // カテゴリ選択→インポート
-    const categorySelect = await screen.findByLabelText('カテゴリ');
+    const devCategory = await screen.findByRole('checkbox', { name: /^Dev$/ });
     await act(async () => {
-      await user.selectOptions(categorySelect, 'Dev');
+      await user.click(devCategory);
     });
     const textarea = screen.getByPlaceholderText('文章を貼り付け（日本語/英語）');
     await act(async () => {
@@ -254,11 +254,14 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     const user = userEvent.setup();
     await openTab(user, '文章インポート');
 
-    const categorySelect = await screen.findByLabelText('カテゴリ');
+    const commonCategory = await screen.findByRole('checkbox', { name: /^Common$/ });
+    const devCategory = await screen.findByRole('checkbox', { name: /^Dev$/ });
     await act(async () => {
-      await user.selectOptions(categorySelect, 'Dev');
+      await user.click(commonCategory);
+      await user.click(devCategory);
     });
-    expect((categorySelect as HTMLSelectElement).value).toBe('Dev');
+    expect((commonCategory as HTMLInputElement).checked).toBe(false);
+    expect((devCategory as HTMLInputElement).checked).toBe(true);
 
     await act(async () => {
       await user.click(screen.getByRole('button', { name: /生成＆インポート/ }));
@@ -269,6 +272,28 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(genBodies.length).toBeGreaterThan(0);
     expect(genBodies.some((b) => b.category === 'Dev')).toBe(true);
+    expect(genBodies.every((b) => b.category !== 'Common')).toBe(true);
+  });
+
+  it('sends requests for every selected category when all is checked', async () => {
+    const fetchMock = setupFetchMocks();
+    renderWithAuth();
+
+    const user = userEvent.setup();
+    await openTab(user, '文章インポート');
+
+    const allCategories = await screen.findByRole('checkbox', { name: /^すべて$/ });
+    await act(async () => {
+      await user.click(allCategories);
+      await user.click(screen.getByRole('button', { name: /生成＆インポート/ }));
+    });
+
+    const genBodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/article/generate_and_import') : ((c[0] as URL).toString().endsWith('/api/article/generate_and_import'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(genBodies.map((b) => b.category).sort()).toEqual(
+      ['Business', 'CS', 'Common', 'Dev', 'LLM'].sort(),
+    );
   });
 
   it('uses selected model for regenerate from import result modal (reasoning model)', async () => {
