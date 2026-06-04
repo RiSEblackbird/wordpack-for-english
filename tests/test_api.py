@@ -1309,6 +1309,54 @@ def test_article_import_includes_llm_metadata(monkeypatch):
     _assert_iso_utc(detail["generation_completed_at"])
     assert detail["generation_duration_ms"] >= 0
 
+
+def test_article_import_uses_plain_text_generation_for_non_json_steps(monkeypatch):
+    """タイトル/翻訳/解説は JSON mode ではなくプレーン生成を使う。"""
+
+    backend_main = _reload_backend_app(monkeypatch, strict=False)
+    from fastapi.testclient import TestClient
+    import backend.providers as providers_mod
+    from backend.flows.article_import import ArticleImportFlow
+
+    monkeypatch.setattr(ArticleImportFlow, "_post_filter_lemmas", lambda self, raw: ["resilience"])
+
+    class _StubLLM:
+        def __init__(self) -> None:
+            self.plain_prompts: list[str] = []
+            self.json_prompts: list[str] = []
+
+        def complete_text(self, prompt: str) -> str:
+            text = str(prompt or "")
+            self.plain_prompts.append(text)
+            if "日本語へ忠実に翻訳" in text:
+                return "これはレジリエンスに関する日本語訳です。"
+            if "詳細な解説" in text:
+                return "レジリエンスは障害からの回復能力を指します。"
+            return "Operational resilience"
+
+        def complete(self, prompt: str) -> str:
+            text = str(prompt or "")
+            self.json_prompts.append(text)
+            return '{"lemmas": ["resilience"]}'
+
+    stub = _StubLLM()
+    providers_mod._LLM_INSTANCE = stub
+    client = TestClient(backend_main.app, raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/article/import",
+        json={"text": "Resilience keeps systems available."},
+    )
+
+    assert response.status_code == 200
+    assert len(stub.plain_prompts) == 3
+    assert any("タイトル" in prompt for prompt in stub.plain_prompts)
+    assert any("日本語へ忠実に翻訳" in prompt for prompt in stub.plain_prompts)
+    assert any("詳細な解説" in prompt for prompt in stub.plain_prompts)
+    assert len(stub.json_prompts) == 1
+    assert "JSON 配列" in stub.json_prompts[0]
+
+
 def test_article_import_category_and_zero_duration(monkeypatch):
     """インポート時に generation_category を指定した場合に保存/再読込で保持され、
     時刻が同一なら duration=0 になることを検証。

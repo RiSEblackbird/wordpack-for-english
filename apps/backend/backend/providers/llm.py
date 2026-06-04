@@ -26,6 +26,9 @@ class _LLMBase:
     def complete(self, prompt: str) -> str:  # pragma: no cover - interface definition
         raise NotImplementedError
 
+    def complete_text(self, prompt: str) -> str:  # pragma: no cover - interface definition
+        return self.complete(prompt)
+
 
 class _LocalEchoLLM(_LLMBase):
     """外部依存が利用できない環境でのフォールバック LLM。"""
@@ -45,6 +48,9 @@ class _LocalEchoLLM(_LLMBase):
             content_chars=len(out),
         )
         return out
+
+    def complete_text(self, prompt: str) -> str:
+        return self.complete(prompt)
 
 
 def _prepare_span_input(model: str, prompt: str) -> dict[str, Any]:
@@ -212,26 +218,49 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
             },
         ]
 
-    def complete(self, prompt: str) -> str:
+    @staticmethod
+    def _plain_response_attempts() -> list[dict[str, Any]]:
+        return [
+            {
+                "use_json": False,
+                "include_reasoning": True,
+                "include_text_options": True,
+                "label": "plain_with_controls",
+            },
+            {
+                "use_json": False,
+                "include_reasoning": False,
+                "include_text_options": False,
+                "label": "plain_without_optional_controls",
+            },
+        ]
+
+    def _complete_with_attempts(
+        self, prompt: str, attempts: list[dict[str, Any]], response_mode: str
+    ) -> str:
         logger.info(
             "llm_complete_call",
             provider="openai",
             model=self._model,
             prompt_chars=len(prompt),
+            response_mode=response_mode,
         )
         if self._api_key == "test-key":
-            out = '{"senses": [{"id": "s1", "gloss_ja": "テスト用の語義", "patterns": ["test pattern"]}], "sense_title": "テスト語義", "collocations": {"general": {"verb_object": ["test verb"], "adj_noun": ["test adj"], "prep_noun": ["test prep"]}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}}, "contrast": [], "examples": {"Dev": [{"en": "This is a test in dev.", "ja": "これは開発現場のテストです。"}], "CS": [], "LLM": [], "Business": [], "Common": []}, "etymology": {"note": "Test etymology", "confidence": "medium"}, "study_card": "テスト用の学習カード", "pronunciation": {"ipa_RP": "/test/"}}'
+            if response_mode == "plain":
+                out = "テスト用のプレーンテキスト応答"
+            else:
+                out = '{"senses": [{"id": "s1", "gloss_ja": "テスト用の語義", "patterns": ["test pattern"]}], "sense_title": "テスト語義", "collocations": {"general": {"verb_object": ["test verb"], "adj_noun": ["test adj"], "prep_noun": ["test prep"]}, "academic": {"verb_object": [], "adj_noun": [], "prep_noun": []}}, "contrast": [], "examples": {"Dev": [{"en": "This is a test in dev.", "ja": "これは開発現場のテストです。"}], "CS": [], "LLM": [], "Business": [], "Common": []}, "etymology": {"note": "Test etymology", "confidence": "medium"}, "study_card": "テスト用の学習カード", "pronunciation": {"ipa_RP": "/test/"}}'
             logger.info(
                 "llm_complete_result",
                 provider="openai",
                 model=self._model,
                 content_chars=len(out),
+                response_mode=response_mode,
             )
             return out
 
         last_exc: Exception | None = None
         with _langfuse_span("openai.responses.create", self._model, prompt) as current_span:
-            attempts = self._response_attempts()
             for attempt_index, attempt in enumerate(attempts):
                 try:
                     resp = self._create_response(
@@ -255,6 +284,7 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
                             ).hexdigest(),
                             json_forced=bool(attempt["use_json"]),
                             param_profile=str(attempt["label"]),
+                            response_mode=response_mode,
                         )
                     except Exception:
                         pass
@@ -266,6 +296,7 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
                         content_chars=len(content),
                         json_forced=bool(attempt["use_json"]),
                         param_profile=str(attempt["label"]),
+                        response_mode=response_mode,
                     )
                     return content
                 except Exception as exc:
@@ -282,10 +313,21 @@ class _OpenAILLM(_LLMBase):  # pragma: no cover - オンライン利用が前提
                             next_profile=str(attempts[attempt_index + 1]["label"]),
                             error_type=type(exc).__name__,
                             error=str(exc)[:256],
+                            response_mode=response_mode,
                         )
                         continue
                     raise
         raise last_exc if last_exc else RuntimeError("LLM call failed with unsupported params")
+
+    def complete(self, prompt: str) -> str:
+        return self._complete_with_attempts(
+            prompt, self._response_attempts(), response_mode="json"
+        )
+
+    def complete_text(self, prompt: str) -> str:
+        return self._complete_with_attempts(
+            prompt, self._plain_response_attempts(), response_mode="plain"
+        )
 
 
 def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
@@ -295,18 +337,26 @@ def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
 
     class _Wrapped(_LLMBase):
         def complete(self, prompt: str) -> str:
+            return self._run_with_policy("complete", prompt)
+
+        def complete_text(self, prompt: str) -> str:
+            return self._run_with_policy("complete_text", prompt)
+
+        def _run_with_policy(self, method_name: str, prompt: str) -> str:
             last_exc: Exception | None = None
             for attempt in range(1, max(1, settings.llm_max_retries) + 1):
                 future = None
                 try:
                     ctx = contextvars.copy_context()
-                    future = executor.submit(ctx.run, llm.complete, prompt)
+                    method = getattr(llm, method_name)
+                    future = executor.submit(ctx.run, method, prompt)
                     result = future.result(timeout=settings.llm_timeout_ms / 1000.0)
                     if result == "":
                         logger.info(
                             "llm_complete_empty",
                             attempt=attempt,
                             retries=settings.llm_max_retries,
+                            method=method_name,
                         )
                     return result
                 except Exception as exc:
@@ -317,6 +367,7 @@ def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
                         retries=settings.llm_max_retries,
                         error_type=type(exc).__name__,
                         error=str(exc),
+                        method=method_name,
                     )
                     if future is not None:
                         try:
@@ -330,6 +381,7 @@ def _llm_with_policy(llm: _LLMBase) -> _LLMBase:
                 "llm_complete_failed_all_retries",
                 error=str(last_exc) if last_exc else None,
                 error_type=(type(last_exc).__name__ if last_exc else None),
+                method=method_name,
             )
             if settings.strict_mode:
                 reason_code = "UNKNOWN"

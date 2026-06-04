@@ -423,6 +423,15 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
         """
         return strip_code_fences(text, prefer_json_object=False)
 
+    def _complete_text(self, llm: object, prompt: str) -> str:
+        """プレーンテキスト生成では Responses API の JSON mode を使わない。"""
+
+        complete_text = getattr(llm, "complete_text", None)
+        if callable(complete_text):
+            return str(complete_text(prompt) or "")
+        complete = getattr(llm, "complete")
+        return str(complete(prompt) or "")
+
     def _post_filter_lemmas(self, raw: list[str]) -> list[str]:
         return filter_article_lemmas(raw, basic_lemmas=self._BASIC_LEMMAS)
 
@@ -651,7 +660,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                     name="article.title.llm",
                     input={"prompt_chars": len(pr)},
                 ):
-                    out = llm.complete(pr)
+                    out = self._complete_text(llm, pr)
                 t = str(out or "").strip()
                 t = self._strip_code_fences(t)
                 # 安全側: 空なら Untitled（UI互換）。ダミー生成ではなく保存時に明示化するだけ。
@@ -675,7 +684,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                     name="article.translation.llm",
                     input={"prompt_chars": len(pr)},
                 ):
-                    out = llm.complete(pr)
+                    out = self._complete_text(llm, pr)
                 ja = str(out or "").strip()
                 ja = self._strip_code_fences(ja)
                 s["body_ja"] = ja
@@ -698,7 +707,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                     name="article.explanation.llm",
                     input={"prompt_chars": len(pr)},
                 ):
-                    out = llm.complete(pr)
+                    out = self._complete_text(llm, pr)
                 note = str(out or "").strip()
                 note = self._strip_code_fences(note)
                 s["notes_ja"] = note or None
