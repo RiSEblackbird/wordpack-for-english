@@ -20,7 +20,19 @@ import {
 } from '../../api/articleApi';
 import { APP_EVENTS, dispatchAppEvent } from '../../../../shared/events/appEvents';
 
-export const ArticleImportPanel: React.FC = () => {
+interface ArticleImportPanelProps {
+  showInlineControls?: boolean;
+  showSidebarControls?: boolean;
+}
+
+type ControlPlacement = 'inline' | 'sidebar';
+const EXAMPLE_CATEGORIES = ['Dev', 'CS', 'LLM', 'Business', 'Common'] as const;
+type ExampleCategory = (typeof EXAMPLE_CATEGORIES)[number];
+
+export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
+  showInlineControls = true,
+  showSidebarControls = true,
+}) => {
   const { isGuest } = useAuth();
   const { settings, setSettings } = useSettings();
   const { setModalOpen } = useModal();
@@ -34,7 +46,7 @@ export const ArticleImportPanel: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [wpPreviewOpen, setWpPreviewOpen] = useState(false);
   const [wpPreviewId, setWpPreviewId] = useState<string | null>(null);
-  const [category, setCategory] = useState<'Dev'|'CS'|'LLM'|'Business'|'Common'>('Common');
+  const [selectedCategories, setSelectedCategories] = useState<ExampleCategory[]>(['Common']);
   const abortRef = useRef<AbortController | null>(null);
 
   const [model, setModel] = useState<string>(normalizeLlmModel(settings.model || DEFAULT_LLM_MODEL));
@@ -45,6 +57,9 @@ export const ArticleImportPanel: React.FC = () => {
     [trimmedText],
   );
   const importDisabled = loading || !trimmedText || isTextTooLong;
+  const hasSelectedCategories = selectedCategories.length > 0;
+  const allCategoriesSelected = selectedCategories.length === EXAMPLE_CATEGORIES.length;
+  const generateDisabled = loading || genRunning > 0 || !hasSelectedCategories;
 
   const showAdvancedModelOptions = useMemo(() => SUPPORTED_LLM_MODELS.includes(model as any), [model]);
 
@@ -56,7 +71,7 @@ export const ArticleImportPanel: React.FC = () => {
 
   const importArticle = async () => {
     const selectedModel = model;
-    const selectedCategory = category;
+    const selectedCategory = selectedCategories[0] || 'Common';
     if (!trimmedText) {
       return;
     }
@@ -103,6 +118,78 @@ export const ArticleImportPanel: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleCategory = (nextCategory: ExampleCategory, checked: boolean) => {
+    setSelectedCategories((prev) => {
+      if (!checked) {
+        return prev.filter((categoryName) => categoryName !== nextCategory);
+      }
+      return [nextCategory, ...prev.filter((categoryName) => categoryName !== nextCategory)];
+    });
+  };
+
+  const toggleAllCategories = (checked: boolean) => {
+    setSelectedCategories(checked ? [...EXAMPLE_CATEGORIES] : []);
+  };
+
+  const generateAndImport = async () => {
+    const categories = [...selectedCategories];
+    if (categories.length === 0) {
+      setMsg({ kind: 'alert', text: 'カテゴリを選択してください' });
+      return;
+    }
+    const selectedModel = model;
+    setMsg(null);
+    setArticle(null);
+    setGenRunning((n) => n + categories.length);
+
+    const results = await Promise.allSettled(
+      categories.map(async (selectedCategory) => {
+        const notifId = addNotification({ title: `【${selectedCategory}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
+        try {
+          const reqBody: any = { category: selectedCategory };
+          reqBody.model = selectedModel;
+          reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
+          reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
+          const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
+            method: 'POST',
+            body: reqBody,
+            timeoutMs: settings.requestTimeoutMs,
+          });
+          updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
+          return { category: selectedCategory, result: res };
+        } catch (e) {
+          const message = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
+          updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message, model: selectedModel, category: selectedCategory });
+          throw { category: selectedCategory, message };
+        } finally {
+          setGenRunning((n) => Math.max(0, n - 1));
+        }
+      }),
+    );
+
+    const successCount = results.filter((result) => result.status === 'fulfilled').length;
+    const failures = results
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map((result) => result.reason)
+      .map((reason) => {
+        const categoryName = typeof reason?.category === 'string' ? reason.category : 'カテゴリ';
+        const message = typeof reason?.message === 'string' ? reason.message : '失敗しました';
+        return `${categoryName}: ${message}`;
+      });
+
+    if (successCount > 0) {
+      dispatchAppEvent(APP_EVENTS.articleUpdated);
+    }
+    if (failures.length > 0) {
+      const prefix = successCount > 0
+        ? `${successCount}カテゴリで生成＆インポートを実行しましたが、一部失敗しました`
+        : '生成＆インポートに失敗しました';
+      setMsg({ kind: 'alert', text: `${prefix}: ${failures.join(' / ')}` });
+      return;
+    }
+    setMsg({ kind: 'status', text: `${successCount}カテゴリで生成＆インポートを実行しました` });
   };
 
   const regenerateWordPack = async (wordPackId: string) => {
@@ -168,151 +255,215 @@ export const ArticleImportPanel: React.FC = () => {
     }
   };
 
-  return (
-    <>
-      <SidebarPortal>
-        <section className="sidebar-section" aria-label="文章インポート">
-          <h2>文章インポート</h2>
-          <div className="sidebar-field">
-            <label htmlFor="article-import-text">文章</label>
-            {/* ゲストモードではAI利用に直結する入力をロックする */}
-            <GuestLock isGuest={isGuest}>
-              <textarea
-                id="article-import-text"
-                placeholder="文章を貼り付け（日本語/英語）"
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                disabled={loading}
-                style={{ width: '100%', minHeight: '5rem', padding: '0.5rem', borderRadius: 6, border: '1px solid var(--color-border)' }}
-              />
-            </GuestLock>
-            {isTextTooLong ? (
-              <p role="alert" style={{ color: 'var(--color-danger, #b00020)', marginTop: '0.25rem' }}>
-                文章は{ARTICLE_IMPORT_TEXT_MAX_LENGTH}文字以内で入力してください（現在 {trimmedText.length} 文字）
-              </p>
-            ) : null}
-          </div>
-          <div className="sidebar-actions">
-            <GuestLock isGuest={isGuest}>
-              <button type="button" onClick={importArticle} disabled={importDisabled}>
-                インポート
-              </button>
-            </GuestLock>
-            <div className="sidebar-field">
-              <label htmlFor="article-category-select">カテゴリ</label>
+  const renderControls = (placement: ControlPlacement) => {
+    const isSidebar = placement === 'sidebar';
+    const suffix = isSidebar ? 'sidebar' : 'inline';
+    const fieldClass = isSidebar ? 'sidebar-field' : 'article-import-field';
+    const actionsClass = isSidebar ? 'sidebar-actions' : 'article-import-actions';
+    const inlineClass = isSidebar ? 'sidebar-inline' : 'article-import-inline';
+    const sidebarSuffix = isSidebar ? '（サイドバー）' : '';
+
+    return (
+      <div className={isSidebar ? undefined : 'article-import-form'}>
+        <div className={fieldClass}>
+          <label htmlFor={`article-import-text-${suffix}`}>文章{sidebarSuffix}</label>
+          {/* ゲストモードではAI利用に直結する入力をロックする */}
+          <GuestLock isGuest={isGuest}>
+            <textarea
+              id={`article-import-text-${suffix}`}
+              placeholder={isSidebar ? '文章を貼り付け（サイドバー）' : '文章を貼り付け（日本語/英語）'}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              disabled={loading}
+              className="article-import-textarea"
+            />
+          </GuestLock>
+          {isTextTooLong ? (
+            <p role="alert" className="article-import-warning">
+              文章は{ARTICLE_IMPORT_TEXT_MAX_LENGTH}文字以内で入力してください（現在 {trimmedText.length} 文字）{sidebarSuffix}
+            </p>
+          ) : null}
+        </div>
+        <div className={actionsClass}>
+          <GuestLock isGuest={isGuest}>
+            <button
+              type="button"
+              onClick={importArticle}
+              disabled={importDisabled}
+              aria-label={isSidebar ? 'インポート（サイドバー）' : undefined}
+            >
+              インポート
+            </button>
+          </GuestLock>
+          <GuestLock isGuest={isGuest}>
+            <button
+              type="button"
+              onClick={generateAndImport}
+              disabled={generateDisabled}
+              aria-label={isSidebar ? `サイドバーの例文生成記事化${genRunning > 0 ? `、実行中 ${genRunning}` : ''}` : undefined}
+            >
+              生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
+            </button>
+          </GuestLock>
+        </div>
+        <fieldset className={`${fieldClass} article-import-category-field`}>
+          <legend>カテゴリ{sidebarSuffix}</legend>
+          <GuestLock isGuest={isGuest}>
+            <div className="article-import-category-options">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={allCategoriesSelected}
+                  onChange={(e) => toggleAllCategories(e.target.checked)}
+                  disabled={loading || genRunning > 0}
+                  aria-label={isSidebar ? 'すべて（サイドバー）' : 'すべて'}
+                />
+                <span>すべて</span>
+              </label>
+              {EXAMPLE_CATEGORIES.map((categoryName) => (
+                <label key={`${suffix}-${categoryName}`}>
+                  <input
+                    type="checkbox"
+                    checked={selectedCategories.includes(categoryName)}
+                    onChange={(e) => toggleCategory(categoryName, e.target.checked)}
+                    disabled={loading || genRunning > 0}
+                    aria-label={isSidebar ? `${categoryName}（サイドバー）` : categoryName}
+                  />
+                  <span>{categoryName}</span>
+                </label>
+              ))}
+            </div>
+          </GuestLock>
+        </fieldset>
+        <div className={fieldClass}>
+          <label htmlFor={`article-model-select-${suffix}`}>モデル{sidebarSuffix}</label>
+          <GuestLock isGuest={isGuest}>
+            <select
+              id={`article-model-select-${suffix}`}
+              value={model}
+              onChange={(e) => handleChangeModel(e.target.value)}
+              disabled={loading}
+            >
+              {SUPPORTED_LLM_MODELS.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </GuestLock>
+        </div>
+        {showAdvancedModelOptions && (
+          <div className={inlineClass}>
+            <div className={fieldClass}>
+              <label htmlFor={`article-reasoning-select-${suffix}`}>reasoning.effort{sidebarSuffix}</label>
               <GuestLock isGuest={isGuest}>
                 <select
-                  id="article-category-select"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as any)}
+                  id={`article-reasoning-select-${suffix}`}
+                  aria-label={isSidebar ? 'reasoning.effort（サイドバー）' : 'reasoning.effort'}
+                  value={settings.reasoningEffort || 'minimal'}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
                   disabled={loading}
                 >
-                  <option value="Dev">Dev</option>
-                  <option value="CS">CS</option>
-                  <option value="LLM">LLM</option>
-                  <option value="Business">Business</option>
-                  <option value="Common">Common</option>
+                  <option value="minimal">minimal</option>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
                 </select>
               </GuestLock>
             </div>
-            <GuestLock isGuest={isGuest}>
-              <button
-                type="button"
-                onClick={async () => {
-                  const selectedCategory = category;
-                  const selectedModel = model;
-                  setMsg(null);
-                  setArticle(null);
-                  setGenRunning((n) => n + 1);
-                  const notifId = addNotification({ title: `【${selectedCategory}】について例文生成&インポートを開始します`, message: '関連語を選定し、例文を生成して記事化します', status: 'progress', model: selectedModel, category: selectedCategory });
-                  try {
-                    const reqBody: any = { category: selectedCategory };
-                    reqBody.model = selectedModel;
-                    reqBody.reasoning = { effort: settings.reasoningEffort || 'minimal' };
-                    reqBody.text = { verbosity: settings.textVerbosity || 'medium' };
-                    const res = await fetchJson<{ lemma: string; word_pack_id: string; category: string; generated_examples: number; article_ids: string[] }>(`${settings.apiBase}/article/generate_and_import`, {
-                      method: 'POST',
-                      body: reqBody,
-                      timeoutMs: settings.requestTimeoutMs,
-                    });
-                    updateNotification(notifId, { title: '生成＆インポート完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
-                    dispatchAppEvent(APP_EVENTS.articleUpdated);
-                    setMsg({ kind: 'status', text: '生成＆インポートを実行しました' });
-                  } catch (e) {
-                    const m = e instanceof ApiError ? e.message : '生成＆インポートに失敗しました';
-                    setMsg({ kind: 'alert', text: m });
-                    updateNotification(notifId, { title: '生成＆インポート失敗', status: 'error', message: m, model: selectedModel, category: selectedCategory });
-                  } finally {
-                    setGenRunning((n) => Math.max(0, n - 1));
-                  }
-                }}
-                disabled={loading}
-              >
-                生成＆インポート{genRunning > 0 ? `（実行中 ${genRunning}）` : ''}
-              </button>
-            </GuestLock>
-          </div>
-          <div className="sidebar-field">
-            <label htmlFor="article-model-select">モデル</label>
-            <GuestLock isGuest={isGuest}>
-              <select
-                id="article-model-select"
-                value={model}
-                onChange={(e) => handleChangeModel(e.target.value)}
-                disabled={loading}
-              >
-                {SUPPORTED_LLM_MODELS.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            </GuestLock>
-          </div>
-          {showAdvancedModelOptions && (
-            <div className="sidebar-inline">
-              <div className="sidebar-field">
-                <label htmlFor="article-reasoning-select">reasoning.effort</label>
-                <GuestLock isGuest={isGuest}>
-                  <select
-                    id="article-reasoning-select"
-                    aria-label="reasoning.effort"
-                    value={settings.reasoningEffort || 'minimal'}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
-                    disabled={loading}
-                  >
-                    <option value="minimal">minimal</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
-                </GuestLock>
-              </div>
-              <div className="sidebar-field">
-                <label htmlFor="article-verbosity-select">text.verbosity</label>
-                <GuestLock isGuest={isGuest}>
-                  <select
-                    id="article-verbosity-select"
-                    aria-label="text.verbosity"
-                    value={settings.textVerbosity || 'medium'}
-                    onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
-                    disabled={loading}
-                  >
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
-                </GuestLock>
-              </div>
+            <div className={fieldClass}>
+              <label htmlFor={`article-verbosity-select-${suffix}`}>text.verbosity{sidebarSuffix}</label>
+              <GuestLock isGuest={isGuest}>
+                <select
+                  id={`article-verbosity-select-${suffix}`}
+                  aria-label={isSidebar ? 'text.verbosity（サイドバー）' : 'text.verbosity'}
+                  value={settings.textVerbosity || 'medium'}
+                  onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
+                  disabled={loading}
+                >
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </GuestLock>
             </div>
-          )}
-        </section>
-      </SidebarPortal>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <>
+      {showSidebarControls ? (
+        <SidebarPortal>
+          <section className="sidebar-section" aria-label="文章インポート（サイドバー）">
+            <h2>文章インポート</h2>
+            {renderControls('sidebar')}
+          </section>
+        </SidebarPortal>
+      ) : null}
       <section>
         <style>{`
+        .article-import-form { display: grid; gap: 0.75rem; }
+        .article-import-field { display: grid; gap: 0.35rem; }
+        .article-import-field label { font-weight: 600; }
+        .article-import-textarea {
+          width: 100%;
+          min-height: 8rem;
+          padding: 0.65rem;
+          border-radius: 6px;
+          border: 1px solid var(--color-border);
+          background: var(--color-surface);
+          color: inherit;
+          resize: vertical;
+        }
+        .article-import-actions {
+          display: flex;
+          align-items: end;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+        }
+        .article-import-actions > .article-import-field {
+          min-width: 9rem;
+        }
+        .article-import-actions button,
+        .article-import-field select {
+          min-height: 2.25rem;
+        }
+        .article-import-category-field {
+          border: 0;
+          margin: 0;
+          padding: 0;
+        }
+        .article-import-category-field legend {
+          font-weight: 600;
+          padding: 0;
+        }
+        .article-import-category-options {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem 0.75rem;
+        }
+        .article-import-category-options label {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          font-weight: 500;
+        }
+        .article-import-inline {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+          gap: 0.75rem;
+        }
+        .article-import-warning {
+          color: var(--color-danger, #b00020);
+          margin: 0;
+        }
         .ai-wp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.5rem; }
         .ai-card { border: 1px solid var(--color-border); border-radius: 6px; padding: 0.5rem; background: var(--color-surface); }
         .ai-badge { font-size: 0.75em; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid var(--color-border); }
       `}</style>
 
+        {showInlineControls ? renderControls('inline') : null}
         {msg && <div role={msg.kind}>{msg.text}</div>}
 
       <ArticleDetailModal
