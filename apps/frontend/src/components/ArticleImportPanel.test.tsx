@@ -65,7 +65,7 @@ const overrideImportFailureHandlers = () => {
   );
 };
 
-// なぜ: 短いタイムアウト設定で生成＆インポート失敗を素早く再現するため。
+// なぜ: 短いタイムアウト設定で例文生成・記事化失敗を素早く再現するため。
 const overrideGenerateTimeoutHandlers = () => {
   server.use(
     http.get('/api/config', () => HttpResponse.json({ request_timeout_ms: 30 })),
@@ -119,7 +119,7 @@ describe('ArticleImportPanel (MSW + contexts)', () => {
     const textarea = await screen.findByPlaceholderText('文章を貼り付け（日本語/英語）');
     await user.type(textarea, 'hello world');
 
-    const importButton = screen.getByRole('button', { name: 'インポート' });
+    const importButton = screen.getByRole('button', { name: '文章をインポート' });
     await user.click(importButton);
 
     await waitFor(() => {
@@ -141,7 +141,7 @@ describe('ArticleImportPanel (MSW + contexts)', () => {
     const textarea = await screen.findByPlaceholderText('文章を貼り付け（日本語/英語）');
     await user.type(textarea, 'broken import');
 
-    const importButton = screen.getByRole('button', { name: 'インポート' });
+    const importButton = screen.getByRole('button', { name: '文章をインポート' });
     await user.click(importButton);
 
     const alert = await screen.findByRole('alert');
@@ -152,22 +152,22 @@ describe('ArticleImportPanel (MSW + contexts)', () => {
     });
   });
 
-  it('生成＆インポート失敗後に実行中表示が解除される', async () => {
+  it('例文生成・記事化失敗後に実行中表示が解除される', async () => {
     overrideGenerateTimeoutHandlers();
     renderWithProviders();
     const user = userEvent.setup();
 
-    const generateButton = await screen.findByRole('button', { name: '生成＆インポート' });
+    const generateButton = await screen.findByRole('button', { name: '例文を生成して記事化' });
     await user.click(generateButton);
 
-    const runningButton = await screen.findByRole('button', { name: /生成＆インポート（実行中/ });
+    const runningButton = await screen.findByRole('button', { name: /例文を生成して記事化（実行中/ });
     expect(runningButton).toBeInTheDocument();
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Request aborted or timed out');
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: '生成＆インポート' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '例文を生成して記事化' })).toBeInTheDocument();
     });
   });
 
