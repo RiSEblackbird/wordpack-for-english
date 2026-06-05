@@ -45,6 +45,18 @@ test.describe('認証導線', () => {
       await expect(menuButton).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
+      await expect
+        .poll(async () =>
+          menuButton.evaluate((button) => {
+            const rect = button.getBoundingClientRect();
+            const topElement = document.elementFromPoint(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2,
+            );
+            return topElement === button || button.contains(topElement);
+          }),
+        )
+        .toBe(true);
     });
   });
 });
