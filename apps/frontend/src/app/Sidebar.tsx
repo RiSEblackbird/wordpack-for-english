@@ -1,5 +1,6 @@
 import React from 'react';
 import { SIDEBAR_PORTAL_CONTAINER_ID } from '../components/SidebarPortal';
+import { SidebarPlaybackRateControl } from '../components/SidebarPlaybackRateControl';
 import { NAV_ITEMS, SIDEBAR_ID, type NavigationItem } from './navigation';
 
 interface SidebarProps {
@@ -118,6 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           ))}
         </nav>
+        <SidebarPlaybackRateControl isSidebarOpen={isSidebarOpen} />
         <div
           id={SIDEBAR_PORTAL_CONTAINER_ID}
           className="sidebar-controls"

@@ -26,6 +26,7 @@
 | Selection active | Selection bar appears with count, select all, clear, public/private, tag placeholder, and delete. | Clear selection, change visibility, or confirm delete. | Unit test updated. |
 | Guest mode | Generate/delete/visibility actions remain disabled through `GuestLock`, including menu actions. | Sign in to use write actions. | Guest mode unit test updated. |
 | Generation progress | Lexicon uses the right-side `生成キュー` instead of stacked bottom-right toasts. | Watch progress or clear completed history. | Component and screenshot review. |
+| Global audio settings | Sidebar keeps `音声コントロール` visible with playback speed and volume controls. | Adjust speed or volume before pressing any `音声` button. | Review feedback fix plus App/SidebarPlaybackRateControl tests. |
 | Mobile viewport | Recent list becomes compact horizontal list; header no longer fractures vertically; page has no horizontal overflow. | Scroll normally; bottom nav remains fixed. | Playwright 390x844 metrics. |
 
 ## Novice Simulation
@@ -59,6 +60,7 @@
 | Could a first-time user miss where to create a WordPack? | No. Top shortcut and right-side create panel both say `新しいWordPack`. |
 | Could generated job status be confused with normal toasts? | Less likely. Lexicon now has a dedicated `生成キュー` with progress/completed grouping. |
 | Could hidden destructive actions make delete hard to find? | Acceptable. Single-card delete is in the card menu; bulk delete appears immediately after selection. This reduces accidental destructive scanning while preserving access. |
+| Did the persistent sidebar remove global TTS controls? | Fixed after review. `音声コントロール` is mounted in the sidebar again, with both playback speed and volume controls visible. |
 | Could mobile users see a broken heading? | Fixed after visual smoke caught vertical wrapping. |
 | Could the right rail create invalid landmark nesting? | Fixed after axe reported `landmark-complementary-is-top-level`. |
 | Could there be page-level horizontal overflow? | Desktop 1728px and mobile 390px checks both reported `overflowX: false`. |
@@ -68,6 +70,7 @@
 - `cd apps/frontend && npx tsc -p tsconfig.json`
 - `cd apps/frontend && npm test -- WordPackListPanel --reporter=dot` (6 files passed; 14 tests passed)
 - `cd apps/frontend && npm test -- WordPackPanel --reporter=dot` (1 file passed, 1 skipped; 8 tests passed, 1 skipped)
+- `cd apps/frontend && npm test -- SidebarPlaybackRateControl App.test.tsx --reporter=dot` (3 files passed; 27 tests passed)
 - `cd apps/frontend && npm test -- --coverage --silent` (35 files passed, 1 skipped; 142 tests passed, 1 skipped)
 - `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts --update-snapshots` (4 passed; macOS snapshots updated)
 - `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts` (4 passed)

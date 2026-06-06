@@ -742,6 +742,9 @@ describe('App navigation', () => {
     const sidebarFooter = document.querySelector('.sidebar-footer');
     if (!sidebarFooter) throw new Error('sidebar footer not found');
 
+    expect(screen.getByRole('heading', { name: '音声コントロール' })).toBeInTheDocument();
+    expect(screen.getByLabelText('音声再生スピード')).toBeEnabled();
+    expect(screen.getByLabelText('音量')).toBeEnabled();
     expect(sidebarContent.lastElementChild).toBe(sidebarFooter);
     expect(sidebarFooter).toContainElement(screen.getByRole('link', { name: 'GitHubリポジトリを開く' }));
     expect(sidebarFooter).toContainElement(screen.getByRole('button', { name: 'ログアウト' }));
