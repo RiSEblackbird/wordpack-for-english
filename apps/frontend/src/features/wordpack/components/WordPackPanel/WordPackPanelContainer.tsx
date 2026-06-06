@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { useSettings } from '../../../../SettingsContext';
 import { useModal } from '../../../../ModalContext';
 import { useConfirmDialog } from '../../../../ConfirmDialogContext';
@@ -24,6 +24,7 @@ import { CollocationsSection } from './CollocationsSection';
 import { ConfidenceSection } from './ConfidenceSection';
 import { ContrastSection } from './ContrastSection';
 import { WordPackLoadingPlaceholder } from './WordPackLoadingPlaceholder';
+import { WordPackLoadError } from './WordPackLoadError';
 import { WordPackStatusMessage } from './WordPackStatusMessage';
 
 export interface WordPackPreviewMeta {
@@ -43,6 +44,10 @@ interface Props {
   onStudyProgressRecorded?: (payload: { wordPackId: string; checked_only_count: number; learned_count: number }) => void;
   creationPanelPlacement?: 'sidebar' | 'inline' | 'none';
   showDetails?: boolean;
+  previewContext?: string | null;
+  previewNotice?: React.ReactNode;
+  revealStudyCardImmediately?: boolean;
+  onRequestClose?: () => void;
 }
 
 /**
@@ -58,6 +63,10 @@ export const WordPackPanel: React.FC<Props> = ({
   onStudyProgressRecorded,
   creationPanelPlacement = 'sidebar',
   showDetails = true,
+  previewContext,
+  previewNotice,
+  revealStudyCardImmediately,
+  onRequestClose,
 }) => {
   const { isGuest } = useAuth();
   const { settings, setSettings } = useSettings();
@@ -67,6 +76,7 @@ export const WordPackPanel: React.FC<Props> = ({
   const { apiBase, pronunciationEnabled, requestTimeoutMs } = settings;
   const { lemma, setLemma, lemmaValidation, model, showAdvancedModelOptions, handleChangeModel, advancedSettings } = useWordPackForm({ settings, setSettings });
   const [detailOpen, setDetailOpen] = useState(false);
+  const panelInstanceId = useId();
 
   const {
     aiMeta,
@@ -116,25 +126,39 @@ export const WordPackPanel: React.FC<Props> = ({
   const normalizedLemma = lemmaValidation.normalizedLemma;
   const isActionLoading = loading || examplesLoading || progressUpdating;
   const [guestPublicUpdating, setGuestPublicUpdating] = useState(false);
+  const [activeSectionKey, setActiveSectionKey] = useState('overview');
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
     return formatDateJst(dateStr);
   };
 
+  const sectionIdPrefix = useMemo(
+    () => `wp-panel-${panelInstanceId.replace(/[^a-zA-Z0-9_-]/g, '')}`,
+    [panelInstanceId],
+  );
+  const getSectionId = useCallback(
+    (key: string) => `${sectionIdPrefix}-${key}`,
+    [sectionIdPrefix],
+  );
+  const getExampleSectionId = useCallback(
+    (category: string) => getSectionId(`examples-${category}`),
+    [getSectionId],
+  );
+
   const sectionIds = useMemo(
     () => [
-      { id: 'overview', label: '概要' },
-      { id: 'pronunciation', label: '発音' },
-      { id: 'senses', label: '語義' },
-      { id: 'etymology', label: '語源' },
-      { id: 'examples', label: '例文' },
-      { id: 'collocations', label: '共起' },
-      { id: 'contrast', label: '対比' },
-      { id: 'citations', label: '引用' },
-      { id: 'confidence', label: '信頼度' },
+      { key: 'overview', id: getSectionId('overview'), label: '概要' },
+      { key: 'pronunciation', id: getSectionId('pronunciation'), label: '発音' },
+      { key: 'senses', id: getSectionId('senses'), label: '語義' },
+      { key: 'etymology', id: getSectionId('etymology'), label: '語源' },
+      { key: 'examples', id: getSectionId('examples'), label: '例文' },
+      { key: 'collocations', id: getSectionId('collocations'), label: '共起' },
+      { key: 'contrast', id: getSectionId('contrast'), label: '対比' },
+      { key: 'citations', id: getSectionId('citations'), label: '引用' },
+      { key: 'confidence', id: getSectionId('confidence'), label: '信頼度' },
     ],
-    [],
+    [getSectionId],
   );
 
   const exampleCategories = useMemo(() => (['Dev', 'CS', 'LLM', 'Business', 'Common'] as const), []);
@@ -147,6 +171,10 @@ export const WordPackPanel: React.FC<Props> = ({
     if (selectedWordPackId) return selectedWordPackId;
     return 'WordPack';
   }, [data?.lemma, fallbackMeta, selectedWordPackId]);
+
+  useEffect(() => {
+    setActiveSectionKey('overview');
+  }, [selectedWordPackId, data?.lemma]);
 
   const exampleStats = useMemo(
     () => {
@@ -259,19 +287,37 @@ export const WordPackPanel: React.FC<Props> = ({
   const canShowDetails = showDetails;
 
   const detailsContent = canShowDetails && data ? (
-    <div className="wp-container">
+    <>
+      {previewNotice ? (
+        <div className="wp-preview-notice" role="status">
+          {previewNotice}
+        </div>
+      ) : null}
+      {previewContext ? (
+        <p className="wp-preview-context">{previewContext}</p>
+      ) : null}
+      <div className="wp-container">
       {/* セクションナビゲーション: 画面内リンクで各要素へショートカット */}
       <nav className="wp-nav" aria-label="セクション">
         {sectionIds.map((s) => (
-          <a key={s.id} href={`#${s.id}`}>{s.label}</a>
+          <a
+            key={s.key}
+            href={`#${s.id}`}
+            aria-current={activeSectionKey === s.key ? 'location' : undefined}
+            onClick={() => setActiveSectionKey(s.key)}
+          >
+            {s.label}
+          </a>
         ))}
         {exampleCategories.map((category) => (
           <a
             key={`examples-${category}`}
-            href={`#examples-${category}`}
+            href={`#${getExampleSectionId(category)}`}
+            aria-current={activeSectionKey === `examples-${category}` ? 'location' : undefined}
             onClick={(e) => {
               e.preventDefault();
-              document.getElementById(`examples-${category}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              setActiveSectionKey(`examples-${category}`);
+              document.getElementById(getExampleSectionId(category))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }}
           >例文: {category}</a>
         ))}
@@ -295,12 +341,14 @@ export const WordPackPanel: React.FC<Props> = ({
           onRegenerate={handleRegenerateWordPack}
           formatDate={formatDate}
           showTtsButton={isInModalView}
+          sectionId={getSectionId('overview')}
+          revealStudyCardImmediately={revealStudyCardImmediately ?? false}
         />
 
-        {pronunciationEnabled ? <PronunciationSection pronunciation={data.pronunciation} /> : null}
-        <SensesSection senses={data.senses} />
+        {pronunciationEnabled ? <PronunciationSection pronunciation={data.pronunciation} sectionId={getSectionId('pronunciation')} /> : null}
+        <SensesSection senses={data.senses} sectionId={getSectionId('senses')} />
 
-        <section id="etymology" className="wp-section">
+        <section id={getSectionId('etymology')} className="wp-section">
           <h3>語源</h3>
           <p>{data.etymology?.note || '-'}</p>
           <p>確度: {data.etymology?.confidence}</p>
@@ -317,18 +365,35 @@ export const WordPackPanel: React.FC<Props> = ({
           onLemmaOpen={onLemmaOpen}
           lookupLemmaMetadata={lookupLemmaMetadata as (lemmaText: string) => Promise<LemmaLookupResponseData>}
           triggerUnknownLemmaGeneration={triggerUnknownLemmaGeneration}
+          sectionId={getSectionId('examples')}
+          getCategorySectionId={getExampleSectionId}
         />
 
-        <CollocationsSection collocations={data.collocations} onSelectLemma={setLemma} />
-        <ContrastSection contrast={data.contrast} onSelectLemma={setLemma} />
-        <CitationsSection citations={data.citations} />
-        <ConfidenceSection confidence={data.confidence} />
+        <CollocationsSection collocations={data.collocations} onSelectLemma={setLemma} sectionId={getSectionId('collocations')} />
+        <ContrastSection contrast={data.contrast} onSelectLemma={setLemma} sectionId={getSectionId('contrast')} />
+        <CitationsSection citations={data.citations} sectionId={getSectionId('citations')} />
+        <ConfidenceSection confidence={data.confidence} sectionId={getSectionId('confidence')} />
       </div>
     </div>
+    </>
   ) : null;
 
+  const loadError = canShowDetails && selectedWordPackId && !data && !loading && message?.kind === 'alert'
+    ? message
+    : null;
   const loadingPlaceholder = canShowDetails && selectedWordPackId && !data ? (
     <WordPackLoadingPlaceholder placeholderLemma={placeholderLemma} />
+  ) : null;
+  const loadErrorContent = loadError && selectedWordPackId ? (
+    <WordPackLoadError
+      placeholderLemma={placeholderLemma}
+      message={loadError.text}
+      onRetry={() => {
+        setStatusMessage(null);
+        void handleLoadWordPack(selectedWordPackId);
+      }}
+      onClose={onRequestClose}
+    />
   ) : null;
 
   const creationPanel = !isInModalView && creationPanelPlacement !== 'none' ? (
@@ -446,37 +511,46 @@ export const WordPackPanel: React.FC<Props> = ({
         <style>{`
         .wp-container { display: grid; grid-template-columns: minmax(80px, 100px) 1fr; gap: 1rem; }
         .wp-nav { position: sticky; top: 0; align-self: start; display: flex; flex-direction: column; gap: 0.25rem; }
-        .wp-nav a { text-decoration: none; color: var(--color-link); font-size: 0.7em; }
+        .wp-nav a { text-decoration: none; color: var(--color-link); font-size: 0.88rem; line-height: 1.35; padding: 0.18rem 0.2rem; border-radius: 4px; }
+        .wp-nav a[aria-current="location"] { background: var(--color-accent-bg); color: var(--color-accent); font-weight: 700; }
         .wp-section { padding-block: 0.25rem; border-top: 1px solid var(--color-border); }
         .blurred { filter: blur(6px); pointer-events: none; user-select: none; }
         .selfcheck { position: relative; border: 1px dashed var(--color-border); padding: 0.5rem; border-radius: 6px; }
-        .selfcheck-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--color-overlay-bg); cursor: pointer; font-weight: bold; }
+        .selfcheck-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--color-overlay-bg); cursor: pointer; font-weight: bold; border: 0; color: inherit; border-radius: 6px; min-height: 2.75rem; }
         .kv { display: grid; grid-template-columns: 10rem 1fr; row-gap: 0.25rem; }
         .wp-modal-lemma { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-        .wp-modal-tts-btn { font-size: 0.6em; padding: 0.15rem 0.45rem; border-radius: 4px; }
+        .wp-modal-tts-btn { font-size: 0.85rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
         .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
         .wp-citation-meta { white-space: pre-wrap; }
         .wp-loading-title { font-size: 1.4em; margin-bottom: 0.5rem; }
         .wp-loading-field { max-width: 30rem; }
         .wp-loading-note { margin-top: 0.4rem; }
         .wp-status-message { overflow-wrap: anywhere; word-break: break-word; }
+        .wp-load-error { border-color: var(--color-danger, #b00020); }
+        .wp-load-error__message { font-weight: 600; overflow-wrap: anywhere; }
+        .wp-load-error__note { color: var(--color-subtle); }
+        .wp-load-error__actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+        .wp-load-error__actions button { min-height: 2.25rem; padding: 0.35rem 0.8rem; }
+        .wp-preview-notice { margin: 0 0 0.75rem; padding: 0.75rem; border: 1px solid var(--color-accent); background: var(--color-accent-bg); border-radius: 6px; }
+        .wp-preview-context { margin: 0 0 0.75rem; color: var(--color-subtle); }
         @media (max-width: 840px) { .wp-container { grid-template-columns: 1fr; } }
       `}</style>
 
         {!isInModalView && <div style={{ marginBottom: '0.75rem' }} />}
 
-        <WordPackStatusMessage message={message} />
+        <WordPackStatusMessage message={loadError ? null : message} />
 
         {canShowDetails ? (
           <>
             {/* 詳細表示: モーダル/ダイレクト表示の両対応 */}
             {selectedWordPackId ? (
-              data ? detailsContent : loadingPlaceholder
+              data ? detailsContent : loadErrorContent ?? loadingPlaceholder
             ) : (
               <Modal
                 isOpen={!!data && detailOpen}
                 onClose={() => { setDetailOpen(false); try { setModalOpen(false); } catch {} }}
-                title="WordPack プレビュー"
+                title={`WordPack プレビュー: ${data?.lemma ?? 'WordPack'}`}
+                closeLabel="WordPackプレビューを閉じる"
               >
                 {detailsContent}
               </Modal>

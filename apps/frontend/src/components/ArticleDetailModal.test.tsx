@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 import ArticleDetailModal, { ArticleDetailData } from './ArticleDetailModal';
 import * as AuthContext from '../AuthContext';
@@ -40,6 +41,7 @@ describe('ArticleDetailModal', () => {
         onClose={() => {}}
         title="文章プレビュー"
         article={article}
+        onSelectWordPackPreview={() => {}}
       />,
     );
 
@@ -60,8 +62,34 @@ describe('ArticleDetailModal', () => {
     expect(screen.getByLabelText('import-warnings')).toHaveTextContent('Resilient');
     const heading = screen.getByRole('heading', { level: 4, name: '関連WordPack' });
     expect(heading).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'WordPack「alpha」をプレビュー' })).toBeInTheDocument();
     // メタ情報が「関連WordPack」見出しより後に来ることを確認
     expect(heading.compareDocumentPosition(meta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('selects a related WordPack preview inside the article dialog', async () => {
+    const article: ArticleDetailData = {
+      id: 'art:preview',
+      title_en: 'Preview Source',
+      body_en: 'English body',
+      body_ja: '日本語本文',
+      related_word_packs: [{ word_pack_id: 'wp:1', lemma: 'alpha', status: 'existing' }],
+    };
+    const onSelectWordPackPreview = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        article={article}
+        onSelectWordPackPreview={onSelectWordPackPreview}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'WordPack「alpha」をプレビュー' }));
+
+    expect(onSelectWordPackPreview).toHaveBeenCalledWith('wp:1');
   });
 
   it('falls back to 0秒 when created_at and updated_at are identical', () => {

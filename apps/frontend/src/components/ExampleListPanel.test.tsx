@@ -76,12 +76,12 @@ describe('ExampleListPanel', () => {
     act(() => {
       vi.advanceTimersByTime(300);
     });
-    expect(screen.getByText(guestLockMessage)).toBeInTheDocument();
+    expect(screen.getByRole('tooltip')).toHaveTextContent(guestLockMessage);
 
     act(() => {
       fireEvent.mouseLeave(wrapper);
     });
-    expect(screen.queryByText(guestLockMessage)).not.toBeInTheDocument();
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
 
     vi.useRealTimers();
   });

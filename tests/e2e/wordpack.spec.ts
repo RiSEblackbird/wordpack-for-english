@@ -270,7 +270,7 @@ test.describe('WordPack 操作', () => {
       const alphaCard = page.getByTestId('wp-card').filter({ hasText: 'alpha' }).first();
       await expect(alphaCard).toBeVisible();
       await alphaCard.getByRole('button', { name: '開く' }).click();
-      await expect(page.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: /WordPack プレビュー/ })).toBeVisible();
       await expect(page.getByRole('heading', { name: /例文/ })).toBeVisible();
       const actionEnd = await page.evaluate(() => {
         performance.mark('wordpack-generate-end');
@@ -307,22 +307,22 @@ test.describe('WordPack 操作', () => {
     });
 
     await test.step('When: 例文を追加生成する', async () => {
-      await page.getByRole('button', { name: 'generate-examples-Dev' }).click();
+      await page.getByRole('button', { name: 'Dev例文を2件追加生成' }).click();
     });
 
     await test.step('Then: 例文の件数が増えている', async () => {
       await expect(page.getByText('Dev (3件)')).toBeVisible();
-      await page.getByRole('button', { name: '閉じる' }).click();
+      await page.getByRole('button', { name: 'WordPackプレビューを閉じる' }).click();
       const queue = page.getByRole('region', { name: '生成キュー' });
       await expect(queue).toContainText('alpha');
       await expect(queue).toContainText('Dev: gpt-5.4-mini');
       const alphaCard = page.getByTestId('wp-card').filter({ hasText: 'alpha' }).first();
       await alphaCard.getByRole('button', { name: '開く' }).click();
-      await expect(page.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: /WordPack プレビュー/ })).toBeVisible();
     });
 
     await test.step('When: 追加した例文を削除する', async () => {
-      await page.getByRole('button', { name: 'delete-example-Dev-0' }).click();
+      await page.getByRole('button', { name: 'alphaのDev例文1を削除' }).click();
       await page.getByRole('button', { name: 'はい' }).click();
       // 削除完了は件数の変化で観測する（通知UIは他のトーストと競合しやすい）。
     });
@@ -337,13 +337,13 @@ test.describe('WordPack 操作', () => {
 
     await test.step('Then: 再生成完了メッセージが出る', async () => {
       await expect(page.getByText('alpha 再生成済み')).toBeVisible();
-      await page.getByRole('button', { name: '閉じる' }).click();
+      await page.getByRole('button', { name: 'WordPackプレビューを閉じる' }).click();
       const queue = page.getByRole('region', { name: '生成キュー' });
       await expect(queue).toContainText('alpha');
       await expect(queue).toContainText('完了3');
       const alphaCard = page.getByTestId('wp-card').filter({ hasText: 'alpha' }).first();
       await alphaCard.getByRole('button', { name: '開く' }).click();
-      await expect(page.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: /WordPack プレビュー/ })).toBeVisible();
     });
 
     await test.step('Then: テストデータを後片付けする', async () => {

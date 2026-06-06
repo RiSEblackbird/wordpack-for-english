@@ -230,7 +230,7 @@ describe('WordPackListPanel modal preview', () => {
     });
 
     // モーダルが開くまで待機
-    await waitFor(() => expect(screen.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeInTheDocument(), { timeout: 5000 });
+    await waitFor(() => expect(screen.getByRole('dialog', { name: /WordPack プレビュー:/ })).toBeInTheDocument(), { timeout: 5000 });
     
     // WordPackの詳細が読み込まれるまで待機（モーダル内の内容を一意に特定）
     const modalContent = await waitFor(() => screen.getByTestId('modal-wordpack-content'), { timeout: 10000 });
@@ -243,9 +243,9 @@ describe('WordPackListPanel modal preview', () => {
 
     // 閉じる
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '閉じる' }));
+      await user.click(screen.getByRole('button', { name: 'WordPackプレビューを閉じる' }));
     });
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'WordPack プレビュー' })).not.toBeInTheDocument(), { timeout: 3000 });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /WordPack プレビュー/ })).not.toBeInTheDocument(), { timeout: 3000 });
   }, 15000);
 
   it('カードに学習記録バッジを表示し、イベントでリアルタイム更新される', async () => {
@@ -264,8 +264,8 @@ describe('WordPackListPanel modal preview', () => {
     const deltaCard = cards.find((card) => card.textContent?.includes('delta'));
     expect(deltaCard).toBeDefined();
     const targetCard = deltaCard!;
-    expect(within(targetCard).getByText('学 3')).toBeInTheDocument();
-    expect(within(targetCard).getByText('難 5')).toBeInTheDocument();
+    expect(within(targetCard).getByText('使える 3')).toBeInTheDocument();
+    expect(within(targetCard).getByText('確認済み 5')).toBeInTheDocument();
 
     await act(async () => {
       window.dispatchEvent(
@@ -276,8 +276,8 @@ describe('WordPackListPanel modal preview', () => {
     });
 
     await waitFor(() => {
-      expect(within(targetCard).getByText('学 9')).toBeInTheDocument();
-      expect(within(targetCard).getByText('難 12')).toBeInTheDocument();
+      expect(within(targetCard).getByText('使える 9')).toBeInTheDocument();
+      expect(within(targetCard).getByText('確認済み 12')).toBeInTheDocument();
     });
   });
 
@@ -307,6 +307,20 @@ describe('WordPackListPanel modal preview', () => {
     const senseButtonsInListView = await screen.findAllByRole('button', { name: '語義' });
     expect(senseButtonsInListView).toHaveLength(3);
 
+    const listItems = await screen.findAllByTestId('wp-index-item');
+    const firstListOpenButton = within(listItems[0]).getByRole('button', { name: /開く/ });
+    firstListOpenButton.focus();
+    expect(firstListOpenButton).toHaveFocus();
+
+    await act(async () => {
+      await user.keyboard('{Enter}');
+    });
+
+    await waitFor(() => expect(screen.getByRole('dialog', { name: /WordPack プレビュー:/ })).toBeInTheDocument());
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'WordPackプレビューを閉じる' }));
+    });
 
     await act(async () => {
       await user.click(screen.getByRole('button', { name: 'カード' }));

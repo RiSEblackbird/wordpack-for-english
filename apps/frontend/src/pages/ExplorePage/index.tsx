@@ -110,6 +110,10 @@ export const ExplorePage: React.FC = () => {
   const [previewWordPackId, setPreviewWordPackId] = useState<string | null>(
     null,
   );
+  const [previewNotice, setPreviewNotice] = useState<{
+    title: string;
+    body: string;
+  } | null>(null);
   const [creatingRelationId, setCreatingRelationId] = useState<string | null>(
     null,
   );
@@ -166,10 +170,18 @@ export const ExplorePage: React.FC = () => {
   );
   const existingCount = relations.length - unknownCount - emptyCount;
   const selectedLabel = selectedWordPack?.lemma ?? '未選択';
+  const previewNavigationIds = useMemo(
+    () =>
+      visibleRelations
+        .map((relation) => relation.targetWordPack?.id)
+        .filter((id): id is string => Boolean(id)),
+    [visibleRelations],
+  );
 
   const handleRelationAction = async (relation: ExploreRelation) => {
     setRelationMessage(null);
     if (relation.targetWordPack) {
+      setPreviewNotice(null);
       setPreviewWordPackId(relation.targetWordPack.id);
       return;
     }
@@ -202,6 +214,10 @@ export const ExplorePage: React.FC = () => {
       const result = await createEmptyWordPack(lemma);
       await reload();
       dispatchAppEvent(APP_EVENTS.wordPackUpdated);
+      setPreviewNotice({
+        title: '空のWordPackを作成しました。',
+        body: 'まだ例文はありません。プレビュー内の「追加生成」または「再生成」で内容を育てられます。',
+      });
       setPreviewWordPackId(result.id);
       setRelationMessage({
         kind: 'status',
@@ -530,7 +546,10 @@ export const ExplorePage: React.FC = () => {
                 <Button
                   variant="primary"
                   disabled={!selectedWordPackId}
-                  onClick={() => setPreviewWordPackId(selectedWordPackId)}
+                  onClick={() => {
+                    setPreviewNotice(null);
+                    setPreviewWordPackId(selectedWordPackId);
+                  }}
                 >
                   このWordPackを開く
                 </Button>
@@ -615,9 +634,31 @@ export const ExplorePage: React.FC = () => {
       </div>
       <WordPackPreviewModal
         isOpen={Boolean(previewWordPackId)}
-        onClose={() => setPreviewWordPackId(null)}
+        onClose={() => {
+          setPreviewWordPackId(null);
+          setPreviewNotice(null);
+        }}
         wordPackId={previewWordPackId}
         wordPacks={wordPacks}
+        contextLabel="Explore から開いた WordPack"
+        contextDescription={
+          selectedWordPack
+            ? `Exploreで「${selectedWordPack.lemma}」から見つかった接続を開いています。`
+            : 'Exploreの接続一覧から開いています。'
+        }
+        notice={
+          previewNotice ? (
+            <div>
+              <strong>{previewNotice.title}</strong>
+              <p style={{ margin: '0.35rem 0 0' }}>{previewNotice.body}</p>
+            </div>
+          ) : null
+        }
+        navigationIds={previewNavigationIds}
+        onNavigate={(id) => {
+          setPreviewNotice(null);
+          setPreviewWordPackId(id);
+        }}
         onWordPackUpdated={() => {
           void reload();
         }}

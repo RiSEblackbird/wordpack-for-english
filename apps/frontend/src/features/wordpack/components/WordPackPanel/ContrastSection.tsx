@@ -4,13 +4,15 @@ import type { WordPack } from '../../../../hooks/useWordPack';
 interface ContrastSectionProps {
   contrast: WordPack['contrast'];
   onSelectLemma: (lemma: string) => void;
+  sectionId?: string;
 }
 
 export const ContrastSection: React.FC<ContrastSectionProps> = ({
   contrast,
   onSelectLemma,
+  sectionId = 'contrast',
 }) => (
-  <section id="contrast" className="wp-section">
+  <section id={sectionId} className="wp-section">
     <h3>対比</h3>
     {contrast?.length ? (
       <ul>

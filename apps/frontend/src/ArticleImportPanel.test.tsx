@@ -1,4 +1,4 @@
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
@@ -99,6 +99,16 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     });
   };
 
+  const closeImportResult = async (user: ReturnType<typeof userEvent.setup>) => {
+    const closeButton = await screen.findByRole('button', { name: 'インポート結果を閉じる' });
+    await act(async () => {
+      await user.click(closeButton);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'インポート結果' })).not.toBeInTheDocument();
+    });
+  };
+
   it('sends reasoning/text_opts for the default model on import', async () => {
     const fetchMock = setupFetchMocks();
     renderWithAuth();
@@ -153,6 +163,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
     expect(importBodies.some((b) => b.model === 'gpt-5.4-mini' && b.reasoning && b.text_opts && !('temperature' in b))).toBe(true);
 
     // 例文生成・記事化でも同様のパラメータ（text キー）
+    await closeImportResult(user);
     await act(async () => {
       await user.click(screen.getByRole('button', { name: '例文を生成して記事化' }));
     });
@@ -214,6 +225,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(importBodies.some((b) => b.model === 'gpt-5.4-nano' && b.reasoning && b.text_opts && !('temperature' in b))).toBe(true);
 
+    await closeImportResult(user);
     await act(async () => {
       await user.click(screen.getByRole('button', { name: '例文を生成して記事化' }));
     });

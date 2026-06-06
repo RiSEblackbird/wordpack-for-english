@@ -20,6 +20,8 @@ interface ExamplesSectionProps {
   onLemmaOpen: (lemmaText: string) => void;
   lookupLemmaMetadata: (lemmaText: string) => Promise<LemmaLookupResponseData>;
   triggerUnknownLemmaGeneration: (lemmaText: string) => Promise<boolean>;
+  sectionId?: string;
+  getCategorySectionId?: (category: ExampleCategory) => string;
 }
 
 /**
@@ -37,6 +39,8 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
   onLemmaOpen,
   lookupLemmaMetadata,
   triggerUnknownLemmaGeneration,
+  sectionId = 'examples',
+  getCategorySectionId = (category) => `examples-${category}`,
 }) => {
   const { isGuest } = useAuth();
   const exampleCategories = useMemo(() => (['Dev', 'CS', 'LLM', 'Business', 'Common'] as ExampleCategory[]), []);
@@ -154,7 +158,7 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
   );
 
   return (
-    <section id="examples" className="wp-section">
+    <section id={sectionId} className="wp-section">
       <h3>
         例文
         <span style={{ fontSize: '0.7em', fontWeight: 'normal', color: 'var(--color-subtle)', marginLeft: '0.5rem' }}>
@@ -163,14 +167,14 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
       </h3>
       <style>{styleDefinition}</style>
       {exampleCategories.map((category) => (
-        <div key={category} id={`examples-${category}`} style={{ marginBottom: '0.5rem' }}>
+        <div key={category} id={getCategorySectionId(category)} style={{ marginBottom: '0.5rem' }}>
           <div className="ex-level" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span>{category} ({data.examples?.[category]?.length || 0}件)</span>
             <GuestLock isGuest={isGuest}>
               <button
                 onClick={() => onGenerateExamples(category)}
                 disabled={!currentWordPackId || isActionLoading}
-                aria-label={`generate-examples-${category}`}
+                aria-label={`${category}例文を2件追加生成`}
                 title={!currentWordPackId ? '保存済みWordPackのみ追加生成が可能です' : undefined}
                 style={{ fontSize: '0.85em', color: '#1565c0', border: '1px solid #1565c0', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
               >
@@ -211,7 +215,7 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
                           <button
                             onClick={() => onDeleteExample(category, index)}
                             disabled={isActionLoading}
-                            aria-label={`delete-example-${category}-${index}`}
+                            aria-label={`${data.lemma}の${category}例文${index + 1}を削除`}
                             style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
                           >
                             削除
@@ -221,7 +225,7 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
                           <button
                             onClick={() => onImportArticleFromExample(category, index)}
                             disabled={isActionLoading}
-                            aria-label={`import-example-${category}-${index}`}
+                            aria-label={`${data.lemma}の${category}例文${index + 1}から記事を作成`}
                             style={{ fontSize: '0.85em', color: '#2e7d32', border: '1px solid #2e7d32', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
                           >
                             記事化
@@ -230,7 +234,7 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
                         <button
                           onClick={() => onCopyExampleText(category, index)}
                           disabled={isActionLoading}
-                          aria-label={`copy-example-${category}-${index}`}
+                          aria-label={`${data.lemma}の${category}例文${index + 1}をコピー`}
                           style={{ fontSize: '0.85em', color: '#1976d2', border: '1px solid #1976d2', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
                         >
                           コピー

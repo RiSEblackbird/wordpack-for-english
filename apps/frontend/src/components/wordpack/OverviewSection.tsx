@@ -37,6 +37,8 @@ interface OverviewSectionProps {
   onRegenerate?: () => void;
   formatDate: (dateStr?: string | null) => string;
   showTtsButton?: boolean;
+  sectionId?: string;
+  revealStudyCardImmediately?: boolean;
 }
 
 /**
@@ -60,13 +62,20 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
   onRegenerate,
   formatDate,
   showTtsButton = true,
+  sectionId = 'overview',
+  revealStudyCardImmediately = false,
 }) => {
   const { isGuest } = useAuth();
-  const [reveal, setReveal] = useState(false);
+  const [reveal, setReveal] = useState(revealStudyCardImmediately);
   const [count, setCount] = useState(3);
 
   // WordPack切り替え時にセルフチェックのカウントダウンを初期化し、自動解除する。
   useEffect(() => {
+    if (revealStudyCardImmediately) {
+      setReveal(true);
+      setCount(0);
+      return undefined;
+    }
     setReveal(false);
     setCount(3);
     const t1 = window.setTimeout(() => setCount(2), 1000);
@@ -77,7 +86,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
       window.clearTimeout(t2);
       window.clearTimeout(t3);
     };
-  }, [data.lemma]);
+  }, [data.lemma, revealStudyCardImmediately]);
 
   const aiMetaItems = useMemo(() => {
     const items: { label: string; value: string | null | undefined }[] = [];
@@ -87,7 +96,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
   }, [aiMeta]);
 
   return (
-    <section id="overview" className="wp-section">
+    <section id={sectionId} className="wp-section">
       <h3>概要</h3>
       <div className="kv" style={{ fontSize: '1.7em', marginBottom: '0.8rem' }}>
         <div>見出し語</div>
@@ -213,9 +222,14 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
           <p>{data.study_card}</p>
         </div>
         {!reveal && (
-          <div className="selfcheck-overlay" onClick={() => setReveal(true)} aria-label="セルフチェック解除">
+          <button
+            type="button"
+            className="selfcheck-overlay"
+            onClick={() => setReveal(true)}
+            aria-label={`セルフチェックを表示する（${count}）`}
+          >
             <span>セルフチェック中… {count}</span>
-          </div>
+          </button>
         )}
       </div>
     </section>
