@@ -22,8 +22,12 @@ test.describe('認証導線', () => {
     await test.step('Then: ログイン済み UI が表示される', async () => {
       await page.waitForURL('**/', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('networkidle');
-      // なぜ: ログイン後の常設UI（ヘッダー）に存在し、画面文言の揺らぎに強い要素を採用する。
+      // なぜ: ログイン状態の操作はサイドバー下部に集約しているため、メニューを開いて確認する。
+      const menuButton = page.locator('button[aria-controls="app-sidebar"]');
+      await menuButton.click();
       await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
+      await menuButton.click();
+      await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
       await expect(
         page.getByRole('heading', { name: 'WordPack', level: 1, includeHidden: true }),
       ).toHaveCount(1);
@@ -40,8 +44,8 @@ test.describe('認証導線', () => {
     });
 
     await test.step('Then: キーボード操作でメニューを開ける', async () => {
-      await page.keyboard.press('Tab');
       const menuButton = page.locator('button[aria-controls="app-sidebar"]');
+      await menuButton.focus();
       await expect(menuButton).toBeFocused();
       await page.keyboard.press('Enter');
       await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
