@@ -1,12 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Settings } from '../SettingsContext';
+import { validateLemmaInput } from '../lib/lemmaValidation';
 import { DEFAULT_LLM_MODEL, SUPPORTED_LLM_MODELS, normalizeLlmModel } from '../lib/wordpack';
-
-type LemmaValidationResult = {
-  valid: boolean;
-  message: string;
-  normalizedLemma: string;
-};
 
 type AdvancedSettingsControls = {
   reasoningEffort: NonNullable<Settings['reasoningEffort']>;
@@ -20,9 +15,6 @@ type UseWordPackFormParams = {
   setSettings: React.Dispatch<React.SetStateAction<Settings>>;
 };
 
-const LEMMA_PATTERN = /^[A-Za-z0-9-' ]+$/;
-const LEMMA_MAX_LENGTH = 64;
-
 export const useWordPackForm = ({ settings, setSettings }: UseWordPackFormParams) => {
   // フォーム入力とUI表示のために見出し語のテキストを保持し、他の入力からのセットにも対応する。
   const [lemma, setLemma] = useState('');
@@ -30,34 +22,7 @@ export const useWordPackForm = ({ settings, setSettings }: UseWordPackFormParams
   const normalizedLemma = useMemo(() => lemma.trim(), [lemma]);
 
   // クライアント側で境界値を固定し、サーバーのバリデーションと乖離しないように事前に入力を判定する。
-  const lemmaValidation = useMemo<LemmaValidationResult>(() => {
-    if (!normalizedLemma) {
-      return {
-        valid: false,
-        message: '見出し語を入力してください（英数字・ハイフン・アポストロフィ・半角スペースのみ）',
-        normalizedLemma,
-      };
-    }
-    if (normalizedLemma.length > LEMMA_MAX_LENGTH) {
-      return {
-        valid: false,
-        message: `見出し語は最大${LEMMA_MAX_LENGTH}文字までです（英数字・半角スペース・ハイフン・アポストフィのみ）`,
-        normalizedLemma,
-      };
-    }
-    if (!LEMMA_PATTERN.test(normalizedLemma)) {
-      return {
-        valid: false,
-        message: '英数字と半角スペース、ハイフン、アポストロフィのみ利用できます',
-        normalizedLemma,
-      };
-    }
-    return {
-      valid: true,
-      message: '英数字・半角スペース・ハイフン・アポストロフィのみ（最大64文字）',
-      normalizedLemma,
-    };
-  }, [normalizedLemma]);
+  const lemmaValidation = useMemo(() => validateLemmaInput(normalizedLemma), [normalizedLemma]);
 
   // モデル選択はフォームのローカル状態で即時反映し、同時にSettingsContextへ同期して他画面と整合させる。
   const [model, setModel] = useState<string>(normalizeLlmModel(settings.model || DEFAULT_LLM_MODEL));

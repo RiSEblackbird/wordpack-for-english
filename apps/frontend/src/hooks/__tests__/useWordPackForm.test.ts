@@ -33,7 +33,7 @@ describe('useWordPackForm', () => {
       result.current.form.setLemma('a'.repeat(65));
     });
     expect(result.current.form.lemmaValidation.valid).toBe(false);
-    expect(result.current.form.lemmaValidation.message).toBe('見出し語は最大64文字までです（英数字・半角スペース・ハイフン・アポストフィのみ）');
+    expect(result.current.form.lemmaValidation.message).toBe('見出し語は最大64文字までです（英数字・半角スペース・ハイフン・アポストロフィのみ）');
 
     act(() => {
       result.current.form.setLemma('invalid!');

@@ -85,7 +85,12 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
               Common: [
                 { en: `Paths ${lemma} at the main square downtown.`, ja: `${lemma} のCommon例文1`, grammar_ja: '前置詞句' },
                 { en: `Schedules ${lemma} around the team’s availability.`, ja: `${lemma} のCommon例文2`, grammar_ja: '三単現' },
-                { en: 'Ghosts linger without a defined sense in the archive.', ja: 'Ghosts のCommon例文 (senseなし)', grammar_ja: '動詞句' }
+                { en: 'Ghosts linger without a defined sense in the archive.', ja: 'Ghosts のCommon例文 (senseなし)', grammar_ja: '動詞句' },
+                {
+                  en: 'SupercalifragilisticexpialidociousSupercalifragilisticexpialidocious appears as an invalid candidate.',
+                  ja: '長すぎる候補のCommon例文',
+                  grammar_ja: '名詞句',
+                }
               ]
             },
             etymology: { note: '-', confidence: 'low' },
@@ -485,6 +490,86 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
     expect(generatedBodies.some((body) => body.lemma === 'Ghosts')).toBe(true);
+  });
+
+  it('blocks guest unknown lemma generation from example tokens before write requests', async () => {
+    try {
+      localStorage.setItem('wordpack.auth.v1', JSON.stringify({ authMode: 'guest' }));
+    } catch {}
+    const fetchMock = setupFetchMocks();
+    render(
+      <AppProviders googleClientId="test-client">
+        <WordPackPanel focusRef={{ current: null }} selectedWordPackId="wp:guest" />
+      </AppProviders>,
+    );
+
+    const user = userEvent.setup();
+    const ghostToken = await screen.findByText((content, element) => {
+      if (!element) return false;
+      if (!element.matches('span.lemma-token')) return false;
+      return content.trim() === 'Ghosts';
+    });
+
+    await act(async () => {
+      await user.hover(ghostToken);
+    });
+
+    await waitFor(() => {
+      const tipEl = Array.from(document.querySelectorAll('.lemma-tooltip')).find(
+        (el) => el.textContent === '未生成（ログインが必要）',
+      );
+      expect(tipEl).toBeTruthy();
+    });
+
+    await act(async () => {
+      await user.click(ghostToken);
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('ゲストモードでは例文中の未生成語をWordPack生成できません。ログインすると未生成語を追加できます。');
+    const generatedBodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(generatedBodies.some((body) => body.lemma === 'Ghosts')).toBe(false);
+  });
+
+  it('blocks invalid unknown lemma tokens before write requests', async () => {
+    const fetchMock = setupFetchMocks();
+    render(
+      <AppProviders googleClientId="test-client">
+        <WordPackPanel focusRef={{ current: null }} selectedWordPackId="wp:long-token" />
+      </AppProviders>,
+    );
+
+    const user = userEvent.setup();
+    const longTokenText = 'SupercalifragilisticexpialidociousSupercalifragilisticexpialidocious';
+    const longToken = await screen.findByText((content, element) => {
+      if (!element) return false;
+      if (!element.matches('span.lemma-token')) return false;
+      return content.trim() === longTokenText;
+    });
+
+    await act(async () => {
+      await user.hover(longToken);
+    });
+
+    await waitFor(() => {
+      const tipEl = Array.from(document.querySelectorAll('.lemma-tooltip')).find(
+        (el) => el.textContent?.startsWith('作成不可:'),
+      );
+      expect(tipEl).toBeTruthy();
+    });
+
+    await act(async () => {
+      await user.click(longToken);
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(`「${longTokenText}」はWordPackとして生成できません。見出し語は最大64文字までです`);
+    const generatedBodies = fetchMock.mock.calls
+      .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
+      .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
+    expect(generatedBodies.some((body) => body.lemma === longTokenText)).toBe(false);
   });
 
   // Note: 二重採点防止のテストは実装の複雑さのため、手動テストで確認

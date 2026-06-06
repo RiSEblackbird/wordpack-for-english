@@ -45,20 +45,21 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
       .ex-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
       .ex-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem 0.75rem; background: var(--color-surface); }
       .ex-label { display: inline-block; min-width: 3em; color: var(--color-subtle); font-size: 90%; }
-      .ex-en { font-weight: 600; line-height: 1.5; }
+      .ex-en { font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
       .ex-ja { color: var(--color-text); opacity: 0.9; margin-top: 2px; line-height: 1.6; }
       .ex-grammar { color: var(--color-subtle); font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
       .ex-level { font-weight: 600; margin: 0.25rem 0; color: var(--color-level); }
       .lemma-highlight { color: #1565c0; }
       .lemma-known { font-weight: 700; }
+      .lemma-token { overflow-wrap: anywhere; word-break: break-word; }
       .lemma-unknown { color: #ef6c00; text-decoration: underline dotted #ef6c00; }
-      .lemma-tooltip { position: fixed; z-index: 10000; background: #212121; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); pointer-events: none; }
+      .lemma-tooltip { position: fixed; z-index: 10000; max-width: min(320px, calc(100vw - 16px)); overflow-wrap: anywhere; white-space: normal; background: #212121; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); pointer-events: none; }
       .ex-en[role="button"] { cursor: pointer; }
       .ex-en[role="button"]:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
     `,
     [],
   );
-  const { handleMouseOver, handleMouseOut, detachTooltip } = useLemmaTooltip({ lookupLemmaMetadata });
+  const { handleMouseOver, handleMouseOut, detachTooltip } = useLemmaTooltip({ lookupLemmaMetadata, isGuest });
 
   const renderExampleEnText = (text: string, lemma: string): React.ReactNode => {
     const highlighted = highlightLemma(text, lemma, {
@@ -107,6 +108,18 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
     }
     const container = event.currentTarget;
     const target = event.target as HTMLElement;
+    const triggerPendingLemma = (pendingLemma: string, tokenEl?: HTMLElement | null) => {
+      const trimmed = pendingLemma.trim();
+      if (!trimmed) return;
+      void triggerUnknownLemmaGeneration(trimmed).then((generated) => {
+        if (!generated) return;
+        container.removeAttribute('data-pending-lemma');
+        container.removeAttribute('data-last-lemma');
+        tokenEl?.removeAttribute('data-pending-lemma');
+        tokenEl?.classList.remove('lemma-unknown');
+        detachTooltip();
+      });
+    };
     const highlight = target.closest('span.lemma-highlight') as HTMLElement | null;
     if (highlight) {
       const lemmaAttr = highlight.getAttribute('data-lemma') || highlight.textContent?.trim();
@@ -122,22 +135,13 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
       }
       const pendingLemma = token.getAttribute('data-pending-lemma') || container.getAttribute('data-pending-lemma');
       if (pendingLemma && pendingLemma.trim()) {
-        const trimmed = pendingLemma.trim();
-        container.removeAttribute('data-pending-lemma');
-        container.removeAttribute('data-last-lemma');
-        token.removeAttribute('data-pending-lemma');
-        token.classList.remove('lemma-unknown');
-        detachTooltip();
-        void triggerUnknownLemmaGeneration(trimmed);
+        triggerPendingLemma(pendingLemma, token);
         return;
       }
     }
     const pending = container.getAttribute('data-pending-lemma');
     if (pending && pending.trim()) {
-      container.removeAttribute('data-pending-lemma');
-      container.removeAttribute('data-last-lemma');
-      detachTooltip();
-      void triggerUnknownLemmaGeneration(pending);
+      triggerPendingLemma(pending);
       return;
     }
     const fallback = container.getAttribute('data-last-lemma') || container.getAttribute('data-lemma');

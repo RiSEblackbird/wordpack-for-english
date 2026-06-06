@@ -6,5 +6,5 @@ interface WordPackStatusMessageProps {
 
 export const WordPackStatusMessage: React.FC<WordPackStatusMessageProps> = ({ message }) => {
   if (!message) return null;
-  return <div role={message.kind}>{message.text}</div>;
+  return <div className="wp-status-message" role={message.kind}>{message.text}</div>;
 };

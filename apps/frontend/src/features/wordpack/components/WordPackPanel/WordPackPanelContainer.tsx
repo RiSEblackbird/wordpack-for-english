@@ -17,6 +17,7 @@ import { SensesSection } from '../../../../components/wordpack/SensesSection';
 import { ExamplesSection } from '../../../../components/wordpack/ExamplesSection';
 import { useAuth } from '../../../../AuthContext';
 import { GuestLock } from '../../../../components/GuestLock';
+import { validateLemmaInput } from '../../../../lib/lemmaValidation';
 import { SUPPORTED_LLM_MODELS } from '../../../../lib/wordpack';
 import { CitationsSection } from './CitationsSection';
 import { CollocationsSection } from './CollocationsSection';
@@ -165,15 +166,32 @@ export const WordPackPanel: React.FC<Props> = ({
     : null;
 
   const triggerUnknownLemmaGeneration = useCallback(async (lemmaText: string) => {
-    const trimmed = lemmaText.trim();
-    if (!trimmed) return false;
-    await generateWordPack(trimmed);
+    const validation = validateLemmaInput(lemmaText);
+    const displayLemma = validation.normalizedLemma || lemmaText.trim();
+    if (!validation.valid) {
+      setStatusMessage({
+        kind: 'alert',
+        text: displayLemma
+          ? `「${displayLemma}」はWordPackとして生成できません。${validation.message}`
+          : validation.message,
+      });
+      return false;
+    }
+    if (isGuest) {
+      setStatusMessage({
+        kind: 'alert',
+        text: 'ゲストモードでは例文中の未生成語をWordPack生成できません。ログインすると未生成語を追加できます。',
+      });
+      return false;
+    }
+    const lemmaToGenerate = validation.normalizedLemma;
+    await generateWordPack(lemmaToGenerate);
     try {
-      invalidateLemmaCache(trimmed);
+      invalidateLemmaCache(lemmaToGenerate);
     } catch {}
-    onLemmaOpen(trimmed);
+    onLemmaOpen(lemmaToGenerate);
     return true;
-  }, [generateWordPack, invalidateLemmaCache, onLemmaOpen]);
+  }, [generateWordPack, invalidateLemmaCache, isGuest, onLemmaOpen, setStatusMessage]);
 
   const handleGenerate = useCallback(async () => {
     if (!lemmaValidation.valid) {
@@ -421,6 +439,7 @@ export const WordPackPanel: React.FC<Props> = ({
         .wp-loading-title { font-size: 1.4em; margin-bottom: 0.5rem; }
         .wp-loading-field { max-width: 30rem; }
         .wp-loading-note { margin-top: 0.4rem; }
+        .wp-status-message { overflow-wrap: anywhere; word-break: break-word; }
         @media (max-width: 840px) { .wp-container { grid-template-columns: 1fr; } }
       `}</style>
 

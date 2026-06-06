@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNotifications } from '../NotificationsContext';
 import { useSettings } from '../SettingsContext';
 import { ApiError, fetchJson } from '../lib/fetcher';
+import { validateLemmaInput } from '../lib/lemmaValidation';
 import { APP_EVENTS, dispatchAppEvent } from '../shared/events/appEvents';
 import { composeModelRequestFields, enqueueRegenerateWordPack, fetchRegenerateJobStatus, regenerateWordPackRequest, updateGuestPublicFlag } from '../features/wordpack/api';
 export type { ExampleItem, Examples, Pronunciation, Sense, WordPack } from '../features/wordpack/types';
@@ -146,13 +147,19 @@ export const useWordPack = ({
 
   const generateWordPack = useCallback(
     async (lemma: string) => {
+      const validation = validateLemmaInput(lemma);
+      if (!validation.valid) {
+        setMessage({ kind: 'alert', text: validation.message });
+        return;
+      }
+      const normalizedLemma = validation.normalizedLemma;
       abortRef.current?.abort();
       const ctrl = new AbortController();
       setLoading(true);
       setMessage(null);
       setData(null);
       const notifId = addNotification({
-        title: `【${lemma}】の生成処理中...`,
+        title: `【${normalizedLemma}】の生成処理中...`,
         message: '新規のWordPackを生成しています（LLM応答の受信と解析を待機中）',
         status: 'progress',
       });
@@ -160,7 +167,7 @@ export const useWordPack = ({
         const res = await fetchJson<WordPack>(`${apiBase}/word/pack`, {
           method: 'POST',
           body: applyModelRequestFields({
-            lemma,
+            lemma: normalizedLemma,
             pronunciation_enabled: pronunciationEnabled,
             regenerate_scope: regenerateScope,
           }),
@@ -189,7 +196,7 @@ export const useWordPack = ({
         }
         setMessage({ kind: 'alert', text });
         updateNotification(notifId, {
-          title: `【${lemma}】の生成失敗`,
+          title: `【${normalizedLemma}】の生成失敗`,
           status: 'error',
           message: `新規生成に失敗しました（${text}）`,
         });
@@ -204,20 +211,26 @@ export const useWordPack = ({
 
   const createEmptyWordPack = useCallback(
     async (lemma: string) => {
+      const validation = validateLemmaInput(lemma);
+      if (!validation.valid) {
+        setMessage({ kind: 'alert', text: validation.message });
+        return;
+      }
+      const normalizedLemma = validation.normalizedLemma;
       abortRef.current?.abort();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       setLoading(true);
       setMessage(null);
       const notifId = addNotification({
-        title: `【${lemma}】の生成処理中...`,
+        title: `【${normalizedLemma}】の生成処理中...`,
         message: '空のWordPackを作成しています',
         status: 'progress',
       });
       try {
         const res = await fetchJson<{ id: string }>(`${apiBase}/word/packs`, {
           method: 'POST',
-          body: { lemma },
+          body: { lemma: normalizedLemma },
           signal: ctrl.signal,
           timeoutMs: requestTimeoutMs,
         });
@@ -225,12 +238,12 @@ export const useWordPack = ({
         await loadWordPack(res.id);
         try { onWordPackGenerated?.(res.id); } catch {}
         dispatchAppEvent(APP_EVENTS.wordPackUpdated);
-        updateNotification(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: '詳細読み込み完了' });
+        updateNotification(notifId, { title: `【${normalizedLemma}】の生成完了！`, status: 'success', message: '詳細読み込み完了' });
       } catch (error) {
         if (ctrl.signal.aborted) return;
         const text = error instanceof ApiError ? error.message : '空のWordPack作成に失敗しました';
         setMessage({ kind: 'alert', text });
-        updateNotification(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: `空のWordPackの作成に失敗しました（${text}）` });
+        updateNotification(notifId, { title: `【${normalizedLemma}】の生成失敗`, status: 'error', message: `空のWordPackの作成に失敗しました（${text}）` });
       } finally {
         setLoading(false);
       }

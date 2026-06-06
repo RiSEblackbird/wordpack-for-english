@@ -346,6 +346,7 @@ body.theme-dark .guest-badge {
 }
 
 .main-inner {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   max-width: var(--main-max-width);

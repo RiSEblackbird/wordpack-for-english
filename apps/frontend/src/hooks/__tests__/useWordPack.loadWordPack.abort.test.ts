@@ -84,6 +84,8 @@ function makeWordPack(lemma: string): WordPack {
 describe('useWordPack.loadWordPack', () => {
   beforeEach(() => {
     vi.mocked(fetchJson).mockReset();
+    mockNotifications.add.mockClear();
+    mockNotifications.update.mockClear();
   });
 
   it('aborts the previous request when loadWordPack is called again', async () => {
@@ -137,6 +139,35 @@ describe('useWordPack.loadWordPack', () => {
     expect(result.current.currentWordPackId).toBe('wp:2');
     expect(result.current.data?.lemma).toBe('produce');
   });
-});
 
+  it('rejects invalid generated lemmas before starting network calls', async () => {
+    const { result } = renderHook(() => useWordPack({ model: 'gpt-5.4-mini' }));
+
+    await act(async () => {
+      await result.current.generateWordPack('This sentence, with punctuation.');
+    });
+
+    expect(fetchJson).not.toHaveBeenCalled();
+    expect(mockNotifications.add).not.toHaveBeenCalled();
+    expect(result.current.message).toEqual({
+      kind: 'alert',
+      text: '英数字と半角スペース、ハイフン、アポストロフィのみ利用できます',
+    });
+  });
+
+  it('rejects invalid empty WordPack lemmas before starting network calls', async () => {
+    const { result } = renderHook(() => useWordPack({ model: 'gpt-5.4-mini' }));
+
+    await act(async () => {
+      await result.current.createEmptyWordPack('文脈依存');
+    });
+
+    expect(fetchJson).not.toHaveBeenCalled();
+    expect(mockNotifications.add).not.toHaveBeenCalled();
+    expect(result.current.message).toEqual({
+      kind: 'alert',
+      text: '英数字と半角スペース、ハイフン、アポストロフィのみ利用できます',
+    });
+  });
+});
 
