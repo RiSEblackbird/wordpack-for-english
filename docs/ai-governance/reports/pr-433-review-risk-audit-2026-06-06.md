@@ -14,6 +14,8 @@
 | --- | --- | --- |
 | Explore relation creation | Example sentences and expression patterns could be sent to `POST /api/word/packs` as lemmas. | Shared `validateLemmaInput` now gates Explore creation, and `examples` / `pattern` relations are explicitly non-creatable with visible reasons. |
 | Explore guest mode | Guest users could click `WordPackを作成`, then receive a 403 from the backend. | Explore now disables unknown-relation create actions for guests, shows a visible permission reason, and keeps the guest-lock affordance. |
+| Example-token unknown generation | Example text tokens could trigger WordPack generation without guest or lemma guards. | Unknown-token generation now checks guest mode and shared lemma validation before network calls, and reports visible/announced reasons when blocked. |
+| WordPack write helpers | `generateWordPack` and `createEmptyWordPack` could be called with unvalidated arbitrary strings. | The hook now validates and normalizes lemmas before starting notifications or network calls. |
 
 ## Repository-wide audit method
 
@@ -26,12 +28,12 @@
   - `tests/test_api.py`
   - `tests/backend/test_guest_mode_middleware.py`
 
-## Audit findings
+## Audit findings after remediation
 
-| Severity | Location | Finding | User impact | Recommended follow-up |
+| Severity | Location | Finding | User impact | Status |
 | --- | --- | --- | --- | --- |
-| P1 | `apps/frontend/src/components/wordpack/ExamplesSection.tsx` and `apps/frontend/src/features/wordpack/components/WordPackPanel/WordPackPanelContainer.tsx` | Example text tokens can trigger `triggerUnknownLemmaGeneration` from a custom `role="button"` row. This path is not protected by `GuestLock` and does not use client-side lemma validation before calling `generateWordPack`. | A guest can activate an unknown token and get a backend 403 instead of a permission explanation. A very long token could also fail only after the request. | Add guest and `validateLemmaInput` guards to `triggerUnknownLemmaGeneration`, expose a visible/announced reason, and update tests for guest + invalid token paths. |
-| P2 | `apps/frontend/src/hooks/useWordPack.ts` | `generateWordPack(lemma)` and `createEmptyWordPack(lemma)` accept arbitrary strings and rely on callers/backend validation. The main form now validates, but hook-level callers can still bypass it. | Future callers may repeat the Explore bug by passing non-lemma strings. Backend remains safe, but UI could offer actions that fail late. | Consider central hook-level validation or a typed helper that returns a rejected status before network calls. |
+| P1 | `apps/frontend/src/components/wordpack/ExamplesSection.tsx` and `apps/frontend/src/features/wordpack/components/WordPackPanel/WordPackPanelContainer.tsx` | Example text tokens can trigger `triggerUnknownLemmaGeneration` from a custom `role="button"` row. This path was not protected by `GuestLock` and did not use client-side lemma validation before calling `generateWordPack`. | A guest could activate an unknown token and get a backend 403 instead of a permission explanation. A very long token could also fail only after the request. | Resolved. Guest and invalid candidates are blocked before write requests; tooltip/status copy explain the reason. |
+| P2 | `apps/frontend/src/hooks/useWordPack.ts` | `generateWordPack(lemma)` and `createEmptyWordPack(lemma)` accepted arbitrary strings and relied on callers/backend validation. | Future callers could repeat the Explore bug by passing non-lemma strings. Backend remained safe, but UI could offer actions that fail late. | Resolved. Hook-level validation stops invalid values before notifications or network calls. |
 
 ## Areas checked with no matching risk found
 
@@ -48,8 +50,8 @@
 
 ## Current status
 
-- P0: none found after the Explore review fixes.
-- P1: one existing cross-repo issue remains in the example-token unknown generation path.
-- P2: one architectural hardening opportunity remains in `useWordPack` write helpers.
+- P0: none found after the Explore review fixes and follow-up remediation.
+- P1: none remaining from this audit.
+- P2: none remaining from this audit.
 
-The remaining P1/P2 items are outside the two PR review threads that were fixed here and are intentionally reported for follow-up direction rather than silently expanding this change.
+The previously reported P1/P2 items were remediated in this branch after follow-up approval.

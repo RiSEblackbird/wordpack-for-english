@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useRef } from 'react';
 import { LemmaLookupResponseData } from '../LemmaExplorer/useLemmaExplorer';
+import { validateLemmaInput } from '../../lib/lemmaValidation';
 
 interface LemmaTooltipState {
   tooltip: HTMLElement;
@@ -12,6 +13,7 @@ interface LemmaTooltipState {
 
 interface UseLemmaTooltipOptions {
   lookupLemmaMetadata: (lemmaText: string) => Promise<LemmaLookupResponseData>;
+  isGuest?: boolean;
 }
 
 interface LemmaTooltipHandlers {
@@ -24,7 +26,7 @@ interface LemmaTooltipHandlers {
  * 例文行のトークンに紐づくツールチップ表示を集約するカスタムフック。
  * DOM操作を一箇所に閉じ込め、UI側ではハンドラを渡すだけにする。
  */
-export const useLemmaTooltip = ({ lookupLemmaMetadata }: UseLemmaTooltipOptions): LemmaTooltipHandlers => {
+export const useLemmaTooltip = ({ lookupLemmaMetadata, isGuest = false }: UseLemmaTooltipOptions): LemmaTooltipHandlers => {
   const lemmaActionRef = useRef<LemmaTooltipState | null>(null);
 
   const detachTooltip = useCallback(() => {
@@ -130,7 +132,13 @@ export const useLemmaTooltip = ({ lookupLemmaMetadata }: UseLemmaTooltipOptions)
           token.setAttribute('data-pending-lemma', candidateText);
           token.classList.add('lemma-unknown');
         }
-        const tooltip = showTooltip(token, '未生成');
+        const validation = validateLemmaInput(candidateText);
+        const tooltipText = isGuest
+          ? '未生成（ログインが必要）'
+          : validation.valid
+            ? '未生成'
+            : `作成不可: ${validation.message}`;
+        const tooltip = showTooltip(token, tooltipText);
         lemmaActionRef.current = {
           tooltip,
           aborter: null,
@@ -159,7 +167,7 @@ export const useLemmaTooltip = ({ lookupLemmaMetadata }: UseLemmaTooltipOptions)
         lemmaActionRef.current = { tooltip: tip, aborter: null };
       }, 500);
     },
-    [detachTooltip, lookupLemmaMetadata, showTooltip],
+    [detachTooltip, isGuest, lookupLemmaMetadata, showTooltip],
   );
 
   const handleMouseOut = useCallback(
