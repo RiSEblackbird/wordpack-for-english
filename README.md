@@ -553,6 +553,7 @@ apps/backend/backend/   # FastAPI アプリ
 apps/frontend/          # React + Vite
 tests/                  # Python テスト
 docs/                   # 詳細ドキュメント
+.agents/                # AI エージェント用スキル
 ```
 
 ## ドキュメント更新ポリシー
@@ -565,4 +566,5 @@ docs/                   # 詳細ドキュメント
 - フロントエンドの Vitest カバレッジ測定は `docs/testing/vitest-coverage.md` を参照してください。
 - Playwright による E2E 実行手順は `docs/testing/playwright-e2e.md` を参照してください。
 - Playwright のビジュアル回帰テスト手順は `docs/testing/visual-regression.md` を参照してください。
+- AI エージェント向け UI/UX ガバナンスは `docs/ai-governance/00-index.md` を参照してください。
 - ユーザー向け操作は `UserManual.md` を参照してください。
