@@ -22,6 +22,8 @@ The Explore screen now explains its purpose, makes the first action explicit, di
 | P1 | Unregistered relations ended at a disabled-looking state | Resolved | `WordPackを作成` creates an empty WordPack and opens preview |
 | P1 | Right panel did not summarize why the selected item mattered | Resolved | Metrics, primary open action, guidance, and quick actions added |
 | P1 | Mobile tabs could wrap into unreadable vertical text or create overflow | Resolved | Mobile tabs use a compact grid; 390px browser check showed no horizontal overflow |
+| P1 | Unknown example sentences or expression patterns could appear as creatable WordPacks | Resolved | Creation is now limited to lemma-valid non-example/non-pattern relations; disabled cards show the reason |
+| P1 | Guest users could see create actions that would fail with backend 403 | Resolved | Guest creation is disabled with visible permission guidance |
 | P2 | English source labels were exposed in a Japanese UI | Resolved | Source labels are translated for user-facing chips |
 
 ## State matrix
@@ -36,6 +38,8 @@ The Explore screen now explains its purpose, makes the first action explicit, di
 | Saved relation | `保存済み` badge and `プレビュー` action | Open preview | Covered |
 | Empty WordPack relation | `空のWordPack` badge and `開いて育てる` action | Open detail/preview and generate content later | Covered |
 | Unregistered relation | `未登録` badge and `WordPackを作成` action | Create empty WordPack, then preview | Covered |
+| Non-creatable unregistered relation | Disabled `作成不可` action with reason | Use Lexicon for the exact word | Covered |
+| Guest unregistered relation | Disabled `ログインで作成` action with permission reason | Log in before creating | Covered |
 | Create pending | Button label changes to `作成中` and is disabled | Wait | Covered |
 | Create error | Alert explains the failure and retry path | Retry creation or update | Covered |
 | No selected source | Right panel disables primary open action and explains selection is required | Select a source WordPack | Covered |
@@ -79,10 +83,11 @@ The layout now supports a left-to-right desktop scan: choose source, inspect can
 
 ## Verification evidence
 
-- `cd apps/frontend && npm test -- ExplorePage --run`: passed, 3 tests.
+- `cd apps/frontend && npm test -- ExplorePage useWordPackForm --run`: passed, 7 tests.
 - `cd apps/frontend && npx tsc -p tsconfig.json`: passed.
-- `cd apps/frontend && npm test -- --coverage --silent`: passed, 136 tests and 1 skipped integration test.
+- `cd apps/frontend && npm test -- --coverage --silent`: passed, 138 tests and 1 skipped integration test.
 - `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts`: passed, 3 tests.
-- Browser desktop 1440x900 against local mock API: no horizontal overflow; status guide, create action, and primary open action visible.
-- Browser interaction: clicking `「文脈依存の」のWordPackを作成` created an empty WordPack and opened the WordPack preview dialog.
-- Browser mobile 390x844: no horizontal overflow, all mode labels readable, primary create action present.
+- Browser desktop 1440x900 against local mock API: no horizontal overflow; valid unknown lemma action is enabled, expression-pattern relation is disabled with a visible reason, and example sentence relation is disabled with a visible reason.
+- Browser guest 1440x900 against local mock API: valid unknown lemma action is disabled before any `POST /api/word/packs`; visible permission guidance explains that login is required.
+- Browser mobile 390x844: no horizontal overflow, all mode labels remain readable, and primary create action remains reachable.
+- Code review follow-up: targeted tests cover non-creatable example sentences, shared lemma validation, and guest-locked unknown relation creation.

@@ -6,6 +6,14 @@ import { axe } from 'vitest-axe';
 import { ExplorePage } from './index';
 import type { WordPack } from '../../features/wordpack/types';
 
+const authState = vi.hoisted(() => ({ isGuest: false }));
+
+vi.mock('../../AuthContext', () => ({
+  useAuth: () => ({
+    isGuest: authState.isGuest,
+  }),
+}));
+
 vi.mock('../../SettingsContext', () => ({
   useSettings: () => ({
     settings: {
@@ -48,7 +56,7 @@ const wordPackDetail: WordPack = {
   },
   contrast: [{ with: 'brittle', diff_ja: 'brittle は壊れやすさを示す。' }],
   examples: {
-    Dev: [{ en: 'The service uses a robust fallback.', ja: 'サービスは堅牢なフォールバックを使う。' }],
+    Dev: [{ en: 'This sentence, with punctuation, should not become a WordPack.', ja: '句読点を含む文全体は見出し語ではない。' }],
     CS: [],
     LLM: [],
     Business: [],
@@ -153,6 +161,7 @@ const setupFetch = () => {
 describe('ExplorePage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    authState.isGuest = false;
     setupFetch();
   });
 
@@ -204,6 +213,46 @@ describe('ExplorePage', () => {
         method: 'POST',
         body: JSON.stringify({ lemma: 'resilient' }),
       }),
+    );
+  });
+
+  it('does not offer creation for example sentences that are not valid lemma candidates', async () => {
+    const fetchMock = setupFetch();
+    render(<ExplorePage />);
+
+    expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '例文' }));
+    });
+
+    const blockedAction = await screen.findByRole('button', {
+      name: /This sentence, with punctuation, should not become a WordPack.*作成できません/,
+    });
+    expect(blockedAction).toBeDisabled();
+    expect(screen.getByText(/例文全体は見出し語ではないため/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/word/packs',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('locks unregistered relation creation for guest users before sending a write request', async () => {
+    authState.isGuest = true;
+    const fetchMock = setupFetch();
+    render(<ExplorePage />);
+
+    expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
+    const guestCreateAction = screen.getByRole('button', {
+      name: /resilient.*ログインするとWordPackを作成できます/,
+    });
+
+    expect(guestCreateAction).toBeDisabled();
+    expect(screen.getAllByText('ゲストモードではWordPackを作成できません。ログインすると未登録語を追加できます。').length).toBeGreaterThan(0);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      '/api/word/packs',
+      expect.objectContaining({ method: 'POST' }),
     );
   });
 

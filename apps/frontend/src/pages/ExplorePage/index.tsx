@@ -1,6 +1,9 @@
 import React, { useMemo, useState } from 'react';
+import { useAuth } from '../../AuthContext';
+import { GuestLock } from '../../components/GuestLock';
 import { WordPackPreviewModal } from '../../components/WordPackPreviewModal';
 import { ApiError } from '../../lib/fetcher';
+import { validateLemmaInput } from '../../lib/lemmaValidation';
 import { APP_EVENTS, dispatchAppEvent } from '../../shared/events/appEvents';
 import { Badge, Button, EmptyState, SearchBox, SegmentedControl } from '../../shared/ui';
 import { attachRelationStatus, buildExploreRelations, filterExploreRelations, type ExploreMode, type ExploreRelation } from './exploreRelations';
@@ -58,7 +61,33 @@ const modeHeading = (mode: ExploreMode): string => {
   return option?.label ?? '接続';
 };
 
+const relationCreateBlockReason = (relation: ExploreRelation): string | null => {
+  if (relation.targetWordPack) return null;
+  if (relation.kind === 'examples') {
+    return '例文全体は見出し語ではないため、ここからは作成できません。文中の語をLexiconで作成してください。';
+  }
+  if (relation.source === 'pattern') {
+    return '表現パターンは見出し語ではないため、必要な語だけをLexiconで作成してください。';
+  }
+  const validation = validateLemmaInput(relation.label);
+  return validation.valid ? null : validation.message;
+};
+
+const relationActionLabel = (
+  relation: ExploreRelation,
+  isGuest: boolean,
+  isCreating: boolean,
+  createBlockReason: string | null,
+): string => {
+  if (isCreating) return '作成中';
+  if (relation.targetWordPack) return statusMeta[relation.status].action;
+  if (createBlockReason) return '作成不可';
+  if (isGuest) return 'ログインで作成';
+  return statusMeta.unknown.action;
+};
+
 export const ExplorePage: React.FC = () => {
+  const { isGuest } = useAuth();
   const [mode, setMode] = useState<ExploreMode>('related');
   const [previewWordPackId, setPreviewWordPackId] = useState<string | null>(null);
   const [creatingRelationId, setCreatingRelationId] = useState<string | null>(null);
@@ -88,6 +117,10 @@ export const ExplorePage: React.FC = () => {
   }, [selectedDetail, wordPacks]);
   const visibleRelations = useMemo(() => filterExploreRelations(relations, mode), [mode, relations]);
   const unknownCount = useMemo(() => relations.filter((relation) => relation.status === 'unknown').length, [relations]);
+  const creatableUnknownCount = useMemo(
+    () => relations.filter((relation) => relation.status === 'unknown' && !relationCreateBlockReason(relation)).length,
+    [relations],
+  );
   const emptyCount = useMemo(() => relations.filter((relation) => relation.status === 'empty').length, [relations]);
   const existingCount = relations.length - unknownCount - emptyCount;
   const selectedLabel = selectedWordPack?.lemma ?? '未選択';
@@ -99,12 +132,22 @@ export const ExplorePage: React.FC = () => {
       return;
     }
 
-    const lemma = relation.label.trim();
-    if (!lemma) {
-      setRelationMessage({ kind: 'alert', text: '作成する語が空のため、WordPackを作成できません。' });
+    if (isGuest) {
+      setRelationMessage({
+        kind: 'alert',
+        text: 'ゲストモードではWordPackを作成できません。ログインすると未登録語を追加できます。',
+      });
       return;
     }
 
+    const blockedReason = relationCreateBlockReason(relation);
+    if (blockedReason) {
+      setRelationMessage({ kind: 'alert', text: `「${relation.label}」はWordPackとして作成できません。${blockedReason}` });
+      return;
+    }
+
+    const validation = validateLemmaInput(relation.label);
+    const lemma = validation.normalizedLemma;
     setCreatingRelationId(relation.id);
     setRelationMessage({ kind: 'status', text: `「${lemma}」の空WordPackを作成しています。` });
     try {
@@ -242,38 +285,61 @@ export const ExplorePage: React.FC = () => {
             <div className="explore-column-heading">
               <div>
                 <h3 id="explore-relations-heading">{selectedLabel} から見つかった{modeHeading(mode)}</h3>
-                <p>保存済みはプレビュー可能。未登録はWordPackを作成できます。</p>
+                <p>保存済みはプレビュー可能。未登録のうち見出し語として扱える候補だけ作成できます。</p>
               </div>
               <Badge>{visibleRelations.length}件</Badge>
             </div>
             <div className="explore-connections" aria-label="接続カード">
               {renderEmptyRelations()}
-              {!detailLoading && !detailMessage && visibleRelations.map((relation) => (
-                <article key={relation.id} className="explore-connection-card">
-                  <div>
-                    <div className="dictionary-meta-row">
-                      <Badge>{sourceLabel(relation.source)}</Badge>
-                      <Badge className={`explore-status-badge ${relation.status}`}>
-                        {statusMeta[relation.status].label}
-                      </Badge>
-                    </div>
-                    <h3>{relation.label}</h3>
-                    {relation.description ? <p>{relation.description}</p> : null}
-                  </div>
+              {!detailLoading && !detailMessage && visibleRelations.map((relation) => {
+                const createBlockReason = relation.status === 'unknown' ? relationCreateBlockReason(relation) : null;
+                const guestCreateBlocked = relation.status === 'unknown' && isGuest && !createBlockReason;
+                const isCreating = creatingRelationId === relation.id;
+                const actionDisabled = isCreating || Boolean(createBlockReason) || guestCreateBlocked;
+                const actionHint = createBlockReason
+                  || (guestCreateBlocked ? 'ゲストモードではWordPackを作成できません。ログインすると未登録語を追加できます。' : null);
+                const actionHintId = actionHint ? `explore-action-hint-${relation.id}` : undefined;
+                const actionAriaLabel = relation.targetWordPack
+                  ? `「${relation.label}」のWordPackを開く`
+                  : createBlockReason
+                    ? `「${relation.label}」はWordPackとして作成できません`
+                    : guestCreateBlocked
+                      ? `「${relation.label}」はログインするとWordPackを作成できます`
+                      : `「${relation.label}」のWordPackを作成`;
+                const actionButton = (
                   <Button
-                    variant={relation.status === 'unknown' ? 'primary' : 'default'}
-                    disabled={creatingRelationId === relation.id}
-                    aria-label={
-                      relation.status === 'unknown'
-                        ? `「${relation.label}」のWordPackを作成`
-                        : `「${relation.label}」のWordPackを開く`
-                    }
+                    variant={relation.status === 'unknown' && !actionDisabled ? 'primary' : 'default'}
+                    disabled={actionDisabled}
+                    aria-describedby={actionHintId}
+                    aria-label={actionAriaLabel}
                     onClick={() => { void handleRelationAction(relation); }}
                   >
-                    {creatingRelationId === relation.id ? '作成中' : statusMeta[relation.status].action}
+                    {relationActionLabel(relation, isGuest, isCreating, createBlockReason)}
                   </Button>
-                </article>
-              ))}
+                );
+                return (
+                  <article key={relation.id} className="explore-connection-card">
+                    <div>
+                      <div className="dictionary-meta-row">
+                        <Badge>{sourceLabel(relation.source)}</Badge>
+                        <Badge className={`explore-status-badge ${relation.status}`}>
+                          {statusMeta[relation.status].label}
+                        </Badge>
+                      </div>
+                      <h3>{relation.label}</h3>
+                      {relation.description ? <p>{relation.description}</p> : null}
+                    </div>
+                    <div className="explore-card-action">
+                      {guestCreateBlocked ? <GuestLock isGuest>{actionButton}</GuestLock> : actionButton}
+                      {actionHint ? (
+                        <p id={actionHintId} className="explore-action-hint">
+                          {actionHint}
+                        </p>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           </section>
           <aside className="explore-side" aria-label="選択中WordPackの概要">
@@ -291,7 +357,7 @@ export const ExplorePage: React.FC = () => {
               <div className="explore-metric pending">
                 <strong>{unknownCount}</strong>
                 <span>件が未登録</span>
-                <p>対応するWordPackを作成できます</p>
+                <p>{isGuest ? 'ログインすると追加できます' : `作成可能な候補は${creatableUnknownCount}件`}</p>
               </div>
             </div>
             <Button
@@ -305,7 +371,7 @@ export const ExplorePage: React.FC = () => {
               <p className="explore-disabled-hint">先に左の一覧からWordPackを選んでください。</p>
             ) : null}
             <div className="explore-guidance">
-              未登録の語を作ると、関連語ネットワークを広げられます。
+              見出し語として扱える未登録語を作ると、関連語ネットワークを広げられます。
             </div>
             <div className="explore-quick-actions" aria-label="クイックアクション">
               <h4>クイックアクション</h4>

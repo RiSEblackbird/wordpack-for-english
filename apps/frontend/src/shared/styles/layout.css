@@ -300,6 +300,22 @@ body.theme-dark .dictionary-reader-canvas {
   min-width: 9rem;
 }
 
+.explore-card-action {
+  min-width: 9rem;
+  display: grid;
+  justify-items: end;
+  gap: 0.35rem;
+}
+
+.explore-action-hint {
+  max-width: 13rem;
+  margin: 0;
+  color: var(--dict-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  text-align: right;
+}
+
 .explore-connection-card h3,
 .shelf-wordpack-card h3 {
   margin: 0.45rem 0 0.25rem;
@@ -590,6 +606,20 @@ body.theme-dark .dictionary-reader-canvas {
 
   .dictionary-section {
     padding: 0.85rem;
+  }
+
+  .explore-connection-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .explore-card-action {
+    justify-items: stretch;
+  }
+
+  .explore-action-hint {
+    max-width: none;
+    text-align: left;
   }
 
   .dictionary-bottom-nav {
