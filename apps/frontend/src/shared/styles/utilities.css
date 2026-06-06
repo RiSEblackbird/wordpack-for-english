@@ -2,6 +2,7 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
+  white-space: nowrap;
   padding: 0.18rem 0.55rem;
   border: 1px solid var(--dict-border);
   border-radius: 999px;
@@ -21,6 +22,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   gap: 0.45rem;
   min-height: 2.25rem;
   border: 1px solid var(--dict-border);
@@ -29,6 +31,7 @@
   background: var(--dict-surface-raised);
   color: var(--dict-text);
   font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -65,8 +68,10 @@
 }
 
 .dictionary-segmented {
+  max-width: 100%;
   display: inline-flex;
   gap: 0.25rem;
+  overflow-x: auto;
   padding: 0.25rem;
   border: 1px solid var(--dict-border);
   border-radius: var(--dict-radius);
@@ -74,17 +79,34 @@
 }
 
 .dictionary-segmented button {
+  flex: 0 0 auto;
   border: 0;
   border-radius: 6px;
   padding: 0.35rem 0.7rem;
   background: transparent;
   color: var(--dict-muted);
+  white-space: nowrap;
   cursor: pointer;
 }
 
 .dictionary-segmented button[aria-pressed='true'] {
   background: rgba(131, 206, 248, 0.16);
   color: var(--dict-text);
+}
+
+@media (max-width: 640px) {
+  .dictionary-segmented {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(5.4rem, 1fr));
+    overflow-x: visible;
+  }
+
+  .dictionary-segmented button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 0.45rem;
+  }
 }
 
 .dictionary-empty {
@@ -97,4 +119,3 @@
   text-align: center;
   padding: 1.5rem;
 }
-

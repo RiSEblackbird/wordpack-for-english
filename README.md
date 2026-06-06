@@ -12,7 +12,7 @@
 - バックエンド: FastAPI / フロントエンド: React + TypeScript + Vite
 - WordPack の生成・再生成・永続化
 - Lexicon / Reader / Examples Corpus / Explore / Shelves / Settings の辞書型UI。`/lexicon`、`/reader`、`/examples`、`/explore`、`/shelves`、`/settings`、`/wordpacks/:id` のURLで直接開けます。
-- Explore は保存済みWordPackの `senses` / `collocations` / `contrast` / `examples` を読み取り、関連語・共起・対比・未作成語を横断する Connection Explorer として動作します。
+- Explore は保存済みWordPackの `senses` / `collocations` / `contrast` / `examples` を読み取り、関連語・共起・対比・例文由来のつながりを横断する Connection Explorer として動作します。候補は「保存済み」「空のWordPack」「未登録」の状態で区別され、未登録語はその場で空のWordPackとして追加できます。
 - Shelves は `GET /word/packs` の一覧データを、最近更新・未生成・例文が多い・ゲスト公開中・カテゴリ別などへ自動分類する Smart Shelves として動作します。
 - WordPack再生成は非同期ジョブ化し、ジョブIDを返して完了までポーリング（長時間処理でもUIが切れない）
 - 発音情報（IPA/音節/強勢）の付与

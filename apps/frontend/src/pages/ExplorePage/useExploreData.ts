@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSettings } from '../../SettingsContext';
 import { ApiError } from '../../lib/fetcher';
-import { fetchWordPack } from '../../features/wordpack/api';
+import { createEmptyWordPackRequest, fetchWordPack } from '../../features/wordpack/api';
 import { useWordPackList } from '../../features/wordpack/hooks/useWordPackList';
 import type { WordPack } from '../../features/wordpack/types';
 
@@ -69,8 +69,15 @@ export const useExploreData = () => {
     [list.wordPacks, selectedWordPackId],
   );
 
+  const createEmptyWordPack = useCallback((lemma: string): Promise<{ id: string }> => (
+    createEmptyWordPackRequest(settings.apiBase, lemma, {
+      timeoutMs: settings.requestTimeoutMs,
+    })
+  ), [settings.apiBase, settings.requestTimeoutMs]);
+
   return {
     ...list,
+    createEmptyWordPack,
     detailLoading,
     detailMessage,
     filteredWordPacks,

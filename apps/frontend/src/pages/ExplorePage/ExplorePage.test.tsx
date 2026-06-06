@@ -1,7 +1,8 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { axe } from 'vitest-axe';
 import { ExplorePage } from './index';
 import type { WordPack } from '../../features/wordpack/types';
 
@@ -12,6 +13,12 @@ vi.mock('../../SettingsContext', () => ({
       requestTimeoutMs: 60000,
     },
   }),
+}));
+
+vi.mock('../../components/WordPackPreviewModal', () => ({
+  WordPackPreviewModal: ({ isOpen, wordPackId }: { isOpen: boolean; wordPackId: string | null }) => (
+    isOpen ? <div role="dialog" aria-label="WordPack プレビュー">Preview {wordPackId}</div> : null
+  ),
 }));
 
 const wordPackDetail: WordPack = {
@@ -54,38 +61,61 @@ const wordPackDetail: WordPack = {
 };
 
 const setupFetch = () => {
-  const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+  let createdPack: { id: string; lemma: string } | null = null;
+  const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
+    if (url === '/api/word/packs' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body ?? '{}')) as { lemma?: string };
+      createdPack = { id: 'wp:created', lemma: body.lemma ?? 'created' };
+      return Promise.resolve(
+        new Response(JSON.stringify({ id: createdPack.id }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      );
+    }
     if (url.startsWith('/api/word/packs?')) {
+      const items = [
+        {
+          id: 'wp:robust',
+          lemma: 'robust',
+          sense_title: '壊れにくい',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-02T00:00:00Z',
+          is_empty: false,
+          guest_public: true,
+          examples_count: { Dev: 1, CS: 0, LLM: 0, Business: 0, Common: 0 },
+          checked_only_count: 1,
+          learned_count: 0,
+        },
+        {
+          id: 'wp:fallback',
+          lemma: 'fallback',
+          sense_title: '代替手段',
+          created_at: '2024-01-01T00:00:00Z',
+          updated_at: '2024-01-01T00:00:00Z',
+          is_empty: false,
+          guest_public: true,
+          examples_count: { Dev: 0, CS: 0, LLM: 0, Business: 0, Common: 0 },
+          checked_only_count: 0,
+          learned_count: 0,
+        },
+      ];
+      if (createdPack) {
+        items.push({
+          id: createdPack.id,
+          lemma: createdPack.lemma,
+          sense_title: createdPack.lemma,
+          created_at: '2024-01-03T00:00:00Z',
+          updated_at: '2024-01-03T00:00:00Z',
+          is_empty: true,
+          guest_public: false,
+          examples_count: { Dev: 0, CS: 0, LLM: 0, Business: 0, Common: 0 },
+          checked_only_count: 0,
+          learned_count: 0,
+        });
+      }
       return Promise.resolve(
         new Response(JSON.stringify({
-          items: [
-            {
-              id: 'wp:robust',
-              lemma: 'robust',
-              sense_title: '壊れにくい',
-              created_at: '2024-01-01T00:00:00Z',
-              updated_at: '2024-01-02T00:00:00Z',
-              is_empty: false,
-              guest_public: true,
-              examples_count: { Dev: 1, CS: 0, LLM: 0, Business: 0, Common: 0 },
-              checked_only_count: 1,
-              learned_count: 0,
-            },
-            {
-              id: 'wp:fallback',
-              lemma: 'fallback',
-              sense_title: '代替手段',
-              created_at: '2024-01-01T00:00:00Z',
-              updated_at: '2024-01-01T00:00:00Z',
-              is_empty: false,
-              guest_public: true,
-              examples_count: { Dev: 0, CS: 0, LLM: 0, Business: 0, Common: 0 },
-              checked_only_count: 0,
-              learned_count: 0,
-            },
-          ],
-          total: 2,
+          items,
+          total: items.length,
           limit: 200,
           offset: 0,
         }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
@@ -94,6 +124,19 @@ const setupFetch = () => {
     if (url.endsWith('/api/word/packs/wp:robust')) {
       return Promise.resolve(
         new Response(JSON.stringify(wordPackDetail), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      );
+    }
+    if (createdPack && url.endsWith(`/api/word/packs/${createdPack.id}`)) {
+      return Promise.resolve(
+        new Response(JSON.stringify({
+          ...wordPackDetail,
+          lemma: createdPack.lemma,
+          sense_title: createdPack.lemma,
+          senses: [],
+          collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
+          contrast: [],
+          examples: { Dev: [], CS: [], LLM: [], Business: [], Common: [] },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
       );
     }
     return Promise.resolve(
@@ -117,24 +160,59 @@ describe('ExplorePage', () => {
     render(<ExplorePage />);
 
     expect(screen.getByRole('heading', { name: 'Explore' })).toBeInTheDocument();
-    expect(screen.getByLabelText('探索する lemma を検索')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /robust/ })).toBeInTheDocument();
+    expect(screen.getByText('保存済みWordPackのつながりを見つけ、未登録の語を追加できます。')).toBeInTheDocument();
+    expect(screen.getByLabelText('探索するWordPackを検索')).toBeInTheDocument();
+    expect(screen.getByText('ステータスの意味')).toBeInTheDocument();
+    expect(screen.getAllByText('未登録').length).toBeGreaterThan(0);
+    expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
 
     const user = userEvent.setup();
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: 'Collocations' }));
+      await user.click(screen.getByRole('button', { name: '共起' }));
     });
 
-    expect(screen.getByRole('button', { name: 'Collocations' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '共起' })).toHaveAttribute('aria-pressed', 'true');
     expect(await screen.findByText('robust fallback')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '開く' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: '未作成' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /robust fallback.*開く|robust fallback/ })).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: /WordPackを作成/ })[0]).toBeEnabled();
 
     await act(async () => {
-      await user.type(screen.getByLabelText('探索する lemma を検索'), 'fall');
+      await user.type(screen.getByLabelText('探索するWordPackを検索'), 'fall');
     });
 
-    await waitFor(() => expect(screen.queryByRole('button', { name: /robust/ })).not.toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /fallback/ })).toBeInTheDocument();
+    const candidateList = screen.getByLabelText('探索候補');
+    await waitFor(() => expect(within(candidateList).queryByRole('button', { name: /robust/ })).not.toBeInTheDocument());
+    expect(within(candidateList).getByRole('button', { name: /fallback/ })).toBeInTheDocument();
+  });
+
+  it('creates an empty WordPack from an unregistered relation and opens its preview', async () => {
+    const fetchMock = setupFetch();
+    render(<ExplorePage />);
+
+    expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
+    const user = userEvent.setup();
+
+    await act(async () => {
+      await user.click(screen.getAllByRole('button', { name: /WordPackを作成/ })[0]);
+    });
+
+    expect(await screen.findByText(/空WordPackを作成しました/)).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'WordPack プレビュー' })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/word/packs',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ lemma: 'resilient' }),
+      }),
+    );
+  });
+
+  it('has no automated accessibility violations in the loaded Explore state', async () => {
+    const { container } = render(<ExplorePage />);
+
+    expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
+    expect(await screen.findByText('resilient')).toBeInTheDocument();
+
+    expect(await axe(container, { rules: { 'color-contrast': { enabled: false } } })).toHaveNoViolations();
   });
 });
