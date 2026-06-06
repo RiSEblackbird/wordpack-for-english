@@ -739,44 +739,45 @@ export const WordPackListPanel: React.FC = () => {
             <span>生成済み {generatedCount}件</span>
             <span>未生成 {emptyCount}件</span>
           </p>
+          <div className="wp-view-toggle" role="group" aria-label="表示モード">
+            <button
+              type="button"
+              className="wp-toggle-btn"
+              aria-pressed={viewMode === 'card'}
+              onClick={() => setViewMode('card')}
+              title="カード表示"
+            >カード</button>
+            <button
+              type="button"
+              className="wp-toggle-btn"
+              aria-pressed={viewMode === 'list'}
+              onClick={() => setViewMode('list')}
+              title="リスト表示（索引）"
+            >リスト</button>
+          </div>
           <button className="wp-refresh-button" onClick={() => loadWordPacks(offset)} disabled={loading}>
             更新
           </button>
         </div>
 
-        <div className="wp-view-toggle" role="group" aria-label="表示モード">
-          <button
-            type="button"
-            className="wp-toggle-btn"
-            aria-pressed={viewMode === 'card'}
-            onClick={() => setViewMode('card')}
-            title="カード表示"
-          >カード</button>
-          <button
-            type="button"
-            className="wp-toggle-btn"
-            aria-pressed={viewMode === 'list'}
-            onClick={() => setViewMode('list')}
-            title="リスト表示（索引）"
-          >リスト</button>
-        </div>
-
-        <div className="wp-selection-bar" role="group" aria-label="WordPack選択操作">
-          <span>選択中: {selectedCount}件</span>
-          <button type="button" onClick={toggleVisibleSelection} disabled={sortedWordPacks.length === 0}>
-            {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
-          </button>
-          <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
-            全選択解除
-          </button>
-          <GuestLock isGuest={isGuest}>
-            <button
-              type="button"
-              onClick={deleteSelectedWordPacks}
-              disabled={selectedCount === 0 || loading}
-            >選択したWordPackを削除</button>
-          </GuestLock>
-        </div>
+        {selectedCount > 0 ? (
+          <div className="wp-selection-bar" role="group" aria-label="WordPack選択操作">
+            <span>選択中: {selectedCount}件</span>
+            <button type="button" onClick={toggleVisibleSelection} disabled={sortedWordPacks.length === 0}>
+              {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
+            </button>
+            <button type="button" onClick={clearSelection}>
+              全選択解除
+            </button>
+            <GuestLock isGuest={isGuest}>
+              <button
+                type="button"
+                onClick={deleteSelectedWordPacks}
+                disabled={loading}
+              >選択したWordPackを削除</button>
+            </GuestLock>
+          </div>
+        ) : null}
 
         <ListControls<SortKey>
           sortKey={sortKey}
@@ -923,6 +924,13 @@ export const WordPackListPanel: React.FC = () => {
                         </div>
                       ) : null}
                       <div className="wp-card-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="wp-open-button"
+                          onClick={() => openPreview(wp.id)}
+                        >
+                          開く
+                        </button>
                         <div className="wp-card-actions-upper" role="group" aria-label="カード操作 上段">
                           <TTSButton text={wp.lemma} className="wp-card-tts-btn" />
                           <DeleteButton
@@ -957,15 +965,6 @@ export const WordPackListPanel: React.FC = () => {
                           >語義</button>
                         </div>
                       </div>
-                    </div>
-                    <div className="wp-card-quick-actions" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        className="wp-open-button"
-                        onClick={() => openPreview(wp.id)}
-                      >
-                        開く
-                      </button>
                     </div>
                     {(showAllSense || senseOpenIds.has(wp.id)) && (
                       <div className="wp-card-sense-title" data-testid="wp-card-sense-title">

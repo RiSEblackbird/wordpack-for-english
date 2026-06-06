@@ -41,7 +41,7 @@ export const LexiconPage: React.FC<LexiconPageProps> = ({
           </section>
         </div>
 
-        <aside className="lexicon-rail" aria-label="生成と作成">
+        <section className="lexicon-rail" aria-label="生成と作成">
           <GenerationQueuePanel />
           <WordPackPanel
             focusRef={focusRef}
@@ -49,7 +49,7 @@ export const LexiconPage: React.FC<LexiconPageProps> = ({
             creationPanelPlacement="inline"
             showDetails={false}
           />
-        </aside>
+        </section>
       </div>
     </div>
   );

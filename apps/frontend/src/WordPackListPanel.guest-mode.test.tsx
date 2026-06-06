@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { App } from './App';
@@ -78,18 +79,27 @@ describe('WordPackListPanel guest controls', () => {
   it('disables write actions and shows the guest tooltip on hover', async () => {
     renderWithGuestSession();
 
+    const user = userEvent.setup();
+
     // WordPack一覧がロードされて生成ボタンが表示されるまで待機
     await waitFor(() => expect(screen.getByRole('button', { name: '生成' })).toBeInTheDocument());
 
-    vi.useFakeTimers();
-
-    const bulkDeleteButton = screen.getByRole('button', { name: '選択したWordPackを削除' });
+    expect(screen.queryByRole('button', { name: '選択したWordPackを削除' })).not.toBeInTheDocument();
     const generateButton = screen.getByRole('button', { name: '生成' });
     const deleteButtons = screen.getAllByRole('button', { name: '削除' });
 
-    expect(bulkDeleteButton).toBeDisabled();
     expect(generateButton).toBeDisabled();
     expect(deleteButtons[0]).toBeDisabled();
+
+    const checkbox = screen.getByRole('checkbox', { name: 'WordPack alpha を選択' });
+    await act(async () => {
+      await user.click(checkbox);
+    });
+
+    const bulkDeleteButton = screen.getByRole('button', { name: '選択したWordPackを削除' });
+    expect(bulkDeleteButton).toBeDisabled();
+
+    vi.useFakeTimers();
 
     const wrapper = bulkDeleteButton.parentElement as HTMLElement;
     act(() => {

@@ -127,10 +127,7 @@ describe('WordPackListPanel bulk delete', () => {
     expect(alphaCheckbox).not.toBeChecked();
     expect(betaCheckbox).not.toBeChecked();
 
-    const bulkDeleteButton = await screen.findByRole('button', { name: '選択したWordPackを削除' });
-    expect(bulkDeleteButton).toBeDisabled();
-    expect(window.getComputedStyle(bulkDeleteButton).backgroundColor).toBe('rgb(229, 231, 235)');
-    expect(window.getComputedStyle(bulkDeleteButton).color).toBe('rgb(55, 65, 81)');
+    expect(screen.queryByRole('button', { name: '選択したWordPackを削除' })).not.toBeInTheDocument();
 
     await act(async () => {
       await user.click(alphaCheckbox);
@@ -140,6 +137,7 @@ describe('WordPackListPanel bulk delete', () => {
     expect(alphaCheckbox).toBeChecked();
     expect(betaCheckbox).toBeChecked();
 
+    const bulkDeleteButton = await screen.findByRole('button', { name: '選択したWordPackを削除' });
     expect(bulkDeleteButton).not.toBeDisabled();
 
     await act(async () => {
