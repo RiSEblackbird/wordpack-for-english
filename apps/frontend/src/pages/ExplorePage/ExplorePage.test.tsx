@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { axe } from 'vitest-axe';
+import { NotificationsProvider } from '../../NotificationsContext';
 import { ExplorePage } from './index';
 import type { WordPack } from '../../features/wordpack/types';
 
@@ -158,6 +159,12 @@ const setupFetch = () => {
   return fetchMock;
 };
 
+const renderExplorePage = () => render(
+  <NotificationsProvider persist={false}>
+    <ExplorePage />
+  </NotificationsProvider>,
+);
+
 describe('ExplorePage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -166,7 +173,7 @@ describe('ExplorePage', () => {
   });
 
   it('loads existing WordPacks and shows relation cards from selected detail', async () => {
-    render(<ExplorePage />);
+    renderExplorePage();
 
     expect(screen.getByRole('heading', { name: 'Explore' })).toBeInTheDocument();
     expect(screen.getByText('保存済みWordPackのつながりを見つけ、未登録の語を追加できます。')).toBeInTheDocument();
@@ -196,7 +203,7 @@ describe('ExplorePage', () => {
 
   it('creates an empty WordPack from an unregistered relation and opens its preview', async () => {
     const fetchMock = setupFetch();
-    render(<ExplorePage />);
+    renderExplorePage();
 
     expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
     const user = userEvent.setup();
@@ -220,7 +227,7 @@ describe('ExplorePage', () => {
 
   it('does not offer creation for example sentences that are not valid lemma candidates', async () => {
     const fetchMock = setupFetch();
-    render(<ExplorePage />);
+    renderExplorePage();
 
     expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
     const user = userEvent.setup();
@@ -243,7 +250,7 @@ describe('ExplorePage', () => {
   it('locks unregistered relation creation for guest users before sending a write request', async () => {
     authState.isGuest = true;
     const fetchMock = setupFetch();
-    render(<ExplorePage />);
+    renderExplorePage();
 
     expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
     const guestCreateAction = await screen.findByRole('button', {
@@ -259,7 +266,7 @@ describe('ExplorePage', () => {
   });
 
   it('has no automated accessibility violations in the loaded Explore state', async () => {
-    const { container } = render(<ExplorePage />);
+    const { container } = renderExplorePage();
 
     expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
     expect(await screen.findByText('resilient')).toBeInTheDocument();

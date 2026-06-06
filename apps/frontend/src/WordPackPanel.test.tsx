@@ -464,6 +464,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       expect(within(queue).getAllByText('Ghosts').length).toBeGreaterThan(0);
       expect(within(queue).getAllByText('完了').length).toBeGreaterThan(0);
     });
+    expect(within(queue).getByRole('status')).toHaveTextContent('Ghosts の生成状態は完了です');
     const generatedBodies = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));

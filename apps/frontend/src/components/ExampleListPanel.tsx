@@ -294,17 +294,17 @@ export const ExampleListPanel: React.FC = () => {
         @media (max-width: 768px) {
           .ex-list-grid { grid-template-columns: 1fr; }
         }
-        .ex-card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 0.6rem; background:rgb(224, 183, 112); cursor: pointer; color: #111827; }
+        .ex-card { border: 1px solid var(--dict-border); border-radius: 8px; padding: 0.75rem; background: var(--dict-surface); cursor: pointer; color: var(--dict-text); }
         .ex-card-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.25rem; }
         .ex-select-checkbox { display: inline-flex; align-items: center; justify-content: center; }
         .ex-select-checkbox input { width: 1rem; height: 1rem; cursor: pointer; }
-        .ex-card h4 { margin: 0 0 0.25rem 0; font-size: 1.0em; }
+        .ex-card h3 { margin: 0 0 0.25rem 0; font-size: 1.0em; }
         .ex-meta {
           display: inline-flex;
           flex-wrap: wrap;
           gap: 0.4rem;
           font-size: 0.75em;
-          color: #6b7280;
+          color: var(--dict-muted);
         }
         /* メタ情報内のバッジはカード/リスト共通で読みやすい色と余白に統一する */
         .ex-meta-badge {
@@ -312,9 +312,15 @@ export const ExampleListPanel: React.FC = () => {
           align-items: center;
           gap: 0.2rem;
           padding: 0.1rem 0.35rem;
+          border: 1px solid color-mix(in srgb, var(--dict-accent) 35%, transparent);
           border-radius: 9999px;
-          background-color: rgba(30, 136, 229, 0.12);
-          color: #1565c0;
+          background-color: color-mix(in srgb, var(--dict-accent) 14%, var(--dict-surface-raised));
+          color: var(--dict-accent-strong);
+        }
+        body.theme-dark .ex-meta-badge {
+          border-color: rgba(147, 197, 253, 0.36);
+          background-color: rgba(47, 115, 255, 0.22);
+          color: #dbeafe;
         }
         .ex-actions { display: flex; gap: 0.5rem; margin-top: 0.4rem; flex-wrap: wrap; align-items: center; }
         .ex-actions button,
@@ -337,7 +343,7 @@ export const ExampleListPanel: React.FC = () => {
         .ex-en { font-weight: 600; }
         .ex-ja { margin-top: 0.3rem; }
         /* view-specific text colors */
-        .ex-list-container[data-view="card"] .ex-en { color: #111827; }
+        .ex-list-container[data-view="card"] .ex-en { color: var(--dict-text); }
         .ex-list-container[data-view="card"] .ex-ja { color: #374151; }
         .ex-list-container[data-view="list"] .ex-en { color:rgb(240, 230, 245); }
         .ex-list-container[data-view="list"] .ex-ja { color: #334155; }
@@ -508,7 +514,7 @@ export const ExampleListPanel: React.FC = () => {
                         </span>
                       </div>
                     </div>
-                    <h4 className="ex-en">{it.en}</h4>
+                    <h3 className="ex-en">{it.en}</h3>
                     <div className="ex-actions">
                       <button
                         type="button"

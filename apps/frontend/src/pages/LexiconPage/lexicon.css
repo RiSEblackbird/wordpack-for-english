@@ -139,7 +139,7 @@
   box-shadow: var(--lexicon-card-shadow);
 }
 
-.lexicon-rail {
+.lexicon-main .dictionary-rail {
   position: sticky;
   top: 1rem;
   display: grid;
@@ -481,7 +481,7 @@
     grid-template-columns: 1fr;
   }
 
-  .lexicon-rail {
+  .lexicon-main .dictionary-rail {
     position: static;
     max-height: none;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -502,7 +502,7 @@
     width: 100%;
   }
 
-  .lexicon-rail {
+  .lexicon-main .dictionary-rail {
     grid-template-columns: 1fr;
   }
 

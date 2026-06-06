@@ -124,13 +124,13 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
                 gap: '0.25rem',
                 padding: '0.25rem 0.5rem',
                 backgroundColor: count > 0 ? 'var(--color-accent-bg)' : 'var(--color-neutral-surface)',
-                color: count > 0 ? 'var(--color-accent)' : 'var(--color-subtle)',
+                color: count > 0 ? 'var(--color-accent)' : 'var(--dict-text)',
                 borderRadius: '4px',
                 border: `1px solid ${count > 0 ? 'var(--color-accent)' : 'var(--color-border)'}`,
               }}
             >
               <span style={{ fontWeight: 'bold' }}>{category}</span>
-              <span style={{ fontSize: '0.85em' }}>{count}件</span>
+              <span style={{ fontSize: '0.9em' }}>{count}件</span>
             </span>
           ))}
         </div>
@@ -170,7 +170,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
               borderRadius: 6,
               border: '1px solid #ffa726',
               backgroundColor: '#fff3e0',
-              color: '#ef6c00',
+              color: '#7a3700',
             }}
           >
             確認した ({packCheckedCount})
@@ -185,7 +185,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
               borderRadius: 6,
               border: '1px solid #81c784',
               backgroundColor: '#e8f5e9',
-              color: '#1b5e20',
+              color: '#0d4f18',
             }}
           >
             使える ({packLearnedCount})

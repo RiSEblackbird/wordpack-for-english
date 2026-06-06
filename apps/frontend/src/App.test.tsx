@@ -600,7 +600,24 @@ describe('App navigation', () => {
 
   it('adds safe-area classes for fixed controls on all layouts', async () => {
     const originalMatchMedia = window.matchMedia;
+    const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
     window.matchMedia = createMatchMediaMock(true);
+    HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRectMock() {
+      if (this instanceof HTMLElement && this.classList.contains('dictionary-bottom-nav')) {
+        return {
+          x: 0,
+          y: 760,
+          width: 360,
+          height: 96,
+          top: 760,
+          right: 360,
+          bottom: 856,
+          left: 0,
+          toJSON: () => ({}),
+        } as DOMRect;
+      }
+      return originalGetBoundingClientRect.call(this);
+    };
 
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = resolveUrl(input);
@@ -636,8 +653,12 @@ describe('App navigation', () => {
       await waitFor(() => {
         expect(toggle).toHaveClass('safe-area-adjusted');
         expect(guestBadge).not.toHaveClass('safe-area-adjusted');
+        expect(document.querySelector<HTMLElement>('.dictionary-shell')).toHaveStyle({
+          '--bottom-nav-height': '96px',
+        });
       });
     } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
       if (originalMatchMedia) {
         window.matchMedia = originalMatchMedia;
       } else {

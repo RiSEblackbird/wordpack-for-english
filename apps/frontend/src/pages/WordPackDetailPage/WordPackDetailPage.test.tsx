@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { describe, expect, it, vi } from 'vitest';
+import { NotificationsProvider } from '../../NotificationsContext';
 import { WordPackDetailPage } from './index';
 
 vi.mock('../../components/WordPackPanel', () => ({
@@ -16,11 +17,13 @@ describe('WordPackDetailPage', () => {
     const onBackToLexicon = vi.fn();
 
     render(
-      <WordPackDetailPage
-        focusRef={createRef<HTMLElement>()}
-        wordPackId="wp:test:alpha"
-        onBackToLexicon={onBackToLexicon}
-      />,
+      <NotificationsProvider persist={false}>
+        <WordPackDetailPage
+          focusRef={createRef<HTMLElement>()}
+          wordPackId="wp:test:alpha"
+          onBackToLexicon={onBackToLexicon}
+        />
+      </NotificationsProvider>,
     );
 
     expect(screen.getByRole('heading', { name: 'WordPack' })).toBeInTheDocument();

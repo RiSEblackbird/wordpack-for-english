@@ -47,4 +47,36 @@ test.describe('ゲストモード', () => {
       await expect(page.getByRole('button', { name: '作成を開始' })).toBeDisabled();
     });
   });
+
+  test('モバイル下部ナビの高さを本文下余白に反映する', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockConfig(page, { requestTimeoutMs: 20000, sessionAuthDisabled: false });
+
+    await page.route('**/api/auth/logout', ignoreRoute);
+    await page.route('**/api/auth/guest', (route) => route.fulfill(json({ mode: 'guest' })));
+    await page.route('**/api/word/packs?*', (route) =>
+      route.fulfill(json({ items: [{ id: 'wp:guest:1', lemma: 'guest', sense_title: 'guest' }], total: 1 })),
+    );
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'ゲスト閲覧モード' }).click();
+    await expect(page.getByRole('navigation', { name: 'モバイル主要メニュー' })).toBeVisible();
+
+    const metrics = await page.evaluate(() => {
+      const nav = document.querySelector<HTMLElement>('.dictionary-bottom-nav');
+      const shell = document.querySelector<HTMLElement>('.dictionary-shell');
+      const mainInner = document.querySelector<HTMLElement>('.main-inner');
+      if (!nav || !shell || !mainInner) {
+        throw new Error('bottom nav metrics target is missing');
+      }
+      const navHeight = Math.ceil(nav.getBoundingClientRect().height);
+      const reservedHeight = getComputedStyle(shell).getPropertyValue('--bottom-nav-height').trim();
+      const paddingBottom = Number.parseFloat(getComputedStyle(mainInner).paddingBottom);
+      return { navHeight, paddingBottom, reservedHeight };
+    });
+
+    expect(metrics.navHeight).toBeGreaterThan(0);
+    expect(metrics.reservedHeight).toBe(`${metrics.navHeight}px`);
+    expect(metrics.paddingBottom).toBeGreaterThanOrEqual(metrics.navHeight + 20);
+  });
 });

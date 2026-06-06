@@ -49,10 +49,10 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
       .ex-ja { color: var(--color-text); opacity: 0.9; margin-top: 2px; line-height: 1.6; }
       .ex-grammar { color: var(--color-subtle); font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
       .ex-level { font-weight: 600; margin: 0.25rem 0; color: var(--color-level); }
-      .lemma-highlight { color: #1565c0; }
+      .lemma-highlight { color: var(--dict-accent); }
       .lemma-known { font-weight: 700; }
       .lemma-token { overflow-wrap: anywhere; word-break: break-word; }
-      .lemma-unknown { color: #ef6c00; text-decoration: underline dotted #ef6c00; }
+      .lemma-unknown { color: #f59e0b; text-decoration: underline dotted #f59e0b; }
       .lemma-tooltip { position: fixed; z-index: 10000; max-width: min(320px, calc(100vw - 16px)); overflow-wrap: anywhere; white-space: normal; background: #212121; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.3); pointer-events: none; }
       .ex-en[role="button"] { cursor: pointer; }
       .ex-en[role="button"]:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
