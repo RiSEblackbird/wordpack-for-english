@@ -201,8 +201,10 @@ describe('ExplorePage', () => {
     expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
     const user = userEvent.setup();
 
+    const createAction = await screen.findByRole('button', { name: '「resilient」のWordPackを作成' });
+
     await act(async () => {
-      await user.click(screen.getAllByRole('button', { name: /WordPackを作成/ })[0]);
+      await user.click(createAction);
     });
 
     expect(await screen.findByText(/空WordPackを作成しました/)).toBeInTheDocument();
@@ -244,8 +246,8 @@ describe('ExplorePage', () => {
     render(<ExplorePage />);
 
     expect(await screen.findByRole('button', { name: 'robust を接続元に選ぶ' })).toBeInTheDocument();
-    const guestCreateAction = screen.getByRole('button', {
-      name: /resilient.*ログインするとWordPackを作成できます/,
+    const guestCreateAction = await screen.findByRole('button', {
+      name: '「resilient」はログインするとWordPackを作成できます',
     });
 
     expect(guestCreateAction).toBeDisabled();
