@@ -1,5 +1,6 @@
 .dictionary-shell {
   --main-max-width: min(1180px, calc(100vw - 2rem));
+  --bottom-nav-height: 0px;
   --lexicon-blue: #2f73ff;
   --lexicon-blue-strong: #1d5eea;
   --lexicon-panel: rgba(8, 18, 31, 0.94);
@@ -728,7 +729,10 @@ body.theme-dark .dictionary-reader-canvas {
 
 @media (max-width: 640px) {
   .dictionary-shell .main-inner {
-    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    padding-bottom: max(
+      calc(5.5rem + env(safe-area-inset-bottom)),
+      calc(var(--bottom-nav-height, 0px) + 1.75rem + env(safe-area-inset-bottom))
+    );
   }
 
   .dictionary-page-title h2 {

@@ -7,7 +7,7 @@
 - 判定: Pass
 - P0件数: 0
 - P1件数: 0
-- P2件数: 2
+- P2件数: 1
 
 ## 2. ユーザー価値
 
@@ -101,8 +101,8 @@
 - 実装を落とす観点で見つけた問題: 初回実装ではExploreモバイルが2カラムのまま潰れ、axeで複数のコントラスト違反が出た。
 - P0候補: モバイルExploreの内容潰れ、低コントラスト、キュー表示の画面差。
 - 対応: Exploreモバイル1カラム化、right railのregion化、低コントラスト修正、AppShellの旧トースト削除。
-- 証跡不足: 実ユーザーテストは未実施。
-- 残リスク: 下部ナビは既存の固定表示で、全スクロール位置の手動確認は未網羅。
+- 証跡不足: 実ユーザーテストは未実施。ただし高速レビューで初見タスク、狭幅、文字拡大、固定下部ナビ重なりを再点検した。
+- 残リスク: 実ユーザー観察での迷いは未検証。下部ナビ重なりは実測高さに基づく余白へ変更して対応済み。
 
 ## 11. 指摘一覧
 
@@ -112,8 +112,8 @@
 | P0 | Explore mobile | 内部2カラムが潰れる | 初見で読めず操作しにくい | 狭幅で1カラム化 | 対応済 |
 | P0 | Examples/Shelves/Detail | コントラスト違反 | 読めないユーザーが出る | 色トークンとチップ色を修正 | 対応済 |
 | P1 | Reader/Examples/Settings | 画面骨格がLexiconと不統一 | 品質差、現在地の理解低下 | 共通workspace/railへ統一 | 対応済 |
-| P2 | モバイル下部ナビ | 固定ナビが一部スクロール位置で本文に重なる可能性 | 読み進め時に一時的に隠れる | 後続でbottom navの表示方式を再検討 | 未対応 |
-| P2 | 実ユーザーテスト | AIレビューと自動検査のみ | 実利用の迷いは未検証 | ユーザーテストで補完 | 未対応 |
+| P2 | モバイル下部ナビ | 固定ナビが一部スクロール位置で本文に重なる可能性 | 読み進め時に一時的に隠れる | bottom navの実測高さを本文下余白へ反映 | 対応済 |
+| P2 | 実ユーザーテスト | AIレビューと自動検査のみ | 実利用の迷いは未検証 | 高速レビューで補完。実ユーザー観察は外部協力が必要 | 高速レビュー済 |
 
 ## 12. 証跡
 
@@ -131,13 +131,23 @@
   - `implemented-mobile-explore.png`
   - `implemented-mobile-settings.png`
 - 自動検査: Playwrightで7画面の `生成キュー` 表示が各1件、`.ntf-card` が0件、axe違反0。
-- 取得できなかった証跡と理由: 実ユーザー観察は未実施。
+- 取得できなかった証跡と理由: 実ユーザー観察は未実施。ユーザー本人または第三者の観察参加が必要なため、AI高速レビューとは区別する。
+
+## 12.1 高速レビュー追補
+
+- 実施日: 2026-06-07
+- 対象: Reader / Examples / Explore / Shelves / Settings / WordPack詳細、モバイル下部ナビ、生成キュー右レール
+- 観点: 初見3秒理解、最初の有意味な行動、スクロール終端、固定下部ナビ、文字拡大、キーボード/支援技術上の状態通知
+- 結果: 下部ナビは固定値余白ではなく、`dictionary-bottom-nav` の実測高さを `--bottom-nav-height` として本文下余白へ反映する実装に変更した。生成キューは `role="status"` / `aria-live="polite"` の読み上げを追加済み。
+- 判定: UI上の既知P2は対応済み。実ユーザーの迷いは高速レビューでは事実確認できないため、未実施検証として明示する。
 
 ## 13. 実行した検証
 
 - [x] typecheck: `cd apps/frontend && npx tsc -p tsconfig.json`
 - [x] frontend tests: `cd apps/frontend && npm test -- --coverage --silent`
+- [x] App navigation focused test: `cd apps/frontend && npm test -- App.test.tsx --coverage=false --silent`
 - [x] Playwright smoke: `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts`
+- [x] Playwright visual regression: `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts`
 - [x] diff check: `git diff --check`
 - [x] accessibility check: Playwright + axe-core、Lexicon / Reader / Examples / Explore / Shelves / Settings / WordPack詳細、違反0
 - [x] responsive check: 390px幅でReader / Explore / Settings、違反0
@@ -148,5 +158,5 @@
 
 | 未実行検証 | 理由 | 残リスク | 後続対応 |
 |---|---|---|---|
-| 実ユーザーテスト | 今回は実装と自動/目視検証が対象 | 初見説明の自然さは仮説 | ユーザー観察で補完 |
-| 全モバイル画面の全スクロール位置目視 | 代表3画面で確認 | 固定下部ナビの一部重なり | 後続でbottom navの仕様改善 |
+| 実ユーザーテスト | 外部参加者の観察が必要 | 初見説明の自然さは仮説 | 高速レビューで補完済。実ユーザー観察は別途実施 |
+| 全モバイル画面の全スクロール位置目視 | 代表画面と自動検証で確認 | 端末固有表示差は残る | bottom nav実測高さを本文下余白へ反映済 |
