@@ -1,0 +1,996 @@
+.lexicon-main {
+  --lexicon-blue: #2f73ff;
+  --lexicon-blue-strong: #1d5eea;
+  --lexicon-panel: rgba(13, 24, 39, 0.92);
+  --lexicon-panel-raised: rgba(18, 31, 50, 0.96);
+  --lexicon-panel-soft: rgba(21, 35, 56, 0.9);
+  --lexicon-line: rgba(125, 146, 178, 0.28);
+  --lexicon-line-strong: rgba(142, 164, 199, 0.42);
+  --lexicon-muted: #aeb9cb;
+  --lexicon-faint: #8290a6;
+  --lexicon-success: #69d391;
+  --lexicon-warning: #f7aa3b;
+  --lexicon-danger: #ff6b72;
+}
+
+.lexicon-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 352px);
+  align-items: start;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.lexicon-primary {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.lexicon-page-heading {
+  padding-top: 1.1rem;
+}
+
+.lexicon-page-heading .dictionary-page-title h2 {
+  font-size: clamp(2.4rem, 4vw, 3.15rem);
+  letter-spacing: 0;
+}
+
+.lexicon-top-actions {
+  align-self: center;
+}
+
+.lexicon-create-shortcut {
+  min-height: 3rem;
+  padding-inline: 1rem;
+  border-color: rgba(93, 145, 255, 0.85);
+  background: linear-gradient(180deg, #347cff, #1f61de);
+  color: #ffffff;
+  box-shadow: 0 14px 32px rgba(31, 97, 222, 0.28);
+}
+
+.lexicon-list-section {
+  padding: 1rem;
+  border-color: var(--lexicon-line);
+  background: rgba(12, 22, 36, 0.72);
+  box-shadow: 0 18px 70px rgba(0, 0, 0, 0.16);
+}
+
+.lexicon-rail {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.generation-queue-panel,
+.wordpack-create-panel {
+  border: 1px solid var(--lexicon-line);
+  border-radius: 10px;
+  background: var(--lexicon-panel);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+.generation-queue-panel {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.9rem;
+}
+
+.generation-queue-panel__header,
+.wordpack-create-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.generation-queue-panel h2,
+.wordpack-create-panel h2 {
+  margin: 0;
+  color: var(--dict-text);
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+
+.generation-queue-count,
+.wordpack-create-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.65rem;
+  min-height: 1.65rem;
+  padding: 0 0.45rem;
+  border-radius: 7px;
+  background: rgba(130, 151, 186, 0.18);
+  color: var(--dict-text);
+  font-weight: 800;
+  font-size: 0.83rem;
+}
+
+.generation-queue-section {
+  display: grid;
+  gap: 0.55rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 8px;
+  background: rgba(7, 16, 28, 0.48);
+  padding: 0.65rem;
+}
+
+.generation-queue-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.generation-queue-section__header h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--dict-text);
+}
+
+.generation-queue-section__header span {
+  min-width: 1.45rem;
+  min-height: 1.45rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(130, 151, 186, 0.18);
+  color: var(--lexicon-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.generation-queue-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.generation-queue-item {
+  display: grid;
+  grid-template-columns: 1.7rem minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: 0.72rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 8px;
+  background: rgba(18, 31, 50, 0.78);
+}
+
+.generation-queue-item__status {
+  width: 1.45rem;
+  height: 1.45rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(47, 115, 255, 0.16);
+  color: var(--lexicon-blue);
+  font-weight: 900;
+}
+
+.generation-queue-item.is-success .generation-queue-item__status {
+  background: rgba(105, 211, 145, 0.18);
+  color: var(--lexicon-success);
+}
+
+.generation-queue-item.is-error .generation-queue-item__status {
+  background: rgba(255, 107, 114, 0.18);
+  color: var(--lexicon-danger);
+}
+
+.generation-queue-spinner {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid rgba(91, 138, 255, 0.28);
+  border-top-color: var(--lexicon-blue);
+  border-radius: 999px;
+  animation: generation-queue-spin 0.9s linear infinite;
+}
+
+@keyframes generation-queue-spin {
+  to { transform: rotate(360deg); }
+}
+
+.generation-queue-item__body {
+  min-width: 0;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.generation-queue-item__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.generation-queue-item__heading strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dict-text);
+}
+
+.generation-queue-item__heading span {
+  flex: 0 0 auto;
+  padding: 0.12rem 0.4rem;
+  border-radius: 5px;
+  background: rgba(47, 115, 255, 0.18);
+  color: #8fb4ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.generation-queue-item.is-success .generation-queue-item__heading span {
+  background: rgba(105, 211, 145, 0.18);
+  color: var(--lexicon-success);
+}
+
+.generation-queue-item.is-error .generation-queue-item__heading span {
+  background: rgba(255, 107, 114, 0.18);
+  color: var(--lexicon-danger);
+}
+
+.generation-queue-item p,
+.generation-queue-empty {
+  margin: 0;
+  color: var(--lexicon-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.generation-queue-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  color: var(--lexicon-faint);
+  font-size: 0.78rem;
+}
+
+.generation-queue-progress {
+  height: 0.42rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(130, 151, 186, 0.28);
+}
+
+.generation-queue-progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2f73ff, #71a1ff);
+}
+
+.generation-queue-history-button {
+  min-height: 2.35rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--lexicon-muted);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.wordpack-create-panel {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.95rem;
+}
+
+.wordpack-create-panel__field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.wordpack-create-panel__field label {
+  color: var(--lexicon-muted);
+  font-size: 0.83rem;
+  font-weight: 800;
+}
+
+.wordpack-create-panel input,
+.wordpack-create-panel select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.65rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 8px;
+  background: rgba(8, 17, 31, 0.74);
+  color: var(--dict-text);
+  padding: 0.6rem 0.7rem;
+}
+
+.wordpack-create-panel input:focus-visible,
+.wordpack-create-panel select:focus-visible {
+  outline: 3px solid rgba(47, 115, 255, 0.34);
+  outline-offset: 1px;
+  border-color: rgba(80, 135, 255, 0.9);
+}
+
+.wordpack-create-panel__help {
+  margin: 0;
+  color: var(--lexicon-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.wordpack-create-panel__help.is-invalid {
+  color: #ff8b8f;
+}
+
+.wordpack-create-panel__actions {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.wordpack-create-panel__actions button {
+  min-height: 2.6rem;
+  border-radius: 8px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.wordpack-create-panel__primary {
+  border: 1px solid rgba(93, 145, 255, 0.78);
+  background: linear-gradient(180deg, #347cff, #1f61de);
+  color: #ffffff;
+}
+
+.wordpack-create-panel__secondary {
+  border: 1px solid var(--lexicon-line);
+  background: rgba(130, 151, 186, 0.14);
+  color: var(--dict-text);
+}
+
+.wordpack-create-panel__actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.wordpack-create-panel__advanced {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+@media (max-width: 1180px) {
+  .lexicon-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .lexicon-rail {
+    position: static;
+    max-height: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+@media (max-width: 720px) {
+  .lexicon-page-heading {
+    align-items: stretch;
+  }
+
+  .lexicon-top-actions,
+  .lexicon-create-shortcut {
+    width: 100%;
+  }
+
+  .lexicon-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .wordpack-create-panel__advanced {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lexicon-list-section .wp-list-container {
+  display: grid;
+  gap: 1rem;
+}
+
+.lexicon-list-section .wp-recent-panel {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 10px;
+  background: rgba(12, 22, 36, 0.74);
+}
+
+.lexicon-list-section .wp-recent-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0;
+  max-height: none;
+}
+
+.lexicon-list-section .wp-list-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.2rem 1rem;
+  margin: 0;
+  max-height: none;
+}
+
+.lexicon-list-section .wp-list-header .wp-refresh-button {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+
+.lexicon-list-section .wp-recent-panel h2,
+.lexicon-list-section .wp-list-header h2 {
+  margin: 0;
+  color: var(--dict-text);
+  font-size: 1.16rem;
+  line-height: 1.25;
+}
+
+.lexicon-list-section .wp-recent-panel p,
+.lexicon-list-section .wp-list-summary {
+  margin: 0.25rem 0 0;
+  color: var(--lexicon-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.lexicon-list-section .wp-list-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+}
+
+.lexicon-list-section .wp-list-summary span {
+  color: var(--lexicon-faint);
+}
+
+.lexicon-list-section .wp-recent-panel a {
+  color: #8fb4ff;
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.lexicon-list-section .wp-recent-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.lexicon-list-section .wp-recent-item {
+  min-width: 0;
+  min-height: 4rem;
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.6rem;
+  text-align: left;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 8px;
+  background: rgba(21, 35, 56, 0.78);
+  color: var(--dict-text);
+  padding: 0.75rem;
+  cursor: pointer;
+}
+
+.lexicon-list-section .wp-recent-item:hover,
+.lexicon-list-section .wp-recent-item:focus-visible {
+  border-color: rgba(93, 145, 255, 0.72);
+  background: rgba(27, 44, 70, 0.9);
+}
+
+.lexicon-list-section .wp-recent-item:focus-visible {
+  outline: 3px solid rgba(47, 115, 255, 0.32);
+  outline-offset: 2px;
+}
+
+.lexicon-list-section .wp-recent-item strong,
+.lexicon-list-section .wp-recent-item small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lexicon-list-section .wp-recent-item small {
+  margin-top: 0.15rem;
+  color: var(--lexicon-muted);
+  font-size: 0.8rem;
+}
+
+.lexicon-list-section .wp-recent-bookmark {
+  width: 1rem;
+  height: 1.45rem;
+  border-radius: 4px 4px 2px 2px;
+  background: #8d74ff;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+}
+
+.lexicon-list-section .wp-recent-bookmark-2 {
+  background: #2f73ff;
+}
+
+.lexicon-list-section .wp-recent-bookmark-3 {
+  background: #62d58b;
+}
+
+.lexicon-list-section .wp-refresh-button,
+.lexicon-list-section .wp-list-header > button {
+  min-height: 2.45rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 8px;
+  background: rgba(245, 248, 255, 0.96);
+  color: #0b1220;
+  padding: 0.45rem 0.85rem;
+  font-weight: 900;
+}
+
+.lexicon-list-section .wp-view-toggle {
+  justify-content: flex-end;
+  margin: 0;
+}
+
+.lexicon-list-section .wp-toggle-btn {
+  min-height: 2.5rem;
+  border-color: var(--lexicon-line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lexicon-muted);
+  font-weight: 800;
+  padding: 0.45rem 0.85rem;
+}
+
+.lexicon-list-section .wp-toggle-btn[aria-pressed="true"] {
+  border-color: rgba(93, 145, 255, 0.5);
+  background: rgba(47, 115, 255, 0.18);
+  color: #8fb4ff;
+}
+
+.lexicon-list-section .wp-selection-bar {
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 9px;
+  background: rgba(8, 17, 31, 0.58);
+  color: var(--lexicon-muted);
+  font-size: 0.9rem;
+}
+
+.lexicon-list-section .wp-selection-bar button {
+  min-height: 2.35rem;
+  border-color: var(--lexicon-line);
+  border-radius: 7px;
+  background: rgba(130, 151, 186, 0.14);
+  color: var(--dict-text);
+  font-weight: 800;
+}
+
+.lexicon-list-section .wp-selection-bar button:disabled {
+  color: var(--lexicon-faint);
+  background: rgba(130, 151, 186, 0.08);
+}
+
+.lexicon-list-section .wp-selection-bar button:last-child:not(:disabled) {
+  border-color: rgba(255, 107, 114, 0.55);
+  color: #ff8b8f;
+  background: rgba(255, 107, 114, 0.08);
+}
+
+.lexicon-list-section .wp-sort-controls {
+  display: grid;
+  grid-template-columns: auto minmax(9rem, 12rem) auto auto minmax(12rem, auto) minmax(10rem, 11rem) minmax(12rem, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 9px;
+  background: rgba(8, 17, 31, 0.48);
+}
+
+.lexicon-list-section .wp-sort-controls label {
+  color: var(--lexicon-muted);
+  font-weight: 800;
+}
+
+.lexicon-list-section .wp-sort-select,
+.lexicon-list-section .wp-filter-select,
+.lexicon-list-section .wp-search-input {
+  min-height: 2.5rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 8px;
+  background: rgba(13, 24, 39, 0.94);
+  color: var(--dict-text);
+  padding: 0.5rem 0.65rem;
+}
+
+.lexicon-list-section .wp-search-input {
+  min-width: 0;
+}
+
+.lexicon-list-section .wp-sort-button,
+.lexicon-list-section .wp-search-button {
+  min-height: 2.5rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 8px;
+  background: rgba(130, 151, 186, 0.14);
+  color: var(--dict-text);
+  font-weight: 900;
+}
+
+.lexicon-list-section .wp-search-button {
+  border-color: rgba(93, 145, 255, 0.56);
+  background: rgba(47, 115, 255, 0.18);
+  color: #a9c4ff;
+}
+
+.lexicon-list-section .wp-sort-button.active {
+  border-color: rgba(93, 145, 255, 0.66);
+  background: rgba(47, 115, 255, 0.2);
+  color: #a9c4ff;
+}
+
+.lexicon-list-section .wp-list-grid {
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 0.75rem;
+}
+
+.lexicon-list-section .wp-card {
+  position: relative;
+  min-height: 12.7rem;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 0.65rem;
+  border: 1px solid var(--lexicon-line);
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at top right, rgba(47, 115, 255, 0.1), transparent 34%),
+    var(--lexicon-panel-raised);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  color: var(--dict-text);
+  padding: 0.9rem;
+  cursor: pointer;
+}
+
+.lexicon-list-section .wp-card:hover,
+.lexicon-list-section .wp-card:focus-within {
+  border-color: rgba(93, 145, 255, 0.62);
+  background:
+    radial-gradient(circle at top right, rgba(47, 115, 255, 0.15), transparent 34%),
+    rgba(21, 35, 56, 0.98);
+}
+
+.lexicon-list-section .wp-card.is-selected {
+  box-shadow: 0 0 0 2px rgba(47, 115, 255, 0.38);
+}
+
+.lexicon-list-section .wp-card-header {
+  display: grid;
+  grid-template-columns: 1.55rem minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.lexicon-list-section .wp-card-header-main {
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.lexicon-list-section .wp-card-title {
+  margin: 0;
+  color: var(--dict-text);
+  font-size: 1rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.lexicon-list-section .wp-card-description {
+  margin: 0;
+  color: var(--lexicon-muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.lexicon-list-section .wp-card-more {
+  width: 2rem;
+  height: 2rem;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--lexicon-muted);
+  font-size: 1.2rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.lexicon-list-section .wp-card-more:hover,
+.lexicon-list-section .wp-card-more:focus-visible {
+  background: rgba(130, 151, 186, 0.14);
+  color: var(--dict-text);
+}
+
+.lexicon-list-section .wp-card-menu {
+  position: absolute;
+  top: 3rem;
+  right: 0.75rem;
+  z-index: 3;
+  min-width: 11rem;
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.35rem;
+  border: 1px solid var(--lexicon-line-strong);
+  border-radius: 8px;
+  background: rgba(8, 17, 31, 0.98);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.32);
+}
+
+.lexicon-list-section .wp-card-menu button {
+  width: 100%;
+  min-height: 2.25rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--dict-text);
+  text-align: left;
+  padding: 0.45rem 0.55rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lexicon-list-section .wp-card-menu button:hover,
+.lexicon-list-section .wp-card-menu button:focus-visible {
+  background: rgba(130, 151, 186, 0.16);
+  outline: 0;
+}
+
+.lexicon-list-section .wp-card-menu .wp-card-menu-danger {
+  color: #ff8b8f;
+}
+
+.lexicon-list-section .wp-card-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.lexicon-list-section .wp-card-actions-upper,
+.lexicon-list-section .wp-card-actions-lower,
+.lexicon-list-section .wp-card-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.lexicon-list-section .wp-card-quick-actions {
+  margin-left: 2.2rem;
+}
+
+.lexicon-list-section .wp-open-button,
+.lexicon-list-section .wp-card-tts-btn,
+.lexicon-list-section .wp-sense-btn,
+.lexicon-list-section .wp-generate-btn,
+.lexicon-list-section .wp-danger-button,
+.lexicon-list-section .wp-index-tts-btn {
+  min-height: 2.25rem;
+  border-radius: 7px;
+  padding: 0.42rem 0.75rem;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.lexicon-list-section .wp-open-button {
+  min-width: 5.8rem;
+  border: 1px solid rgba(93, 145, 255, 0.72);
+  background: linear-gradient(180deg, #347cff, #1f61de);
+  color: #ffffff;
+}
+
+.lexicon-list-section .wp-card-tts-btn,
+.lexicon-list-section .wp-sense-btn,
+.lexicon-list-section .wp-index-tts-btn {
+  border: 1px solid var(--lexicon-line);
+  background: rgba(130, 151, 186, 0.12);
+  color: var(--dict-text);
+}
+
+.lexicon-list-section .wp-generate-btn {
+  border: 1px solid rgba(105, 211, 145, 0.46);
+  background: rgba(105, 211, 145, 0.12);
+  color: #8bedad;
+}
+
+.lexicon-list-section .wp-danger-button {
+  border: 1px solid rgba(255, 107, 114, 0.5);
+  background: rgba(255, 107, 114, 0.08);
+  color: #ff8b8f;
+}
+
+.lexicon-list-section .wp-card-meta {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  color: var(--lexicon-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.lexicon-list-section .wp-card-public {
+  margin: 0;
+}
+
+.lexicon-list-section .wp-card-public label {
+  color: var(--dict-text) !important;
+  font-size: 0.8rem !important;
+}
+
+.lexicon-list-section .wp-card-public [aria-label="ゲスト公開の説明"],
+.lexicon-list-section .wp-card-public div[id$="-desc"] {
+  color: var(--lexicon-faint) !important;
+  font-size: 0.76rem !important;
+}
+
+.lexicon-list-section .wp-example-tags {
+  margin: 0;
+}
+
+.lexicon-list-section .wp-example-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.lexicon-list-section .wp-example-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  min-height: 1.45rem;
+  padding: 0.12rem 0.43rem;
+  border: 1px solid rgba(130, 151, 186, 0.34);
+  border-radius: 5px;
+  background: rgba(130, 151, 186, 0.1);
+  color: var(--lexicon-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.lexicon-list-section .wp-example-tag.has-count {
+  border-color: rgba(93, 145, 255, 0.54);
+  background: rgba(47, 115, 255, 0.14);
+  color: #a9c4ff;
+}
+
+.lexicon-list-section .wp-example-tag.is-empty {
+  border-color: rgba(247, 170, 59, 0.52);
+  background: rgba(247, 170, 59, 0.13);
+  color: #ffc46e;
+}
+
+.lexicon-list-section .wp-progress-badges {
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.lexicon-list-section .wp-progress-badge {
+  min-height: 1.55rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+}
+
+.lexicon-list-section .wp-progress-badge.learned {
+  border-color: rgba(105, 211, 145, 0.5);
+  background: rgba(105, 211, 145, 0.14);
+  color: #8bedad;
+}
+
+.lexicon-list-section .wp-progress-badge.checked {
+  border-color: rgba(247, 170, 59, 0.5);
+  background: rgba(247, 170, 59, 0.13);
+  color: #ffc46e;
+}
+
+.lexicon-list-section .wp-card-sense-title {
+  margin: 0 0 0 2.2rem;
+  border: 1px solid rgba(93, 145, 255, 0.34);
+  border-left: 3px solid #5d91ff;
+  border-radius: 8px;
+  background: rgba(47, 115, 255, 0.1);
+  color: var(--dict-text);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  padding: 0.5rem 0.6rem;
+}
+
+.lexicon-list-section .wp-select-checkbox input {
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: var(--lexicon-blue);
+}
+
+.lexicon-list-section .wp-index-grid {
+  gap: 0.45rem;
+}
+
+.lexicon-list-section .wp-index-item {
+  border: 1px solid var(--lexicon-line);
+  border-radius: 8px;
+  background: rgba(18, 31, 50, 0.78);
+  color: var(--dict-text);
+  padding: 0.65rem;
+}
+
+.lexicon-list-section .wp-index-title {
+  color: var(--dict-text);
+  font-size: 0.95rem;
+}
+
+.lexicon-list-section .wp-index-sense {
+  background: rgba(47, 115, 255, 0.12);
+  color: var(--lexicon-muted);
+}
+
+.lexicon-list-section .wp-index-meta {
+  color: var(--lexicon-muted);
+  font-size: 0.8rem;
+}
+
+.lexicon-list-section .wp-empty {
+  border-color: var(--lexicon-line);
+  color: var(--lexicon-muted);
+}
+
+@media (max-width: 1320px) {
+  .lexicon-list-section .wp-sort-controls {
+    grid-template-columns: repeat(4, minmax(0, auto));
+  }
+
+  .lexicon-list-section .wp-search-input {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 760px) {
+  .lexicon-list-section .wp-recent-list {
+    grid-template-columns: 1fr;
+  }
+
+  .lexicon-list-section .wp-list-header,
+  .lexicon-list-section .wp-recent-panel-header {
+    flex-direction: column;
+  }
+
+  .lexicon-list-section .wp-sort-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .lexicon-list-section .wp-search-input {
+    grid-column: auto;
+  }
+
+  .lexicon-list-section .wp-view-toggle {
+    justify-content: stretch;
+  }
+
+  .lexicon-list-section .wp-view-toggle button {
+    flex: 1;
+  }
+}

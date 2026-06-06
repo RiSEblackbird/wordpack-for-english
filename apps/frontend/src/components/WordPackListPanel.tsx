@@ -31,30 +31,11 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false, 
   const resolvedDisabled = disabled || isGuest;
   return (
     <GuestLock isGuest={isGuest}>
-      <button 
-        className="danger" 
+      <button
+        className="wp-danger-button"
         onClick={onClick}
         disabled={disabled}
-        style={{
-          padding: '0.1rem 0.4rem',
-          fontSize: '0.55em',
-          border: '1px solid #d32f2f',
-          borderRadius: '4px',
-          background: 'rgb(234, 230, 217)',
-          cursor: resolvedDisabled ? 'not-allowed' : 'pointer',
-          color: '#d32f2f',
-          opacity: resolvedDisabled ? 0.6 : 1
-        }}
-        onMouseEnter={(e) => {
-          if (!resolvedDisabled) {
-            e.currentTarget.style.background = '#ffebee';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!resolvedDisabled) {
-            e.currentTarget.style.background = 'rgb(234, 230, 217)';
-          }
-        }}
+        aria-disabled={resolvedDisabled}
       >
         削除
       </button>
@@ -156,6 +137,7 @@ export const WordPackListPanel: React.FC = () => {
   const [senseOpenIds, setSenseOpenIds] = useState<Set<string>>(() => new Set());
   const [showAllSense, setShowAllSense] = useState(persistedState.showAllSense);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(() => new Set());
   const [guestPublicUpdatingIds, setGuestPublicUpdatingIds] = useState<Set<string>>(() => new Set());
   const { run: runAbortable } = useAbortableAsync();
@@ -571,6 +553,10 @@ export const WordPackListPanel: React.FC = () => {
     setSelectedIds((prev) => toggleSetValue(prev, id));
   }, []);
 
+  const toggleActionMenu = useCallback((id: string) => {
+    setActionMenuOpenId((prev) => (prev === id ? null : id));
+  }, []);
+
   useEffect(() => {
     if (showAllSense) {
       setSenseOpenIds(new Set(wordPacks.map((wp) => wp.id)));
@@ -584,6 +570,21 @@ export const WordPackListPanel: React.FC = () => {
 
   const hasNext = offset + PAGE_LIMIT < total;
   const hasPrev = offset > 0;
+  const generatedCount = normalizedWordPacks.filter((wp) => wp.totalExamples > 0).length;
+  const emptyCount = normalizedWordPacks.length - generatedCount;
+  const recentWordPacks = useMemo(
+    () =>
+      [...normalizedWordPacks]
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, 3),
+    [normalizedWordPacks],
+  );
+  const openPreview = useCallback((wordPackId: string) => {
+    setActionMenuOpenId(null);
+    setPreviewWordPackId(wordPackId);
+    setPreviewOpen(true);
+    setModalOpen(true);
+  }, [setModalOpen]);
 
   return (
     <section>
@@ -703,9 +704,42 @@ export const WordPackListPanel: React.FC = () => {
       `}</style>
 
       <div className="wp-list-container">
+        {wordPacks.length > 3 && recentWordPacks.length > 0 ? (
+          <section className="wp-recent-panel" aria-labelledby="wp-recent-heading">
+            <div className="wp-recent-panel-header">
+              <div>
+                <h2 id="wp-recent-heading">最近開いたWordPack</h2>
+                <p>直近で更新された辞書記事へすぐ戻れます。</p>
+              </div>
+              <a href="#wp-saved-list-heading">すべて見る</a>
+            </div>
+            <div className="wp-recent-list">
+              {recentWordPacks.map((wp, index) => (
+                <button
+                  key={wp.id}
+                  type="button"
+                  className="wp-recent-item"
+                  onClick={() => openPreview(wp.id)}
+                >
+                  <span className={`wp-recent-bookmark wp-recent-bookmark-${index + 1}`} aria-hidden="true" />
+                  <span>
+                    <strong>{wp.lemma}</strong>
+                    <small>{formatDate(wp.updated_at)}に更新</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <div className="wp-list-header">
-          <h2>保存済みWordPack一覧</h2>
-          <button onClick={() => loadWordPacks(offset)} disabled={loading}>
+          <h2 id="wp-saved-list-heading">保存済みWordPack一覧</h2>
+          <p className="wp-list-summary">
+            {total}件中 {sortedWordPacks.length}件を表示
+            <span>生成済み {generatedCount}件</span>
+            <span>未生成 {emptyCount}件</span>
+          </p>
+          <button className="wp-refresh-button" onClick={() => loadWordPacks(offset)} disabled={loading}>
             更新
           </button>
         </div>
@@ -810,13 +844,9 @@ export const WordPackListPanel: React.FC = () => {
                 {sortedWordPacks.map((wp) => (
                   <div
                     key={wp.id}
-                    className="wp-card"
+                    className={`wp-card${selectedIds.has(wp.id) ? ' is-selected' : ''}${wp.is_empty ? ' is-empty' : ''}`}
                     data-testid="wp-card"
-                    onClick={() => { 
-                      setPreviewWordPackId(wp.id); 
-                      setPreviewOpen(true);
-                      setModalOpen(true);
-                    }}
+                    onClick={() => openPreview(wp.id)}
                   >
                     <div className="wp-card-header">
                       <label
@@ -832,7 +862,66 @@ export const WordPackListPanel: React.FC = () => {
                       </label>
                       <div className="wp-card-header-main">
                         <h3 className="wp-card-title">{wp.lemma}</h3>
+                        <p className="wp-card-description">
+                          {wp.sense_title?.trim() || (wp.is_empty ? '例文を追加すると学習パックとして使えます。' : '用例と語義をまとめた学習パックです。')}
+                        </p>
                       </div>
+                      <button
+                        type="button"
+                        className="wp-card-more"
+                        aria-label={`${wp.lemma} のその他の操作`}
+                        aria-expanded={actionMenuOpenId === wp.id}
+                        aria-controls={`wp-action-menu-${wp.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleActionMenu(wp.id);
+                        }}
+                      >
+                        …
+                      </button>
+                      {actionMenuOpenId === wp.id ? (
+                        <div
+                          id={`wp-action-menu-${wp.id}`}
+                          className="wp-card-menu"
+                          role="menu"
+                          aria-label={`${wp.lemma} の操作メニュー`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button type="button" role="menuitem" onClick={() => openPreview(wp.id)}>
+                            開く
+                          </button>
+                          {wp.is_empty ? (
+                            <GuestLock isGuest={isGuest}>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setActionMenuOpenId(null);
+                                  generateWordPack(wp);
+                                }}
+                                disabled={loading || generatingIds.has(wp.id)}
+                              >
+                                例文を生成
+                              </button>
+                            </GuestLock>
+                          ) : null}
+                          <GuestLock isGuest={isGuest}>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="wp-card-menu-danger"
+                              onClick={(e) => {
+                                setActionMenuOpenId(null);
+                                deleteWordPack(wp);
+                                e.stopPropagation();
+                              }}
+                              disabled={loading}
+                            >
+                              削除
+                            </button>
+                          </GuestLock>
+                        </div>
+                      ) : null}
                       <div className="wp-card-actions" onClick={(e) => e.stopPropagation()}>
                         <div className="wp-card-actions-upper" role="group" aria-label="カード操作 上段">
                           <TTSButton text={wp.lemma} className="wp-card-tts-btn" />
@@ -869,6 +958,15 @@ export const WordPackListPanel: React.FC = () => {
                         </div>
                       </div>
                     </div>
+                    <div className="wp-card-quick-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="wp-open-button"
+                        onClick={() => openPreview(wp.id)}
+                      >
+                        開く
+                      </button>
+                    </div>
                     {(showAllSense || senseOpenIds.has(wp.id)) && (
                       <div className="wp-card-sense-title" data-testid="wp-card-sense-title">
                         {resolveSenseTitle(wp.sense_title)}
@@ -880,7 +978,7 @@ export const WordPackListPanel: React.FC = () => {
                         <span className="wp-progress-badge learned">学 {wp.learned_count}</span>
                         <span className="wp-progress-badge checked">確 {wp.checked_only_count}</span>
                       </div>
-                      <div style={{ marginTop: '0.35rem' }}>
+                      <div className="wp-card-public">
                         <GuestPublicToggle
                           isGuest={isGuest}
                           checked={Boolean(wp.guest_public)}
@@ -892,37 +990,17 @@ export const WordPackListPanel: React.FC = () => {
                         />
                       </div>
                       {wp.is_empty ? (
-                        <div style={{ marginTop: '0.3rem', fontSize: '0.7em' }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.25rem',
-                            padding: '0.1rem 0.3rem',
-                            backgroundColor: '#fff3cd',
-                            color: '#7a5b00',
-                            borderRadius: '3px',
-                            border: '1px solid #ffe08a',
-                            fontSize: '0.75em'
-                          }}>
+                        <div className="wp-example-tags">
+                          <span className="wp-example-tag is-empty">
                             例文未生成
                           </span>
                         </div>
                       ) : wp.examples_count && (
-                        <div style={{ marginTop: '0.3rem', fontSize: '0.2em' }}>
-                          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                        <div className="wp-example-tags">
+                          <div className="wp-example-tag-list">
                             {Object.entries(wp.examples_count).map(([category, count]) => (
-                              <span key={category} style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.10rem',
-                                padding: '0.1rem 0.2rem',
-                                backgroundColor: count > 0 ? '#e3f2fd' : '#f5f5f5',
-                                color: count > 0 ? '#1565c0' : '#666',
-                                borderRadius: '3px',
-                                border: `1px solid ${count > 0 ? '#1565c0' : '#ddd'}`,
-                                fontSize: '0.40em'
-                              }}>
-                                <span style={{ fontWeight: 'bold' }}>{category}</span>
+                              <span key={category} className={`wp-example-tag${count > 0 ? ' has-count' : ''}`}>
+                                <span>{category}</span>
                                 <span>{count}</span>
                               </span>
                             ))}
@@ -950,11 +1028,7 @@ export const WordPackListPanel: React.FC = () => {
                     key={wp.id}
                     className="wp-index-item"
                     data-testid="wp-index-item"
-                    onClick={() => {
-                      setPreviewWordPackId(wp.id);
-                      setPreviewOpen(true);
-                      setModalOpen(true);
-                    }}
+                    onClick={() => openPreview(wp.id)}
                   >
                     <label className="wp-select-checkbox" onClick={(e) => e.stopPropagation()}>
                       <input

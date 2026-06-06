@@ -1,7 +1,9 @@
 import React from 'react';
 import { WordPackPanel } from '../../components/WordPackPanel';
 import { WordPackListPanel } from '../../components/WordPackListPanel';
-import { SearchBox } from '../../shared/ui';
+import { GenerationQueuePanel } from '../../components/GenerationQueuePanel';
+import { Button } from '../../shared/ui';
+import './lexicon.css';
 
 interface LexiconPageProps {
   focusRef: React.RefObject<HTMLElement>;
@@ -11,28 +13,44 @@ interface LexiconPageProps {
 
 export const LexiconPage: React.FC<LexiconPageProps> = ({
   focusRef,
-  selectedWordPackId,
   onWordPackGenerated,
-}) => (
-  <div className="dictionary-main">
-    <div className="dictionary-page-heading">
-      <div className="dictionary-page-title">
-        <h2>Lexicon</h2>
-        <p>検索して、開いて、用例と文脈へ辿る個人辞書。</p>
-      </div>
-      <div className="dictionary-top-actions">
-        <SearchBox label="WordPack、用例、記事を検索" placeholder="Search WordPack, examples, articles..." shortcut="⌘K" />
+}) => {
+  const focusCreateInput = () => {
+    try { focusRef.current?.focus(); } catch {}
+  };
+
+  return (
+    <div className="dictionary-main lexicon-main">
+      <div className="lexicon-workspace">
+        <div className="lexicon-primary">
+          <div className="dictionary-page-heading lexicon-page-heading">
+            <div className="dictionary-page-title">
+              <h2>Lexicon</h2>
+              <p>保存済みの個人辞書を検索・管理します。</p>
+            </div>
+            <div className="dictionary-top-actions lexicon-top-actions">
+              <Button variant="primary" className="lexicon-create-shortcut" onClick={focusCreateInput}>
+                <span aria-hidden="true">＋</span>
+                新しいWordPack
+              </Button>
+            </div>
+          </div>
+
+          <section className="dictionary-section lexicon-list-section" aria-label="保存済みWordPack一覧 セクション">
+            <WordPackListPanel />
+          </section>
+        </div>
+
+        <aside className="lexicon-rail" aria-label="生成と作成">
+          <GenerationQueuePanel />
+          <WordPackPanel
+            focusRef={focusRef}
+            onWordPackGenerated={onWordPackGenerated}
+            creationPanelPlacement="inline"
+            showDetails={false}
+          />
+        </aside>
       </div>
     </div>
-
-    <WordPackPanel
-      focusRef={focusRef}
-      selectedWordPackId={selectedWordPackId}
-      onWordPackGenerated={onWordPackGenerated}
-    />
-
-    <section className="dictionary-section" aria-label="保存済みWordPack一覧 セクション">
-      <WordPackListPanel />
-    </section>
-  </div>
-);
+  );
+};

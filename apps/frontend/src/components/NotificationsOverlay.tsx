@@ -4,6 +4,8 @@ import { useNotifications } from '../NotificationsContext';
 export const NotificationsOverlay: React.FC = () => {
   const { notifications, remove } = useNotifications();
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  const isLexiconPage = typeof window !== 'undefined'
+    && (window.location.pathname === '/' || window.location.pathname.startsWith('/lexicon'));
 
   useEffect(() => {
     const t = window.setInterval(() => setNowMs(Date.now()), 250);
@@ -17,6 +19,10 @@ export const NotificationsOverlay: React.FC = () => {
     const ss = s % 60;
     return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}` : `${m}:${String(ss).padStart(2, '0')}`;
   };
+
+  if (isLexiconPage) {
+    return null;
+  }
 
   return (
     <div aria-live="polite" aria-relevant="additions" style={{ position: 'fixed', right: 12, bottom: 12, zIndex: 1000, display: 'flex', flexDirection: 'column-reverse', gap: 8, pointerEvents: 'none' }}>
@@ -61,5 +67,4 @@ export const NotificationsOverlay: React.FC = () => {
     </div>
   );
 };
-
 

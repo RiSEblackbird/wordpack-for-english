@@ -1,6 +1,5 @@
 import React from 'react';
 import { SIDEBAR_PORTAL_CONTAINER_ID } from '../components/SidebarPortal';
-import { SidebarPlaybackRateControl } from '../components/SidebarPlaybackRateControl';
 import { NAV_ITEMS, SIDEBAR_ID, type NavigationItem } from './navigation';
 
 interface SidebarProps {
@@ -26,6 +25,57 @@ const GithubIcon: React.FC = () => (
   </svg>
 );
 
+const BrandMark: React.FC = () => (
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+    <path d="M14 2 25 14 14 26 3 14 14 2Z" fill="#2f73ff" />
+    <path d="M14 2v24M3 14h22" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round" />
+    <path d="m8.8 8.8 10.4 10.4M19.2 8.8 8.8 19.2" stroke="#0b1220" strokeOpacity=".42" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const NavIcon: React.FC<{ item: NavigationItem['key'] }> = ({ item }) => {
+  switch (item) {
+    case 'lexicon':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 5.8c0-.9.7-1.6 1.6-1.6h4.3c1.1 0 2.1.5 2.8 1.3.7-.8 1.7-1.3 2.8-1.3h4.3c.9 0 1.6.7 1.6 1.6v13.4c0 .6-.6 1-1.1.8l-4.5-1.8c-.9-.4-2-.2-2.8.4l-.3.2-.3-.2c-.8-.6-1.9-.8-2.8-.4L6.1 20c-.5.2-1.1-.2-1.1-.8V5.8Z" />
+        </svg>
+      );
+    case 'reader':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 4h9.5L19 7.5V20H6V4Zm8.7 1.7V8h2.6M8.5 11h8M8.5 14h8M8.5 17h5" />
+        </svg>
+      );
+    case 'examples':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 5h14v3H5V5Zm0 5.5h14v3H5v-3ZM5 16h14v3H5v-3Z" />
+        </svg>
+      );
+    case 'explore':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16Zm3.4 4.6-1.7 5.1-5.1 1.7 1.7-5.1 5.1-1.7Z" />
+        </svg>
+      );
+    case 'shelves':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 4h3.5v16H6V4Zm5.2 0H15v16h-3.8V4Zm5.5.6 3.2 14.8-2.8.6-3.2-14.8 2.8-.6Z" />
+        </svg>
+      );
+    case 'settings':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Zm8 3.8-2.1-.7a6.7 6.7 0 0 0-.6-1.5l1-2-2.1-2.1-2 1a6.7 6.7 0 0 0-1.5-.6L12 4H9l-.7 2.1c-.5.1-1 .3-1.5.6l-2-1-2.1 2.1 1 2c-.3.5-.5 1-.6 1.5L1 12v3l2.1.7c.1.5.3 1 .6 1.5l-1 2 2.1 2.1 2-1c.5.3 1 .5 1.5.6L9 23h3l.7-2.1c.5-.1 1-.3 1.5-.6l2 1 2.1-2.1-1-2c.3-.5.5-1 .6-1.5L20 15v-3Z" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+};
+
 export const Sidebar: React.FC<SidebarProps> = ({
   activeNavKey,
   firstSidebarItemRef,
@@ -47,6 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <div className="sidebar-content" style={{ width: '100%', boxSizing: 'border-box' }}>
       <div className="sidebar-main">
         <div className="sidebar-brand" aria-label="アプリタイトル">
+          <BrandMark />
           <span className="sidebar-title">WordPack</span>
         </div>
         <nav className="sidebar-nav" aria-label="主要メニュー">
@@ -62,12 +113,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               tabIndex={isSidebarOpen ? 0 : -1}
               ref={item.key === NAV_ITEMS[0].key ? firstSidebarItemRef : undefined}
             >
-              <span aria-hidden="true">◇</span>
+              <span className="sidebar-nav-icon"><NavIcon item={item.key} /></span>
               <span aria-hidden="true">{item.label}</span>
             </button>
           ))}
         </nav>
-        <SidebarPlaybackRateControl isSidebarOpen={isSidebarOpen} />
         <div
           id={SIDEBAR_PORTAL_CONTAINER_ID}
           className="sidebar-controls"
@@ -76,6 +126,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       </div>
       <div className="sidebar-footer" aria-label="アカウントと外部リンク">
+        <div className="sidebar-user-card" aria-label={isGuest ? 'ゲストユーザー' : 'ログインユーザー'}>
+          <span className="sidebar-user-avatar" aria-hidden="true">U</span>
+          <span>
+            <strong>User</strong>
+            <small>{isGuest ? 'ゲスト' : 'ログイン中'}</small>
+          </span>
+        </div>
         <a
           href="https://github.com/RiSEblackbird/wordpack-for-english"
           target="_blank"

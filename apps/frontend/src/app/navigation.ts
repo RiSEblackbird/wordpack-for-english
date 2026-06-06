@@ -17,5 +17,5 @@ export const NAV_ITEMS: NavigationItem[] = [
 ];
 
 export const SIDEBAR_ID = 'app-sidebar';
-export const MAIN_MAX_WIDTH = 1180;
+export const MAIN_MAX_WIDTH = 1560;
 export const MAIN_HEADING_TEXT = 'WordPack';
