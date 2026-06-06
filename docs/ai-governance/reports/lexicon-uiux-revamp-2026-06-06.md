@@ -69,10 +69,11 @@
 - `cd apps/frontend && npm test -- WordPackListPanel --reporter=dot` (6 files passed; 14 tests passed)
 - `cd apps/frontend && npm test -- WordPackPanel --reporter=dot` (1 file passed, 1 skipped; 8 tests passed, 1 skipped)
 - `cd apps/frontend && npm test -- --coverage --silent` (35 files passed, 1 skipped; 142 tests passed, 1 skipped)
-- `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts -g "WordPack一覧" --update-snapshots`
-- `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts -g "WordPack一覧"`
+- `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts --update-snapshots` (4 passed; macOS snapshots updated)
+- `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts` (4 passed)
 - `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts` (3 passed)
 - `git diff --check`
+- Linux visual snapshots were updated from CI artifact actuals for WordPack list, example list, and settings panel after verifying the images reflected the intended persistent sidebar layout.
 - Playwright visual smoke with mocked API:
   - Desktop 1680x930: persistent sidebar, top search/create action, recent panel, 3-column saved cards, and right generation/create rail all visible without overlap.
   - Mobile 390x844: hamburger sidebar mode, stacked search/create action, horizontal recent list, filter chips, and bottom nav visible without page-level horizontal overflow.
