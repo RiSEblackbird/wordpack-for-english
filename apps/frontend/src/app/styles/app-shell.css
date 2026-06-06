@@ -65,7 +65,7 @@ footer {
 }
 
 .app-shell {
-  --app-sidebar-width: 280px;
+  --app-sidebar-width: 224px;
   --sidebar-title-toggle-clearance: 3rem;
   margin: 0 auto;
   box-sizing: border-box;
@@ -79,10 +79,10 @@ footer {
 }
 
 .header-bar {
-  min-height: 50px;
+  min-height: 0;
   display: flex;
   align-items: center;
-  padding-left: 3.5rem;
+  padding-left: 0;
 }
 
 .github-link {
@@ -186,59 +186,63 @@ body.theme-dark .guest-badge {
 }
 
 .sidebar {
-  width: 0;
+  width: var(--app-sidebar-width);
   flex-shrink: 0;
-  background: var(--color-surface);
+  background:
+    linear-gradient(180deg, rgba(47, 115, 255, 0.08), transparent 16rem),
+    #07111e;
   box-shadow: none;
   overflow: hidden;
   z-index: 970;
+  border-right: 1px solid rgba(125, 146, 178, 0.26);
 }
 
 .app-shell.sidebar-open .sidebar {
-  box-shadow: 2px 0 20px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
   width: var(--app-sidebar-width);
 }
 
 .sidebar-content {
   height: 100vh;
   height: 100dvh;
-  padding: 2rem 1.5rem;
+  padding: 1.75rem 0.95rem 1rem;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   width: 100%;
   box-sizing: border-box;
-  gap: 1.5rem;
+  gap: 1.2rem;
   align-content: stretch;
   overflow: hidden;
 }
 
 .sidebar-main {
   display: grid;
-  gap: 1.5rem;
+  gap: 1.35rem;
   align-content: flex-start;
   min-height: 0;
   overflow-y: auto;
 }
 
 .sidebar-brand {
-  display: grid;
-  gap: 0.25rem;
-  min-height: 40px;
-  padding: 0.25rem 0.5rem 0.5rem var(--sidebar-title-toggle-clearance);
+  display: flex;
+  gap: 0.65rem;
+  min-height: 44px;
+  padding: 0.25rem 0.35rem 0.5rem;
   align-items: center;
 }
 
 .sidebar-title {
-  font-size: 1.45rem;
+  font-size: 1.42rem;
   font-weight: 800;
   line-height: 1.2;
+  letter-spacing: 0;
 }
 
 .sidebar-nav {
   display: grid;
-  gap: 0.2rem;
+  gap: 0.35rem;
   align-content: flex-start;
-  padding-top: 0.5rem;
+  padding-top: 0.35rem;
 }
 
 .sidebar-controls {
@@ -249,16 +253,18 @@ body.theme-dark .guest-badge {
 
 .sidebar-footer {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.75rem;
   align-content: flex-start;
   padding-top: 1rem;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid rgba(125, 146, 178, 0.22);
 }
 
 .sidebar-github-link {
   min-height: 40px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-weight: 700;
+  color: #dce6f6;
+  padding: 0.45rem 0.35rem;
 }
 
 .sidebar-auth {
@@ -273,22 +279,46 @@ body.theme-dark .guest-badge {
 
 .sidebar-section {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.45rem;
+  padding: 0.35rem;
+  border-radius: 8px;
+  color: #dce6f6;
 }
 
 .sidebar-section h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 0.95rem;
+  line-height: 1.2;
 }
 
 .sidebar-field {
   display: grid;
+  grid-template-columns: 3.6rem minmax(0, 1fr);
+  align-items: center;
   gap: 0.35rem;
 }
 
 .sidebar-field label {
-  font-size: 0.85rem;
-  color: var(--color-subtle);
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: #aeb9cb;
+}
+
+.sidebar-field select {
+  min-width: 0;
+  width: 100%;
+  min-height: 2rem;
+  border-radius: 6px;
+  border: 1px solid rgba(125, 146, 178, 0.34);
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  padding: 0.25rem 0.35rem;
+  font: inherit;
+  font-size: 0.86rem;
+}
+
+.sidebar-field small {
+  display: none;
 }
 
 .sidebar-actions {
@@ -313,27 +343,53 @@ body.theme-dark .guest-badge {
 }
 
 .sidebar-nav-button {
-  font-size: 1.2rem;
-  border: none;
-  border-radius: 4px;
-  padding: 0.3rem 0.5rem;
+  min-height: 2.85rem;
+  font-size: 0.97rem;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 0.55rem 0.72rem;
   text-align: left;
   background: transparent;
-  color: var(--color-text);
+  color: #dce6f6;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  transition: background 0.2s ease, color 0.2s ease;
+  gap: 0.7rem;
+  font-weight: 700;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.sidebar-nav-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: inline-grid;
+  place-items: center;
+  color: currentColor;
+}
+
+.sidebar-nav-icon svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sidebar-nav-icon svg path {
+  fill: none;
 }
 
 .sidebar-nav-button:hover {
-  background: var(--color-neutral-surface);
+  background: rgba(130, 151, 186, 0.12);
 }
 
 .sidebar-nav-button[aria-pressed='true'] {
-  background: var(--color-accent);
+  border-color: rgba(93, 145, 255, 0.52);
+  background: linear-gradient(180deg, #347cff, #1f61de);
   color: #ffffff;
+  box-shadow: 0 12px 28px rgba(31, 97, 222, 0.28);
 }
 
 .main-column {
@@ -352,13 +408,67 @@ body.theme-dark .guest-badge {
   max-width: var(--main-max-width);
   width: min(100%, var(--main-max-width));
   margin: 0 auto;
-  padding: 0.5rem;
+  padding: 0.45rem 0 0.5rem;
   transition: none;
+}
+
+.sidebar-user-card {
+  display: grid;
+  grid-template-columns: 2.35rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.35rem;
+  color: #dce6f6;
+}
+
+.sidebar-user-avatar {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #91c7a5, #6f9d83);
+  color: #0b1220;
+  font-weight: 900;
+}
+
+.sidebar-user-card strong,
+.sidebar-user-card small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-user-card small {
+  margin-top: 0.1rem;
+  color: #aeb9cb;
+  font-size: 0.82rem;
 }
 
 .app-footer {
   padding: 0.5rem;
   margin-top: 6rem;
+}
+
+@media (max-width: 900px) {
+  .header-bar {
+    min-height: 50px;
+    padding-left: 3.5rem;
+  }
+
+  .sidebar {
+    width: 0;
+  }
+
+  .app-shell.sidebar-open .sidebar {
+    box-shadow: 2px 0 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .sidebar-brand {
+    padding-left: var(--sidebar-title-toggle-clearance);
+  }
 }
 
 @media (max-width: 430px) {
@@ -380,7 +490,7 @@ body.theme-dark .guest-badge {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 900px) {
   .sidebar {
     position: fixed;
     top: 0;

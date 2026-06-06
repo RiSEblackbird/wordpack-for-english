@@ -81,32 +81,37 @@ export const AppShell: React.FC = () => {
     [closeSidebar, isSidebarOpen, navigate],
   );
 
+  const isSidebarVisible = isOverlaySidebar ? isSidebarOpen : true;
+
   useEffect(() => {
+    if (!isOverlaySidebar) {
+      return;
+    }
     if (isSidebarOpen) {
       hasSidebarOpened.current = true;
       firstSidebarItemRef.current?.focus();
     } else if (hasSidebarOpened.current) {
       sidebarToggleRef.current?.focus();
     }
-  }, [isSidebarOpen]);
+  }, [isOverlaySidebar, isSidebarOpen]);
 
   useLayoutEffect(() => {
     const sidebar = sidebarRef.current;
     if (!sidebar) {
       return;
     }
-    if (isSidebarOpen) {
+    if (isSidebarVisible) {
       sidebar.removeAttribute('inert');
       return;
     }
     sidebar.setAttribute('inert', '');
-  }, [isSidebarOpen]);
+  }, [isSidebarVisible]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
       return undefined;
     }
-    const mediaQuery = window.matchMedia('(max-width: 480px)');
+    const mediaQuery = window.matchMedia('(max-width: 900px)');
     const updateOverlayState = () => {
       setIsOverlaySidebar(mediaQuery.matches);
     };
@@ -126,6 +131,9 @@ export const AppShell: React.FC = () => {
 
   const handleSelectRoute = (next: NavigationItem['key']) => {
     navigate({ key: next });
+    if (isOverlaySidebar) {
+      closeSidebar();
+    }
   };
 
   const handleHeaderSignOut = useCallback(async () => {
@@ -142,7 +150,7 @@ export const AppShell: React.FC = () => {
 
   return (
     <main
-      className={`app-shell dictionary-shell${isSidebarOpen ? ' sidebar-open' : ''}`}
+      className={`app-shell dictionary-shell${isSidebarVisible ? ' sidebar-open' : ''}`}
       style={shellStyle}
     >
       <h1 className="visually-hidden">{MAIN_HEADING_TEXT}</h1>
@@ -161,7 +169,7 @@ export const AppShell: React.FC = () => {
           firstSidebarItemRef={firstSidebarItemRef}
           isAuthenticating={isAuthenticating}
           isGuest={isGuest}
-          isSidebarOpen={isSidebarOpen}
+          isSidebarOpen={isSidebarVisible}
           onSelectRoute={handleSelectRoute}
           onSignOut={handleHeaderSignOut}
           sidebarRef={sidebarRef}
@@ -170,7 +178,8 @@ export const AppShell: React.FC = () => {
           <div className="main-inner">
             <Header
               fixedSafeAreaClass={fixedSafeAreaClass}
-              isSidebarOpen={isSidebarOpen}
+              isSidebarOpen={isSidebarVisible}
+              isSidebarToggleVisible={isOverlaySidebar}
               onToggleSidebar={toggleSidebar}
               sidebarToggleRef={sidebarToggleRef}
             />

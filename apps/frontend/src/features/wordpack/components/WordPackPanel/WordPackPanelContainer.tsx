@@ -41,6 +41,8 @@ interface Props {
   selectedMeta?: { created_at: string; updated_at: string } | null;
   fallbackMeta?: Pick<WordPackPreviewMeta, 'id' | 'lemma' | 'senseTitle'> | null;
   onStudyProgressRecorded?: (payload: { wordPackId: string; checked_only_count: number; learned_count: number }) => void;
+  creationPanelPlacement?: 'sidebar' | 'inline' | 'none';
+  showDetails?: boolean;
 }
 
 /**
@@ -54,6 +56,8 @@ export const WordPackPanel: React.FC<Props> = ({
   selectedMeta,
   fallbackMeta,
   onStudyProgressRecorded,
+  creationPanelPlacement = 'sidebar',
+  showDetails = true,
 }) => {
   const { isGuest } = useAuth();
   const { settings, setSettings } = useSettings();
@@ -252,7 +256,9 @@ export const WordPackPanel: React.FC<Props> = ({
     handleLoadWordPack(selectedWordPackId);
   }, [currentWordPackId, handleLoadWordPack, selectedWordPackId]);
 
-  const detailsContent = data ? (
+  const canShowDetails = showDetails;
+
+  const detailsContent = canShowDetails && data ? (
     <div className="wp-container">
       {/* セクションナビゲーション: 画面内リンクで各要素へショートカット */}
       <nav className="wp-nav" aria-label="セクション">
@@ -321,106 +327,120 @@ export const WordPackPanel: React.FC<Props> = ({
     </div>
   ) : null;
 
-  const loadingPlaceholder = selectedWordPackId && !data ? (
+  const loadingPlaceholder = canShowDetails && selectedWordPackId && !data ? (
     <WordPackLoadingPlaceholder placeholderLemma={placeholderLemma} />
+  ) : null;
+
+  const creationPanel = !isInModalView && creationPanelPlacement !== 'none' ? (
+    <section className="wordpack-create-panel" aria-label="新しいWordPackを作成">
+      <div className="wordpack-create-panel__header">
+        <h2>{creationPanelPlacement === 'inline' ? '新しいWordPackを作成' : 'WordPack生成'}</h2>
+        <span className="wordpack-create-panel__badge" aria-label={`使用モデル ${model}`}>{model}</span>
+      </div>
+      <div className="sidebar-field wordpack-create-panel__field">
+        <label htmlFor="wordpack-lemma-input">見出し語</label>
+        {/* ゲストモードではAI生成に関わる入力をロックし、理由をツールチップで提示する */}
+        <GuestLock isGuest={isGuest}>
+          <input
+            id="wordpack-lemma-input"
+            ref={focusRef as React.RefObject<HTMLInputElement>}
+            value={lemma}
+            onChange={(e) => setLemma(e.target.value)}
+            placeholder="見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）"
+            disabled={isActionLoading}
+          />
+        </GuestLock>
+        <p
+          aria-live="polite"
+          className={`sidebar-help wordpack-create-panel__help${isLemmaValid ? '' : ' is-invalid'}`}
+        >
+          {isLemmaValid ? '見出し語を入力すると作成できます' : lemmaValidation.message}
+        </p>
+      </div>
+      <div className="sidebar-actions wordpack-create-panel__actions">
+        <GuestLock isGuest={isGuest}>
+          <button
+            type="button"
+            className="wordpack-create-panel__primary"
+            onClick={handleGenerate}
+            disabled={!isLemmaValid || isActionLoading}
+          >
+            作成を開始
+          </button>
+        </GuestLock>
+        <GuestLock isGuest={isGuest}>
+          <button
+            type="button"
+            className="wordpack-create-panel__secondary"
+            onClick={handleCreateEmpty}
+            disabled={!isLemmaValid || isActionLoading}
+            title="内容の生成を行わず、空のWordPackのみ保存"
+          >
+            WordPackのみ作成
+          </button>
+        </GuestLock>
+      </div>
+      <div className="sidebar-field wordpack-create-panel__field">
+        <label htmlFor="wordpack-model-select">モデル</label>
+        <GuestLock isGuest={isGuest}>
+          <select
+            id="wordpack-model-select"
+            value={model}
+            onChange={(e) => handleChangeModel(e.target.value)}
+            disabled={isActionLoading}
+          >
+            {SUPPORTED_LLM_MODELS.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </GuestLock>
+      </div>
+      {showAdvancedModelOptions && creationPanelPlacement !== 'inline' && (
+        <div className="sidebar-inline wordpack-create-panel__advanced">
+          <div className="sidebar-field wordpack-create-panel__field">
+            <label htmlFor="wordpack-reasoning-select">reasoning.effort</label>
+            <GuestLock isGuest={isGuest}>
+              <select
+                id="wordpack-reasoning-select"
+                aria-label="reasoning.effort"
+                value={advancedSettings.reasoningEffort}
+                onChange={(e) => advancedSettings.handleChangeReasoningEffort(e.target.value as typeof advancedSettings.reasoningEffort)}
+                disabled={isActionLoading}
+              >
+                <option value="minimal">minimal</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </GuestLock>
+          </div>
+          <div className="sidebar-field wordpack-create-panel__field">
+            <label htmlFor="wordpack-verbosity-select">text.verbosity</label>
+            <GuestLock isGuest={isGuest}>
+              <select
+                id="wordpack-verbosity-select"
+                aria-label="text.verbosity"
+                value={advancedSettings.textVerbosity}
+                onChange={(e) => advancedSettings.handleChangeTextVerbosity(e.target.value as typeof advancedSettings.textVerbosity)}
+                disabled={isActionLoading}
+              >
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </GuestLock>
+          </div>
+        </div>
+      )}
+    </section>
   ) : null;
 
   return (
     <>
-      {/* 生成フォーム: サイドバーに固定し、入力とモデル設定をまとめる */}
-      {!isInModalView && (
-        <SidebarPortal>
-          <section className="sidebar-section" aria-label="WordPackの生成">
-            <h2>WordPack生成</h2>
-            <div className="sidebar-field">
-              <label htmlFor="wordpack-lemma-input">見出し語</label>
-              {/* ゲストモードではAI生成に関わる入力をロックし、理由をツールチップで提示する */}
-              <GuestLock isGuest={isGuest}>
-                <input
-                  id="wordpack-lemma-input"
-                  ref={focusRef as React.RefObject<HTMLInputElement>}
-                  value={lemma}
-                  onChange={(e) => setLemma(e.target.value)}
-                  placeholder="見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）"
-                  disabled={isActionLoading}
-                />
-              </GuestLock>
-              <p aria-live="polite" className="sidebar-help" style={{ color: isLemmaValid ? '#666' : '#d32f2f' }}>
-                {lemmaValidation.message}
-              </p>
-            </div>
-            <div className="sidebar-actions">
-              <GuestLock isGuest={isGuest}>
-                <button type="button" onClick={handleGenerate} disabled={!isLemmaValid || isActionLoading}>
-                  生成
-                </button>
-              </GuestLock>
-              <GuestLock isGuest={isGuest}>
-                <button
-                  type="button"
-                  onClick={handleCreateEmpty}
-                  disabled={!isLemmaValid || isActionLoading}
-                  title="内容の生成を行わず、空のWordPackのみ保存"
-                >
-                  WordPackのみ作成
-                </button>
-              </GuestLock>
-            </div>
-            <div className="sidebar-field">
-              <label htmlFor="wordpack-model-select">モデル</label>
-              <GuestLock isGuest={isGuest}>
-                <select
-                  id="wordpack-model-select"
-                  value={model}
-                  onChange={(e) => handleChangeModel(e.target.value)}
-                  disabled={isActionLoading}
-                >
-                  {SUPPORTED_LLM_MODELS.map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
-                </select>
-              </GuestLock>
-            </div>
-            {showAdvancedModelOptions && (
-              <div className="sidebar-inline">
-                <div className="sidebar-field">
-                  <label htmlFor="wordpack-reasoning-select">reasoning.effort</label>
-                  <GuestLock isGuest={isGuest}>
-                    <select
-                      id="wordpack-reasoning-select"
-                      aria-label="reasoning.effort"
-                      value={advancedSettings.reasoningEffort}
-                      onChange={(e) => advancedSettings.handleChangeReasoningEffort(e.target.value as typeof advancedSettings.reasoningEffort)}
-                      disabled={isActionLoading}
-                    >
-                      <option value="minimal">minimal</option>
-                      <option value="low">low</option>
-                      <option value="medium">medium</option>
-                      <option value="high">high</option>
-                    </select>
-                  </GuestLock>
-                </div>
-                <div className="sidebar-field">
-                  <label htmlFor="wordpack-verbosity-select">text.verbosity</label>
-                  <GuestLock isGuest={isGuest}>
-                    <select
-                      id="wordpack-verbosity-select"
-                      aria-label="text.verbosity"
-                      value={advancedSettings.textVerbosity}
-                      onChange={(e) => advancedSettings.handleChangeTextVerbosity(e.target.value as typeof advancedSettings.textVerbosity)}
-                      disabled={isActionLoading}
-                    >
-                      <option value="low">low</option>
-                      <option value="medium">medium</option>
-                      <option value="high">high</option>
-                    </select>
-                  </GuestLock>
-                </div>
-              </div>
-            )}
-          </section>
-        </SidebarPortal>
-      )}
+      {/* 生成フォーム: Lexiconでは右レール、その他では従来どおりサイドバーへ描画する */}
+      {creationPanelPlacement === 'sidebar' && creationPanel ? (
+        <SidebarPortal>{creationPanel}</SidebarPortal>
+      ) : creationPanel}
 
       <section>
         <style>{`
@@ -447,18 +467,22 @@ export const WordPackPanel: React.FC<Props> = ({
 
         <WordPackStatusMessage message={message} />
 
-        {/* 詳細表示: モーダル/ダイレクト表示の両対応 */}
-        {selectedWordPackId ? (
-          data ? detailsContent : loadingPlaceholder
-        ) : (
-          <Modal
-            isOpen={!!data && detailOpen}
-            onClose={() => { setDetailOpen(false); try { setModalOpen(false); } catch {} }}
-            title="WordPack プレビュー"
-          >
-            {detailsContent}
-          </Modal>
-        )}
+        {canShowDetails ? (
+          <>
+            {/* 詳細表示: モーダル/ダイレクト表示の両対応 */}
+            {selectedWordPackId ? (
+              data ? detailsContent : loadingPlaceholder
+            ) : (
+              <Modal
+                isOpen={!!data && detailOpen}
+                onClose={() => { setDetailOpen(false); try { setModalOpen(false); } catch {} }}
+                title="WordPack プレビュー"
+              >
+                {detailsContent}
+              </Modal>
+            )}
+          </>
+        ) : null}
       </section>
 
       {lemmaExplorer ? (

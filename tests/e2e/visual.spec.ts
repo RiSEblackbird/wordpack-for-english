@@ -245,8 +245,8 @@ test.describe('ビジュアル回帰: 主要画面', () => {
     await page.goto('/');
     await disableAnimations(page);
 
-    await expect(page.getByRole('heading', { name: '保存済みWordPack一覧' })).toBeVisible();
-    await expect(page.getByText('alpha')).toBeVisible();
+    await expect(page.getByRole('heading', { name: /保存済みWordPack/ })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^alpha$/ })).toBeVisible();
 
     await expect(page).toHaveScreenshot('wordpack-list.png', {
       maxDiffPixelRatio: 0.01,

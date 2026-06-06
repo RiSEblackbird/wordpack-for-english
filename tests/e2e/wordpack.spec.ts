@@ -154,6 +154,28 @@ const createWordPackStore = () => {
   };
 };
 
+const toWordPackListItem = (id: string, wordPack: WordPack) => {
+  const examplesCount = {
+    Dev: wordPack.examples.Dev.length,
+    CS: wordPack.examples.CS.length,
+    LLM: wordPack.examples.LLM.length,
+    Business: wordPack.examples.Business.length,
+    Common: wordPack.examples.Common.length,
+  };
+  return {
+    id,
+    lemma: wordPack.lemma,
+    sense_title: wordPack.sense_title,
+    created_at: '2026-06-06T00:00:00.000Z',
+    updated_at: '2026-06-06T00:00:00.000Z',
+    is_empty: false,
+    examples_count: examplesCount,
+    checked_only_count: 0,
+    learned_count: 0,
+    guest_public: false,
+  };
+};
+
 test.describe('WordPack 操作', () => {
   test('例文の追加/削除/再生成を1本のシナリオで完結できる', async ({ page, context }) => {
     const store = createWordPackStore();
@@ -163,7 +185,11 @@ test.describe('WordPack 操作', () => {
     await seedAuthenticatedSession(context, page);
     await mockConfig(page, { requestTimeoutMs: 20000 });
 
-    await page.route('**/api/word/packs?*', (route) => route.fulfill(json({ items: [], total: 0 })));
+    await page.route('**/api/word/packs?*', (route) => {
+      const payload = store.read();
+      const items = payload ? [toWordPackListItem(store.wordPackId, payload)] : [];
+      return route.fulfill(json({ items, total: items.length, limit: 200, offset: 0 }));
+    });
 
     await page.route('**/api/word/packs', async (route) => {
       if (route.request().method() !== 'POST') {
@@ -221,14 +247,10 @@ test.describe('WordPack 操作', () => {
       await page.waitForLoadState('networkidle');
       await expect(page.getByRole('heading', { name: 'WordPack', level: 1 })).toBeVisible();
       await runA11yCheck(page);
-      // WordPack の入力・作成ボタンはサイドバー内に配置されているため、メニューを開く。
-      const menuToggle = page.locator('button[aria-controls="app-sidebar"]');
-      await expect(menuToggle).toBeVisible();
-      await menuToggle.click();
-      await expect(menuToggle).toHaveAttribute('aria-expanded', 'true');
+      // WordPack の入力・作成ボタンは Lexicon 右側の作成パネルに配置されている。
       await page.getByLabel('見出し語').fill('alpha');
       // 入力バリデーション完了後にボタンが有効化されるため、明示的に待機してから押下する。
-      const generateButton = page.getByRole('button', { name: '生成' });
+      const generateButton = page.getByRole('button', { name: '作成を開始' });
       const createWordPackButton = page.getByRole('button', { name: 'WordPackのみ作成' });
       await expect(createWordPackButton).toBeEnabled();
       await page.getByLabel('見出し語').focus();
@@ -245,6 +267,10 @@ test.describe('WordPack 操作', () => {
         return performance.now();
       });
       await page.keyboard.press('Space');
+      const alphaCard = page.getByTestId('wp-card').filter({ hasText: 'alpha' }).first();
+      await expect(alphaCard).toBeVisible();
+      await alphaCard.getByRole('button', { name: '開く' }).click();
+      await expect(page.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeVisible();
       await expect(page.getByRole('heading', { name: /例文/ })).toBeVisible();
       const actionEnd = await page.evaluate(() => {
         performance.mark('wordpack-generate-end');
@@ -282,13 +308,17 @@ test.describe('WordPack 操作', () => {
 
     await test.step('When: 例文を追加生成する', async () => {
       await page.getByRole('button', { name: 'generate-examples-Dev' }).click();
-      await expect(
-        page.getByRole('status').filter({ hasText: 'Dev に例文を2件追加しました' }).first(),
-      ).toBeVisible();
     });
 
     await test.step('Then: 例文の件数が増えている', async () => {
       await expect(page.getByText('Dev (3件)')).toBeVisible();
+      await page.getByRole('button', { name: '閉じる' }).click();
+      const queue = page.getByRole('region', { name: '生成キュー' });
+      await expect(queue).toContainText('alpha');
+      await expect(queue).toContainText('Dev: gpt-5.4-mini');
+      const alphaCard = page.getByTestId('wp-card').filter({ hasText: 'alpha' }).first();
+      await alphaCard.getByRole('button', { name: '開く' }).click();
+      await expect(page.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeVisible();
     });
 
     await test.step('When: 追加した例文を削除する', async () => {
@@ -306,9 +336,14 @@ test.describe('WordPack 操作', () => {
     });
 
     await test.step('Then: 再生成完了メッセージが出る', async () => {
-      await expect(
-        page.getByRole('status').filter({ hasText: 'WordPackを再生成しました' }).first(),
-      ).toBeVisible();
+      await expect(page.getByText('alpha 再生成済み')).toBeVisible();
+      await page.getByRole('button', { name: '閉じる' }).click();
+      const queue = page.getByRole('region', { name: '生成キュー' });
+      await expect(queue).toContainText('alpha');
+      await expect(queue).toContainText('完了3');
+      const alphaCard = page.getByTestId('wp-card').filter({ hasText: 'alpha' }).first();
+      await alphaCard.getByRole('button', { name: '開く' }).click();
+      await expect(page.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeVisible();
     });
 
     await test.step('Then: テストデータを後片付けする', async () => {

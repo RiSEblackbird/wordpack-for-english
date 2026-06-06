@@ -207,7 +207,7 @@ describe('WordPackListPanel modal preview', () => {
     });
 
     // 統合された一覧のヘッダーが表示される
-    await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /保存済みWordPack/ })).toBeInTheDocument());
 
     const senseButtons = await screen.findAllByRole('button', { name: '語義' });
     expect(senseButtons).toHaveLength(3);
@@ -265,7 +265,7 @@ describe('WordPackListPanel modal preview', () => {
     expect(deltaCard).toBeDefined();
     const targetCard = deltaCard!;
     expect(within(targetCard).getByText('学 3')).toBeInTheDocument();
-    expect(within(targetCard).getByText('確 5')).toBeInTheDocument();
+    expect(within(targetCard).getByText('難 5')).toBeInTheDocument();
 
     await act(async () => {
       window.dispatchEvent(
@@ -277,7 +277,7 @@ describe('WordPackListPanel modal preview', () => {
 
     await waitFor(() => {
       expect(within(targetCard).getByText('学 9')).toBeInTheDocument();
-      expect(within(targetCard).getByText('確 12')).toBeInTheDocument();
+      expect(within(targetCard).getByText('難 12')).toBeInTheDocument();
     });
   });
 
@@ -420,7 +420,7 @@ describe('WordPackListPanel modal preview', () => {
     });
 
     // 一覧が表示されるまで待機
-    await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /保存済みWordPack/ })).toBeInTheDocument());
     await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(3));
 
     // デフォルトは更新日時降順（alpha, delta, beta）
@@ -458,7 +458,7 @@ describe('WordPackListPanel modal preview', () => {
     expect(exampleSortedCards[2]).toHaveTextContent(/delta/);
   }, 10000);
 
-  it('表示絞り込み（生成済/未生成/-）が正しく動作する', async () => {
+  it('表示絞り込みチップ（生成済/未生成/すべて）が正しく動作する', async () => {
     setupFetchMocks();
     renderWithAuth();
 
@@ -468,12 +468,12 @@ describe('WordPackListPanel modal preview', () => {
       await user.keyboard('{Alt>}{4}{/Alt}');
     });
 
-    await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /保存済みWordPack/ })).toBeInTheDocument());
     await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(3));
 
     // 生成済のみ
     await act(async () => {
-      await user.selectOptions(screen.getByLabelText('表示絞り込み:'), 'generated');
+      await user.click(screen.getByRole('button', { name: '生成済み 2' }));
     });
     await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(2));
     const genCards = screen.getAllByTestId('wp-card');
@@ -482,15 +482,15 @@ describe('WordPackListPanel modal preview', () => {
 
     // 未生成のみ
     await act(async () => {
-      await user.selectOptions(screen.getByLabelText('表示絞り込み:'), 'not_generated');
+      await user.click(screen.getByRole('button', { name: '未生成 1' }));
     });
     const notGenCards = await waitFor(() => screen.getAllByTestId('wp-card'));
     expect(notGenCards).toHaveLength(1);
     expect(notGenCards[0]).toHaveTextContent(/delta/);
 
-    // すべて（-）
+    // すべて
     await act(async () => {
-      await user.selectOptions(screen.getByLabelText('表示絞り込み:'), 'all');
+      await user.click(screen.getByRole('button', { name: 'すべて' }));
     });
     await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(3));
   }, 10000);
@@ -527,7 +527,7 @@ describe('WordPackListPanel modal preview', () => {
     );
   });
 
-  it('検索機能（前方/後方/部分一致と適用操作）が正しく動作する', async () => {
+  it('上部検索バーの部分一致検索が正しく動作する', async () => {
     setupFetchMocks();
     renderWithAuth();
 
@@ -537,39 +537,34 @@ describe('WordPackListPanel modal preview', () => {
       await user.keyboard('{Alt>}{4}{/Alt}');
     });
 
-    await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /保存済みWordPack/ })).toBeInTheDocument());
     await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(3));
 
-    // 前方一致 + ボタン適用: "al" -> alpha のみ
+    const searchInput = screen.getByRole('searchbox', { name: '保存済みWordPackを検索' });
+
+    // "al" -> alpha のみ
     await act(async () => {
-      await user.selectOptions(screen.getByLabelText('検索:'), 'prefix');
-      await user.clear(screen.getByLabelText('検索文字列'));
-      await user.type(screen.getByLabelText('検索文字列'), 'al');
-      await user.click(screen.getByRole('button', { name: '検索' }));
+      await user.clear(searchInput);
+      await user.type(searchInput, 'al{Enter}');
     });
     const prefixCards = await waitFor(() => screen.getAllByTestId('wp-card'));
     expect(prefixCards).toHaveLength(1);
     expect(prefixCards[0]).toHaveTextContent(/alpha/);
 
-    // 後方一致 + Enter適用: "ta" -> beta, delta
+    // "ta" -> beta, delta
     await act(async () => {
-      await user.selectOptions(screen.getByLabelText('検索:'), 'suffix');
-      const input = screen.getByLabelText('検索文字列');
-      await user.clear(input);
-      await user.type(input, 'ta');
-      await user.keyboard('{Enter}');
+      await user.clear(searchInput);
+      await user.type(searchInput, 'ta{Enter}');
     });
     const suffixCards = await waitFor(() => screen.getAllByTestId('wp-card'));
     expect(suffixCards).toHaveLength(2);
     expect(suffixCards.some(c => /beta/i.test(c.textContent || ''))).toBe(true);
     expect(suffixCards.some(c => /delta/i.test(c.textContent || ''))).toBe(true);
 
-    // 部分一致 + ボタン適用: "et" -> beta のみ
+    // "et" -> beta のみ
     await act(async () => {
-      await user.selectOptions(screen.getByLabelText('検索:'), 'contains');
-      await user.clear(screen.getByLabelText('検索文字列'));
-      await user.type(screen.getByLabelText('検索文字列'), 'et');
-      await user.click(screen.getByRole('button', { name: '検索' }));
+      await user.clear(searchInput);
+      await user.type(searchInput, 'et{Enter}');
     });
     const containsCards = await waitFor(() => screen.getAllByTestId('wp-card'));
     expect(containsCards).toHaveLength(1);
@@ -577,10 +572,9 @@ describe('WordPackListPanel modal preview', () => {
 
     // 空文字で検索を再適用すると、全件（3件）に戻る
     await act(async () => {
-      await user.clear(screen.getByLabelText('検索文字列'));
-      await user.click(screen.getByRole('button', { name: '検索' }));
+      await user.clear(searchInput);
+      await user.keyboard('{Enter}');
     });
     await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(3));
   }, 12000);
 });
-

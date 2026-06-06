@@ -15,27 +15,22 @@ test.describe('認証導線', () => {
     });
 
     await test.step('When: アプリを初期表示する', async () => {
-      // メニューの開閉で aria-label が変わるため、aria-controls でトグルボタンを特定する。
-      await expect(page.locator('button[aria-controls="app-sidebar"]')).toBeVisible();
+      const sidebar = page.getByLabel('アプリ内共通メニュー');
+      await expect(sidebar).toBeVisible();
+      await expect(sidebar).toHaveAttribute('aria-hidden', 'false');
     });
 
     await test.step('Then: ログイン済み UI が表示される', async () => {
       await page.waitForURL('**/', { waitUntil: 'domcontentloaded' });
       await page.waitForLoadState('networkidle');
-      // なぜ: ログイン状態の操作はサイドバー下部に集約しているため、メニューを開いて確認する。
-      const menuButton = page.locator('button[aria-controls="app-sidebar"]');
-      await menuButton.click();
+      // なぜ: ログイン状態の操作は常時表示のサイドバー下部に集約しているため。
       await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
-      await menuButton.click();
-      await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
       await expect(
         page.getByRole('heading', { name: 'WordPack', level: 1, includeHidden: true }),
       ).toHaveCount(1);
     });
 
-    await test.step('Then: サイドバーが閉じており aria-hidden-focus の a11y 違反がない', async () => {
-      const menuButton = page.locator('button[aria-controls="app-sidebar"]');
-      await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+    await test.step('Then: 常時表示サイドバーで aria-hidden-focus の a11y 違反がない', async () => {
       await runA11yCheck(page);
     });
 
@@ -43,18 +38,15 @@ test.describe('認証導線', () => {
       await runA11yCheck(page, { rules: ['landmark-one-main', 'page-has-heading-one'] });
     });
 
-    await test.step('Then: キーボード操作でメニューを開ける', async () => {
-      const menuButton = page.locator('button[aria-controls="app-sidebar"]');
-      await menuButton.focus();
-      await expect(menuButton).toBeFocused();
+    await test.step('Then: キーボード操作でサイドバーから移動できる', async () => {
+      const readerButton = page.getByRole('button', { name: '文章インポート' });
+      await readerButton.focus();
+      await expect(readerButton).toBeFocused();
       await page.keyboard.press('Enter');
-      await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
-      await expect
-        .poll(async () => menuButton.evaluate((button) => Number(getComputedStyle(button).zIndex)))
-        .toBeLessThan(1000);
+      await expect(page.getByRole('heading', { name: 'Reader' })).toBeVisible();
       await expect
         .poll(async () =>
-          menuButton.evaluate((button) => {
+          readerButton.evaluate((button) => {
             const rect = button.getBoundingClientRect();
             const topElement = document.elementFromPoint(
               rect.left + rect.width / 2,

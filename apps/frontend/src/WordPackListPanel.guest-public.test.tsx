@@ -92,11 +92,11 @@ describe('WordPackListPanel guest public toggle', () => {
     const { guestPublicRequests } = setupGuestPublicFetch();
     renderWithAuth();
 
-    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'ゲスト公開' })).toBeInTheDocument());
-
-    const toggle = screen.getByRole('checkbox', { name: 'ゲスト公開' });
     const user = userEvent.setup();
-    await user.click(toggle);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'alpha のその他の操作' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'alpha のその他の操作' }));
+    await user.click(screen.getByRole('menuitem', { name: '公開にする' }));
 
     await waitFor(() => expect(guestPublicRequests).toHaveLength(1));
     expect(guestPublicRequests[0]).toEqual({ guest_public: true });

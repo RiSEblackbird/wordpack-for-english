@@ -1,11 +1,12 @@
+import { useRef, useState } from 'react';
 import { render, screen, act, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { axe } from 'vitest-axe';
-import { App } from './App';
 import { AppProviders } from './main';
 import { WordPackPanel } from './components/WordPackPanel';
+import { GenerationQueuePanel } from './components/GenerationQueuePanel';
 
 describe('WordPackPanel E2E (mocked fetch)', () => {
   beforeEach(() => {
@@ -13,6 +14,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     vi.useRealTimers();
     (globalThis as any).fetch = vi.fn();
     try {
+      localStorage.removeItem('wpfe.notifications.v1');
       localStorage.setItem(
         'wordpack.auth.v1',
         JSON.stringify({
@@ -26,13 +28,30 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
   afterEach(() => {
     try {
       localStorage.removeItem('wordpack.auth.v1');
+      localStorage.removeItem('wpfe.notifications.v1');
     } catch {}
   });
+
+  const WordPackPanelHarness = () => {
+    const [selectedWordPackId, setSelectedWordPackId] = useState<string | null>(null);
+    const focusRef = useRef<HTMLElement>(null);
+    return (
+      <>
+        <WordPackPanel
+          focusRef={focusRef}
+          selectedWordPackId={selectedWordPackId}
+          onWordPackGenerated={setSelectedWordPackId}
+          creationPanelPlacement="inline"
+        />
+        <GenerationQueuePanel />
+      </>
+    );
+  };
 
   function renderWithAuth() {
     return render(
       <AppProviders googleClientId="test-client">
-        <App />
+        <WordPackPanelHarness />
       </AppProviders>,
     );
   }
@@ -231,15 +250,8 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     renderWithAuth();
 
     const user = userEvent.setup();
-    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
-    await act(async () => {
-      await user.click(toggle);
-    });
-    await act(async () => {
-      await user.keyboard('{Alt>}{1}{/Alt}');
-    });
 
-    const input = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
+    const input = await screen.findByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
     expect(input).toBeInTheDocument();
     // モデルドロップダウンが表示されている
     expect(screen.getByLabelText('モデル')).toBeInTheDocument();
@@ -249,7 +261,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     });
     await act(async () => {
       await user.type(input, 'delta');
-      await user.click(screen.getByRole('button', { name: '生成' }));
+      await user.click(screen.getByRole('button', { name: '作成を開始' }));
     });
 
     await screen.findByText('WordPack を生成しました');
@@ -274,7 +286,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       const lemmaInput = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
       lemmaInput.value = '';
       await user2.type(lemmaInput, 'alpha');
-      await user2.click(screen.getByRole('button', { name: '生成' }));
+      await user2.click(screen.getByRole('button', { name: '作成を開始' }));
     });
     const bodies2 = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
@@ -288,7 +300,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       const lemmaInput2 = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
       lemmaInput2.value = '';
       await user3.type(lemmaInput2, 'beta');
-      await user3.click(screen.getByRole('button', { name: '生成' }));
+      await user3.click(screen.getByRole('button', { name: '作成を開始' }));
     });
     const bodies3 = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
@@ -301,15 +313,8 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     renderWithAuth();
 
     const user = userEvent.setup();
-    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
-    await act(async () => {
-      await user.click(toggle);
-    });
-    await act(async () => {
-      await user.keyboard('{Alt>}{1}{/Alt}');
-    });
 
-    const input = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
+    const input = await screen.findByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
     await act(async () => {
       await user.clear(input);
       await user.type(input, 'epsilon');
@@ -331,15 +336,8 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     renderWithAuth();
 
     const user = userEvent.setup();
-    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
-    await act(async () => {
-      await user.click(toggle);
-    });
-    await act(async () => {
-      await user.keyboard('{Alt>}{1}{/Alt}');
-    });
 
-    const input = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
+    const input = await screen.findByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
     await act(async () => {
       await user.clear(input);
       await user.type(input, 'theta');
@@ -390,15 +388,8 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     renderWithAuth();
 
     const user = userEvent.setup();
-    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
-    await act(async () => {
-      await user.click(toggle);
-    });
-    await act(async () => {
-      await user.keyboard('{Alt>}{1}{/Alt}');
-    });
 
-    const input = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
+    const input = await screen.findByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
     await act(async () => {
       await user.clear(input);
       await user.type(input, 'theta');
@@ -429,14 +420,11 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.click(ghostToken);
     });
 
-    const statuses = await screen.findAllByRole('status');
-    const statusLabels = statuses.map((el) => el.getAttribute('aria-label') || '');
-    expect(
-      statusLabels.some(
-        (label) =>
-          label === '【Ghosts】の生成処理中... - progress' || label === '【Ghosts】の生成完了！ - success',
-      ),
-    ).toBe(true);
+    const queue = await screen.findByRole('region', { name: '生成キュー' });
+    await waitFor(() => {
+      expect(within(queue).getAllByText('Ghosts').length).toBeGreaterThan(0);
+      expect(within(queue).getAllByText('完了').length).toBeGreaterThan(0);
+    });
 
     const generatedBodies = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
@@ -449,15 +437,8 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     renderWithAuth();
 
     const user = userEvent.setup();
-    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
-    await act(async () => {
-      await user.click(toggle);
-    });
-    await act(async () => {
-      await user.keyboard('{Alt>}{1}{/Alt}');
-    });
 
-    const input = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
+    const input = await screen.findByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
     await act(async () => {
       await user.clear(input);
       await user.type(input, 'theta');
@@ -478,14 +459,11 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.click(ghostToken);
     });
 
-    const statuses = await screen.findAllByRole('status');
-    const statusLabels = statuses.map((el) => el.getAttribute('aria-label') || '');
-    expect(
-      statusLabels.some(
-        (label) =>
-          label === '【Ghosts】の生成処理中... - progress' || label === '【Ghosts】の生成完了！ - success',
-      ),
-    ).toBe(true);
+    const queue = await screen.findByRole('region', { name: '生成キュー' });
+    await waitFor(() => {
+      expect(within(queue).getAllByText('Ghosts').length).toBeGreaterThan(0);
+      expect(within(queue).getAllByText('完了').length).toBeGreaterThan(0);
+    });
     const generatedBodies = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));

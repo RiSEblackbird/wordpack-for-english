@@ -1,7 +1,9 @@
 import React from 'react';
 import { WordPackPanel } from '../../components/WordPackPanel';
 import { WordPackListPanel } from '../../components/WordPackListPanel';
-import { SearchBox } from '../../shared/ui';
+import { GenerationQueuePanel } from '../../components/GenerationQueuePanel';
+import { Button } from '../../shared/ui';
+import './lexicon.css';
 
 interface LexiconPageProps {
   focusRef: React.RefObject<HTMLElement>;
@@ -11,28 +13,85 @@ interface LexiconPageProps {
 
 export const LexiconPage: React.FC<LexiconPageProps> = ({
   focusRef,
-  selectedWordPackId,
   onWordPackGenerated,
-}) => (
-  <div className="dictionary-main">
-    <div className="dictionary-page-heading">
-      <div className="dictionary-page-title">
-        <h2>Lexicon</h2>
-        <p>検索して、開いて、用例と文脈へ辿る個人辞書。</p>
-      </div>
-      <div className="dictionary-top-actions">
-        <SearchBox label="WordPack、用例、記事を検索" placeholder="Search WordPack, examples, articles..." shortcut="⌘K" />
+}) => {
+  const [topSearch, setTopSearch] = React.useState('');
+  const topSearchRef = React.useRef<HTMLInputElement>(null);
+
+  const focusCreateInput = () => {
+    try { focusRef.current?.focus(); } catch {}
+  };
+
+  const applyTopSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      window.dispatchEvent(new CustomEvent('wordpack:list-search', {
+        detail: { mode: 'contains', value: topSearch },
+      }));
+    } catch {}
+  };
+
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        topSearchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  return (
+    <div className="dictionary-main lexicon-main">
+      <div className="lexicon-workspace">
+        <div className="lexicon-primary">
+          <div className="dictionary-page-heading lexicon-page-heading">
+            <div className="dictionary-page-title">
+              <h2>Lexicon</h2>
+              <p>保存済みの個人辞書を検索・管理します。</p>
+            </div>
+            <div className="dictionary-top-actions lexicon-top-actions">
+              <form className="lexicon-searchbar" role="search" aria-label="保存済みWordPackを検索" onSubmit={applyTopSearch}>
+                <span className="lexicon-searchbar__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <circle cx="11" cy="11" r="6.5" />
+                    <path d="m16 16 4 4" />
+                  </svg>
+                </span>
+                <label className="visually-hidden" htmlFor="lexicon-top-search">保存済みWordPackを検索</label>
+                <input
+                  id="lexicon-top-search"
+                  ref={topSearchRef}
+                  type="search"
+                  value={topSearch}
+                  onChange={(event) => setTopSearch(event.target.value)}
+                  placeholder="保存済みWordPackを検索"
+                />
+                <kbd aria-hidden="true">⌘ K</kbd>
+              </form>
+              <Button variant="primary" className="lexicon-create-shortcut" onClick={focusCreateInput}>
+                <span aria-hidden="true">＋</span>
+                新しいWordPack
+              </Button>
+            </div>
+          </div>
+
+          <section className="dictionary-section lexicon-list-section" aria-label="保存済みWordPack一覧 セクション">
+            <WordPackListPanel />
+          </section>
+        </div>
+
+        <section className="lexicon-rail" aria-label="生成と作成">
+          <GenerationQueuePanel />
+          <WordPackPanel
+            focusRef={focusRef}
+            onWordPackGenerated={onWordPackGenerated}
+            creationPanelPlacement="inline"
+            showDetails={false}
+          />
+        </section>
       </div>
     </div>
-
-    <WordPackPanel
-      focusRef={focusRef}
-      selectedWordPackId={selectedWordPackId}
-      onWordPackGenerated={onWordPackGenerated}
-    />
-
-    <section className="dictionary-section" aria-label="保存済みWordPack一覧 セクション">
-      <WordPackListPanel />
-    </section>
-  </div>
-);
+  );
+};

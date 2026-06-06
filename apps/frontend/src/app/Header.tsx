@@ -3,6 +3,7 @@ import React from 'react';
 interface HeaderProps {
   fixedSafeAreaClass: string;
   isSidebarOpen: boolean;
+  isSidebarToggleVisible: boolean;
   onToggleSidebar: () => void;
   sidebarToggleRef: React.RefObject<HTMLButtonElement>;
 }
@@ -28,22 +29,29 @@ const HamburgerIcon: React.FC = () => (
 export const Header: React.FC<HeaderProps> = ({
   fixedSafeAreaClass,
   isSidebarOpen,
+  isSidebarToggleVisible,
   onToggleSidebar,
   sidebarToggleRef,
-}) => (
-  <header>
-    <div className="header-bar">
-      <button
-        ref={sidebarToggleRef}
-        type="button"
-        className={`hamburger-button hamburger-toggle${fixedSafeAreaClass}`}
-        aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
-        aria-expanded={isSidebarOpen ? 'true' : 'false'}
-        aria-controls="app-sidebar"
-        onClick={onToggleSidebar}
-      >
-        <HamburgerIcon />
-      </button>
-    </div>
-  </header>
-);
+}) => {
+  if (!isSidebarToggleVisible) {
+    return null;
+  }
+
+  return (
+    <header>
+      <div className="header-bar">
+        <button
+          ref={sidebarToggleRef}
+          type="button"
+          className={`hamburger-button hamburger-toggle${fixedSafeAreaClass}`}
+          aria-label={isSidebarOpen ? 'メニューを閉じる' : 'メニューを開く'}
+          aria-expanded={isSidebarOpen ? 'true' : 'false'}
+          aria-controls="app-sidebar"
+          onClick={onToggleSidebar}
+        >
+          <HamburgerIcon />
+        </button>
+      </div>
+    </header>
+  );
+};

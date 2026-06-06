@@ -31,41 +31,66 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({ onClick, disabled = false, 
   const resolvedDisabled = disabled || isGuest;
   return (
     <GuestLock isGuest={isGuest}>
-      <button 
-        className="danger" 
+      <button
+        className="wp-danger-button"
         onClick={onClick}
         disabled={disabled}
-        style={{
-          padding: '0.1rem 0.4rem',
-          fontSize: '0.55em',
-          border: '1px solid #d32f2f',
-          borderRadius: '4px',
-          background: 'rgb(234, 230, 217)',
-          cursor: resolvedDisabled ? 'not-allowed' : 'pointer',
-          color: '#d32f2f',
-          opacity: resolvedDisabled ? 0.6 : 1
-        }}
-        onMouseEnter={(e) => {
-          if (!resolvedDisabled) {
-            e.currentTarget.style.background = '#ffebee';
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!resolvedDisabled) {
-            e.currentTarget.style.background = 'rgb(234, 230, 217)';
-          }
-        }}
+        aria-disabled={resolvedDisabled}
       >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" />
+        </svg>
         削除
       </button>
     </GuestLock>
   );
 };
 
+type MiniIconName = 'book' | 'calendar' | 'check' | 'globe' | 'lock' | 'open' | 'speaker' | 'trash' | 'tag' | 'more';
+
+const MiniIcon: React.FC<{ name: MiniIconName }> = ({ name }) => {
+  const common = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.9,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+    focusable: false,
+  };
+
+  switch (name) {
+    case 'book':
+      return <svg {...common}><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H20v16H7.5A2.5 2.5 0 0 0 5 21V5.5Z" /><path d="M5 5.5A2.5 2.5 0 0 0 2.5 3H2v16h.5A2.5 2.5 0 0 1 5 21" /></svg>;
+    case 'calendar':
+      return <svg {...common}><path d="M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1Z" /></svg>;
+    case 'check':
+      return <svg {...common}><path d="M20 6 9 17l-5-5" /></svg>;
+    case 'globe':
+      return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.2 2.4 3.3 5.4 3.3 9S14.2 18.6 12 21M12 3C9.8 5.4 8.7 8.4 8.7 12S9.8 18.6 12 21" /></svg>;
+    case 'lock':
+      return <svg {...common}><path d="M7 10V8a5 5 0 0 1 10 0v2" /><rect x="5" y="10" width="14" height="11" rx="2" /></svg>;
+    case 'open':
+      return <svg {...common}><path d="M5 12h11M12 6l6 6-6 6" /></svg>;
+    case 'speaker':
+      return <svg {...common}><path d="M4 10v4h4l5 4V6l-5 4H4Z" /><path d="M16 9.5a4 4 0 0 1 0 5" /></svg>;
+    case 'trash':
+      return <svg {...common}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 14h10l1-14M9 7V4h6v3" /></svg>;
+    case 'tag':
+      return <svg {...common}><path d="M20 13 13 20 4 11V4h7l9 9Z" /><path d="M7.5 7.5h.01" /></svg>;
+    case 'more':
+      return <svg {...common}><path d="M6 12h.01M12 12h.01M18 12h.01" /></svg>;
+    default:
+      return null;
+  }
+};
+
 type SortKey = 'created_at' | 'updated_at' | 'lemma' | 'total_examples';
 type SortOrder = 'asc' | 'desc';
 type ViewMode = 'card' | 'list';
 type GenerationFilter = 'all' | 'generated' | 'not_generated';
+type VisibilityFilter = 'all' | 'public' | 'private';
 type SearchMode = 'prefix' | 'suffix' | 'contains';
 
 interface WordPackListItemWithTotal extends WordPackListItem {
@@ -77,6 +102,7 @@ type PersistedState = {
   sortOrder: SortOrder;
   viewMode: ViewMode;
   generationFilter: GenerationFilter;
+  visibilityFilter: VisibilityFilter;
   searchMode: SearchMode;
   searchInput: string;
   appliedSearch: { mode: SearchMode; value: string } | null;
@@ -93,6 +119,7 @@ const DEFAULT_PERSISTED_STATE: PersistedState = {
   sortOrder: 'desc',
   viewMode: 'card',
   generationFilter: 'all',
+  visibilityFilter: 'all',
   searchMode: 'contains',
   searchInput: '',
   appliedSearch: null,
@@ -150,12 +177,14 @@ export const WordPackListPanel: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>(persistedState.sortOrder);
   const [viewMode, setViewMode] = useState<ViewMode>(persistedState.viewMode);
   const [generationFilter, setGenerationFilter] = useState<GenerationFilter>(persistedState.generationFilter);
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>(persistedState.visibilityFilter ?? 'all');
   const [searchMode, setSearchMode] = useState<SearchMode>(persistedState.searchMode);
   const [searchInput, setSearchInput] = useState(persistedState.searchInput);
   const [appliedSearch, setAppliedSearch] = useState<{ mode: SearchMode; value: string } | null>(persistedState.appliedSearch);
   const [senseOpenIds, setSenseOpenIds] = useState<Set<string>>(() => new Set());
   const [showAllSense, setShowAllSense] = useState(persistedState.showAllSense);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [actionMenuOpenId, setActionMenuOpenId] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(() => new Set());
   const [guestPublicUpdatingIds, setGuestPublicUpdatingIds] = useState<Set<string>>(() => new Set());
   const { run: runAbortable } = useAbortableAsync();
@@ -215,6 +244,7 @@ export const WordPackListPanel: React.FC = () => {
       sortOrder,
       viewMode,
       generationFilter,
+      visibilityFilter,
       searchMode,
       searchInput,
       appliedSearch,
@@ -222,7 +252,22 @@ export const WordPackListPanel: React.FC = () => {
       showAllSense,
     };
     saveSessionState(STORAGE_KEY, stateToPersist);
-  }, [sortKey, sortOrder, viewMode, generationFilter, searchMode, searchInput, appliedSearch, offset, showAllSense]);
+  }, [sortKey, sortOrder, viewMode, generationFilter, visibilityFilter, searchMode, searchInput, appliedSearch, offset, showAllSense]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ mode?: SearchMode; value?: string }>).detail;
+      const nextMode = detail?.mode ?? 'contains';
+      const nextValue = (detail?.value ?? '').trim();
+      setSearchMode(nextMode);
+      setSearchInput(nextValue);
+      setAppliedSearch(nextValue ? { mode: nextMode, value: nextValue } : null);
+    };
+    try { window.addEventListener('wordpack:list-search', handler as EventListener); } catch {}
+    return () => {
+      try { window.removeEventListener('wordpack:list-search', handler as EventListener); } catch {}
+    };
+  }, []);
 
   // 一覧の取得は他のフィルタ操作と競合するため、AbortController を共通化して最新の結果のみを反映させる。
   const loadWordPacks = useCallback(
@@ -448,6 +493,8 @@ export const WordPackListPanel: React.FC = () => {
 
   const filteredWordPacks = useMemo(() => {
     return normalizedWordPacks.filter((wp) => {
+      if (visibilityFilter === 'public' && !wp.guest_public) return false;
+      if (visibilityFilter === 'private' && wp.guest_public) return false;
       if (generationFilter === 'generated' && wp.totalExamples <= 0) return false;
       if (generationFilter === 'not_generated' && wp.totalExamples > 0) return false;
       if (normalizedSearch) {
@@ -456,7 +503,7 @@ export const WordPackListPanel: React.FC = () => {
       }
       return true;
     });
-  }, [normalizedWordPacks, generationFilter, normalizedSearch]);
+  }, [normalizedWordPacks, visibilityFilter, generationFilter, normalizedSearch]);
 
   const sortedWordPacks = useMemo(() => {
     return [...filteredWordPacks].sort((a, b) => {
@@ -539,6 +586,47 @@ export const WordPackListPanel: React.FC = () => {
     }
   }, [selectedIds, confirmDialog, apiBase, loadWordPacks, offset, clearSelection]);
 
+  const updateSelectedGuestPublic = useCallback(
+    async (nextValue: boolean) => {
+      const ids = Array.from(selectedIds);
+      if (ids.length === 0) return;
+      setLoading(true);
+      setMsg(null);
+      const previous = wordPacks;
+      setWordPacks((prev) =>
+        prev.map((wp) => (selectedIds.has(wp.id) ? { ...wp, guest_public: nextValue } : wp)),
+      );
+      let updated = 0;
+      let failure: string | null = null;
+      try {
+        for (const id of ids) {
+          try {
+            await updateGuestPublicFlag({
+              apiBase,
+              wordPackId: id,
+              guestPublic: nextValue,
+              timeoutMs: requestTimeoutMs,
+            });
+            updated += 1;
+          } catch (error) {
+            failure = error instanceof ApiError ? error.message : '公開設定の更新に失敗しました';
+            break;
+          }
+        }
+        if (failure) {
+          setWordPacks(previous);
+          setMsg({ kind: 'alert', text: `公開設定を${updated}件更新しましたが一部失敗しました: ${failure}` });
+          return;
+        }
+        setMsg({ kind: 'status', text: nextValue ? `WordPackを${updated}件公開にしました` : `WordPackを${updated}件非公開にしました` });
+        dispatchAppEvent(APP_EVENTS.wordPackUpdated);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [apiBase, requestTimeoutMs, selectedIds, wordPacks],
+  );
+
   const handleApplySearch = useCallback(() => {
     setAppliedSearch({ mode: searchMode, value: searchInput.trim() });
   }, [searchMode, searchInput]);
@@ -571,6 +659,10 @@ export const WordPackListPanel: React.FC = () => {
     setSelectedIds((prev) => toggleSetValue(prev, id));
   }, []);
 
+  const toggleActionMenu = useCallback((id: string) => {
+    setActionMenuOpenId((prev) => (prev === id ? null : id));
+  }, []);
+
   useEffect(() => {
     if (showAllSense) {
       setSenseOpenIds(new Set(wordPacks.map((wp) => wp.id)));
@@ -584,6 +676,23 @@ export const WordPackListPanel: React.FC = () => {
 
   const hasNext = offset + PAGE_LIMIT < total;
   const hasPrev = offset > 0;
+  const generatedCount = normalizedWordPacks.filter((wp) => wp.totalExamples > 0).length;
+  const emptyCount = normalizedWordPacks.length - generatedCount;
+  const publicCount = normalizedWordPacks.filter((wp) => wp.guest_public).length;
+  const privateCount = normalizedWordPacks.length - publicCount;
+  const recentWordPacks = useMemo(
+    () =>
+      [...normalizedWordPacks]
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, 3),
+    [normalizedWordPacks],
+  );
+  const openPreview = useCallback((wordPackId: string) => {
+    setActionMenuOpenId(null);
+    setPreviewWordPackId(wordPackId);
+    setPreviewOpen(true);
+    setModalOpen(true);
+  }, [setModalOpen]);
 
   return (
     <section>
@@ -703,46 +812,115 @@ export const WordPackListPanel: React.FC = () => {
       `}</style>
 
       <div className="wp-list-container">
+        {recentWordPacks.length > 0 ? (
+          <section className="wp-recent-panel" aria-labelledby="wp-recent-heading">
+            <div className="wp-recent-panel-header">
+              <div>
+                <h2 id="wp-recent-heading">最近開いたWordPack</h2>
+                <p>直近で更新された辞書記事へすぐ戻れます。</p>
+              </div>
+              <a href="#wp-saved-list-heading">すべて見る</a>
+            </div>
+            <div className="wp-recent-list">
+              {recentWordPacks.map((wp, index) => (
+                <button
+                  key={wp.id}
+                  type="button"
+                  className="wp-recent-item"
+                  onClick={() => openPreview(wp.id)}
+                >
+                  <span className={`wp-recent-bookmark wp-recent-bookmark-${index + 1}`} aria-hidden="true" />
+                  <span>
+                    <strong>{wp.lemma}</strong>
+                    <small>{formatDate(wp.updated_at)}に更新</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <div className="wp-list-header">
-          <h2>保存済みWordPack一覧</h2>
-          <button onClick={() => loadWordPacks(offset)} disabled={loading}>
+          <h2 id="wp-saved-list-heading">
+            <span>保存済みWordPack</span>
+            <span className="wp-count-pill">{total}件</span>
+          </h2>
+          <p className="wp-list-summary">
+            {total}件中 {sortedWordPacks.length}件を表示
+            <span>生成済み {generatedCount}件</span>
+            <span>未生成 {emptyCount}件</span>
+          </p>
+          <div className="wp-view-toggle" role="group" aria-label="表示モード">
+            <button
+              type="button"
+              className="wp-toggle-btn"
+              aria-pressed={viewMode === 'card'}
+              onClick={() => setViewMode('card')}
+              title="カード表示"
+            ><MiniIcon name="book" />カード</button>
+            <button
+              type="button"
+              className="wp-toggle-btn"
+              aria-pressed={viewMode === 'list'}
+              onClick={() => setViewMode('list')}
+              title="リスト表示（索引）"
+            ><MiniIcon name="more" />リスト</button>
+          </div>
+          <button className="wp-refresh-button" onClick={() => loadWordPacks(offset)} disabled={loading}>
             更新
           </button>
         </div>
 
-        <div className="wp-view-toggle" role="group" aria-label="表示モード">
-          <button
-            type="button"
-            className="wp-toggle-btn"
-            aria-pressed={viewMode === 'card'}
-            onClick={() => setViewMode('card')}
-            title="カード表示"
-          >カード</button>
-          <button
-            type="button"
-            className="wp-toggle-btn"
-            aria-pressed={viewMode === 'list'}
-            onClick={() => setViewMode('list')}
-            title="リスト表示（索引）"
-          >リスト</button>
+        <div className="wp-filter-chip-row" role="group" aria-label="WordPackの絞り込み">
+          <button type="button" aria-pressed={visibilityFilter === 'all' && generationFilter === 'all'} onClick={() => { setVisibilityFilter('all'); setGenerationFilter('all'); }}>
+            すべて
+          </button>
+          <button type="button" aria-pressed={visibilityFilter === 'public'} onClick={() => setVisibilityFilter('public')}>
+            公開中 <span>{publicCount}</span>
+          </button>
+          <button type="button" aria-pressed={visibilityFilter === 'private'} onClick={() => setVisibilityFilter('private')}>
+            非公開 <span>{privateCount}</span>
+          </button>
+          <button type="button" aria-pressed={generationFilter === 'generated'} onClick={() => setGenerationFilter('generated')}>
+            生成済み <span>{generatedCount}</span>
+          </button>
+          <button type="button" aria-pressed={generationFilter === 'not_generated'} onClick={() => setGenerationFilter('not_generated')}>
+            未生成 <span>{emptyCount}</span>
+          </button>
+          <span className="wp-filter-chip-more"><span aria-hidden="true">＋</span> フィルター</span>
         </div>
 
-        <div className="wp-selection-bar" role="group" aria-label="WordPack選択操作">
-          <span>選択中: {selectedCount}件</span>
-          <button type="button" onClick={toggleVisibleSelection} disabled={sortedWordPacks.length === 0}>
-            {allVisibleSelected ? '表示中を選択解除' : '表示中を全選択'}
-          </button>
-          <button type="button" onClick={clearSelection} disabled={selectedCount === 0}>
-            全選択解除
-          </button>
-          <GuestLock isGuest={isGuest}>
-            <button
-              type="button"
-              onClick={deleteSelectedWordPacks}
-              disabled={selectedCount === 0 || loading}
-            >選択したWordPackを削除</button>
-          </GuestLock>
-        </div>
+        {selectedCount > 0 ? (
+          <div className="wp-selection-bar" role="group" aria-label="WordPack選択操作">
+            <span className="wp-selection-bar__count">{selectedCount}件選択中</span>
+            <button type="button" onClick={toggleVisibleSelection} disabled={sortedWordPacks.length === 0}>
+              {allVisibleSelected ? '選択を減らす' : '表示中を全選択'}
+            </button>
+            <button type="button" onClick={clearSelection}>
+              選択を解除
+            </button>
+            <GuestLock isGuest={isGuest}>
+              <button type="button" onClick={() => updateSelectedGuestPublic(true)} disabled={loading}>
+                <MiniIcon name="globe" />公開にする
+              </button>
+            </GuestLock>
+            <GuestLock isGuest={isGuest}>
+              <button type="button" onClick={() => updateSelectedGuestPublic(false)} disabled={loading}>
+                <MiniIcon name="lock" />非公開にする
+              </button>
+            </GuestLock>
+            <span className="wp-selection-tag-placeholder" aria-disabled="true">
+              <MiniIcon name="tag" />タグを追加
+            </span>
+            <GuestLock isGuest={isGuest}>
+              <button
+                type="button"
+                onClick={deleteSelectedWordPacks}
+                disabled={loading}
+              ><MiniIcon name="trash" />削除</button>
+            </GuestLock>
+          </div>
+        ) : null}
 
         <ListControls<SortKey>
           sortKey={sortKey}
@@ -760,6 +938,7 @@ export const WordPackListPanel: React.FC = () => {
           searchInput={searchInput}
           onChangeSearchInput={setSearchInput}
           onApplySearch={handleApplySearch}
+          showSearch={false}
           filtersLeft={(
             <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', marginLeft: '0.5rem' }}>
               <input
@@ -771,22 +950,6 @@ export const WordPackListPanel: React.FC = () => {
               />
               語義一括表示
             </label>
-          )}
-          filtersRight={(
-            <>
-              <label htmlFor="gen-filter" style={{ marginLeft: '0.5rem' }}>表示絞り込み:</label>
-              <select
-                id="gen-filter"
-                className="wp-filter-select"
-                value={generationFilter}
-                onChange={(e) => setGenerationFilter(e.target.value as any)}
-                aria-label="例文生成状況で絞り込み"
-              >
-                <option value="all">-</option>
-                <option value="generated">生成済</option>
-                <option value="not_generated">未生成</option>
-              </select>
-            </>
           )}
         />
 
@@ -801,7 +964,7 @@ export const WordPackListPanel: React.FC = () => {
         {wordPacks.length === 0 && !loading ? (
           <div className="wp-empty">
             <p>保存済みのWordPackがありません。</p>
-            <p>新しいWordPackを生成してください。</p>
+            <p>新しいWordPackを作成してください。</p>
           </div>
         ) : (
           <>
@@ -810,13 +973,9 @@ export const WordPackListPanel: React.FC = () => {
                 {sortedWordPacks.map((wp) => (
                   <div
                     key={wp.id}
-                    className="wp-card"
+                    className={`wp-card${selectedIds.has(wp.id) ? ' is-selected' : ''}${wp.is_empty ? ' is-empty' : ''}`}
                     data-testid="wp-card"
-                    onClick={() => { 
-                      setPreviewWordPackId(wp.id); 
-                      setPreviewOpen(true);
-                      setModalOpen(true);
-                    }}
+                    onClick={() => openPreview(wp.id)}
                   >
                     <div className="wp-card-header">
                       <label
@@ -832,42 +991,79 @@ export const WordPackListPanel: React.FC = () => {
                       </label>
                       <div className="wp-card-header-main">
                         <h3 className="wp-card-title">{wp.lemma}</h3>
+                        <p className="wp-card-description">
+                          {wp.sense_title?.trim() || (wp.is_empty ? '例文を追加すると学習パックとして使えます。' : '用例と語義をまとめた学習パックです。')}
+                        </p>
                       </div>
-                      <div className="wp-card-actions" onClick={(e) => e.stopPropagation()}>
-                        <div className="wp-card-actions-upper" role="group" aria-label="カード操作 上段">
-                          <TTSButton text={wp.lemma} className="wp-card-tts-btn" />
-                          <DeleteButton
-                            onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
-                            disabled={loading}
-                            isGuest={isGuest}
-                          />
-                        </div>
-                        <div className="wp-card-actions-lower" role="group" aria-label="カード操作 下段">
-                          {wp.is_empty && (
+                      <button
+                        type="button"
+                        className="wp-card-more"
+                        aria-label={`${wp.lemma} のその他の操作`}
+                        aria-expanded={actionMenuOpenId === wp.id}
+                        aria-controls={`wp-action-menu-${wp.id}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleActionMenu(wp.id);
+                        }}
+                      >
+                        <MiniIcon name="more" />
+                      </button>
+                      {actionMenuOpenId === wp.id ? (
+                        <div
+                          id={`wp-action-menu-${wp.id}`}
+                          className="wp-card-menu"
+                          role="menu"
+                          aria-label={`${wp.lemma} の操作メニュー`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button type="button" role="menuitem" onClick={() => openPreview(wp.id)}>
+                            開く
+                          </button>
+                          {wp.is_empty ? (
                             <GuestLock isGuest={isGuest}>
                               <button
                                 type="button"
-                                className="wp-generate-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
+                                role="menuitem"
+                                onClick={() => {
+                                  setActionMenuOpenId(null);
                                   generateWordPack(wp);
                                 }}
                                 disabled={loading || generatingIds.has(wp.id)}
-                              >生成</button>
+                              >
+                                例文を生成
+                              </button>
                             </GuestLock>
-                          )}
-                          <button
-                            type="button"
-                            className="wp-sense-btn"
-                            aria-pressed={showAllSense || senseOpenIds.has(wp.id)}
-                            disabled={showAllSense}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleSenseOpen(wp.id);
-                            }}
-                          >語義</button>
+                          ) : null}
+                          <GuestLock isGuest={isGuest}>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setActionMenuOpenId(null);
+                                updateGuestPublic(wp.id, !wp.guest_public);
+                              }}
+                              disabled={loading || guestPublicUpdatingIds.has(wp.id)}
+                            >
+                              {wp.guest_public ? '非公開にする' : '公開にする'}
+                            </button>
+                          </GuestLock>
+                          <GuestLock isGuest={isGuest}>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              className="wp-card-menu-danger"
+                              onClick={(e) => {
+                                setActionMenuOpenId(null);
+                                deleteWordPack(wp);
+                                e.stopPropagation();
+                              }}
+                              disabled={loading}
+                            >
+                              削除
+                            </button>
+                          </GuestLock>
                         </div>
-                      </div>
+                      ) : null}
                     </div>
                     {(showAllSense || senseOpenIds.has(wp.id)) && (
                       <div className="wp-card-sense-title" data-testid="wp-card-sense-title">
@@ -875,54 +1071,65 @@ export const WordPackListPanel: React.FC = () => {
                       </div>
                     )}
                     <div className="wp-card-meta">
-                      <div>作成: {formatDate(wp.created_at)} / 更新: {formatDate(wp.updated_at)}</div>
                       <div className="wp-progress-badges" aria-label="学習状況">
                         <span className="wp-progress-badge learned">学 {wp.learned_count}</span>
-                        <span className="wp-progress-badge checked">確 {wp.checked_only_count}</span>
+                        <span className="wp-progress-badge checked">難 {wp.checked_only_count}</span>
                       </div>
-                      <div style={{ marginTop: '0.35rem' }}>
-                        <GuestPublicToggle
-                          isGuest={isGuest}
-                          checked={Boolean(wp.guest_public)}
-                          disabled={loading || guestPublicUpdatingIds.has(wp.id)}
-                          onChange={(next) => updateGuestPublic(wp.id, next)}
-                          tooltip="ゲスト閲覧の一覧に表示するかどうかを切り替えます。"
-                          description="公開対象のWordPackのみ、ゲスト一覧に表示されます。"
-                          compact
-                        />
+                      <div className="wp-card-status-row">
+                        <span className={`wp-visibility-pill ${wp.guest_public ? 'is-public' : 'is-private'}`}>
+                          <MiniIcon name={wp.guest_public ? 'globe' : 'lock'} />
+                          {wp.guest_public ? '公開中' : '非公開'}
+                        </span>
+                        <span className="wp-date-pill">
+                          <MiniIcon name="calendar" />
+                          更新: {formatDate(wp.updated_at)}
+                        </span>
+                      </div>
+                      <div className="wp-card-actions" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="wp-open-button"
+                          onClick={() => openPreview(wp.id)}
+                        >
+                          <MiniIcon name="open" />開く
+                        </button>
+                        <TTSButton text={wp.lemma} className="wp-card-tts-btn" icon={<MiniIcon name="speaker" />} />
+                        {wp.is_empty && (
+                          <GuestLock isGuest={isGuest}>
+                            <button
+                              type="button"
+                              className="wp-generate-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                generateWordPack(wp);
+                              }}
+                              disabled={loading || generatingIds.has(wp.id)}
+                            >生成</button>
+                          </GuestLock>
+                        )}
+                        <button
+                          type="button"
+                          className="wp-sense-btn"
+                          aria-pressed={showAllSense || senseOpenIds.has(wp.id)}
+                          disabled={showAllSense}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSenseOpen(wp.id);
+                          }}
+                        ><MiniIcon name="book" />語義</button>
                       </div>
                       {wp.is_empty ? (
-                        <div style={{ marginTop: '0.3rem', fontSize: '0.7em' }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.25rem',
-                            padding: '0.1rem 0.3rem',
-                            backgroundColor: '#fff3cd',
-                            color: '#7a5b00',
-                            borderRadius: '3px',
-                            border: '1px solid #ffe08a',
-                            fontSize: '0.75em'
-                          }}>
+                        <div className="wp-example-tags">
+                          <span className="wp-example-tag is-empty">
                             例文未生成
                           </span>
                         </div>
                       ) : wp.examples_count && (
-                        <div style={{ marginTop: '0.3rem', fontSize: '0.2em' }}>
-                          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+                        <div className="wp-example-tags">
+                          <div className="wp-example-tag-list">
                             {Object.entries(wp.examples_count).map(([category, count]) => (
-                              <span key={category} style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.10rem',
-                                padding: '0.1rem 0.2rem',
-                                backgroundColor: count > 0 ? '#e3f2fd' : '#f5f5f5',
-                                color: count > 0 ? '#1565c0' : '#666',
-                                borderRadius: '3px',
-                                border: `1px solid ${count > 0 ? '#1565c0' : '#ddd'}`,
-                                fontSize: '0.40em'
-                              }}>
-                                <span style={{ fontWeight: 'bold' }}>{category}</span>
+                              <span key={category} className={`wp-example-tag${count > 0 ? ' has-count' : ''}`}>
+                                <span>{category}</span>
                                 <span>{count}</span>
                               </span>
                             ))}
@@ -950,11 +1157,7 @@ export const WordPackListPanel: React.FC = () => {
                     key={wp.id}
                     className="wp-index-item"
                     data-testid="wp-index-item"
-                    onClick={() => {
-                      setPreviewWordPackId(wp.id);
-                      setPreviewOpen(true);
-                      setModalOpen(true);
-                    }}
+                    onClick={() => openPreview(wp.id)}
                   >
                     <label className="wp-select-checkbox" onClick={(e) => e.stopPropagation()}>
                       <input
@@ -985,7 +1188,7 @@ export const WordPackListPanel: React.FC = () => {
                           e.stopPropagation();
                           toggleSenseOpen(wp.id);
                         }}
-                      >語義</button>
+                      ><MiniIcon name="book" />語義</button>
                       {wp.is_empty && (
                         <GuestLock isGuest={isGuest}>
                           <button
@@ -996,10 +1199,10 @@ export const WordPackListPanel: React.FC = () => {
                               generateWordPack(wp);
                             }}
                             disabled={loading || generatingIds.has(wp.id)}
-                          >生成</button>
+                          ><MiniIcon name="open" />生成</button>
                         </GuestLock>
                       )}
-                      <TTSButton text={wp.lemma} className="wp-index-tts-btn" />
+                      <TTSButton text={wp.lemma} className="wp-index-tts-btn" icon={<MiniIcon name="speaker" />} />
                       <DeleteButton
                         onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
                         disabled={loading}
