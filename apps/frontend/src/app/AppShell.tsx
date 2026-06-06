@@ -146,9 +146,6 @@ export const AppShell: React.FC = () => {
       style={shellStyle}
     >
       <h1 className="visually-hidden">{MAIN_HEADING_TEXT}</h1>
-      {isGuest ? (
-        <span className={`guest-badge guest-badge-fixed${fixedSafeAreaClass}`}>ゲスト閲覧モード</span>
-      ) : null}
       {isSidebarOpen && isOverlaySidebar ? (
         <button
           type="button"
@@ -162,17 +159,18 @@ export const AppShell: React.FC = () => {
         <Sidebar
           activeNavKey={activeNavKey}
           firstSidebarItemRef={firstSidebarItemRef}
+          isAuthenticating={isAuthenticating}
+          isGuest={isGuest}
           isSidebarOpen={isSidebarOpen}
           onSelectRoute={handleSelectRoute}
+          onSignOut={handleHeaderSignOut}
           sidebarRef={sidebarRef}
         />
         <div className="main-column">
           <div className="main-inner">
             <Header
               fixedSafeAreaClass={fixedSafeAreaClass}
-              isAuthenticating={isAuthenticating}
               isSidebarOpen={isSidebarOpen}
-              onSignOut={handleHeaderSignOut}
               onToggleSidebar={toggleSidebar}
               sidebarToggleRef={sidebarToggleRef}
             />
