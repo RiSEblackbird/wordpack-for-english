@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
@@ -84,19 +84,24 @@ describe('WordPackListPanel guest controls', () => {
     // WordPack一覧がロードされて生成ボタンが表示されるまで待機
     await waitFor(() => expect(screen.getByRole('button', { name: '生成' })).toBeInTheDocument());
 
-    expect(screen.queryByRole('button', { name: '選択したWordPackを削除' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'WordPack選択操作' })).not.toBeInTheDocument();
     const generateButton = screen.getByRole('button', { name: '生成' });
-    const deleteButtons = screen.getAllByRole('button', { name: '削除' });
 
     expect(generateButton).toBeDisabled();
-    expect(deleteButtons[0]).toBeDisabled();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'alpha のその他の操作' }));
+    });
+    const cardDeleteButton = screen.getByRole('menuitem', { name: '削除' });
+    expect(cardDeleteButton).toBeDisabled();
 
     const checkbox = screen.getByRole('checkbox', { name: 'WordPack alpha を選択' });
     await act(async () => {
       await user.click(checkbox);
     });
 
-    const bulkDeleteButton = screen.getByRole('button', { name: '選択したWordPackを削除' });
+    const selectionBar = screen.getByRole('group', { name: 'WordPack選択操作' });
+    const bulkDeleteButton = within(selectionBar).getByRole('button', { name: '削除' });
     expect(bulkDeleteButton).toBeDisabled();
 
     vi.useFakeTimers();

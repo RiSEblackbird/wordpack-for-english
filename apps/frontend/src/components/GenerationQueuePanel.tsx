@@ -14,7 +14,7 @@ const extractLemma = (title: string): string => {
   return title.replace(/の生成(処理中|完了|失敗).*$/, '').trim() || 'WordPack';
 };
 
-const QueueItem: React.FC<{ item: NotificationItem; nowMs: number }> = ({ item, nowMs }) => {
+const QueueItem: React.FC<{ item: NotificationItem; nowMs: number; onRemove: (id: string) => void }> = ({ item, nowMs, onRemove }) => {
   const elapsedMs = item.status === 'progress' ? nowMs - item.createdAt : item.updatedAt - item.createdAt;
   const lemma = extractLemma(item.title);
   const statusLabel = item.status === 'progress' ? '生成中' : item.status === 'success' ? '完了' : '失敗';
@@ -30,9 +30,11 @@ const QueueItem: React.FC<{ item: NotificationItem; nowMs: number }> = ({ item, 
           <strong>{lemma}</strong>
           <span>{statusLabel}</span>
         </div>
-        <p>{item.message || (item.status === 'progress' ? 'LLM応答を待機しています' : '生成履歴に保存されました')}</p>
+        {item.status !== 'success' ? (
+          <p>{item.message || (item.status === 'progress' ? 'LLM応答を待機しています' : '生成履歴に保存されました')}</p>
+        ) : null}
         <div className="generation-queue-item__meta">
-          <span>{item.model || 'gpt-5.4-mini'}</span>
+          <span>{item.category ? `${item.category}: ` : ''}{item.model || 'gpt-5.4-mini'}</span>
           <span>{item.status === 'progress' ? `経過 ${formatElapsed(elapsedMs)}` : `${formatElapsed(elapsedMs)}前後`}</span>
         </div>
         {item.status === 'progress' ? (
@@ -47,13 +49,18 @@ const QueueItem: React.FC<{ item: NotificationItem; nowMs: number }> = ({ item, 
             <span style={{ width: `${progressValue}%` }} />
           </div>
         ) : null}
+        {item.status === 'progress' ? (
+          <button type="button" className="generation-queue-item__remove" onClick={() => onRemove(item.id)}>
+            キューから隠す
+          </button>
+        ) : null}
       </div>
     </article>
   );
 };
 
 export const GenerationQueuePanel: React.FC = () => {
-  const { notifications, clearAll } = useNotifications();
+  const { notifications, clearAll, remove } = useNotifications();
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -66,7 +73,7 @@ export const GenerationQueuePanel: React.FC = () => {
     const done = notifications
       .filter((item) => item.status !== 'progress')
       .sort((a, b) => b.updatedAt - a.updatedAt)
-      .slice(0, 4);
+      .slice(0, 3);
     return { progressItems: progress, doneItems: done };
   }, [notifications]);
 
@@ -83,10 +90,11 @@ export const GenerationQueuePanel: React.FC = () => {
         <div className="generation-queue-section__header">
           <h3>進行中</h3>
           <span>{progressItems.length}</span>
+          <b aria-hidden="true">⌃</b>
         </div>
         {progressItems.length ? (
           <div className="generation-queue-list">
-            {progressItems.map((item) => <QueueItem key={item.id} item={item} nowMs={nowMs} />)}
+            {progressItems.map((item) => <QueueItem key={item.id} item={item} nowMs={nowMs} onRemove={remove} />)}
           </div>
         ) : (
           <p className="generation-queue-empty">今は生成待ちのWordPackはありません。</p>
@@ -97,10 +105,11 @@ export const GenerationQueuePanel: React.FC = () => {
         <div className="generation-queue-section__header">
           <h3>完了</h3>
           <span>{doneItems.length}</span>
+          <b aria-hidden="true">⌄</b>
         </div>
         {doneItems.length ? (
           <div className="generation-queue-list">
-            {doneItems.map((item) => <QueueItem key={item.id} item={item} nowMs={nowMs} />)}
+            {doneItems.map((item) => <QueueItem key={item.id} item={item} nowMs={nowMs} onRemove={remove} />)}
           </div>
         ) : (
           <p className="generation-queue-empty">完了した生成はここに残ります。</p>
@@ -109,7 +118,7 @@ export const GenerationQueuePanel: React.FC = () => {
 
       {notifications.length ? (
         <button type="button" className="generation-queue-history-button" onClick={clearAll}>
-          履歴を消去
+          すべての履歴を消去
         </button>
       ) : null}
     </section>

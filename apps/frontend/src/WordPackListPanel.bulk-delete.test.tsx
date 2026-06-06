@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
@@ -120,14 +120,14 @@ describe('WordPackListPanel bulk delete', () => {
 
     const user = userEvent.setup();
 
-    await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /保存済みWordPack/ })).toBeInTheDocument());
 
     const alphaCheckbox = await screen.findByRole('checkbox', { name: 'WordPack alpha を選択' });
     const betaCheckbox = await screen.findByRole('checkbox', { name: 'WordPack beta を選択' });
     expect(alphaCheckbox).not.toBeChecked();
     expect(betaCheckbox).not.toBeChecked();
 
-    expect(screen.queryByRole('button', { name: '選択したWordPackを削除' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'WordPack選択操作' })).not.toBeInTheDocument();
 
     await act(async () => {
       await user.click(alphaCheckbox);
@@ -137,7 +137,8 @@ describe('WordPackListPanel bulk delete', () => {
     expect(alphaCheckbox).toBeChecked();
     expect(betaCheckbox).toBeChecked();
 
-    const bulkDeleteButton = await screen.findByRole('button', { name: '選択したWordPackを削除' });
+    const selectionBar = await screen.findByRole('group', { name: 'WordPack選択操作' });
+    const bulkDeleteButton = within(selectionBar).getByRole('button', { name: '削除' });
     expect(bulkDeleteButton).not.toBeDisabled();
 
     await act(async () => {
@@ -160,10 +161,7 @@ describe('WordPackListPanel bulk delete', () => {
       expect.objectContaining({ method: 'DELETE' }),
     );
 
-    await waitFor(() => {
-      expect(screen.queryByText('alpha')).not.toBeInTheDocument();
-      expect(screen.queryByText('beta')).not.toBeInTheDocument();
-      expect(screen.getByText('gamma')).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getAllByTestId('wp-card')).toHaveLength(1));
+    expect(screen.getAllByTestId('wp-card')[0]).toHaveTextContent('gamma');
   });
 });

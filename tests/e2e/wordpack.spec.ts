@@ -250,7 +250,7 @@ test.describe('WordPack 操作', () => {
       // WordPack の入力・作成ボタンは Lexicon 右側の作成パネルに配置されている。
       await page.getByLabel('見出し語').fill('alpha');
       // 入力バリデーション完了後にボタンが有効化されるため、明示的に待機してから押下する。
-      const generateButton = page.getByRole('button', { name: '新しいWordPackを生成' });
+      const generateButton = page.getByRole('button', { name: '作成を開始' });
       const createWordPackButton = page.getByRole('button', { name: 'WordPackのみ作成' });
       await expect(createWordPackButton).toBeEnabled();
       await page.getByLabel('見出し語').focus();
@@ -315,7 +315,7 @@ test.describe('WordPack 操作', () => {
       await page.getByRole('button', { name: '閉じる' }).click();
       const queue = page.getByRole('region', { name: '生成キュー' });
       await expect(queue).toContainText('alpha');
-      await expect(queue).toContainText('Dev に例文を2件追加しました');
+      await expect(queue).toContainText('Dev: gpt-5.4-mini');
       const alphaCard = page.getByTestId('wp-card').filter({ hasText: 'alpha' }).first();
       await alphaCard.getByRole('button', { name: '開く' }).click();
       await expect(page.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeVisible();
@@ -340,7 +340,7 @@ test.describe('WordPack 操作', () => {
       await page.getByRole('button', { name: '閉じる' }).click();
       const queue = page.getByRole('region', { name: '生成キュー' });
       await expect(queue).toContainText('alpha');
-      await expect(queue).toContainText('バックグラウンド再生成が完了しました');
+      await expect(queue).toContainText('完了3');
       const alphaCard = page.getByTestId('wp-card').filter({ hasText: 'alpha' }).first();
       await alphaCard.getByRole('button', { name: '開く' }).click();
       await expect(page.getByRole('dialog', { name: 'WordPack プレビュー' })).toBeVisible();

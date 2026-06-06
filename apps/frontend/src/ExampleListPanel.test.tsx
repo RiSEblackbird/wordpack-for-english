@@ -34,10 +34,12 @@ describe('ExampleListPanel pagination offset behavior', () => {
     );
 
   const openTab = async (user: ReturnType<typeof userEvent.setup>, label: string) => {
-    const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
-    await act(async () => {
-      await user.click(toggle);
-    });
+    const toggle = screen.queryByRole('button', { name: 'メニューを開く' });
+    if (toggle) {
+      await act(async () => {
+        await user.click(toggle);
+      });
+    }
     const tabButton = await screen.findByRole('button', { name: label });
     await act(async () => {
       await user.click(tabButton);
@@ -387,4 +389,3 @@ describe('ExampleListPanel pagination offset behavior', () => {
     });
   }, 15000);
 });
-

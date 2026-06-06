@@ -77,9 +77,9 @@ describe('WordPackListPanel header layout', () => {
       </AppProviders>,
     );
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: '保存済みWordPack一覧' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /保存済みWordPack/ })).toBeInTheDocument());
 
-    const heading = screen.getByRole('heading', { name: '保存済みWordPack一覧' });
+    const heading = screen.getByRole('heading', { name: /保存済みWordPack/ });
     const refreshButton = screen.getByRole('button', { name: '更新' });
     const headerContainer = heading.parentElement;
 

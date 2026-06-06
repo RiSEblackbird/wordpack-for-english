@@ -362,11 +362,10 @@ export const WordPackPanel: React.FC<Props> = ({
           <button
             type="button"
             className="wordpack-create-panel__primary"
-            aria-label={creationPanelPlacement === 'inline' ? '新しいWordPackを生成' : undefined}
             onClick={handleGenerate}
             disabled={!isLemmaValid || isActionLoading}
           >
-            生成
+            作成を開始
           </button>
         </GuestLock>
         <GuestLock isGuest={isGuest}>

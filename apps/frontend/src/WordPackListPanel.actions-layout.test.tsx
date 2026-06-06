@@ -5,7 +5,7 @@ import { vi } from 'vitest';
 import { App } from './App';
 import { AppProviders } from './main';
 
-describe('WordPackListPanel card actions layout (two rows)', () => {
+describe('WordPackListPanel card actions layout', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     (globalThis as any).fetch = vi.fn();
@@ -87,40 +87,38 @@ describe('WordPackListPanel card actions layout (two rows)', () => {
     return mock;
   }
 
-  it('カード右上の操作が2行: 上段=音声/削除, 下段=生成/語義(右寄せ)', async () => {
+  it('カード下部に主要操作を並べ、破壊的操作はメニューに置く', async () => {
     setupFetchMocks();
     renderWithAuth();
 
     const user = userEvent.setup();
 
     // WordPackタブ（既定）を表示
-    await waitFor(() => expect(screen.getByText('保存済みWordPack一覧')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /保存済みWordPack/ })).toBeInTheDocument());
     const cards = await screen.findAllByTestId('wp-card');
     expect(cards.length).toBeGreaterThanOrEqual(2);
 
     // is_empty の delta カードを対象に検証
     const target = cards.find((el) => /delta/.test(el.textContent || ''))!;
 
-    // 上段グループ: 音声 / 削除
-    const upper = within(target).getByRole('group', { name: 'カード操作 上段' });
-    const upperButtons = within(upper).getAllByRole('button');
-    expect(upperButtons.map((b) => b.textContent)).toEqual(['音声', '削除']);
+    expect(within(target).getByRole('button', { name: '開く' })).toBeInTheDocument();
+    expect(within(target).getByRole('button', { name: '音声' })).toBeInTheDocument();
+    expect(within(target).getByRole('button', { name: '生成' })).toBeInTheDocument();
+    expect(within(target).getByRole('button', { name: '語義' })).toBeInTheDocument();
 
-    // 下段グループ: 右寄せで 生成 / 語義（is_empty のため生成あり）
-    const lower = within(target).getByRole('group', { name: 'カード操作 下段' });
-    const lowerButtons = within(lower).getAllByRole('button');
-    expect(lowerButtons.map((b) => b.textContent)).toEqual(['生成', '語義']);
-
-    // 非 empty カードでは下段が「語義」のみであること
+    // 非 empty カードでは生成操作を出さないこと
     const nonEmpty = cards.find((el) => /alpha/.test(el.textContent || ''))!;
-    const lower2 = within(nonEmpty).getByRole('group', { name: 'カード操作 下段' });
-    const lower2Buttons = within(lower2).getAllByRole('button');
-    expect(lower2Buttons.map((b) => b.textContent)).toEqual(['語義']);
+    expect(within(nonEmpty).queryByRole('button', { name: '生成' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      await user.click(within(target).getByRole('button', { name: 'delta のその他の操作' }));
+    });
+    const menu = screen.getByRole('menu', { name: 'delta の操作メニュー' });
+    expect(within(menu).getByRole('menuitem', { name: '削除' })).toBeInTheDocument();
 
     // 動作確認（語義をクリックしてもカードが開かない＝イベント停止）
-    const senseBtn = within(lower).getByRole('button', { name: '語義' });
+    const senseBtn = within(target).getByRole('button', { name: '語義' });
     await act(async () => { await user.click(senseBtn); });
     expect(screen.queryByRole('dialog', { name: 'WordPack プレビュー' })).not.toBeInTheDocument();
   });
 });
-

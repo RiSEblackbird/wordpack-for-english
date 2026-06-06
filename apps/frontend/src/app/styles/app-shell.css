@@ -65,7 +65,7 @@ footer {
 }
 
 .app-shell {
-  --app-sidebar-width: 244px;
+  --app-sidebar-width: 224px;
   --sidebar-title-toggle-clearance: 3rem;
   margin: 0 auto;
   box-sizing: border-box;
@@ -79,10 +79,10 @@ footer {
 }
 
 .header-bar {
-  min-height: 50px;
+  min-height: 0;
   display: flex;
   align-items: center;
-  padding-left: 3.5rem;
+  padding-left: 0;
 }
 
 .github-link {
@@ -186,24 +186,26 @@ body.theme-dark .guest-badge {
 }
 
 .sidebar {
-  width: 0;
+  width: var(--app-sidebar-width);
   flex-shrink: 0;
-  background: #0b1220;
+  background:
+    linear-gradient(180deg, rgba(47, 115, 255, 0.08), transparent 16rem),
+    #07111e;
   box-shadow: none;
   overflow: hidden;
   z-index: 970;
-  border-right: 1px solid rgba(125, 146, 178, 0.22);
+  border-right: 1px solid rgba(125, 146, 178, 0.26);
 }
 
 .app-shell.sidebar-open .sidebar {
-  box-shadow: 2px 0 20px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
   width: var(--app-sidebar-width);
 }
 
 .sidebar-content {
   height: 100vh;
   height: 100dvh;
-  padding: 1.55rem 1rem;
+  padding: 1.75rem 0.95rem 1rem;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
   width: 100%;
@@ -225,7 +227,7 @@ body.theme-dark .guest-badge {
   display: flex;
   gap: 0.65rem;
   min-height: 44px;
-  padding: 0.25rem 0.5rem 0.5rem var(--sidebar-title-toggle-clearance);
+  padding: 0.25rem 0.35rem 0.5rem;
   align-items: center;
 }
 
@@ -238,9 +240,9 @@ body.theme-dark .guest-badge {
 
 .sidebar-nav {
   display: grid;
-  gap: 0.2rem;
+  gap: 0.35rem;
   align-content: flex-start;
-  padding-top: 0.5rem;
+  padding-top: 0.35rem;
 }
 
 .sidebar-controls {
@@ -317,11 +319,11 @@ body.theme-dark .guest-badge {
 }
 
 .sidebar-nav-button {
-  min-height: 3rem;
+  min-height: 2.85rem;
   font-size: 0.97rem;
   border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 0.55rem 0.75rem;
+  border-radius: 7px;
+  padding: 0.55rem 0.72rem;
   text-align: left;
   background: transparent;
   color: #dce6f6;
@@ -360,10 +362,10 @@ body.theme-dark .guest-badge {
 }
 
 .sidebar-nav-button[aria-pressed='true'] {
-  border-color: rgba(93, 145, 255, 0.42);
+  border-color: rgba(93, 145, 255, 0.52);
   background: linear-gradient(180deg, #347cff, #1f61de);
   color: #ffffff;
-  box-shadow: 0 12px 28px rgba(31, 97, 222, 0.25);
+  box-shadow: 0 12px 28px rgba(31, 97, 222, 0.28);
 }
 
 .main-column {
@@ -372,7 +374,7 @@ body.theme-dark .guest-badge {
   display: flex;
   justify-content: flex-start;
   box-sizing: border-box;
-  padding: 0 24px;
+  padding: 0 20px;
 }
 
 .main-inner {
@@ -382,7 +384,7 @@ body.theme-dark .guest-badge {
   max-width: var(--main-max-width);
   width: min(100%, var(--main-max-width));
   margin: 0 auto;
-  padding: 0.5rem 0.25rem;
+  padding: 0.45rem 0 0.5rem;
   transition: none;
 }
 
@@ -426,6 +428,25 @@ body.theme-dark .guest-badge {
   margin-top: 6rem;
 }
 
+@media (max-width: 900px) {
+  .header-bar {
+    min-height: 50px;
+    padding-left: 3.5rem;
+  }
+
+  .sidebar {
+    width: 0;
+  }
+
+  .app-shell.sidebar-open .sidebar {
+    box-shadow: 2px 0 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .sidebar-brand {
+    padding-left: var(--sidebar-title-toggle-clearance);
+  }
+}
+
 @media (max-width: 430px) {
   body {
     padding-top: env(safe-area-inset-top);
@@ -445,7 +466,7 @@ body.theme-dark .guest-badge {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 900px) {
   .sidebar {
     position: fixed;
     top: 0;

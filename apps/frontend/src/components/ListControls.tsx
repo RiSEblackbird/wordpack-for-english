@@ -18,6 +18,7 @@ interface ListControlsProps<TSortKey extends string> {
   searchInput: string;
   onChangeSearchInput: (value: string) => void;
   onApplySearch: () => void;
+  showSearch?: boolean;
 }
 
 export function ListControls<TSortKey extends string>(props: ListControlsProps<TSortKey>) {
@@ -35,6 +36,7 @@ export function ListControls<TSortKey extends string>(props: ListControlsProps<T
     searchInput,
     onChangeSearchInput,
     onApplySearch,
+    showSearch = true,
   } = props;
 
   return (
@@ -74,33 +76,37 @@ export function ListControls<TSortKey extends string>(props: ListControlsProps<T
 
       {filtersRight}
 
-      <label htmlFor="search-mode" style={{ marginLeft: '0.5rem' }}>検索:</label>
-      <select
-        id="search-mode"
-        className="wp-filter-select"
-        value={searchMode}
-        onChange={(e) => onChangeSearchMode(e.target.value as any)}
-        aria-label="検索方法"
-      >
-        <option value="prefix">前方一致</option>
-        <option value="suffix">後方一致</option>
-        <option value="contains">部分一致</option>
-      </select>
-      <input
-        type="text"
-        className="wp-search-input"
-        value={searchInput}
-        onChange={(e) => onChangeSearchInput(e.target.value)}
-        placeholder="検索する文字列"
-        aria-label="検索文字列"
-        onKeyDown={(e) => { if (e.key === 'Enter') onApplySearch(); }}
-      />
-      <button
-        type="button"
-        className="wp-search-button"
-        onClick={onApplySearch}
-        title="検索"
-      >検索</button>
+      {showSearch ? (
+        <>
+          <label htmlFor="search-mode" style={{ marginLeft: '0.5rem' }}>検索:</label>
+          <select
+            id="search-mode"
+            className="wp-filter-select"
+            value={searchMode}
+            onChange={(e) => onChangeSearchMode(e.target.value as any)}
+            aria-label="検索方法"
+          >
+            <option value="prefix">前方一致</option>
+            <option value="suffix">後方一致</option>
+            <option value="contains">部分一致</option>
+          </select>
+          <input
+            type="text"
+            className="wp-search-input"
+            value={searchInput}
+            onChange={(e) => onChangeSearchInput(e.target.value)}
+            placeholder="検索する文字列"
+            aria-label="検索文字列"
+            onKeyDown={(e) => { if (e.key === 'Enter') onApplySearch(); }}
+          />
+          <button
+            type="button"
+            className="wp-search-button"
+            onClick={onApplySearch}
+            title="検索"
+          >検索</button>
+        </>
+      ) : null}
     </div>
   );
 }

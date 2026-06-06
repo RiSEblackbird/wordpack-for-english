@@ -67,9 +67,9 @@ describe('App guest mode entry', () => {
 
   it('closes the sidebar when the backdrop is clicked or Escape is pressed', async () => {
     // モバイルレイアウト（オーバーレイサイドバー）をシミュレート
-    // なぜ: バックドロップはモバイル（max-width: 480px）でのみ表示される仕様だから
+    // なぜ: バックドロップはオーバーレイ幅（max-width: 900px）でのみ表示される仕様だから
     const mockMatchMedia = vi.fn().mockImplementation((query: string) => ({
-      matches: query === '(max-width: 480px)',
+      matches: query === '(max-width: 900px)',
       media: query,
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),

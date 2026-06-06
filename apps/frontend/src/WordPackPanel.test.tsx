@@ -261,7 +261,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     });
     await act(async () => {
       await user.type(input, 'delta');
-      await user.click(screen.getByRole('button', { name: '新しいWordPackを生成' }));
+      await user.click(screen.getByRole('button', { name: '作成を開始' }));
     });
 
     await screen.findByText('WordPack を生成しました');
@@ -286,7 +286,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       const lemmaInput = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
       lemmaInput.value = '';
       await user2.type(lemmaInput, 'alpha');
-      await user2.click(screen.getByRole('button', { name: '新しいWordPackを生成' }));
+      await user2.click(screen.getByRole('button', { name: '作成を開始' }));
     });
     const bodies2 = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
@@ -300,7 +300,7 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       const lemmaInput2 = screen.getByPlaceholderText('見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）') as HTMLInputElement;
       lemmaInput2.value = '';
       await user3.type(lemmaInput2, 'beta');
-      await user3.click(screen.getByRole('button', { name: '新しいWordPackを生成' }));
+      await user3.click(screen.getByRole('button', { name: '作成を開始' }));
     });
     const bodies3 = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))

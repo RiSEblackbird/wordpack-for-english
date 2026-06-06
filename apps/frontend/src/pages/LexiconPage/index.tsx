@@ -15,9 +15,32 @@ export const LexiconPage: React.FC<LexiconPageProps> = ({
   focusRef,
   onWordPackGenerated,
 }) => {
+  const [topSearch, setTopSearch] = React.useState('');
+  const topSearchRef = React.useRef<HTMLInputElement>(null);
+
   const focusCreateInput = () => {
     try { focusRef.current?.focus(); } catch {}
   };
+
+  const applyTopSearch = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      window.dispatchEvent(new CustomEvent('wordpack:list-search', {
+        detail: { mode: 'contains', value: topSearch },
+      }));
+    } catch {}
+  };
+
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        topSearchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <div className="dictionary-main lexicon-main">
@@ -29,6 +52,24 @@ export const LexiconPage: React.FC<LexiconPageProps> = ({
               <p>保存済みの個人辞書を検索・管理します。</p>
             </div>
             <div className="dictionary-top-actions lexicon-top-actions">
+              <form className="lexicon-searchbar" role="search" aria-label="保存済みWordPackを検索" onSubmit={applyTopSearch}>
+                <span className="lexicon-searchbar__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <circle cx="11" cy="11" r="6.5" />
+                    <path d="m16 16 4 4" />
+                  </svg>
+                </span>
+                <label className="visually-hidden" htmlFor="lexicon-top-search">保存済みWordPackを検索</label>
+                <input
+                  id="lexicon-top-search"
+                  ref={topSearchRef}
+                  type="search"
+                  value={topSearch}
+                  onChange={(event) => setTopSearch(event.target.value)}
+                  placeholder="保存済みWordPackを検索"
+                />
+                <kbd aria-hidden="true">⌘ K</kbd>
+              </form>
               <Button variant="primary" className="lexicon-create-shortcut" onClick={focusCreateInput}>
                 <span aria-hidden="true">＋</span>
                 新しいWordPack
