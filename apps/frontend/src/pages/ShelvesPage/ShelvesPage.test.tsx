@@ -2,6 +2,7 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NotificationsProvider } from '../../NotificationsContext';
 import { ShelvesPage } from './index';
 
 vi.mock('../../SettingsContext', () => ({
@@ -65,7 +66,11 @@ describe('ShelvesPage', () => {
   });
 
   it('builds smart shelves from existing WordPacks and switches the active shelf', async () => {
-    render(<ShelvesPage />);
+    render(
+      <NotificationsProvider persist={false}>
+        <ShelvesPage />
+      </NotificationsProvider>,
+    );
 
     expect(screen.getByRole('heading', { name: 'Shelves' })).toBeInTheDocument();
     expect((await screen.findAllByText('最近更新')).length).toBeGreaterThan(0);
@@ -74,7 +79,7 @@ describe('ShelvesPage', () => {
     const user = userEvent.setup();
     const emptyShelf = screen.getByText('未生成').closest('article') as HTMLElement;
     await act(async () => {
-      await user.click(within(emptyShelf).getByRole('button', { name: 'Open' }));
+      await user.click(within(emptyShelf).getByRole('button', { name: '開く' }));
     });
 
     expect(screen.getAllByRole('heading', { name: '未生成' }).length).toBeGreaterThan(0);

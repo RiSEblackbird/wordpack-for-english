@@ -1,7 +1,7 @@
 import React from 'react';
 import { WordPackPanel } from '../../components/WordPackPanel';
 import { WordPackListPanel } from '../../components/WordPackListPanel';
-import { GenerationQueuePanel } from '../../components/GenerationQueuePanel';
+import { AppRightRail } from '../../components/AppRightRail';
 import { Button } from '../../shared/ui';
 import './lexicon.css';
 
@@ -44,8 +44,8 @@ export const LexiconPage: React.FC<LexiconPageProps> = ({
 
   return (
     <div className="dictionary-main lexicon-main">
-      <div className="lexicon-workspace">
-        <div className="lexicon-primary">
+      <div className="dictionary-workspace lexicon-workspace">
+        <div className="dictionary-primary lexicon-primary">
           <div className="dictionary-page-heading lexicon-page-heading">
             <div className="dictionary-page-title">
               <h2>Lexicon</h2>
@@ -82,15 +82,14 @@ export const LexiconPage: React.FC<LexiconPageProps> = ({
           </section>
         </div>
 
-        <section className="lexicon-rail" aria-label="生成と作成">
-          <GenerationQueuePanel />
+        <AppRightRail>
           <WordPackPanel
             focusRef={focusRef}
             onWordPackGenerated={onWordPackGenerated}
             creationPanelPlacement="inline"
             showDetails={false}
           />
-        </section>
+        </AppRightRail>
       </div>
     </div>
   );

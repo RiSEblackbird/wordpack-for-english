@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { NotificationsOverlay } from '../components/NotificationsOverlay';
 import { useAuth } from '../AuthContext';
 import { LexiconPage } from '../pages/LexiconPage';
 import { WordPackDetailPage } from '../pages/WordPackDetailPage';
@@ -215,7 +214,6 @@ export const AppShell: React.FC = () => {
         isOverlaySidebar={isOverlaySidebar}
         onSelectRoute={handleSelectRoute}
       />
-      <NotificationsOverlay />
     </main>
   );
 };
