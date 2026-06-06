@@ -1,95 +1,95 @@
 # Accessibility and Inclusive Design
 
-Accessibility is not optional polish. It is a completion gate for user-facing work.
+アクセシビリティは任意の polish ではない。ユーザーに見える作業の completion gate である。
 
-## 1. Baseline
+## 1. 基準
 
-Use WCAG 2.2 AA as the minimum baseline unless the repository has stricter requirements. Consider cognitive accessibility guidance even when WCAG testable criteria do not fully cover the issue.
+リポジトリにより厳しい要件がない限り、WCAG 2.2 AA を最低基準にする。WCAG の testable criteria だけでは覆いきれない問題でも、理解を助ける cognitive accessibility guidance を考慮する。
 
-## 2. Mandatory checks
+## 2. 必須確認
 
 ### Keyboard
 
-- Primary task can be completed using keyboard only.
-- Focus order matches visual and logical order.
-- No keyboard trap.
-- Modals, menus, popovers, and drawers manage focus correctly.
+- 主タスクをキーボードだけで完了できる。
+- focus order が visual order と logical order に合っている。
+- keyboard trap がない。
+- modal、menu、popover、drawer が focus を正しく管理する。
 
 ### Focus
 
-- Focus indicator is visible.
-- Focus is not hidden behind sticky headers, dialogs, or overlays.
-- Focus style is consistent.
-- Focus is not conveyed by color alone.
+- focus indicator が見える。
+- focus が sticky header、dialog、overlay の裏に隠れない。
+- focus style が一貫している。
+- focus を色だけで伝えていない。
 
 ### Names, roles, values
 
-- Controls have accessible names.
-- Icon buttons have explicit labels.
-- Visible labels are included in accessible names when applicable.
-- Custom controls expose role, state, and value.
+- control に accessible name がある。
+- icon button に明示的な label がある。
+- visible label がある場合、必要に応じて accessible name に含まれている。
+- custom control が role、state、value を公開している。
 
 ### Semantics
 
-- Page and regions have meaningful headings.
-- Heading order is logical.
-- Landmarks are used when useful.
-- Lists, tables, forms, and buttons use appropriate semantics.
+- page と region に意味のある heading がある。
+- heading order が論理的である。
+- 有用な場合は landmark を使う。
+- list、table、form、button が適切な semantics を使う。
 
-### Contrast and visual perception
+### Contrast と視覚認識
 
-- Normal text contrast: at least 4.5:1.
-- Large text contrast: at least 3:1.
-- Meaningful icons, boundaries, and focus indicators: at least 3:1 where applicable.
-- Do not convey state by color alone.
+- 通常 text contrast は 4.5:1 以上。
+- 大きい text contrast は 3:1 以上。
+- 意味のある icon、boundary、focus indicator は該当する場合 3:1 以上。
+- state を色だけで伝えない。
 
 ### Target size
 
-- Pointer targets meet at least 24×24 CSS px or a valid exception.
-- Touch-oriented interfaces should prefer 44–48 px/dp or larger.
-- Adjacent destructive and safe actions need enough separation.
+- pointer target は 24x24 CSS px 以上、または有効な例外を満たす。
+- touch-oriented interface では 44-48 px/dp 以上を推奨する。
+- 隣接する destructive action と safe action には十分な距離を置く。
 
-### Text and layout
+### Text と layout
 
-- Text can resize without loss of content or function.
-- Long-form content uses readable line height.
-- Long lines are avoided for reading-heavy content.
-- Content reflows without horizontal scrolling except where genuinely required.
+- content や機能を失わず text resize できる。
+- 長文 content は読みやすい line height を使う。
+- 読む量が多い content では長すぎる行を避ける。
+- 本当に必要な場合を除き、horizontal scrolling なしで reflow する。
 
 ### Motion
 
-- Avoid flashing content.
-- Avoid unnecessary motion for critical feedback.
-- Respect reduced-motion preferences where motion exists.
+- flashing content を避ける。
+- critical feedback に不要な motion を使わない。
+- motion が存在する場合は reduced-motion preference を尊重する。
 
-### Errors and forms
+### Errors と forms
 
-- Required fields are identified.
-- Validation errors identify the field and issue.
-- Suggestions are provided when known.
-- User input is preserved after errors.
-- Authentication and repeated-entry flows avoid unnecessary memory burden.
+- required field が識別できる。
+- validation error が field と issue を特定している。
+- 分かる場合は suggestion を示す。
+- error 後も user input を保持する。
+- authentication や repeated-entry flow で不要な記憶負荷を避ける。
 
-## 3. Automated checks
+## 3. 自動確認
 
-Use available tools when present:
+利用可能な場合は次の tool を使う。
 
-- axe or equivalent rendered-DOM checker,
-- eslint accessibility plugin where relevant,
-- browser tests for keyboard flow,
-- Storybook accessibility checks,
-- visual regression for focus and state snapshots.
+- axe または同等の rendered-DOM checker
+- 関係する場合は eslint accessibility plugin
+- keyboard flow の browser test
+- Storybook accessibility check
+- focus と state snapshot の visual regression
 
-Automated accessibility checks are not sufficient by themselves. They do not replace keyboard review, state review, or cognitive walkthrough.
+自動 accessibility check だけでは十分ではない。keyboard review、state review、cognitive walkthrough の代替にはならない。
 
-## 4. P0 accessibility failures
+## 4. P0 accessibility failure
 
-- Keyboard primary task failure.
-- Invisible or obscured focus.
-- Missing accessible name for actionable control.
-- Icon-only primary action with no visible label.
-- Contrast below minimum for essential text or controls.
-- Error message not programmatically or visually associated with input.
-- Status update not perceivable.
-- Drag-only action with no accessible alternative.
-- Authentication or verification requiring memory/puzzle without accessible alternative.
+- keyboard で主タスクを完了できない。
+- focus が見えない、または隠れている。
+- actionable control に accessible name がない。
+- visible label のない icon-only primary action。
+- essential text または control の contrast が最低基準未満。
+- error message が input と programmatic または visual に関連付いていない。
+- status update を知覚できない。
+- accessible alternative のない drag-only action。
+- accessible alternative のない記憶/パズル要求を含む authentication または verification。

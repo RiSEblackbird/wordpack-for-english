@@ -1,86 +1,86 @@
 # UI Copy and Microcopy Rules
 
-UI copy is part of the interface, not decoration.
+UI copy は飾りではなく interface の一部である。
 
-## 1. User-language rule
+## 1. ユーザー言語ルール
 
-Use the user’s words, not internal implementation terms.
+内部実装用語ではなく、ユーザーの言葉を使う。
 
-Reject:
+次は reject する。
 
-- internal model names,
-- database field names,
-- status codes without explanation,
-- unexplained abbreviations,
-- product-specific jargon on first exposure.
+- 内部 model 名
+- database field 名
+- 説明のない status code
+- 説明のない abbreviation
+- 初回接触時の product-specific jargon
 
-## 2. Action label rule
+## 2. Action label ルール
 
-Action labels must state the result.
+action label は結果を示す。
 
-Prefer:
+望ましい例:
 
-- “Create list”
-- “Save changes”
-- “Invite member”
-- “Retry upload”
+- 「一覧を作成」
+- 「変更を保存」
+- 「メンバーを招待」
+- 「アップロードを再試行」
 
-Avoid vague labels:
+避ける曖昧な label:
 
-- “OK”
-- “Submit” when result is unclear
-- “Apply” when scope is unclear
-- icon-only controls for important actions
+- 「OK」
+- 結果が不明な「送信」
+- scope が不明な「適用」
+- 重要 action の icon-only control
 
-## 3. Error message rule
+## 3. Error message ルール
 
-Every actionable error should include:
+操作可能な error は次を含む。
 
-1. What happened.
-2. Why, if known.
-3. What is affected.
-4. What the user can do next.
+1. 何が起きたか。
+2. 分かる場合、なぜ起きたか。
+3. 何が影響を受けるか。
+4. ユーザーが次に何をできるか。
 
-Do not write only:
+次だけで終わらせない。
 
-- “Error”
-- “Failed”
-- “Something went wrong”
-- “Invalid input”
+- 「エラー」
+- 「失敗しました」
+- 「問題が発生しました」
+- 「入力が不正です」
 
-## 4. Empty state rule
+## 4. Empty state ルール
 
-An empty state must explain:
+empty state は次を説明する。
 
-- why it is empty,
-- whether this is expected,
-- what the user can do next,
-- what will appear after data exists.
+- なぜ空なのか。
+- それが想定どおりか。
+- ユーザーが次に何をできるか。
+- データができた後に何が表示されるか。
 
-Do not use the same copy for empty, no-results, permission-denied, and error states.
+empty、no-results、permission-denied、error state に同じ copy を使わない。
 
-## 5. Disabled state rule
+## 5. Disabled state ルール
 
-Disabled controls must communicate:
+disabled control は次を伝える。
 
-- why the control is disabled,
-- what enables it,
-- whether the user has permission,
-- whether waiting, selection, input, or plan/account state is required.
+- なぜ disabled なのか。
+- 何をすれば enabled になるか。
+- ユーザーに permission があるか。
+- 待機、選択、入力、plan/account state のどれが必要か。
 
-If explanation cannot be placed inline, use nearby helper text or an accessible tooltip pattern.
+inline に説明を置けない場合は、近くの helper text または accessible tooltip pattern を使う。
 
-## 6. Confirmation rule
+## 6. Confirmation ルール
 
-For destructive or irreversible actions, copy must state:
+destructive または irreversible action の copy は次を示す。
 
-- object affected,
-- consequence,
-- reversibility,
-- recovery if any.
+- 影響を受ける object
+- consequence
+- reversible かどうか
+- 回復手段がある場合はその内容
 
-## 7. Consistency rule
+## 7. Consistency ルール
 
-Use one label for one concept. Do not alternate between synonyms unless the distinction is meaningful to users.
+1 つの概念には 1 つの label を使う。ユーザーにとって意味のある区別がない限り、同義語を交互に使わない。
 
-Maintain a local terminology list when the repository has repeated domain terms.
+繰り返し出る domain term がある場合は、local terminology list を維持する。

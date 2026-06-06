@@ -1,20 +1,20 @@
 # Content Stress Checklist
 
-Review UI with realistic content pressure.
+実データに近い content pressure で UI を確認する。
 
-- [ ] Very short labels.
-- [ ] Very long Japanese labels.
-- [ ] Very long English labels.
-- [ ] Mixed Japanese/English/numeric strings.
-- [ ] Missing optional values.
-- [ ] Zero items.
-- [ ] One item.
-- [ ] Many items.
-- [ ] Long user-generated names.
-- [ ] Long error messages.
-- [ ] Multiple simultaneous warnings.
-- [ ] Narrow viewport.
-- [ ] 200% text zoom or equivalent.
-- [ ] Slow network/loading.
-- [ ] Permission denied.
-- [ ] Offline/unavailable when applicable.
+- [ ] とても短い label。
+- [ ] とても長い日本語 label。
+- [ ] とても長い英語 label。
+- [ ] 日本語/英語/数字が混在した文字列。
+- [ ] 任意値の欠落。
+- [ ] 0 件。
+- [ ] 1 件。
+- [ ] 多数件。
+- [ ] 長い user-generated name。
+- [ ] 長い error message。
+- [ ] 複数の warning が同時に出る。
+- [ ] narrow viewport。
+- [ ] 200% text zoom または同等の拡大。
+- [ ] slow network/loading。
+- [ ] permission denied。
+- [ ] 該当する場合は offline/unavailable。

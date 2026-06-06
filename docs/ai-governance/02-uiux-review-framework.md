@@ -1,267 +1,267 @@
 # UI/UX Review Framework
 
-This framework turns design judgment into an AI-executable review protocol. Its priority is uncompromising usability for first-time users.
+この枠組みは、デザイン判断を AI が実行可能なレビュー手順へ落とし込む。最優先は、初見ユーザーにとって妥協のない使いやすさである。
 
-## 1. Prime directive
+## 1. 最優先指令
 
-A user-facing interface must make the following clear without documentation:
+ユーザーに見える interface は、説明書なしで次を明確にする。
 
-1. What is this?
-2. Where am I?
-3. What can I do?
-4. What should I do first?
-5. What changed?
-6. What happens next?
-7. What can I do if it fails?
+1. これは何か。
+2. 自分はどこにいるか。
+3. 何ができるか。
+4. 最初に何をすればよいか。
+5. 何が変わったか。
+6. 次に何が起きるか。
+7. 失敗したら何ができるか。
 
-If the interface cannot answer these questions, it is not ready.
+interface がこれらに答えられない場合、完成ではない。
 
-## 2. Definition of “first-time user friendly”
+## 2. 「初見ユーザーにやさしい」の定義
 
-An interface is first-time user friendly only when a user can:
+interface は、ユーザーが次をできる場合に限って初見ユーザーにやさしい。
 
-- identify the page or component purpose from visible cues,
-- recognize the primary action,
-- understand required input,
-- predict the result of the action,
-- recover from common mistakes,
-- distinguish normal, empty, loading, error, disabled, and permission states,
-- complete the primary task using keyboard-only interaction,
-- read the content without excessive density, jargon, or visual competition.
+- 目に見える手がかりからページやコンポーネントの目的を理解できる。
+- 主要操作を認識できる。
+- 必要な入力を理解できる。
+- 操作の結果を予測できる。
+- よくあるミスから回復できる。
+- 通常、空、読み込み中、エラー、無効、権限なし状態を区別できる。
+- キーボードだけで主タスクを完了できる。
+- 過密さ、専門用語、視覚的競合に妨げられず内容を読める。
 
-## 3. Review passes
+## 3. レビュー pass
 
-Run these passes for every UI/UX change.
+すべての UI/UX 変更で次の pass を実行する。
 
-### Pass A: Screen purpose and first action
+### Pass A: 画面目的と最初の行動
 
-Answer:
+次に答える。
 
-- What is the screen/component for?
-- Who is the likely first-time user?
-- What is the first meaningful action?
-- Is the primary action visible without searching?
-- Does the UI explain the current scope, selected object, filter, tab, or mode?
+- この画面/コンポーネントは何のためか。
+- 想定される初見ユーザーは誰か。
+- 最初の意味ある行動は何か。
+- 主要操作は探さずに見えるか。
+- UI は現在の範囲、選択中の対象、filter、tab、mode を説明しているか。
 
-Fail if the answer requires source-code knowledge or prior product knowledge.
+答えにソースコード知識や事前の製品知識が必要なら fail とする。
 
-### Pass B: Cognitive walkthrough
+### Pass B: 認知ウォークスルー
 
-For a novice user attempting the primary task:
+主タスクを行う novice user について確認する。
 
-1. Will they know what goal they can accomplish here?
-2. Will they see the correct control?
-3. Will they understand that the control performs the intended action?
-4. After acting, will they understand the feedback?
-5. If wrong, can they recover without losing work?
+1. ここで達成できる目標を理解できるか。
+2. 正しい control を見つけられるか。
+3. その control が意図した操作を行うと理解できるか。
+4. 操作後の feedback を理解できるか。
+5. 間違えた場合、作業を失わず回復できるか。
 
-### Pass C: State design
+### Pass C: 状態設計
 
-Review every relevant state:
+関係するすべての状態を確認する。
 
-- default,
-- loading,
-- empty,
-- no results,
-- partial data,
-- success,
-- warning,
-- error,
-- validation error,
-- disabled,
-- permission denied,
-- offline/unavailable,
-- long content,
-- narrow viewport,
-- zoomed text.
+- 通常
+- 読み込み中
+- 空
+- 該当なし
+- 部分データ
+- 成功
+- 警告
+- エラー
+- バリデーションエラー
+- 無効
+- 権限なし
+- オフライン/利用不可
+- 長いコンテンツ
+- 狭い viewport
+- 文字拡大
 
-Each state must communicate:
+各状態は次を伝える。
 
-- what happened,
-- why it matters,
-- what the user can do next,
-- whether the system is still working,
-- whether user data is safe.
+- 何が起きたか
+- なぜ重要か
+- 次に何ができるか
+- system がまだ動いているか
+- ユーザーデータが安全か
 
-### Pass D: Visual hierarchy
+### Pass D: 視覚階層
 
-The screen must have a clear hierarchy:
+画面には明確な階層が必要である。
 
-1. Purpose / title
-2. Current context / scope
-3. Primary action
-4. Secondary actions
-5. Supporting information
-6. Metadata and diagnostics
+1. 目的/title
+2. 現在の context/scope
+3. 主要操作
+4. 二次操作
+5. 補助情報
+6. metadata と diagnostics
 
-Fail if metadata, badges, counts, or internal status visually compete with the primary task.
+metadata、badge、count、内部状態が主タスクと視覚的に競合する場合は fail とする。
 
-### Pass E: Accessibility and inclusive design
+### Pass E: アクセシビリティと inclusive design
 
-Use WCAG 2.2 AA as the minimum baseline. Apply cognitive accessibility guidance beyond WCAG where it improves comprehension.
+WCAG 2.2 AA を最低基準とする。理解を助ける場合は、WCAG を超えて cognitive accessibility guidance を適用する。
 
-Minimum checks:
+最低限、次を確認する。
 
-- keyboard access,
-- no keyboard trap,
-- visible focus,
-- focus not obscured,
-- accessible names,
-- labels and instructions,
-- semantic headings,
-- status messages,
-- contrast,
-- target size,
-- error identification,
-- error suggestion,
-- no color-only meaning,
-- text resizing and reflow,
-- reduced motion where relevant.
+- キーボード操作
+- キーボードトラップがない
+- visible focus
+- focus が隠れない
+- accessible name
+- label と instruction
+- semantic heading
+- status message
+- contrast
+- target size
+- error identification
+- error suggestion
+- 色だけに意味を依存しない
+- text resize と reflow
+- 関係する場合は reduced motion
 
-### Pass F: Copy and terminology
+### Pass F: 文言と用語
 
-UI copy must use user language, not implementation language.
+UI 文言は実装用語ではなく、ユーザーの言葉を使う。
 
-Every action label must answer:
+すべての操作ラベルは次に答える。
 
-- What happens if I click this?
-- What object does it affect?
-- Is the action reversible?
+- これを押すと何が起きるか。
+- どの対象に作用するか。
+- 取り消せるか。
 
-Every error must answer:
+すべてのエラーは次に答える。
 
-- What happened?
-- Why did it happen if known?
-- What is affected?
-- What can I do now?
+- 何が起きたか。
+- 分かる場合、なぜ起きたか。
+- 何に影響するか。
+- 今何ができるか。
 
 ### Pass G: Content stress
 
-Test mentally or visually with:
+次の条件で、頭の中または画面上で確認する。
 
-- long Japanese text,
-- long English text,
-- mixed-width strings,
-- missing optional data,
-- many items,
-- zero items,
-- one item,
-- long names,
-- narrow viewport,
-- 200% zoom or equivalent text enlargement,
-- slow network,
-- repeated validation errors.
+- 長い日本語
+- 長い英語
+- 全角/半角混在文字列
+- 任意データの欠落
+- 多数項目
+- 0 件
+- 1 件
+- 長い名前
+- 狭い viewport
+- 200% zoom または同等の文字拡大
+- 遅い network
+- 連続した validation error
 
-### Pass H: Automation and evidence
+### Pass H: Automation と証跡
 
-Use available repository tooling. Examples:
+利用可能なリポジトリ tooling を使う。例:
 
-- lint,
-- typecheck,
-- unit tests,
-- integration tests,
-- browser tests,
-- accessibility tests,
-- visual regression tests.
+- lint
+- typecheck
+- unit test
+- integration test
+- browser test
+- accessibility test
+- visual regression test
 
-If tooling does not exist, document the gap and perform manual reasoning with evidence.
+tooling がない場合は、その gap を文書化し、証跡付きで手動推論を行う。
 
 ### Pass I: Counter-review
 
-Run an adversarial review that tries to reject the work. It must search for P0 blockers, not praise the design.
+作業を却下するための adversarial review を行う。デザインを褒めるのではなく、P0 blocker を探す。
 
-## 4. Severity model
+## 4. 重大度モデル
 
-### P0: Cannot complete
+### P0: 完了不可
 
-P0 means the change must not be considered complete.
+P0 は、その変更を完了扱いにしてはいけないことを意味する。
 
-- first-time user cannot understand purpose,
-- first meaningful action is unclear,
-- current scope/location is unclear,
-- primary action is icon-only or visually buried,
-- state design conflates loading/empty/no-results/error/disabled/permission-denied,
-- errors lack recovery,
-- disabled states lack explanation,
-- keyboard task completion fails,
-- focus is missing or obscured,
-- accessible names or labels are missing,
-- contrast or target size minimums fail,
-- destructive actions lack appropriate prevention or recovery,
-- evidence artifacts are missing,
-- verification is falsely claimed.
+- 初見ユーザーが目的を理解できない。
+- 最初の意味ある行動が不明確。
+- 現在の scope/location が不明確。
+- 主要操作が icon-only または視覚的に埋もれている。
+- 状態設計が読み込み中/空/該当なし/エラー/無効/権限なしを混同している。
+- エラーに回復手段がない。
+- 無効状態に説明がない。
+- キーボードでタスクを完了できない。
+- focus がない、または隠れている。
+- accessible name または label がない。
+- contrast または target size の最低基準を満たさない。
+- 破壊的操作に適切な予防または回復がない。
+- 証跡 artifact がない。
+- 検証を偽って主張している。
 
-### P1: Must fix before merge unless explicitly deferred
+### P1: 明示的に延期しない限り merge 前に修正
 
-- inconsistent terminology,
-- weak empty state,
-- unclear helper text,
-- excessive visual density,
-- secondary actions competing with primary action,
-- poor responsive behavior that has a workaround,
-- non-blocking a11y issue with clear remediation,
-- missing screenshot for a non-critical state.
+- 用語が一貫していない。
+- empty state が弱い。
+- helper text が不明確。
+- 視覚密度が高すぎる。
+- 二次操作が主要操作と競合している。
+- workaround はあるが responsive behavior が弱い。
+- 修正方法が明確な non-blocking a11y issue。
+- 非クリティカル状態の screenshot がない。
 
-### P2: Improvement opportunity
+### P2: 改善機会
 
-- polish issues,
-- minor spacing inconsistency,
-- clearer microcopy,
-- better grouping,
-- stronger progressive disclosure,
-- future automation opportunity.
+- polish issue
+- 軽微な spacing inconsistency
+- より明確な microcopy
+- より良い grouping
+- より強い progressive disclosure
+- 将来の automation opportunity
 
-## 5. Numeric minimums
+## 5. 数値基準
 
-Use these defaults unless the repository has stricter standards.
+リポジトリにより厳しい基準がない場合は、次を既定値として使う。
 
-| Area | Minimum |
+| 領域 | 最低基準 |
 |---|---|
-| Body text | Prefer 16px or equivalent; smaller only when justified and still readable |
-| Long-form line height | At least 1.5 |
-| Paragraph spacing | Prefer at least 1.5× line height between paragraphs in long-form content |
-| Japanese line length | Aim around 40 full-width characters for long-form text when applicable |
-| Text contrast | WCAG AA: 4.5:1 normal text, 3:1 large text |
-| Non-text contrast | At least 3:1 for meaningful UI graphics and component boundaries |
-| Pointer target | WCAG 2.2 AA: at least 24×24 CSS px or valid spacing/exception |
-| Touch-friendly target | Prefer 44–48px/dp when touch is expected |
-| Focus indicator | Clearly visible, consistent, not obscured, not color-only |
-| Motion | Avoid essential information conveyed only by motion; respect reduced motion |
+| 本文 text | 16px または相当を推奨。小さくする場合は理由があり、読みやすさを保つ |
+| 長文 line height | 1.5 以上 |
+| 段落間隔 | 長文では段落間に line height の 1.5 倍以上を推奨 |
+| 日本語の行長 | 長文では 40 全角文字前後を目安にする |
+| text contrast | WCAG AA: 通常文字 4.5:1、大きい文字 3:1 |
+| non-text contrast | 意味のある UI graphic と component boundary は 3:1 以上 |
+| pointer target | WCAG 2.2 AA: 24x24 CSS px 以上、または有効な spacing/exception |
+| touch target | touch が想定される場合は 44-48px/dp を推奨 |
+| focus indicator | 明確に見え、一貫し、隠れず、色だけに依存しない |
+| motion | motion だけで重要情報を伝えない。reduced motion を尊重する |
 
 ## 6. Design anti-patterns
 
-Reject or flag:
+次は reject または flag する。
 
-- icon-only primary actions,
-- placeholder-as-label forms,
-- “Something went wrong” without recovery,
-- disabled button with no reason,
-- empty state with no next step,
-- tab/filter count without scope,
-- status badge that does not explain consequences,
-- visual hierarchy based only on color,
-- hover-only disclosure,
-- hidden destructive side effects,
-- multiple primary buttons in one decision area,
-- tiny click targets,
-- dense cards with equal visual weight for every datum,
-- implementation terms exposed to users,
-- relying on memory across multi-step flows.
+- icon-only の主要操作
+- placeholder を label 代わりにした form
+- 回復手段のない「Something went wrong」
+- 理由がない disabled button
+- 次の行動がない empty state
+- scope が不明な tab/filter count
+- 結果や影響を説明しない status badge
+- 色だけに依存した visual hierarchy
+- hover-only disclosure
+- 隠れた destructive side effect
+- 1 つの意思決定領域に複数の primary button
+- 小さすぎる click target
+- すべての datum が同じ重みで詰め込まれた card
+- 実装用語をユーザーに見せる
+- multi-step flow で記憶に依存する
 
-## 7. Required output
+## 7. 必須出力
 
-Every UI/UX review must produce:
+すべての UI/UX review は次を出力する。
 
-- screen purpose summary,
-- primary user task,
-- first meaningful action,
-- state matrix,
-- cognitive walkthrough,
-- accessibility review,
-- visual hierarchy review,
-- copy review,
-- counter-review,
-- P0/P1/P2 findings,
-- evidence list,
-- tests run / not run,
-- final pass/fail.
+- screen purpose summary
+- primary user task
+- first meaningful action
+- state matrix
+- cognitive walkthrough
+- accessibility review
+- visual hierarchy review
+- copy review
+- counter-review
+- P0/P1/P2 findings
+- evidence list
+- tests run / not run
+- final pass/fail

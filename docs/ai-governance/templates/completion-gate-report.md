@@ -3,19 +3,19 @@
 | Gate | Result | Evidence | Notes |
 |---|---|---|---|
 | Scope gate | PASS / FAIL |  |  |
-| First-time comprehension gate | PASS / FAIL |  |  |
+| 初見理解 gate | PASS / FAIL |  |  |
 | State gate | PASS / FAIL |  |  |
 | Accessibility gate | PASS / FAIL |  |  |
 | Visual clarity gate | PASS / FAIL |  |  |
 | Counter-review gate | PASS / FAIL |  |  |
 
-## Commands run
+## 実行した command
 
 ```sh
-# paste commands and results
+# command と result を貼る
 ```
 
-## Checks not run
+## 実行しなかった check
 
 | Check | Reason | Risk |
 |---|---|---|

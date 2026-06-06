@@ -23,7 +23,7 @@
 
 ## State Matrix
 
-Link or paste state matrix here.
+state matrix への link、または内容をここに貼る。
 
 ## Cognitive Walkthrough
 

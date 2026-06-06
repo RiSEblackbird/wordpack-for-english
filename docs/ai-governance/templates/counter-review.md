@@ -1,19 +1,19 @@
 # Counter-review
 
-The purpose of this document is to reject weak UI/UX work.
+この文書の目的は、弱い UI/UX 作業を却下することである。
 
 ## Rejection questions
 
-- What would confuse a first-time user?
-- Which state is missing?
-- Which action has unclear consequence?
-- Which visual cue is ambiguous?
-- Which copy uses internal jargon?
-- Which accessibility requirement is unproven?
-- Which evidence is missing?
-- What would fail with long content?
-- What would fail on narrow viewport?
-- What would fail by keyboard only?
+- 初見ユーザーは何に混乱するか。
+- どの state が欠けているか。
+- どの action の consequence が不明確か。
+- どの visual cue が曖昧か。
+- どの copy が内部用語か。
+- どの accessibility requirement が未証明か。
+- どの evidence が欠けているか。
+- 長い content で何が壊れるか。
+- narrow viewport で何が壊れるか。
+- keyboard-only で何が失敗するか。
 
 ## Findings
 

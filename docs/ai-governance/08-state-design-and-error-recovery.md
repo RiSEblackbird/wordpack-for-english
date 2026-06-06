@@ -1,100 +1,100 @@
 # State Design and Error Recovery
 
-State design is mandatory. A UI is not complete until its non-happy paths are designed.
+state design は必須である。happy path 以外の状態が設計されるまで、UI は完了ではない。
 
-## 1. Required states
+## 1. 必須 state
 
-For each changed screen/component, classify these states:
+変更された画面/コンポーネントごとに、次の state を分類する。
 
-| State | Required? | Notes |
+| State | 必須? | Notes |
 |---|---:|---|
-| default | yes | Normal usable state |
-| loading | if async | Show progress or skeleton; avoid layout jump where possible |
-| empty | if data can be absent | Explain why empty and next step |
-| no results | if search/filter exists | Explain scope and how to broaden |
-| partial data | if possible | Show what is available and what failed |
-| success | if action changes data | Confirm outcome and next step |
-| warning | if risk exists | Explain consequence before action |
-| error | if operation can fail | Cause, impact, recovery |
-| validation error | if input exists | Field-specific message and suggestion |
-| disabled | if control can be unavailable | Reason and enabling condition |
-| permission denied | if permissions exist | Explain permission boundary and request path if applicable |
-| offline/unavailable | if network or service dependence exists | Retry and preservation behavior |
+| 通常 | yes | 通常の利用可能状態 |
+| 読み込み中 | async の場合 | progress または skeleton を示す。可能な限り layout jump を避ける |
+| 空 | data が存在しない可能性がある場合 | なぜ空か、次に何をするかを説明する |
+| 該当なし | search/filter がある場合 | scope と広げ方を説明する |
+| 部分データ | あり得る場合 | 利用可能なものと失敗したものを示す |
+| 成功 | action が data を変える場合 | 結果と次の行動を確認できる |
+| 警告 | risk がある場合 | action 前に consequence を説明する |
+| エラー | operation が失敗し得る場合 | cause、impact、recovery を示す |
+| バリデーションエラー | input がある場合 | field-specific message と suggestion を示す |
+| 無効 | control が使えない場合 | reason と enabling condition を示す |
+| 権限なし | permission がある場合 | permission boundary と、該当する場合は request path を説明する |
+| オフライン/利用不可 | network または service に依存する場合 | retry と preservation behavior を示す |
 
-## 2. Loading state
+## 2. 読み込み中 state
 
-Must answer:
+次に答える。
 
-- What is loading?
-- Is the system still working?
-- Can the user cancel or continue elsewhere?
-- Is user input preserved?
+- 何を読み込んでいるか。
+- system はまだ動いているか。
+- user は cancel できるか、または別の場所で作業を続けられるか。
+- user input は保持されるか。
 
-Avoid indefinite spinners without context for long operations.
+長い処理で context のない indefinite spinner を避ける。
 
-## 3. Empty state
+## 3. 空 state
 
-Must answer:
+次に答える。
 
-- Is this expected?
-- What data would appear here?
-- What can the user do first?
-- Is there a permission or setup requirement?
+- これは想定どおりか。
+- ここにはどんな data が表示されるか。
+- user が最初に何をできるか。
+- permission または setup requirement があるか。
 
-## 4. No-results state
+## 4. 該当なし state
 
-Must not look like empty state.
+empty state と同じ見え方にしない。
 
-Must answer:
+次に答える。
 
-- What query/filter produced no results?
-- What scope was searched?
-- How can the user broaden or clear filters?
+- どの query/filter の結果が 0 件だったか。
+- どの scope を search したか。
+- user はどう広げる、または filter を clear できるか。
 
 ## 5. Error state
 
-Must answer:
+次に答える。
 
-- What failed?
-- What is still safe?
-- What can be retried?
-- What data might be lost?
-- Where can the user get help if retry fails?
+- 何が失敗したか。
+- 何がまだ安全か。
+- 何を retry できるか。
+- どの data が失われる可能性があるか。
+- retry が失敗する場合、どこで助けを得られるか。
 
 ## 6. Disabled state
 
-Disabled without explanation is a usability failure.
+説明のない disabled は usability failure である。
 
-Use:
+次を使う。
 
-- visible helper text,
-- inline reason,
-- accessible tooltip pattern,
-- validation guidance,
-- permission explanation.
+- visible helper text
+- inline reason
+- accessible tooltip pattern
+- validation guidance
+- permission explanation
 
-Do not rely on hover-only explanation.
+hover-only explanation に依存しない。
 
 ## 7. Permission denied
 
-Must answer:
+次に答える。
 
-- What permission is missing?
-- What is visible despite missing permission?
-- Who can grant access, if known?
-- What action is still available?
+- どの permission が足りないか。
+- permission がなくても何が見えるか。
+- 分かる場合、誰が access を付与できるか。
+- まだ利用できる action は何か。
 
 ## 8. Error recovery severity
 
-Use risk-based recovery:
+risk に応じた recovery を使う。
 
-| Risk | Required recovery |
+| Risk | 必須 recovery |
 |---|---|
-| Low | retry or undo |
-| Medium | confirmation, preserve input, explain impact |
-| High | explicit confirmation, strong warning, audit trail if relevant |
-| Irreversible | require clear object/consequence/reversibility statement |
+| Low | retry または undo |
+| Medium | confirmation、input 保持、impact の説明 |
+| High | explicit confirmation、強い warning、関係する場合は audit trail |
+| Irreversible | 明確な object/consequence/reversibility statement を必須にする |
 
 ## 9. State matrix requirement
 
-Every UI/UX review must include a state matrix. Use `templates/state-matrix.md`.
+すべての UI/UX review は state matrix を含める。`templates/state-matrix.md` を使う。

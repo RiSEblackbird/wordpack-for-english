@@ -2,49 +2,49 @@
 
 ## Keyboard
 
-- [ ] Primary task can be completed keyboard-only.
-- [ ] Focus order follows visual/logical order.
-- [ ] No keyboard trap.
-- [ ] Modal/menu/popover focus behavior is correct.
+- [ ] 主タスクをキーボードだけで完了できる。
+- [ ] focus order が visual/logical order に沿っている。
+- [ ] keyboard trap がない。
+- [ ] modal/menu/popover の focus behavior が正しい。
 
 ## Focus
 
-- [ ] Focus visible.
-- [ ] Focus not obscured.
-- [ ] Focus style consistent.
-- [ ] Focus not color-only.
+- [ ] focus が見える。
+- [ ] focus が隠れない。
+- [ ] focus style が一貫している。
+- [ ] focus が色だけに依存していない。
 
 ## Names and labels
 
-- [ ] Controls have accessible names.
-- [ ] Icon buttons have labels.
-- [ ] Visible label matches accessible name where applicable.
-- [ ] Inputs have persistent labels or equivalent.
+- [ ] control に accessible name がある。
+- [ ] icon button に label がある。
+- [ ] 該当する場合、visible label が accessible name と一致している。
+- [ ] input に永続的な label または同等の説明がある。
 
 ## Semantics
 
-- [ ] Headings are meaningful and ordered.
-- [ ] Landmark/region structure is meaningful where applicable.
-- [ ] Lists/tables/forms/buttons use appropriate semantics.
-- [ ] Status updates are perceivable.
+- [ ] heading が意味を持ち、順序が正しい。
+- [ ] 該当する場合、landmark/region structure が意味を持つ。
+- [ ] list/table/form/button が適切な semantics を使っている。
+- [ ] status update を知覚できる。
 
 ## Visual accessibility
 
-- [ ] Text contrast meets minimum.
-- [ ] Non-text contrast meets minimum for meaningful UI parts.
-- [ ] Target sizes are adequate.
-- [ ] Meaning is not color-only.
-- [ ] Text can resize/reflow.
+- [ ] text contrast が最低基準を満たす。
+- [ ] 意味のある UI parts の non-text contrast が最低基準を満たす。
+- [ ] target size が十分である。
+- [ ] 意味を色だけで伝えていない。
+- [ ] text resize/reflow ができる。
 
 ## Forms and errors
 
-- [ ] Required fields are clear.
-- [ ] Validation error identifies field and issue.
-- [ ] Suggestion/recovery is provided when known.
-- [ ] User input is preserved.
+- [ ] required field が分かる。
+- [ ] validation error が field と issue を特定している。
+- [ ] 分かる場合は suggestion/recovery が示されている。
+- [ ] user input が保持される。
 
 ## Motion
 
-- [ ] No unsafe flashing.
-- [ ] Motion is not required to understand critical information.
-- [ ] Reduced motion is respected where relevant.
+- [ ] unsafe flashing がない。
+- [ ] critical information の理解に motion が必須ではない。
+- [ ] 関係する場合、reduced motion を尊重している。

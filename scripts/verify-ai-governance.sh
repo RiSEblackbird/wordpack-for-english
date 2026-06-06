@@ -24,6 +24,7 @@ check_file AGENTS.md
 check_file CLAUDE.md
 check_file .agents/skills/ui-ux-review/SKILL.md
 check_file docs/ai-governance/00-index.md
+check_file docs/ai-governance/glossary.md
 check_file docs/ai-governance/01-agent-operating-contract.md
 check_file docs/ai-governance/02-uiux-review-framework.md
 check_file docs/ai-governance/03-evidence-and-completion-gates.md

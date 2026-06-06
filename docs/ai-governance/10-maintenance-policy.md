@@ -1,104 +1,109 @@
 # Governance Maintenance Policy
 
-This file controls how AI-agent rules may evolve.
+このファイルは、AI エージェント向けルールの変更方法を定める。
 
 ## 1. Source of truth
 
-- `AGENTS.md` is the rule origin and startup constitution.
-- `docs/ai-governance/` is the detailed source of truth.
-- `.agents/skills/*/SKILL.md` contains task-specific executable workflows.
-- `CLAUDE.md` imports `AGENTS.md` only.
-- Cursor rules are not part of this governance.
+- `AGENTS.md` は rule origin かつ startup constitution である。
+- `docs/ai-governance/` は詳細な source of truth である。
+- `.agents/skills/*/SKILL.md` は task-specific な executable workflow を含む。
+- `CLAUDE.md` は `AGENTS.md` だけを import する。
+- Cursor rules はこの governance の一部ではない。
 
-## 2. No duplication
+## 2. 重複禁止
 
-Do not duplicate the full UI/UX rulebook into:
+UI/UX rulebook の全文を次へ重複させない。
 
-- `AGENTS.md`,
-- `CLAUDE.md`,
-- IDE rules,
-- PR templates,
-- README files,
-- multiple skills.
+- `AGENTS.md`
+- `CLAUDE.md`
+- IDE rules
+- PR templates
+- README files
+- 複数の skills
 
-Duplicate summaries cause drift. Link to the detailed docs instead.
+重複した summary は drift を生む。詳細文書へ link する。
 
-## 3. Rule addition standard
+## 2.1. 言語方針
 
-A new rule must have at least one basis:
+このリポジトリの maintainer が読めるよう、ガバナンス本文は日本語を正式版とする。英語だけの本文を source of truth として追加しない。外部標準名、tool が読む keyword、file path、一般に翻訳しない技術用語を残す場合は、必要に応じて `glossary.md` に意味を追加する。
 
-- accessibility standard,
-- cognitive psychology or HCI research,
-- design-system standard,
-- observed repository defect,
-- repeated review failure,
-- security requirement,
-- user instruction.
+## 3. ルール追加基準
 
-A new rule must be:
+新しい rule は、少なくとも 1 つの根拠を持つ。
 
-- specific,
-- testable or reviewable,
-- severity-classified when applicable,
-- mapped to evidence.
+- accessibility standard
+- cognitive psychology または HCI research
+- design-system standard
+- 観測済みのリポジトリ defect
+- 繰り返し発生した review failure
+- security requirement
+- user instruction
 
-## 4. Update process
+新しい rule は次を満たす。
 
-When changing governance:
+- specific
+- testable または reviewable
+- 該当する場合は severity-classified
+- evidence に対応付けられている
 
-1. Read this file.
-2. Read `references/canonical-sources.md`.
-3. Identify whether the change affects AGENTS, skills, detailed docs, templates, or all.
-4. Avoid duplicated bodies.
-5. Update templates/checklists if the new rule requires evidence.
-6. Run `scripts/verify-ai-governance.sh`.
-7. Report conflicts and migration notes.
+## 4. 更新手順
+
+governance を変更するときは次を行う。
+
+1. このファイルを読む。
+2. `references/canonical-sources.md` を読む。
+3. 変更が AGENTS、skills、詳細 docs、templates、または全体のどれに影響するかを特定する。
+4. rule body の重複を避ける。
+5. 新 rule が evidence を要求する場合は templates/checklists を更新する。
+6. 英語用語を増やした場合は `glossary.md` を更新する。
+7. `scripts/verify-ai-governance.sh` を実行する。
+8. conflicts と migration notes を報告する。
 
 ## 5. Skill maintenance
 
-Skills must remain focused.
+skills は焦点を絞る。
 
-- Keep `SKILL.md` concise.
-- Put heavy detail in `docs/ai-governance/`.
-- Keep description trigger words strong and front-loaded.
-- Do not add tool-specific metadata unless the maintainer explicitly asks.
-- Do not add scripts unless deterministic automation is necessary.
+- `SKILL.md` は簡潔に保つ。
+- 重い detail は `docs/ai-governance/` に置く。
+- description の trigger words は強く、前半に置く。
+- maintainer が明示的に求めない限り、tool-specific metadata を追加しない。
+- deterministic automation が必要な場合を除き、script を追加しない。
 
 ## 6. AGENTS.md maintenance
 
-`AGENTS.md` must stay compact.
+`AGENTS.md` は compact に保つ。
 
-It should contain:
+含めるもの:
 
-- routing,
-- hard gates,
-- trust boundaries,
-- evidence rules,
-- references to detailed docs.
+- routing
+- hard gates
+- trust boundaries
+- evidence rules
+- detailed docs への references
 
-It should not contain:
+含めないもの:
 
-- the full UI/UX framework,
-- long research summaries,
-- vendor-specific settings,
-- duplicated checklists.
+- UI/UX framework 全文
+- 長い research summary
+- vendor-specific settings
+- duplicated checklists
 
 ## 7. Review cadence
 
-Review governance when:
+次の場合に governance を見直す。
 
-- accessibility standards change,
-- the design system changes,
-- the agent toolchain changes,
-- repeated UI/UX review defects occur,
-- a repository adopts a new frontend framework,
-- a major user-facing flow is added.
+- accessibility standards が変わった。
+- design system が変わった。
+- agent toolchain が変わった。
+- UI/UX review defect が繰り返された。
+- repository が新しい frontend framework を採用した。
+- major user-facing flow が追加された。
 
 ## 8. Deprecation
 
-When removing a rule:
+rule を削除するときは次を行う。
 
-- explain why,
-- identify what replaces it,
-- check for references in templates/checklists/skills,
-- avoid weakening P0 blockers unless maintainers explicitly approve.
+- 理由を説明する。
+- 何が置き換えるかを特定する。
+- templates/checklists/skills の参照を確認する。
+- maintainer が明示的に承認しない限り、P0 blocker を弱めない。

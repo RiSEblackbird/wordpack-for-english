@@ -1,6 +1,6 @@
 # Canonical Sources
 
-Use these sources when maintaining the governance rules.
+governance rule を保守するときの参照元一覧である。参照名は外部資料の正式名称として英語を残す。
 
 ## Agent instruction architecture
 
@@ -19,7 +19,7 @@ Use these sources when maintaining the governance rules.
 
 - Nielsen Norman Group 10 usability heuristics: https://www.nngroup.com/articles/ten-usability-heuristics/
 
-## Recent AI-agent and accessibility research to track
+## 追跡対象の AI agent / accessibility research
 
 - Augmenting Interface Usability Heuristics for Reliable Computer-Use Agents, arXiv:2605.02729
 - Large Language Models for Web Accessibility: A Systematic Literature Review, arXiv:2605.13873
@@ -28,10 +28,10 @@ Use these sources when maintaining the governance rules.
 
 ## Maintenance rule
 
-When adding a source, include:
+source を追加するときは次を含める。
 
-- title,
-- URL or citation,
-- why it matters,
-- which governance rule it supports,
-- whether it is normative, advisory, empirical, or speculative.
+- title
+- URL または citation
+- なぜ重要か
+- どの governance rule を支えるか
+- normative、advisory、empirical、speculative のどれか

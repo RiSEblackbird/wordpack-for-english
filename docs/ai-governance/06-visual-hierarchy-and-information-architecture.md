@@ -1,81 +1,81 @@
 # Visual Hierarchy and Information Architecture
 
-The interface must guide attention intentionally.
+interface は意図的に attention を導く必要がある。
 
-## 1. Hierarchy order
+## 1. 階層順
 
-Every screen should make this order visually legible:
+すべての画面は、次の順序を視覚的に読み取れるようにする。
 
-1. Product/page area or screen purpose
-2. Current object, filter, mode, or scope
-3. Primary task or primary action
-4. Required inputs
-5. Secondary actions
-6. Supporting details
-7. Diagnostics, metadata, and rare actions
+1. product/page area または screen purpose
+2. current object、filter、mode、scope
+3. primary task または primary action
+4. required input
+5. secondary action
+6. supporting detail
+7. diagnostics、metadata、rare action
 
-## 2. Primary action rules
+## 2. Primary action ルール
 
-- One primary action per decision area.
-- Primary action label must include a result verb.
-- Primary action must not be icon-only.
-- Destructive primary actions require risk-appropriate confirmation or recovery.
-- Disabled primary action must explain why it is unavailable.
+- decision area ごとに primary action は 1 つ。
+- primary action label は結果を表す動詞を含む。
+- primary action を icon-only にしない。
+- destructive primary action には risk に応じた confirmation または recovery を用意する。
+- disabled primary action は、なぜ使えないかを説明する。
 
-## 3. Grouping rules
+## 3. Grouping ルール
 
-Use proximity, alignment, headings, and whitespace to communicate grouping.
+proximity、alignment、heading、whitespace で grouping を伝える。
 
-Fail if users must infer relationships from implementation structure, DOM order, or hidden context.
+ユーザーが implementation structure、DOM order、hidden context から関係を推測しなければならない場合は fail とする。
 
-## 4. Typography rules
+## 4. Typography ルール
 
-- Use readable default sizes.
-- Long-form text should use line height around or above 1.5.
-- Avoid long all-caps text.
-- Avoid long italic text, especially in Japanese.
-- Keep reading-heavy line lengths manageable.
-- Do not use image text except where unavoidable, such as logos.
+- 読みやすい default size を使う。
+- 長文 text は line height 1.5 前後以上を使う。
+- 長い all-caps text を避ける。
+- 特に日本語では、長い italic text を避ける。
+- 読む量が多い箇所では行長を扱いやすく保つ。
+- logo など不可避な場合を除き、画像化された text を使わない。
 
-## 5. Density rules
+## 5. Density ルール
 
-Dense UI is allowed only when:
+高密度 UI は、次を満たす場合のみ許容する。
 
-- the primary task is still obvious,
-- scanning order is clear,
-- critical actions are not buried,
-- long content does not collapse the layout,
-- narrow viewport has a usable layout.
+- primary task がなお明確である。
+- scanning order が明確である。
+- critical action が埋もれていない。
+- 長い content で layout が崩れない。
+- narrow viewport でも使える layout がある。
 
-## 6. Visual affordance rules
+## 6. Visual affordance ルール
 
-Interactive elements must look interactive.
+interactive element は interactive に見える必要がある。
 
-Reject:
+次は reject する。
 
-- text that looks like body text but acts as a button,
-- buttons that look disabled when enabled,
-- disabled controls that look enabled,
-- hover-only affordances for important actions,
-- tiny ambiguous icons.
+- body text に見えるが button として動く text
+- 有効なのに disabled に見える button
+- 無効なのに enabled に見える control
+- 重要 action の hover-only affordance
+- 小さく曖昧な icon
 
-## 7. Information architecture rules
+## 7. Information architecture ルール
 
-- Navigation labels must be mutually distinguishable.
-- Tab, filter, and count scopes must be explicit.
-- Breadcrumbs or equivalent orientation must exist for deep or multi-step flows.
-- Search must state what it searches when scope is not obvious.
-- Empty and no-results states must not be conflated.
+- navigation label は互いに区別できる。
+- tab、filter、count の scope は明示する。
+- 深い flow または multi-step flow には breadcrumb または同等の orientation を置く。
+- scope が明白でない search は、何を search するかを示す。
+- empty state と no-results state を混同しない。
 
-## 8. Content stress tests
+## 8. Content stress test
 
-Review visual hierarchy with:
+次の条件で visual hierarchy を確認する。
 
-- 0, 1, many items,
-- long names,
-- missing metadata,
-- warning and error banners,
-- narrow viewport,
-- translated strings,
-- 200% text zoom,
-- high-density real-world data.
+- 0 件、1 件、多数件
+- 長い名前
+- metadata 欠落
+- warning banner と error banner
+- narrow viewport
+- 翻訳された文字列
+- 200% text zoom
+- 高密度の実データ

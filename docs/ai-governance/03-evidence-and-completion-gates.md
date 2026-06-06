@@ -1,10 +1,10 @@
 # Evidence and Completion Gates
 
-UI/UX work is complete only when evidence exists.
+UI/UX 作業は、証跡が存在するときだけ完了である。
 
-## 1. Required artifacts
+## 1. 必須 artifact
 
-For any UI/UX change, produce or update:
+UI/UX 変更では、次を作成または更新する。
 
 1. UI/UX review report
 2. State matrix
@@ -14,100 +14,100 @@ For any UI/UX change, produce or update:
 6. Counter-review
 7. Completion gate report
 
-Use templates from `docs/ai-governance/templates/`.
+`docs/ai-governance/templates/` のテンプレートを使う。
 
-## 2. Completion gates
+## 2. 完了 gate
 
 ### Gate 1: Scope gate
 
-Pass only if:
+次を満たす場合のみ pass。
 
-- changed screens/components are listed,
-- user goal is stated,
-- first meaningful action is stated,
-- affected states are listed.
+- 変更された画面/コンポーネントが列挙されている。
+- ユーザー goal が書かれている。
+- first meaningful action が書かれている。
+- 影響を受ける state が列挙されている。
 
-### Gate 2: First-time comprehension gate
+### Gate 2: 初見理解 gate
 
-Pass only if:
+次を満たす場合のみ pass。
 
-- screen purpose is visible,
-- current scope/location is visible,
-- primary action is visually discoverable,
-- important consequences are explained before action.
+- 画面目的が見える。
+- 現在の scope/location が見える。
+- 主要操作を視覚的に見つけられる。
+- 重要な結果や影響が操作前に説明されている。
 
 ### Gate 3: State gate
 
-Pass only if:
+次を満たす場合のみ pass。
 
-- default, loading, empty, no-results, error, disabled, and permission states are intentionally designed or marked not applicable,
-- each state gives a next action or clear explanation,
-- error and disabled states include recovery guidance.
+- 通常、読み込み中、空、該当なし、エラー、無効、権限なし状態が意図的に設計されている、または非該当と明示されている。
+- 各状態に次の行動または明確な説明がある。
+- エラー状態と無効状態に回復 guidance がある。
 
 ### Gate 4: Accessibility gate
 
-Pass only if:
+次を満たす場合のみ pass。
 
-- primary task works keyboard-only or the exception is documented,
-- focus is visible and not obscured,
-- controls have accessible names,
-- labels and instructions exist where needed,
-- contrast/target/semantic checks have been performed or explicitly not run,
-- no known WCAG AA blocker remains.
+- 主タスクがキーボードだけで動く、または例外が文書化されている。
+- focus が見え、隠れない。
+- control に accessible name がある。
+- 必要な場所に label と instruction がある。
+- contrast/target/semantic の確認が実施されている、または未実行理由が明示されている。
+- 既知の WCAG AA blocker が残っていない。
 
 ### Gate 5: Visual clarity gate
 
-Pass only if:
+次を満たす場合のみ pass。
 
-- primary action is visually dominant,
-- hierarchy is scannable,
-- content density is justified,
-- long content and narrow viewport are considered,
-- metadata does not overwhelm task-relevant content.
+- 主要操作が視覚的に最も目立つ。
+- hierarchy が scan しやすい。
+- content density に理由がある。
+- 長い content と狭い viewport が考慮されている。
+- metadata が task-relevant content を圧倒していない。
 
 ### Gate 6: Counter-review gate
 
-Pass only if:
+次を満たす場合のみ pass。
 
-- an adversarial review was performed,
-- P0/P1/P2 findings are listed,
-- unresolved risks are listed,
-- the final pass/fail is justified.
+- adversarial review が実施されている。
+- P0/P1/P2 findings が列挙されている。
+- unresolved risks が列挙されている。
+- final pass/fail の理由が示されている。
 
-## 3. Evidence quality
+## 3. 良い証跡
 
-Good evidence:
+良い証跡は次を満たす。
 
-- is specific,
-- identifies exact screen/state/component,
-- includes command outputs when commands were run,
-- includes screenshots/traces when available,
-- lists limitations.
+- 具体的である。
+- 対象 screen/state/component が明確である。
+- command を実行した場合は出力を含む。
+- 利用可能な場合は screenshot/trace を含む。
+- 限界を列挙する。
 
-Bad evidence:
+悪い証跡の例:
 
-- “looks good”,
-- “should work”,
-- “tested manually” with no steps,
-- happy-path screenshot only,
-- claiming a11y pass without keyboard and focus checks,
-- claiming user validation without real users.
+- 「looks good」
+- 「should work」
+- 手順のない「手動テストした」
+- happy path screenshot だけ
+- keyboard と focus を見ずに a11y pass と主張する
+- 実ユーザーなしに user validation と主張する
 
-## 4. When evidence cannot be generated
+## 4. 証跡を生成できない場合
 
-If screenshots, browser tests, or automated accessibility checks cannot be generated:
+screenshot、browser test、自動 accessibility check を生成できない場合は次を行う。
 
-1. Say exactly why.
-2. Provide the best available substitute evidence.
-3. Mark residual risk.
-4. Do not mark the gate as fully passed unless the substitute evidence genuinely covers the risk.
+1. 理由を正確に書く。
+2. 利用可能な最善の代替証跡を示す。
+3. residual risk を明記する。
+4. 代替証跡が実際に risk を覆っていない限り、gate を完全 pass にしない。
 
-## 5. Final pass/fail language
+## 5. 最終 pass/fail 表現
 
-Use one of:
+次のいずれかを使う。
 
-- `PASS`: No P0 remains; P1/P2 are documented or resolved.
-- `PASS WITH RISK`: No P0 remains, but evidence is incomplete or P1 remains with explicit deferral.
-- `FAIL`: Any P0 remains or verification was materially insufficient.
+- `PASS`: P0 が残っておらず、P1/P2 が文書化または解決済み。
+- `PASS WITH RISK`: P0 は残っていないが、証跡が不完全、または P1 が明示的延期付きで残っている。
+- `FAIL`: P0 が残っている、または検証が実質的に不足している。
 
-Do not invent a softer category.
+これ以外の柔らかい分類を作らない。
