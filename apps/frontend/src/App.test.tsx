@@ -308,6 +308,12 @@ describe('App navigation', () => {
     await completeLogin(fetchMock, user);
 
     expect(await screen.findByRole('heading', { name: 'WordPack' })).toBeInTheDocument();
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(openButton);
+    });
+    expect(document.querySelector('.sidebar-title')).toHaveTextContent('WordPack');
+    expect(screen.getByRole('link', { name: 'GitHubリポジトリを開く' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'ログアウト' })).toBeInTheDocument();
     const authCall = (fetchMock.mock.calls as FetchCall[]).find(([input]) =>
       resolveUrl(input).endsWith('/api/auth/google'),
@@ -551,6 +557,7 @@ describe('App navigation', () => {
 
     const sidebar = screen.getByLabelText('アプリ内共通メニュー');
     expect(sidebar).toHaveAttribute('aria-hidden', 'false');
+    expect(sidebar).toHaveStyle({ transform: 'translateX(0)' });
 
     const computed = window.getComputedStyle(sidebar);
     expect(computed.display).toBe('block');
@@ -589,7 +596,7 @@ describe('App navigation', () => {
     expect(Math.round(rect.top)).toBe(0);
   });
 
-  it('adds safe-area classes for fixed elements on all layouts', async () => {
+  it('adds safe-area classes for fixed controls on all layouts', async () => {
     fetchMock.mockImplementation((input: RequestInfo | URL) => {
       const url = resolveUrl(input);
       if (url.endsWith('/api/config')) {
@@ -615,11 +622,14 @@ describe('App navigation', () => {
     });
 
     const toggle = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(toggle);
+    });
     const guestBadge = await screen.findByText('ゲスト閲覧モード');
 
     await waitFor(() => {
       expect(toggle).toHaveClass('safe-area-adjusted');
-      expect(guestBadge).toHaveClass('safe-area-adjusted');
+      expect(guestBadge).not.toHaveClass('safe-area-adjusted');
     });
   });
 
@@ -646,6 +656,11 @@ describe('App navigation', () => {
     const guestButton = await screen.findByRole('button', { name: 'ゲスト閲覧モード' });
     await act(async () => {
       await user.click(guestButton);
+    });
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(openButton);
     });
 
     const logoutButton = await screen.findByRole('button', { name: 'ログアウト' });
@@ -713,7 +728,7 @@ describe('App navigation', () => {
     expect(computed.position === 'static' || computed.position === '').toBe(true);
   });
 
-  it('aligns sidebar content to the top (no space-between stretching)', async () => {
+  it('pins account and GitHub controls to the bottom of the sidebar', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     renderWithProviders();
 
@@ -727,9 +742,12 @@ describe('App navigation', () => {
 
     const sidebarContent = document.querySelector('.sidebar-content');
     if (!sidebarContent) throw new Error('sidebar content not found');
+    const sidebarFooter = document.querySelector('.sidebar-footer');
+    if (!sidebarFooter) throw new Error('sidebar footer not found');
 
-    const computed = window.getComputedStyle(sidebarContent);
-    expect(computed.alignContent === 'flex-start' || computed.alignContent === '').toBe(true);
+    expect(sidebarContent.lastElementChild).toBe(sidebarFooter);
+    expect(sidebarFooter).toContainElement(screen.getByRole('link', { name: 'GitHubリポジトリを開く' }));
+    expect(sidebarFooter).toContainElement(screen.getByRole('button', { name: 'ログアウト' }));
   });
 
   it('keeps sidebar content width at 100% with border-box sizing on mobile', async () => {
@@ -764,12 +782,17 @@ describe('App navigation', () => {
     }
   });
 
-  it('returns to the login screen when signing out via the header control', async () => {
+  it('returns to the login screen when signing out via the sidebar control', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     renderWithProviders();
 
     const user = userEvent.setup();
     await completeLogin(fetchMock, user);
+
+    const openButton = await screen.findByRole('button', { name: 'メニューを開く' });
+    await act(async () => {
+      await user.click(openButton);
+    });
 
     const logoutButton = await screen.findByRole('button', { name: 'ログアウト' });
     await act(async () => {
