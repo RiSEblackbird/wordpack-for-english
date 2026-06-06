@@ -1,7 +1,7 @@
 import React from 'react';
 import { WordPackPanel } from '../../components/WordPackPanel';
 import { WordPackListPanel } from '../../components/WordPackListPanel';
-import { Badge, SearchBox } from '../../shared/ui';
+import { SearchBox } from '../../shared/ui';
 
 interface LexiconPageProps {
   focusRef: React.RefObject<HTMLElement>;
@@ -25,28 +25,14 @@ export const LexiconPage: React.FC<LexiconPageProps> = ({
       </div>
     </div>
 
-    <section className="dictionary-section" aria-label="Lexicon overview">
-      <div className="dictionary-section-header">
-        <div>
-          <h3>Recently touched</h3>
-          <p>辞書記事への入口。生成や管理は控えめな道具としてここに残します。</p>
-        </div>
-        <div className="dictionary-meta-row">
-          <Badge variant="accent">dictionary first</Badge>
-          <Badge>guest public</Badge>
-          <Badge>empty entries</Badge>
-        </div>
-      </div>
-      <WordPackPanel
-        focusRef={focusRef}
-        selectedWordPackId={selectedWordPackId}
-        onWordPackGenerated={onWordPackGenerated}
-      />
-    </section>
+    <WordPackPanel
+      focusRef={focusRef}
+      selectedWordPackId={selectedWordPackId}
+      onWordPackGenerated={onWordPackGenerated}
+    />
 
     <section className="dictionary-section" aria-label="保存済みWordPack一覧 セクション">
       <WordPackListPanel />
     </section>
   </div>
 );
-
