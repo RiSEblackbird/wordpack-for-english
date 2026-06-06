@@ -312,7 +312,13 @@ export const ExampleListPanel: React.FC = () => {
           align-items: center;
           gap: 0.2rem;
           padding: 0.1rem 0.35rem;
+          border: 1px solid color-mix(in srgb, var(--dict-accent) 35%, transparent);
           border-radius: 9999px;
+          background-color: color-mix(in srgb, var(--dict-accent) 14%, var(--dict-surface-raised));
+          color: var(--dict-accent-strong);
+        }
+        body.theme-dark .ex-meta-badge {
+          border-color: rgba(147, 197, 253, 0.36);
           background-color: rgba(47, 115, 255, 0.22);
           color: #dbeafe;
         }

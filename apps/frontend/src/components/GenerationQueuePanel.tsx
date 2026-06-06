@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNotifications, type NotificationItem } from '../NotificationsContext';
 
 const formatElapsed = (ms: number): string => {
@@ -14,10 +14,20 @@ const extractLemma = (title: string): string => {
   return title.replace(/の生成(処理中|完了|失敗).*$/, '').trim() || 'WordPack';
 };
 
+const notificationStatusLabel = (status: NotificationItem['status']): string => (
+  status === 'progress' ? '生成中' : status === 'success' ? '完了' : '失敗'
+);
+
+const buildLiveMessage = (item: NotificationItem): string => {
+  const lemma = extractLemma(item.title);
+  const statusLabel = notificationStatusLabel(item.status);
+  return `${lemma} の生成状態は${statusLabel}です${item.message ? `。${item.message}` : ''}`;
+};
+
 const QueueItem: React.FC<{ item: NotificationItem; nowMs: number; onRemove: (id: string) => void }> = ({ item, nowMs, onRemove }) => {
   const elapsedMs = item.status === 'progress' ? nowMs - item.createdAt : item.updatedAt - item.createdAt;
   const lemma = extractLemma(item.title);
-  const statusLabel = item.status === 'progress' ? '生成中' : item.status === 'success' ? '完了' : '失敗';
+  const statusLabel = notificationStatusLabel(item.status);
   const progressValue = item.status === 'progress' ? 68 : item.status === 'success' ? 100 : 100;
 
   return (
@@ -62,6 +72,8 @@ const QueueItem: React.FC<{ item: NotificationItem; nowMs: number; onRemove: (id
 export const GenerationQueuePanel: React.FC = () => {
   const { notifications, clearAll, remove } = useNotifications();
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [liveMessage, setLiveMessage] = useState('');
+  const lastAnnouncementKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -77,8 +89,26 @@ export const GenerationQueuePanel: React.FC = () => {
     return { progressItems: progress, doneItems: done };
   }, [notifications]);
 
+  useEffect(() => {
+    const latest = notifications.reduce<NotificationItem | null>((current, item) => {
+      if (!current) return item;
+      return item.updatedAt > current.updatedAt ? item : current;
+    }, null);
+    const nextKey = latest ? `${latest.id}:${latest.status}:${latest.updatedAt}` : 'empty';
+    if (lastAnnouncementKeyRef.current === null) {
+      lastAnnouncementKeyRef.current = nextKey;
+      return;
+    }
+    if (lastAnnouncementKeyRef.current === nextKey) return;
+    lastAnnouncementKeyRef.current = nextKey;
+    setLiveMessage(latest ? buildLiveMessage(latest) : '生成キューを空にしました。');
+  }, [notifications]);
+
   return (
     <section className="generation-queue-panel" aria-label="生成キュー">
+      <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+        {liveMessage}
+      </p>
       <div className="generation-queue-panel__header">
         <h2>生成キュー</h2>
         <span className="generation-queue-count" aria-label={`生成履歴 ${notifications.length}件`}>
