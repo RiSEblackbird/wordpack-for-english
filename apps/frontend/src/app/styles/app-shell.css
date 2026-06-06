@@ -66,6 +66,7 @@ footer {
 
 .app-shell {
   --app-sidebar-width: 280px;
+  --sidebar-title-toggle-clearance: 3rem;
   margin: 0 auto;
   box-sizing: border-box;
   width: 100%;
@@ -222,7 +223,9 @@ body.theme-dark .guest-badge {
 .sidebar-brand {
   display: grid;
   gap: 0.25rem;
-  padding: 0.25rem 0.5rem 0.5rem;
+  min-height: 40px;
+  padding: 0.25rem 0.5rem 0.5rem var(--sidebar-title-toggle-clearance);
+  align-items: center;
 }
 
 .sidebar-title {
