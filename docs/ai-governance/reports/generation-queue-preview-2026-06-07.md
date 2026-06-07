@@ -65,14 +65,19 @@
 - 反証観点: 明滅が進捗理解を邪魔しないか、完了カードがbuttonと分からないか、履歴消去と競合しないか、動きが苦手なユーザーを妨げないか、保存済みIDのない履歴で黙って失敗しないかを確認した。
 - 見つけたリスク: 過去に保存された古い完了履歴は、lemmaを推定できない場合はプレビュー不可のまま残る。
 - 対応: 新規通知にはwordPackId/lemmaを付与し、既存タイトルからlemmaを推定できる履歴はlookupで開く。推定できない履歴は従来どおり履歴表示に限定する。
+- 追加対応: Codex自動レビューで指摘された同一lemma複数保存時の取り違えを防ぐため、通常の `/word/pack` 生成レスポンスにも保存済みWordPack IDを含め、その実IDを完了通知へ保持するようにした。
 - 残るリスク: 明滅の感覚的な「ぼわっ、ぼわっと」は自動テストだけでは評価しきれないため、Browserで実際のクラス付与/解除と表示を確認した。
 
 ## 10. 検証証跡
 - `cd apps/frontend && npx tsc -p tsconfig.json`
 - `cd apps/frontend && npm test -- GenerationQueuePanel.test.tsx --silent`
+- `cd apps/frontend && npm test -- WordPackPanel.test.tsx GenerationQueuePanel.test.tsx --silent`
+- `PYTHONPATH=apps/backend pytest --no-cov tests/test_api.py::test_word_pack`
+- `FIRESTORE_EMULATOR_HOST=localhost:8080 FIRESTORE_PROJECT_ID=test-project GCP_PROJECT_ID=test-project PYTHONPATH=apps/backend pytest -q --no-cov tests/test_api.py tests/test_security_headers.py`
 - `cd apps/frontend && npm test -- WordPackPanel.test.tsx WordPackListPanel.modal.test.tsx ArticleImportPanel.test.tsx --silent`
 - `cd apps/frontend && npm test -- --coverage --silent`
 - `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts`
+- ローカル full backend確認: `PYTHONPATH=apps/backend pytest` はADC不在で収集時に停止。`FIRESTORE_EMULATOR_HOST=localhost:8080 FIRESTORE_PROJECT_ID=test-project GCP_PROJECT_ID=test-project PYTHONPATH=apps/backend pytest` は収集エラーは解消したが、数分間出力なしで進まなかったため中断した。PR CIのBackend testsは成功済みで、ローカルでは変更対象のWordPack APIとSecurity headersを上記コマンドで確認した。
 - Browser手動確認: mock API + Viteで `http://127.0.0.1:5173/` を開き、`alpha` のWordPackのみ作成後に完了カードへ `is-updated` が付き、約2.2秒後に解除され、カードクリックで `WordPack プレビュー: alpha` と例文本文が表示されることを確認した。
 - Browser手動確認: モーダル起動後のfocusが閉じるボタンへ移り、右レールとモーダルに視覚的な重なり崩れがないことを確認した。
 - 最終整合: `git diff --check`

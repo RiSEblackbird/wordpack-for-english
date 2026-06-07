@@ -176,6 +176,7 @@ export const useWordPack = ({
           timeoutMs: requestTimeoutMs,
         });
         const normalized = normalizeWordPack(res);
+        const generatedWordPackId = res.id?.trim() || null;
         if (mountedRef.current) {
           setData(normalized);
           setCurrentWordPackId(null);
@@ -186,6 +187,7 @@ export const useWordPack = ({
           title: `【${res.lemma}】の生成完了！`,
           status: 'success',
           message: '新規生成が完了しました',
+          wordPackId: generatedWordPackId,
           lemma: res.lemma,
         });
         dispatchAppEvent(APP_EVENTS.wordPackUpdated);

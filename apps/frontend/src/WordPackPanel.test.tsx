@@ -130,9 +130,12 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       if (url.endsWith('/api/word/pack') && init?.method === 'POST') {
         const body = init?.body ? JSON.parse(init.body as string) : {};
         const lemma = body.lemma || 'test';
+        const id = nextWordPackId();
         generated.add(lemma);
+        lemmaById.set(id, lemma);
         return new Response(
           JSON.stringify({
+            id,
             lemma,
             sense_title: `${lemma}概説`,
             pronunciation: { ipa_GA: null, ipa_RP: null, syllables: null, stress_index: null, linking_notes: [] },
@@ -320,6 +323,23 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     await screen.findByText('WordPack を生成しました');
     // 自動でプレビューモーダルは開かれない
     expect(screen.queryByRole('dialog', { name: 'WordPack プレビュー' })).not.toBeInTheDocument();
+
+    const queue = await screen.findByRole('region', { name: '生成キュー' });
+    const previewCallsStart = fetchMock.mock.calls.length;
+    await act(async () => {
+      await user.click(within(queue).getByRole('button', { name: 'delta の生成結果プレビューを開く' }));
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /WordPack プレビュー: delta/ })).toBeVisible();
+    });
+    const previewUrls = fetchMock.mock.calls
+      .slice(previewCallsStart)
+      .map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));
+    expect(previewUrls.some((u) => u.endsWith('/api/word/packs/wp:00000000000000000000000000000000'))).toBe(true);
+    expect(previewUrls.some((u) => u.endsWith('/api/word/lemma/delta'))).toBe(false);
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: 'WordPackプレビューを閉じる' }));
+    });
 
     // fetch が正しいエンドポイントで呼ばれていること（採点APIは呼ばれない）
     const urls = fetchMock.mock.calls.map((c) => (typeof c[0] === 'string' ? c[0] : (c[0] as URL).toString()));

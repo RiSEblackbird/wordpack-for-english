@@ -142,6 +142,10 @@ def test_word_pack(client):
     assert "citations" in body and "confidence" in body
     assert body.get("checked_only_count") == 0
     assert body.get("learned_count") == 0
+    assert isinstance(body.get("id"), str) and body["id"].startswith("wp:")
+    saved = client.get(f"/api/word/packs/{body['id']}")
+    assert saved.status_code == 200
+    assert saved.json()["lemma"] == "converge"
 
 
 @pytest.mark.parametrize(

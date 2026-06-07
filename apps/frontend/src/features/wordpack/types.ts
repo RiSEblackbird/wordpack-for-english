@@ -35,6 +35,7 @@ export interface Etymology { note: string; confidence: 'low' | 'medium' | 'high'
 export interface Citation { text: string; meta?: Record<string, any> }
 
 export interface WordPack {
+  id?: string | null;
   lemma: string;
   sense_title: string;
   pronunciation: Pronunciation;

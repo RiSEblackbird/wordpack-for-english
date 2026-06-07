@@ -392,6 +392,12 @@ class WordPack(BaseModel):
     )
 
 
+class GeneratedWordPackResponse(WordPack):
+    """生成直後の保存済みWordPack IDを含むレスポンス。"""
+
+    id: str = Field(description="保存されたWordPack ID")
+
+
 class WordPackListItem(BaseModel):
     """WordPack一覧表示用の軽量モデル"""
 
