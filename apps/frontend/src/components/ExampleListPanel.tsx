@@ -528,7 +528,7 @@ export const ExampleListPanel: React.FC = () => {
                         訳表示
                       </button>
                       <div onClick={(e) => e.stopPropagation()}>
-                        <TTSButton text={it.en} className="ex-tts-btn" />
+                        <TTSButton text={it.en} ariaLabel={`${it.lemma}の例文音声`} className="ex-tts-btn" />
                       </div>
                     </div>
                     {(showAllTranslations || expandedIds.has(it.id)) && <div className="ex-ja">{it.ja}</div>}
@@ -586,7 +586,7 @@ export const ExampleListPanel: React.FC = () => {
                           訳表示
                         </button>
                         <div onClick={(e) => e.stopPropagation()}>
-                          <TTSButton text={it.en} className="ex-tts-btn" />
+                          <TTSButton text={it.en} ariaLabel={`${it.lemma}の例文音声`} className="ex-tts-btn" />
                         </div>
                       </div>
                       {(showAllTranslations || expandedIds.has(it.id)) && <div className="ex-ja">{it.ja}</div>}

@@ -158,6 +158,57 @@ export const ArticleDetailModal: React.FC<Props> = ({
               white-space: pre-wrap;
               word-break: break-word;
             }
+            .article-reader {
+              display: grid;
+              gap: 0.9rem;
+              max-width: 56rem;
+            }
+            .article-reader__header {
+              display: flex;
+              gap: 0.75rem;
+              align-items: flex-start;
+              justify-content: space-between;
+              flex-wrap: wrap;
+            }
+            .article-reader__header h3 {
+              margin: 0;
+              flex: 1 1 24rem;
+              line-height: 1.25;
+            }
+            .article-text-block {
+              display: grid;
+              gap: 0.35rem;
+              max-width: 48rem;
+            }
+            .article-text-block h4 {
+              margin: 0;
+              font-size: 0.95rem;
+              color: var(--color-subtle);
+            }
+            .article-text-block p {
+              margin: 0;
+              white-space: pre-wrap;
+              line-height: 1.65;
+            }
+            .article-notes {
+              border-left: 3px solid var(--color-border);
+              padding-left: 0.75rem;
+              color: var(--color-subtle);
+            }
+            .article-detail-summary {
+              margin-top: 0.9rem;
+              border-top: 1px solid var(--color-border);
+              padding-top: 0.75rem;
+            }
+            .article-detail-summary summary {
+              cursor: pointer;
+              font-weight: 600;
+            }
+            .article-related-empty {
+              margin: 0.25rem 0 0;
+              color: var(--color-subtle);
+              line-height: 1.6;
+            }
             @media (max-width: 480px) {
               .ai-meta-grid {
                 grid-template-columns: minmax(5rem, 0.55fr) 1fr;
@@ -175,7 +226,9 @@ export const ArticleDetailModal: React.FC<Props> = ({
             }
             .ai-card { border: 1px solid var(--color-border); border-radius: 4px; padding: 0.35rem; background: var(--color-surface); }
             .ai-badge { font-size: 0.68em; padding: 0.06rem 0.3rem; border-radius: 999px; border: 1px solid var(--color-border); }
-            .ai-warnings { border: 1px solid #ffe08a; background: #fff8e1; padding: 0.5rem; border-radius: 4px; }
+            .ai-warnings { border: 1px solid #d6a31a; background: #fff8e1; color: #4d3600; padding: 0.5rem; border-radius: 4px; }
+            .ai-warnings strong,
+            .ai-warnings li { color: #4d3600; }
             .ai-warnings ul { margin: 0.25rem 0 0 1.2rem; padding: 0; }
             .ai-wp-preview-button {
               border: 0;
@@ -223,30 +276,33 @@ export const ArticleDetailModal: React.FC<Props> = ({
               padding: 0.25rem 0.7rem;
             }
           `}</style>
-          <div
-            style={{
-              marginTop: 0,
-              display: 'flex',
-              gap: '0.5rem',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-            }}
-          >
-            <h3 style={{ margin: 0, flex: '1 1 auto' }}>{article.title_en}</h3>
-            <TTSButton
-              text={article.body_en}
-              style={{ flex: '0 0 auto' }}
-            />
-          </div>
-          <div style={{ whiteSpace: 'pre-wrap', margin: '0.5rem 0' }}>{article.body_en}</div>
-          <hr />
-          <div style={{ whiteSpace: 'pre-wrap', margin: '0.5rem 0' }}>{article.body_ja}</div>
-          {article.notes_ja ? (
-            <div style={{ marginTop: '0.5rem', color: 'var(--color-subtle)' }}>{article.notes_ja}</div>
-          ) : null}
+          <section className="article-reader" aria-label="文章の本文">
+            <div className="article-reader__header">
+              <h3>{article.title_en}</h3>
+              <TTSButton
+                text={article.body_en}
+                label="音声"
+                ariaLabel="記事本文の音声"
+                style={{ flex: '0 0 auto' }}
+              />
+            </div>
+            <div className="article-text-block">
+              <h4>英文</h4>
+              <p>{article.body_en}</p>
+            </div>
+            <div className="article-text-block">
+              <h4>日本語訳</h4>
+              <p>{article.body_ja}</p>
+            </div>
+            {article.notes_ja ? (
+              <div className="article-text-block article-notes">
+                <h4>解説の要点</h4>
+                <p>{article.notes_ja}</p>
+              </div>
+            ) : null}
+          </section>
           {article.warnings && article.warnings.length > 0 ? (
-            <div className="ai-warnings" role="alert" aria-label="import-warnings">
+            <div className="ai-warnings" role="alert" aria-label="インポート警告">
               <strong>警告</strong>
               <ul>
                 {article.warnings.map((w, idx) => (
@@ -255,54 +311,65 @@ export const ArticleDetailModal: React.FC<Props> = ({
               </ul>
             </div>
           ) : null}
-          <h4>関連WordPack</h4>
-          <div className="ai-wp-grid">
-            {article.related_word_packs.map((l) => (
-              <div key={l.word_pack_id} className="ai-card">
-                <div className="ai-wp-card-header">
-                  {onSelectWordPackPreview ? (
-                    <button
-                      type="button"
-                      className="ai-wp-preview-button"
-                      onClick={() => onSelectWordPackPreview(l.word_pack_id)}
-                    >
-                      <strong>WordPack「{l.lemma}」をプレビュー</strong>
-                    </button>
-                  ) : (
-                    <strong style={{ fontSize: '0.9rem' }}>{l.lemma}</strong>
-                  )}
-                  {l.is_empty ? (
-                    <span className="ai-badge" style={{ background: '#fff3cd', borderColor: '#ffe08a', color: '#7a5b00' }}>例文未生成</span>
-                  ) : null}
-                  {onRegenerateWordPack ? (
-                    <GuestLock isGuest={isGuest}>
-                      <button onClick={() => onRegenerateWordPack(l.word_pack_id)} style={{ marginLeft: 'auto', fontSize: '0.65em', padding: '0.05rem 0.2rem', borderRadius: 3 }}>生成</button>
-                    </GuestLock>
-                  ) : null}
-                  {onDeleteWordPack ? (
-                    <GuestLock isGuest={isGuest}>
-                      <button
-                        onClick={() => onDeleteWordPack(l.word_pack_id)}
-                        aria-label={`WordPack「${l.lemma}」を関連一覧から削除`}
-                        style={{ marginLeft: 4, color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.12rem 0.35rem', borderRadius: 3, fontSize: '0.78rem' }}
-                      >
-                        削除
-                      </button>
-                    </GuestLock>
-                  ) : null}
-                </div>
+          <section aria-labelledby="article-related-wordpacks-heading" style={{ marginTop: '1rem' }}>
+            <h4 id="article-related-wordpacks-heading">関連WordPack</h4>
+            {article.related_word_packs.length > 0 ? (
+              <div className="ai-wp-grid">
+                {article.related_word_packs.map((l) => (
+                  <div key={l.word_pack_id} className="ai-card">
+                    <div className="ai-wp-card-header">
+                      {onSelectWordPackPreview ? (
+                        <button
+                          type="button"
+                          className="ai-wp-preview-button"
+                          onClick={() => onSelectWordPackPreview(l.word_pack_id)}
+                        >
+                          <strong>WordPack「{l.lemma}」をプレビュー</strong>
+                        </button>
+                      ) : (
+                        <strong style={{ fontSize: '0.9rem' }}>{l.lemma}</strong>
+                      )}
+                      {l.is_empty ? (
+                        <span className="ai-badge" style={{ background: '#fff3cd', borderColor: '#ffe08a', color: '#7a5b00' }}>例文未生成</span>
+                      ) : null}
+                      {onRegenerateWordPack ? (
+                        <GuestLock isGuest={isGuest}>
+                          <button onClick={() => onRegenerateWordPack(l.word_pack_id)} style={{ marginLeft: 'auto', fontSize: '0.65em', padding: '0.05rem 0.2rem', borderRadius: 3 }}>例文を生成</button>
+                        </GuestLock>
+                      ) : null}
+                      {onDeleteWordPack ? (
+                        <GuestLock isGuest={isGuest}>
+                          <button
+                            onClick={() => onDeleteWordPack(l.word_pack_id)}
+                            aria-label={`WordPack「${l.lemma}」を関連一覧から削除`}
+                            style={{ marginLeft: 4, color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.12rem 0.35rem', borderRadius: 3, fontSize: '0.78rem' }}
+                          >
+                            削除
+                          </button>
+                        </GuestLock>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            ) : (
+              <p className="article-related-empty">
+                この記事に紐づくWordPackはまだありません。必要な語句はLexiconで作成できます。
+              </p>
+            )}
+          </section>
           {metaRows.length > 0 ? (
-            <dl className="ai-meta-grid" data-testid="article-meta">
-              {metaRows.map((row, idx) => (
-                <React.Fragment key={`${row.label}-${idx}`}>
-                  <dt>{row.label}</dt>
-                  <dd>{row.value}</dd>
-                </React.Fragment>
-              ))}
-            </dl>
+            <details className="article-detail-summary">
+              <summary>生成・管理情報</summary>
+              <dl className="ai-meta-grid" data-testid="article-meta">
+                {metaRows.map((row, idx) => (
+                  <React.Fragment key={`${row.label}-${idx}`}>
+                    <dt>{row.label}</dt>
+                    <dd>{row.value}</dd>
+                  </React.Fragment>
+                ))}
+              </dl>
+            </details>
           ) : null}
           {previewWordPackId && previewMeta ? (
             <section className="article-wordpack-preview" aria-label={`Reader内WordPackプレビュー ${previewMeta.lemma}`}>

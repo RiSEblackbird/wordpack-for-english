@@ -124,7 +124,8 @@ describe('ArticleListPanel bulk delete', () => {
       await user.click(bulkButton);
     });
 
-    const confirmYes = await screen.findByRole('button', { name: 'はい' });
+    expect(await screen.findByText(/実行後はこの画面から取り消せません/)).toBeInTheDocument();
+    const confirmYes = await screen.findByRole('button', { name: '削除する' });
     await act(async () => {
       await user.click(confirmYes);
     });

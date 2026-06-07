@@ -84,6 +84,12 @@ describe('TTSButton', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
   });
 
+  it('keeps compact visible text while exposing a target-specific accessible name', () => {
+    render(<TTSButton text="Hello" ariaLabel="原文の音声" />);
+
+    expect(screen.getByRole('button', { name: '原文の音声' })).toHaveTextContent('音声');
+  });
+
   it('alerts when fetch fails', async () => {
     (global as any).Audio = vi.fn().mockImplementation(() => ({ play: vi.fn().mockResolvedValue(undefined), onended: null, onerror: null }));
     URL.createObjectURL = vi.fn().mockReturnValue('blob:mock');

@@ -1116,7 +1116,7 @@ export const WordPackListPanel: React.FC = () => {
                         >
                           <MiniIcon name="open" />開く
                         </button>
-                        <TTSButton text={wp.lemma} className="wp-card-tts-btn" icon={<MiniIcon name="speaker" />} />
+                        <TTSButton text={wp.lemma} ariaLabel={`${wp.lemma}の音声`} className="wp-card-tts-btn" icon={<MiniIcon name="speaker" />} />
                         {wp.is_empty && (
                           <GuestLock isGuest={isGuest}>
                             <button
@@ -1232,7 +1232,7 @@ export const WordPackListPanel: React.FC = () => {
                           ><MiniIcon name="open" />生成</button>
                         </GuestLock>
                       )}
-                      <TTSButton text={wp.lemma} className="wp-index-tts-btn" icon={<MiniIcon name="speaker" />} />
+                      <TTSButton text={wp.lemma} ariaLabel={`${wp.lemma}の音声`} className="wp-index-tts-btn" icon={<MiniIcon name="speaker" />} />
                       <DeleteButton
                         onClick={(e) => { e.stopPropagation(); deleteWordPack(wp); }}
                         disabled={loading}

@@ -323,7 +323,7 @@ test.describe('WordPack 操作', () => {
 
     await test.step('When: 追加した例文を削除する', async () => {
       await page.getByRole('button', { name: 'alphaのDev例文1を削除' }).click();
-      await page.getByRole('button', { name: 'はい' }).click();
+      await page.getByRole('button', { name: '削除する' }).click();
       // 削除完了は件数の変化で観測する（通知UIは他のトーストと競合しやすい）。
     });
 

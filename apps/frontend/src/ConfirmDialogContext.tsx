@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { Modal } from './components/Modal';
 
 interface ConfirmDialogContextValue {
@@ -14,6 +14,7 @@ const ConfirmDialogContext = createContext<ConfirmDialogContextValue | undefined
 
 export const ConfirmDialogProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [pending, setPending] = useState<PendingConfirm | null>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
 
   const requestConfirm = useCallback((targetLabel: string) => {
     return new Promise<boolean>((resolve) => {
@@ -28,7 +29,7 @@ export const ConfirmDialogProvider: React.FC<{ children: ReactNode }> = ({ child
     });
   }, []);
 
-  const message = pending ? `【${pending.targetLabel}】について削除しますか？` : '';
+  const targetLabel = pending?.targetLabel ?? '';
 
   return (
     <ConfirmDialogContext.Provider value={{ confirm: requestConfirm }}>
@@ -37,12 +38,26 @@ export const ConfirmDialogProvider: React.FC<{ children: ReactNode }> = ({ child
         isOpen={pending !== null}
         onClose={() => close(false)}
         title="削除確認"
-        maxWidth="min(48vw, calc(var(--main-max-width, 1000px) * 0.45))"
+        maxWidth="min(92vw, 34rem)"
+        initialFocusRef={cancelButtonRef}
       >
-        <p style={{ marginBottom: '1.5rem', lineHeight: 1.6 }}>{message}</p>
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-          <button onClick={() => close(false)}>いいえ</button>
-          <button onClick={() => close(true)} style={{ background: 'var(--color-accent)', color: '#fff' }}>はい</button>
+        <div style={{ display: 'grid', gap: '0.75rem' }}>
+          <p style={{ margin: 0, lineHeight: 1.6 }}>
+            <strong>{targetLabel}</strong> を削除します。
+          </p>
+          <p style={{ margin: 0, lineHeight: 1.6, color: 'var(--color-subtle)' }}>
+            この操作は保存済みデータから対象を削除します。実行後はこの画面から取り消せません。
+          </p>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+          <button ref={cancelButtonRef} type="button" onClick={() => close(false)}>キャンセル</button>
+          <button
+            type="button"
+            onClick={() => close(true)}
+            style={{ background: '#b91c1c', borderColor: '#b91c1c', color: '#fff' }}
+          >
+            削除する
+          </button>
         </div>
       </Modal>
     </ConfirmDialogContext.Provider>

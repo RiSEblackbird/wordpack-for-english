@@ -99,7 +99,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
 
     // 初期ロードのレンジ表記とボタン状態（見出しをheadingロールで特定）
     await screen.findByRole('heading', { name: '例文一覧' });
-    const ttsButtons = await screen.findAllByRole('button', { name: '音声' });
+    const ttsButtons = await screen.findAllByRole('button', { name: /の例文音声/ });
     expect(ttsButtons.length).toBeGreaterThan(0);
     // limit=200, total=450, offset=0 => 1-200 / 450件
     const range1 = await screen.findByText(/1-200 \/ 450件/);
@@ -246,7 +246,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
       await user.click(card);
     });
 
-    const toggleTypingButton = await screen.findByRole('button', { name: '文字起こしタイピング (0文字)' });
+    const toggleTypingButton = await screen.findByRole('button', { name: '文字起こしタイピングを開く (0文字)' });
     await act(async () => {
       await user.click(toggleTypingButton);
     });
@@ -256,7 +256,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
       await user.type(textarea, 'example en 1');
     });
 
-    const recordButton = await screen.findByRole('button', { name: 'タイピング記録' });
+    const recordButton = await screen.findByRole('button', { name: '文字起こしを記録' });
     await act(async () => {
       await user.click(recordButton);
     });
@@ -265,7 +265,7 @@ describe('ExampleListPanel pagination offset behavior', () => {
       expect(screen.getByText('タイピング累計: 3文字')).toBeInTheDocument();
     });
 
-    await screen.findByRole('button', { name: '文字起こしタイピング (3文字)' });
+    await screen.findByRole('button', { name: '文字起こしタイピングを開く (3文字)' });
 
     fetchMock.mockRestore();
   }, 20000);
@@ -375,7 +375,8 @@ describe('ExampleListPanel pagination offset behavior', () => {
       await user.click(bulkButton);
     });
 
-    const confirmYes = await screen.findByRole('button', { name: 'はい' });
+    expect(await screen.findByText(/実行後はこの画面から取り消せません/)).toBeInTheDocument();
+    const confirmYes = await screen.findByRole('button', { name: '削除する' });
     await act(async () => {
       await user.click(confirmYes);
     });

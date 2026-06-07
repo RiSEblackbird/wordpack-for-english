@@ -397,8 +397,8 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       await user.click(screen.getByRole('button', { name: 'WordPackのみ作成' }));
     });
 
-    const example = await screen.findByLabelText('example-Common-0');
-    const englishRow = within(example).getByRole('button', { name: /英/ });
+    const example = await screen.findByTestId('example-Common-0');
+    const englishRow = within(example).getByRole('button', { name: /関連WordPackを開く/ });
     const token = within(englishRow).getByText('Paths', { selector: 'span.lemma-token' });
 
     await act(async () => {
