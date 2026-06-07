@@ -2,11 +2,11 @@
 
 自由探索型の個人用英語辞書。バックエンド（FastAPI）とフロントエンド（React + Vite）のモノレポです。
 
-| WordPack | 文章インポート | 例文一覧 |
+| Lexicon | Reader | Examples |
 |---|---|---|
-| <img width="600" alt="image" src="https://github.com/user-attachments/assets/11c5cb6c-dcb8-4ad2-9bfb-0c47bef9b0a4" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/8fbf2d62-69e7-48f9-b7ba-7eb34e6fcd40" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/6d01da80-3844-4641-a93c-efb7414f65d2" /> |
-| <img width="600" alt="image" src="https://github.com/user-attachments/assets/7932f36a-68cb-4acd-8ce7-113a8139a8d9" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/860e20ce-2651-4c39-891c-894b56ff7a4d" /> | <img width="600" alt="image" src="https://github.com/user-attachments/assets/4dae1671-38c7-4482-a632-4dffed49dacd" /> |
-| <img width="600" alt="image" src="https://github.com/user-attachments/assets/8427f4fa-a718-4cf4-b761-e3fb90acd252" /> |  |  |
+| <img width="600" alt="スクリーンショット 2026-06-08 1 41 55" src="https://github.com/user-attachments/assets/dd2f606d-1215-4b20-b033-d73dd4b04704" /> | <img width="600" alt="スクリーンショット 2026-06-08 1 43 49" src="https://github.com/user-attachments/assets/3d903357-8e1d-455d-b2d1-01ef8e7a29c0" /> | <img width="600" alt="スクリーンショット 2026-06-08 1 44 37" src="https://github.com/user-attachments/assets/55fa5da7-7353-4268-b744-d452ffd918b7" /> |
+| <img width="600" alt="スクリーンショット 2026-06-08 1 42 16" src="https://github.com/user-attachments/assets/26b983e1-92c2-493b-a8a3-716aa474e969" /> | <img width="600" alt="スクリーンショット 2026-06-08 1 44 16" src="https://github.com/user-attachments/assets/27835a40-ac97-4a1b-8b3e-f607c27320d9" /> | <img width="600" alt="スクリーンショット 2026-06-08 1 45 11" src="https://github.com/user-attachments/assets/1060e107-6ade-4485-8636-5228711022e6" /> |
+| <img width="600" alt="スクリーンショット 2026-06-08 1 42 47" src="https://github.com/user-attachments/assets/4c96b995-3c7e-4910-8f92-e8b6e55c50d8" /> |  |  |
 
 ## 主な機能
 - バックエンド: FastAPI / フロントエンド: React + TypeScript + Vite
