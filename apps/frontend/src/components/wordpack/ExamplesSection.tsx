@@ -266,16 +266,16 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
                               記事を作成
                             </button>
                           </GuestLock>
-                          <button
-                            onClick={() => onCopyExampleText(category, index)}
-                            disabled={isActionLoading}
-                            aria-label={`${data.lemma}の${category}例文${index + 1}をコピー`}
-                            style={{ fontSize: '0.85em', color: '#1976d2', border: '1px solid #1976d2', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                          >
-                            コピー
-                          </button>
                         </>
                       ) : null}
+                      <button
+                        onClick={() => onCopyExampleText(category, index)}
+                        disabled={isActionLoading}
+                        aria-label={`${data.lemma}の${category}例文${index + 1}をコピー`}
+                        style={{ fontSize: '0.85em', color: '#1976d2', border: '1px solid #1976d2', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                      >
+                        コピー
+                      </button>
                     </div>
                   </article>
                 );
