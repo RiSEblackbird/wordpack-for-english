@@ -64,8 +64,8 @@ describe('ExampleDetailModal', () => {
       </SettingsProvider>
     );
 
-    const ttsButtons = screen.getAllByRole('button', { name: '音声' });
-    expect(ttsButtons).toHaveLength(2);
+    expect(screen.getByRole('button', { name: '原文の音声' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '日本語訳の音声' })).toBeInTheDocument();
     expect(screen.getByText(item.en)).toBeInTheDocument();
     expect(screen.getByText(item.ja)).toBeInTheDocument();
   });
@@ -78,8 +78,25 @@ describe('ExampleDetailModal', () => {
       </SettingsProvider>
     );
 
-    expect(screen.getByRole('button', { name: '確認した (2)' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '学習した (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '確認済みにする (2)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '学習済みにする (1)' })).toBeInTheDocument();
+  });
+
+  it('groups long grammar explanation into summary and collapsible details', () => {
+    const enriched: ExampleItemData = {
+      ...item,
+      grammar_ja: '1) 品詞分解: The app 【名/主語】 / uses 【動詞】 / authentication 【名/目的語】。\n\n2) 解説: 文の核はSVOで、authentication が目的語です。',
+    };
+    render(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={enriched} />
+      </SettingsProvider>
+    );
+
+    expect(screen.getByRole('heading', { name: '解説' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '要点' })).toBeInTheDocument();
+    expect(screen.getByText(/文の核はSVO/)).toBeInTheDocument();
+    expect(screen.getByText('品詞分解を表示')).toBeInTheDocument();
   });
 
   it('toggles transcription typing form', async () => {
@@ -90,13 +107,14 @@ describe('ExampleDetailModal', () => {
       </SettingsProvider>
     );
 
-    const toggleButton = screen.getByRole('button', { name: '文字起こしタイピング (0文字)' });
+    const toggleButton = screen.getByRole('button', { name: '文字起こしタイピングを開く (0文字)' });
     await act(async () => {
       await user.click(toggleButton);
     });
 
     expect(screen.getByLabelText('文字起こしタイピング入力')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'タイピング記録' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '文字起こしを記録' })).toBeDisabled();
+    expect(screen.getByText(/原文と同じ英文を入力してください/)).toBeInTheDocument();
   });
 
   it('enforces transcription length tolerance', async () => {
@@ -108,7 +126,7 @@ describe('ExampleDetailModal', () => {
     );
 
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '文字起こしタイピング (0文字)' }));
+      await user.click(screen.getByRole('button', { name: '文字起こしタイピングを開く (0文字)' }));
     });
     const textarea = screen.getByLabelText('文字起こしタイピング入力');
     await act(async () => {
@@ -116,9 +134,9 @@ describe('ExampleDetailModal', () => {
       await user.type(textarea, 'short');
     });
 
-    const recordButton = screen.getByRole('button', { name: 'タイピング記録' });
+    const recordButton = screen.getByRole('button', { name: '文字起こしを記録' });
     expect(recordButton).toBeDisabled();
-    expect(screen.getByText(/入力文字数差:/)).toHaveTextContent(/入力文字数差: -\d+/);
+    expect(screen.getByText(/入力文字数差:/)).toHaveTextContent(/10文字以内/);
 
     await act(async () => {
       await user.clear(textarea);
@@ -148,7 +166,7 @@ describe('ExampleDetailModal', () => {
     );
 
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '文字起こしタイピング (2文字)' }));
+      await user.click(screen.getByRole('button', { name: '文字起こしタイピングを開く (2文字)' }));
     });
     const textarea = screen.getByLabelText('文字起こしタイピング入力');
     await act(async () => {
@@ -157,7 +175,7 @@ describe('ExampleDetailModal', () => {
     });
 
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: 'タイピング記録' }));
+      await user.click(screen.getByRole('button', { name: '文字起こしを記録' }));
     });
 
     await waitFor(() => {
@@ -174,7 +192,7 @@ describe('ExampleDetailModal', () => {
       word_pack_id: 'wp:test',
       transcription_typing_count: 5,
     });
-    expect(screen.getByRole('button', { name: '文字起こしタイピング (5文字)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '文字起こしタイピングを閉じる (5文字)' })).toBeInTheDocument();
     expect(screen.getByText('タイピング記録を保存しました')).toBeInTheDocument();
   });
 
@@ -188,7 +206,7 @@ describe('ExampleDetailModal', () => {
       </SettingsProvider>,
     );
 
-    const studyButton = screen.getByRole('button', { name: '確認した (0)' });
+    const studyButton = screen.getByRole('button', { name: '確認済みにする (0)' });
     expect(studyButton).toBeDisabled();
     expect(studyButton).toHaveAttribute('aria-disabled', 'true');
 

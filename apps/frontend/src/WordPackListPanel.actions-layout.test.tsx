@@ -102,7 +102,7 @@ describe('WordPackListPanel card actions layout', () => {
     const target = cards.find((el) => /delta/.test(el.textContent || ''))!;
 
     expect(within(target).getByRole('button', { name: '開く' })).toBeInTheDocument();
-    expect(within(target).getByRole('button', { name: '音声' })).toBeInTheDocument();
+    expect(within(target).getByRole('button', { name: 'deltaの音声' })).toBeInTheDocument();
     expect(within(target).getByRole('button', { name: '生成' })).toBeInTheDocument();
     expect(within(target).getByRole('button', { name: '語義' })).toBeInTheDocument();
 

@@ -102,7 +102,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
         <div>見出し語</div>
         <div className="wp-modal-lemma">
           <strong>{data.lemma}</strong>
-          {showTtsButton ? <TTSButton text={data.lemma} className="wp-modal-tts-btn" /> : null}
+          {showTtsButton ? <TTSButton text={data.lemma} ariaLabel="見出し語の音声" className="wp-modal-tts-btn" /> : null}
         </div>
       </div>
       {selectedMeta ? (

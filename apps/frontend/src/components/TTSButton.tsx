@@ -8,11 +8,13 @@ type Props = {
   text: string;
   className?: string;
   icon?: ReactNode;
+  label?: string;
+  ariaLabel?: string;
   voice?: string;
   style?: CSSProperties;
 };
 
-export function TTSButton({ text, className, icon, voice = 'alloy', style }: Props) {
+export function TTSButton({ text, className, icon, label = '音声', ariaLabel, voice = 'alloy', style }: Props) {
   const { isGuest } = useAuth();
   const [loading, setLoading] = useState(false);
   let contextApiBase: string | undefined;
@@ -36,6 +38,7 @@ export function TTSButton({ text, className, icon, voice = 'alloy', style }: Pro
     const normalized = base.endsWith('/') ? base.slice(0, -1) : base;
     return `${normalized}/tts`;
   }, [contextApiBase]);
+  const resolvedAriaLabel = ariaLabel || label;
 
   const speak = async () => {
     if (loading) return;
@@ -128,9 +131,10 @@ export function TTSButton({ text, className, icon, voice = 'alloy', style }: Pro
         className={className}
         data-testid="speak-btn"
         style={style}
+        aria-label={loading ? `${resolvedAriaLabel}を読み上げ中` : resolvedAriaLabel}
       >
         {icon}
-        {loading ? '読み上げ中…' : '音声'}
+        {loading ? '読み上げ中…' : label}
       </button>
     </GuestLock>
   );

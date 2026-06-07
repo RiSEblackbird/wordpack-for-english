@@ -45,9 +45,10 @@ describe('ArticleDetailModal', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: '音声' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '記事本文の音声' })).toBeInTheDocument();
     const meta = screen.getByTestId('article-meta');
     expect(meta.tagName.toLowerCase()).toBe('dl');
+    expect(screen.getByText('生成・管理情報')).toBeInTheDocument();
     expect(meta).toHaveTextContent('作成');
     expect(meta).toHaveTextContent('更新');
     expect(meta).toHaveTextContent('生成所要時間');
@@ -59,7 +60,7 @@ describe('ArticleDetailModal', () => {
     expect(meta).toHaveTextContent('2024/05/01 10:00');
     expect(meta).toHaveTextContent('1分5秒');
     expect(meta).toHaveTextContent('Dev（開発）');
-    expect(screen.getByLabelText('import-warnings')).toHaveTextContent('Resilient');
+    expect(screen.getByLabelText('インポート警告')).toHaveTextContent('Resilient');
     const heading = screen.getByRole('heading', { level: 4, name: '関連WordPack' });
     expect(heading).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'WordPack「alpha」をプレビュー' })).toBeInTheDocument();
@@ -136,9 +137,30 @@ describe('ArticleDetailModal', () => {
       />,
     );
 
-    const button = screen.getByRole('button', { name: '生成' });
+    const button = screen.getByRole('button', { name: '例文を生成' });
     const wrapper = button.parentElement as HTMLElement;
     // GuestLock wrapper が flex item になるため、autoマージンは wrapper 側に必要
     expect(wrapper).toHaveStyle({ marginLeft: 'auto' });
+  });
+
+  it('shows an explicit empty state when no related WordPack exists', () => {
+    const article: ArticleDetailData = {
+      id: 'art:no-related',
+      title_en: 'No Related',
+      body_en: 'English body',
+      body_ja: '日本語本文',
+      related_word_packs: [],
+    };
+
+    render(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        article={article}
+      />,
+    );
+
+    expect(screen.getByText('関連WordPack')).toBeInTheDocument();
+    expect(screen.getByText(/この記事に紐づくWordPackはまだありません/)).toBeInTheDocument();
   });
 });

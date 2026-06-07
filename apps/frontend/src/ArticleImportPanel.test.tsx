@@ -327,7 +327,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       await user.click(screen.getByRole('button', { name: '文章をインポート' }));
     });
 
-    const regenBtn = await screen.findByRole('button', { name: '生成' });
+    const regenBtn = await screen.findByRole('button', { name: '例文を生成' });
     await act(async () => {
       await user.click(regenBtn);
     });
@@ -355,7 +355,7 @@ describe('ArticleImportPanel model/params wiring (mocked fetch)', () => {
       await user.click(screen.getByRole('button', { name: '文章をインポート' }));
     });
 
-    const regenBtn = await screen.findByRole('button', { name: '生成' });
+    const regenBtn = await screen.findByRole('button', { name: '例文を生成' });
     await act(async () => {
       await user.click(regenBtn);
     });

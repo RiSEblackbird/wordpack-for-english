@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useId, useState } from 'react';
 import { Modal } from './Modal';
 import { TTSButton } from './TTSButton';
 import { useSettings } from '../SettingsContext';
 import { fetchJson, ApiError } from '../lib/fetcher';
 import { useAuth } from '../AuthContext';
 import { GuestLock } from './GuestLock';
+import { formatDateJst } from '../lib/date';
+import { splitExampleExplanation } from '../lib/exampleExplanation';
 
 export interface ExampleItemData {
   id: number;
@@ -58,6 +60,8 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
   const [transcriptionInput, setTranscriptionInput] = useState('');
   const [transcriptionUpdating, setTranscriptionUpdating] = useState(false);
   const [transcriptionFeedback, setTranscriptionFeedback] = useState<string | null>(null);
+  const transcriptionHelpId = useId();
+  const transcriptionStatusId = useId();
 
   useEffect(() => {
     if (!item) return;
@@ -159,46 +163,150 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
 
   const transcriptionLengthDiff = transcriptionInput.length - (item?.en.length ?? 0);
   const isTranscriptionWithinRange = Math.abs(transcriptionLengthDiff) <= 10; // ±10文字差以内なら許容する
+  const transcriptionDisabledReason = transcriptionInput.trim().length === 0
+    ? '英文を入力すると記録できます。'
+    : isTranscriptionWithinRange
+      ? '文字数条件を満たしています。'
+      : '入力文字数差が10文字以内になると記録できます。';
   const transcriptionRecordDisabled =
     transcriptionUpdating || !isTranscriptionWithinRange || transcriptionInput.trim().length === 0;
+  const explanationSections = splitExampleExplanation(item?.grammar_ja);
+  const formattedPackUpdatedAt = item?.word_pack_updated_at ? formatDateJst(item.word_pack_updated_at) || item.word_pack_updated_at : null;
+  const formattedCreatedAt = item ? formatDateJst(item.created_at) || item.created_at : null;
 
   if (!isOpen || !item) return null;
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`例文 詳細（${item.lemma} / ${item.category}）`}>
-      <section>
-        <div style={{ display: 'grid', gap: '0.5rem' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <strong>原文</strong>
-              <TTSButton text={item.en} style={{ fontSize: '0.75em', padding: '0.15rem 0.5rem', borderRadius: 4 }} />
-            </div>
-            <p style={{ marginTop: 4 }}>{item.en}</p>
+      <section className="example-detail-modal" aria-label={`${item.lemma}の${item.category}例文詳細`}>
+        <style>{`
+          .example-detail-modal {
+            display: grid;
+            gap: 1rem;
+            max-width: 56rem;
+          }
+          .example-detail-block {
+            display: grid;
+            gap: 0.35rem;
+            max-width: 48rem;
+          }
+          .example-detail-block__header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+          }
+          .example-detail-block h3,
+          .example-detail-block h4 {
+            margin: 0;
+          }
+          .example-detail-block p {
+            margin: 0;
+            line-height: 1.65;
+            white-space: pre-wrap;
+          }
+          .example-detail-explanation {
+            border-left: 3px solid var(--color-border);
+            padding-left: 0.75rem;
+          }
+          .example-detail-explanation details {
+            margin-top: 0.5rem;
+          }
+          .example-detail-explanation summary,
+          .example-detail-meta summary {
+            cursor: pointer;
+            font-weight: 600;
+          }
+          .example-detail-meta {
+            border-top: 1px solid var(--color-border);
+            padding-top: 0.75rem;
+          }
+          .example-detail-meta dl {
+            display: grid;
+            grid-template-columns: minmax(7rem, 0.4fr) 1fr;
+            column-gap: 0.75rem;
+            row-gap: 0.35rem;
+            color: var(--color-subtle);
+            font-size: 0.85rem;
+          }
+          .example-detail-meta dd {
+            margin: 0;
+            word-break: break-word;
+          }
+          .example-detail-actions {
+            display: grid;
+            gap: 0.65rem;
+            border-top: 1px solid var(--color-border);
+            padding-top: 0.75rem;
+          }
+          .example-detail-action-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+          }
+          .example-detail-help {
+            margin: 0;
+            color: var(--color-subtle);
+            line-height: 1.5;
+          }
+        `}</style>
+        <div className="example-detail-block">
+          <div className="example-detail-block__header">
+            <h3>原文</h3>
+            <TTSButton text={item.en} label="音声" ariaLabel="原文の音声" style={{ fontSize: '0.85em', padding: '0.15rem 0.5rem', borderRadius: 4 }} />
           </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <strong>日本語訳</strong>
-              <TTSButton text={item.ja} style={{ fontSize: '0.75em', padding: '0.15rem 0.5rem', borderRadius: 4 }} />
-            </div>
-            <p style={{ marginTop: 4 }}>{item.ja}</p>
+          <p>{item.en}</p>
+        </div>
+        <div className="example-detail-block">
+          <div className="example-detail-block__header">
+            <h3>日本語訳</h3>
+            <TTSButton text={item.ja} label="音声" ariaLabel="日本語訳の音声" style={{ fontSize: '0.85em', padding: '0.15rem 0.5rem', borderRadius: 4 }} />
           </div>
-          {item.grammar_ja ? (
-            <div>
-              <strong>解説</strong>
-              <p style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{item.grammar_ja}</p>
-            </div>
-          ) : null}
-          <div style={{ color: 'var(--color-subtle)', fontSize: '0.85em' }}>
-            <span>ID: {item.id}</span>
-            <span> / WordPack: {item.word_pack_id}</span>
-            {item.word_pack_updated_at ? <span> / Pack更新: {item.word_pack_updated_at}</span> : null}
-            <span> / 例文作成: {item.created_at}</span>
-          </div>
-          <div
-            style={{ marginTop: '0.5rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}
-            aria-label="例文の学習記録"
-          >
-            <strong style={{ fontSize: '0.9em' }}>学習記録</strong>
-            {/* 学習記録はAI連携のためゲスト時はロックする */}
+          <p>{item.ja}</p>
+        </div>
+        {item.grammar_ja ? (
+          <section className="example-detail-block example-detail-explanation" aria-label="例文の解説">
+            <h3>解説</h3>
+            {explanationSections.summary ? (
+              <div>
+                <h4>要点</h4>
+                <p>{explanationSections.summary}</p>
+              </div>
+            ) : null}
+            {explanationSections.structure ? (
+              <div>
+                <h4>構文</h4>
+                <p>{explanationSections.structure}</p>
+              </div>
+            ) : null}
+            {explanationSections.details ? (
+              <details>
+                <summary>品詞分解を表示</summary>
+                <p>{explanationSections.details}</p>
+              </details>
+            ) : null}
+          </section>
+        ) : null}
+        <details className="example-detail-meta">
+          <summary>例文の詳細情報</summary>
+          <dl>
+            <dt>ID</dt>
+            <dd>{item.id}</dd>
+            <dt>WordPack</dt>
+            <dd>{item.word_pack_id}</dd>
+            {formattedPackUpdatedAt ? (
+              <>
+                <dt>Pack更新</dt>
+                <dd>{formattedPackUpdatedAt}</dd>
+              </>
+            ) : null}
+            <dt>例文作成</dt>
+            <dd>{formattedCreatedAt}</dd>
+          </dl>
+        </details>
+        <section className="example-detail-actions" aria-label="例文の学習記録">
+          <div className="example-detail-action-row">
+            <h3 style={{ margin: 0, fontSize: '1rem' }}>学習記録</h3>
             <GuestLock isGuest={isGuest}>
               <button
                 type="button"
@@ -212,7 +320,7 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
                   color: '#ef6c00',
                 }}
               >
-                確認した ({localCounts.checked})
+                確認済みにする ({localCounts.checked})
               </button>
             </GuestLock>
             <GuestLock isGuest={isGuest}>
@@ -228,7 +336,7 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
                   color: '#1b5e20',
                 }}
               >
-                学習した ({localCounts.learned})
+                学習済みにする ({localCounts.learned})
               </button>
             </GuestLock>
             {feedback ? (
@@ -249,6 +357,8 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
               <button
                 type="button"
                 onClick={toggleTranscriptionForm}
+                aria-expanded={transcriptionFormVisible}
+                aria-controls={transcriptionFormVisible ? transcriptionHelpId : undefined}
                 style={{
                   padding: '0.3rem 0.6rem',
                   borderRadius: 6,
@@ -258,13 +368,16 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
                   textAlign: 'left',
                 }}
               >
-                文字起こしタイピング ({localCounts.transcriptionTyping}文字)
+                {transcriptionFormVisible ? '文字起こしタイピングを閉じる' : '文字起こしタイピングを開く'} ({localCounts.transcriptionTyping}文字)
               </button>
             </GuestLock>
             {transcriptionFormVisible ? (
               <div style={{ display: 'grid', gap: '0.5rem' }}>
+                <p id={transcriptionHelpId} className="example-detail-help">
+                  原文と同じ英文を入力してください。文字数差が10文字以内になると記録できます。
+                </p>
                 <label style={{ display: 'grid', gap: '0.25rem' }}>
-                  <span style={{ fontWeight: 600 }}>英文を入力してください</span>
+                  <span style={{ fontWeight: 600 }}>英文入力</span>
                   <GuestLock isGuest={isGuest}>
                     <textarea
                       value={transcriptionInput}
@@ -277,15 +390,17 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
                         fontFamily: 'inherit',
                       }}
                       aria-label="文字起こしタイピング入力"
+                      aria-describedby={`${transcriptionHelpId} ${transcriptionStatusId}`}
                     />
                   </GuestLock>
                 </label>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="example-detail-action-row">
                   <GuestLock isGuest={isGuest}>
                     <button
                       type="button"
                       onClick={recordTranscriptionTyping}
                       disabled={transcriptionRecordDisabled}
+                      aria-describedby={transcriptionStatusId}
                       style={{
                         padding: '0.3rem 0.6rem',
                         borderRadius: 6,
@@ -294,11 +409,14 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
                         color: '#0d47a1',
                       }}
                     >
-                      タイピング記録
+                      文字起こしを記録
                     </button>
                   </GuestLock>
-                  <span style={{ fontSize: '0.8em', color: isTranscriptionWithinRange ? '#2e7d32' : '#c62828' }}>
-                    入力文字数差: {transcriptionLengthDiff}
+                  <span
+                    id={transcriptionStatusId}
+                    style={{ fontSize: '0.85em', color: isTranscriptionWithinRange ? '#2e7d32' : '#c62828' }}
+                  >
+                    入力文字数差: {transcriptionLengthDiff}。{transcriptionDisabledReason}
                   </span>
                   {transcriptionFeedback ? (
                     <span
@@ -319,9 +437,8 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
               </div>
             ) : null}
           </div>
-        </div>
+        </section>
       </section>
     </Modal>
   );
 };
-

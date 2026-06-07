@@ -179,6 +179,65 @@ const mockExampleList = async (page: Page): Promise<void> => {
   );
 };
 
+const mockWordPackDetail = async (page: Page): Promise<void> => {
+  /**
+   * WordPackプレビューの例文エリアを固定データで再現する。
+   * なぜ: 長い解説の視覚階層を、一覧画面とは別に回帰検知するため。
+   */
+  await page.route(
+    (url) => url.pathname.includes('/api/word/packs/wp') && url.pathname.includes('e2e') && url.pathname.includes('alpha'),
+    (route) =>
+      route.fulfill(
+        json({
+          lemma: 'alpha',
+          sense_title: '初期検証版',
+          pronunciation: { ipa_GA: null, ipa_RP: null, syllables: null, stress_index: null, linking_notes: [] },
+          senses: [
+            {
+              id: 's1',
+              gloss_ja: '初期段階の検証版',
+              definition_ja: '正式公開前に主要機能を試すための版。',
+              nuances_ja: '品質保証よりも学習と検証を優先する文脈で使われる。',
+              patterns: ['alpha release', 'alpha build'],
+              synonyms: ['preview'],
+              antonyms: ['stable release'],
+              register: 'technical',
+              notes_ja: '開発・プロダクト文脈で頻出。',
+            },
+          ],
+          collocations: { general: { verb_object: [], adj_noun: [], prep_noun: [] }, academic: { verb_object: [], adj_noun: [], prep_noun: [] } },
+          contrast: [],
+          examples: {
+            Dev: [
+              {
+                en: 'During the search-ranking rewrite, the team added contextual embeddings to reduce polysemy in user queries.',
+                ja: '検索順位の書き換え中、チームはユーザーのクエリにおける多義性を減らすため文脈埋め込みを導入した。',
+                grammar_ja: [
+                  '品詞分解：During【前置詞】 / the search-ranking rewrite【名詞句】 / the team【主語】 / added【動詞】 / contextual embeddings【目的語】 / to reduce polysemy in user queries【目的】。',
+                  '構文：文の核は the team added contextual embeddings で、During句が時期、to不定詞句が目的を示します。',
+                  '解説：長い修飾は先に目的と背景をつかむと読みやすくなります。polysemy はここではユーザー入力の多義性を指します。',
+                ].join('\n\n'),
+              },
+              {
+                en: 'The alpha build exposed navigation issues before the public beta started.',
+                ja: 'アルファ版は公開ベータが始まる前にナビゲーション上の問題を明らかにした。',
+                grammar_ja: '解説：exposed は「表面化させた」という意味で、問題発見の文脈に合います。',
+              },
+            ],
+            CS: [],
+            LLM: [],
+            Business: [],
+            Common: [],
+          },
+          etymology: { note: '-', confidence: 'medium' },
+          study_card: 'alpha release は「初期検証版」。正式版ではなく学習と検証のための段階を指す。',
+          citations: [],
+          confidence: 'medium',
+        }),
+      ),
+  );
+};
+
 const mockArticleImport = async (page: Page): Promise<void> => {
   /**
    * 文章インポートの確定画面を再現するため、POST/GETを一貫したモックに固定する。
@@ -252,6 +311,27 @@ test.describe('ビジュアル回帰: 主要画面', () => {
       maxDiffPixelRatio: 0.01,
       threshold: 0.2,
       mask: [page.locator(STATIC_MASK_SELECTOR)],
+    });
+  });
+
+  test('WordPackプレビュー（例文表示エリア）', async ({ page, context }) => {
+    await prepareAuthenticatedPage(context, page);
+    await mockWordPackList(page);
+    await mockWordPackDetail(page);
+
+    await page.goto('/');
+    await disableAnimations(page);
+
+    await page.getByTestId('wp-card').first().click();
+    const dialog = page.getByRole('dialog', { name: /WordPack プレビュー: alpha/ });
+    await expect(dialog).toBeVisible({ timeout: 15000 });
+    await expect(page.getByTestId('example-Dev-0')).toBeVisible({ timeout: 15000 });
+    await page.getByTestId('example-Dev-0').scrollIntoViewIfNeeded();
+    await expect(page.getByText('品詞分解を表示').first()).toBeVisible();
+
+    await expect(page).toHaveScreenshot('wordpack-preview-examples.png', {
+      maxDiffPixelRatio: 0.01,
+      threshold: 0.2,
     });
   });
 

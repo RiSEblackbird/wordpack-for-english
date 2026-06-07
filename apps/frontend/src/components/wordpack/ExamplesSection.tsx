@@ -6,6 +6,7 @@ import { highlightLemma } from '../../lib/highlight';
 import { useLemmaTooltip } from './useLemmaTooltip';
 import { useAuth } from '../../AuthContext';
 import { GuestLock } from '../GuestLock';
+import { splitExampleExplanation } from '../../lib/exampleExplanation';
 
 export type ExampleCategory = keyof Examples;
 
@@ -47,11 +48,16 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
   const styleDefinition = useMemo(
     () => `
       .ex-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
-      .ex-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem 0.75rem; background: var(--color-surface); }
-      .ex-label { display: inline-block; min-width: 3em; color: var(--color-subtle); font-size: 90%; }
-      .ex-en { font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
-      .ex-ja { color: var(--color-text); opacity: 0.9; margin-top: 2px; line-height: 1.6; }
-      .ex-grammar { color: var(--color-subtle); font-size: 90%; margin-top: 4px; white-space: pre-wrap; }
+      .ex-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.75rem; background: var(--color-surface); display: grid; gap: 0.55rem; }
+      .ex-block { display: grid; gap: 0.25rem; max-width: 48rem; }
+      .ex-label { display: block; color: var(--color-subtle); font-size: 0.85rem; font-weight: 600; }
+      .ex-en { font-weight: 600; line-height: 1.55; overflow-wrap: anywhere; }
+      .ex-ja { color: var(--color-text); opacity: 0.92; line-height: 1.65; }
+      .ex-grammar { color: var(--color-subtle); font-size: 0.92rem; line-height: 1.6; }
+      .ex-grammar p { margin: 0; white-space: pre-wrap; }
+      .ex-grammar details { margin-top: 0.35rem; }
+      .ex-grammar summary { cursor: pointer; font-weight: 600; color: var(--color-text); }
+      .ex-actions { margin-top: 0.15rem; display: inline-flex; gap: 6px; flex-wrap: wrap; }
       .ex-level { font-weight: 600; margin: 0.25rem 0; color: var(--color-level); }
       .lemma-highlight { color: var(--dict-accent); }
       .lemma-known { font-weight: 700; }
@@ -184,66 +190,96 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
           </div>
           {data.examples?.[category]?.length ? (
             <div className="ex-grid">
-              {(data.examples[category] as ExampleItem[]).map((ex: ExampleItem, index: number) => (
-                <article key={index} className="ex-card" aria-label={`example-${category}-${index}`}>
-                  <div
-                    className="ex-en"
-                    data-lemma={data.lemma}
-                    data-sense-title={data.sense_title}
-                    role="button"
-                    tabIndex={0}
-                    onClick={handleExampleActivation}
-                    onKeyDown={handleExampleActivation}
-                    onMouseOver={handleMouseOver}
-                    onMouseOut={handleMouseOut}
+              {(data.examples[category] as ExampleItem[]).map((ex: ExampleItem, index: number) => {
+                const explanationSections = splitExampleExplanation(ex.grammar_ja);
+                return (
+                  <article
+                    key={index}
+                    className="ex-card"
+                    aria-label={`${category}カテゴリの例文${index + 1}`}
+                    data-testid={`example-${category}-${index}`}
                   >
-                    <span className="ex-label">[{index + 1}] 英</span> {renderExampleEnText(ex.en, data.lemma)}
-                  </div>
-                  <div className="ex-ja"><span className="ex-label">訳</span> {ex.ja}</div>
-                  {ex.grammar_ja ? (
-                    <div className="ex-grammar"><span className="ex-label">解説</span> {ex.grammar_ja}</div>
-                  ) : null}
-                  <div style={{ marginTop: 6, display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
-                    <TTSButton
-                      text={ex.en}
-                      voice="alloy"
-                      style={{ fontSize: '0.85em', color: '#6a1b9a', border: '1px solid #6a1b9a', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                    />
-                    {currentWordPackId ? (
-                      <>
-                        <GuestLock isGuest={isGuest}>
-                          <button
-                            onClick={() => onDeleteExample(category, index)}
-                            disabled={isActionLoading}
-                            aria-label={`${data.lemma}の${category}例文${index + 1}を削除`}
-                            style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                          >
-                            削除
-                          </button>
-                        </GuestLock>
-                        <GuestLock isGuest={isGuest}>
-                          <button
-                            onClick={() => onImportArticleFromExample(category, index)}
-                            disabled={isActionLoading}
-                            aria-label={`${data.lemma}の${category}例文${index + 1}から記事を作成`}
-                            style={{ fontSize: '0.85em', color: '#2e7d32', border: '1px solid #2e7d32', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                          >
-                            記事化
-                          </button>
-                        </GuestLock>
-                        <button
-                          onClick={() => onCopyExampleText(category, index)}
-                          disabled={isActionLoading}
-                          aria-label={`${data.lemma}の${category}例文${index + 1}をコピー`}
-                          style={{ fontSize: '0.85em', color: '#1976d2', border: '1px solid #1976d2', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
-                        >
-                          コピー
-                        </button>
-                      </>
+                    <div
+                      className="ex-block ex-en"
+                      data-lemma={data.lemma}
+                      data-sense-title={data.sense_title}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${category}カテゴリの例文${index + 1}の語句から関連WordPackを開く`}
+                      onClick={handleExampleActivation}
+                      onKeyDown={handleExampleActivation}
+                      onMouseOver={handleMouseOver}
+                      onMouseOut={handleMouseOut}
+                    >
+                      <span className="ex-label">[{index + 1}] 英文</span>
+                      <span>{renderExampleEnText(ex.en, data.lemma)}</span>
+                    </div>
+                    <div className="ex-block ex-ja">
+                      <span className="ex-label">日本語訳</span>
+                      <span>{ex.ja}</span>
+                    </div>
+                    {ex.grammar_ja ? (
+                      <div className="ex-block ex-grammar">
+                        <span className="ex-label">解説</span>
+                        {explanationSections.summary ? <p>{explanationSections.summary}</p> : null}
+                        {explanationSections.structure ? (
+                          <>
+                            <span className="ex-label">構文</span>
+                            <p>{explanationSections.structure}</p>
+                          </>
+                        ) : null}
+                        {explanationSections.details ? (
+                          <details>
+                            <summary>品詞分解を表示</summary>
+                            <p>{explanationSections.details}</p>
+                          </details>
+                        ) : null}
+                      </div>
                     ) : null}
-                  </div>
-                </article>
-              ))}
+                    <div className="ex-actions">
+                      <TTSButton
+                        text={ex.en}
+                        label="音声"
+                        ariaLabel="英文の音声"
+                        voice="alloy"
+                        style={{ fontSize: '0.85em', color: '#6a1b9a', border: '1px solid #6a1b9a', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                      />
+                      {currentWordPackId ? (
+                        <>
+                          <GuestLock isGuest={isGuest}>
+                            <button
+                              onClick={() => onDeleteExample(category, index)}
+                              disabled={isActionLoading}
+                              aria-label={`${data.lemma}の${category}例文${index + 1}を削除`}
+                              style={{ fontSize: '0.85em', color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                            >
+                              削除
+                            </button>
+                          </GuestLock>
+                          <GuestLock isGuest={isGuest}>
+                            <button
+                              onClick={() => onImportArticleFromExample(category, index)}
+                              disabled={isActionLoading}
+                              aria-label={`${data.lemma}の${category}例文${index + 1}から記事を作成`}
+                              style={{ fontSize: '0.85em', color: '#2e7d32', border: '1px solid #2e7d32', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                            >
+                              記事を作成
+                            </button>
+                          </GuestLock>
+                        </>
+                      ) : null}
+                      <button
+                        onClick={() => onCopyExampleText(category, index)}
+                        disabled={isActionLoading}
+                        aria-label={`${data.lemma}の${category}例文${index + 1}をコピー`}
+                        style={{ fontSize: '0.85em', color: '#1976d2', border: '1px solid #1976d2', background: 'white', padding: '0.1rem 0.4rem', borderRadius: 4 }}
+                      >
+                        コピー
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           ) : <p>なし</p>}
         </div>
