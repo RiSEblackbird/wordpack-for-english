@@ -14,6 +14,7 @@ interface ModalProps {
 
 let nextModalId = 0;
 const modalStack: number[] = [];
+const modalOverlayAttribute = 'data-wordpack-modal-overlay';
 
 const focusableSelector = [
   'a[href]',
@@ -34,6 +35,9 @@ const getFocusableElements = (root: HTMLElement | null): HTMLElement[] => {
 };
 
 const isTopmostModal = (id: number) => modalStack[modalStack.length - 1] === id;
+
+const isModalOverlayElement = (element: Element): element is HTMLElement =>
+  element instanceof HTMLElement && element.hasAttribute(modalOverlayAttribute);
 
 export const Modal: React.FC<ModalProps> = ({
   isOpen,
@@ -67,9 +71,15 @@ export const Modal: React.FC<ModalProps> = ({
     previouslyFocusedRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     modalStack.push(modalId);
 
-    const parent = overlayRef.current?.parentElement ?? null;
+    const overlay = overlayRef.current;
+    if (overlay) {
+      overlay.removeAttribute('aria-hidden');
+      (overlay as HTMLElement & { inert?: boolean }).inert = false;
+    }
+
+    const parent = overlay?.parentElement ?? null;
     const siblings = parent
-      ? Array.from(parent.children).filter((child) => child !== overlayRef.current)
+      ? Array.from(parent.children).filter((child) => child !== overlay && !isModalOverlayElement(child))
       : [];
     const previousSiblingStates = siblings.map((element) => ({
       element: element as HTMLElement,
@@ -144,6 +154,7 @@ export const Modal: React.FC<ModalProps> = ({
   const modalContent = (
     <div
       ref={overlayRef}
+      data-wordpack-modal-overlay="true"
       role="dialog"
       aria-modal="true"
       aria-labelledby={dialogTitleId}

@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { useState } from 'react';
@@ -78,7 +78,9 @@ describe('Modal close interactions', () => {
       </Modal>
     );
 
-    await user.keyboard('{Escape}');
+    await act(async () => {
+      await user.keyboard('{Escape}');
+    });
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -132,6 +134,52 @@ describe('Modal close interactions', () => {
     await user.tab({ shift: true });
 
     expect(screen.getByRole('button', { name: '最後の操作' })).toHaveFocus();
+  });
+
+  it('keeps the topmost concurrently opened modal accessible', async () => {
+    const user = userEvent.setup();
+
+    const Harness = () => {
+      const [baseOpen, setBaseOpen] = useState(false);
+      const [topOpen, setTopOpen] = useState(false);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setBaseOpen(true);
+              setTopOpen(true);
+            }}
+          >
+            同時に開く
+          </button>
+          <Modal isOpen={baseOpen} onClose={() => setBaseOpen(false)} title="ベースモーダル">
+            <button type="button">ベース操作</button>
+          </Modal>
+          <Modal isOpen={topOpen} onClose={() => setTopOpen(false)} title="上位モーダル">
+            <button type="button">上位操作</button>
+          </Modal>
+        </>
+      );
+    };
+
+    render(<Harness />);
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '同時に開く' }));
+    });
+
+    const topDialog = await screen.findByRole('dialog', { name: '上位モーダル' });
+    expect(topDialog).not.toHaveAttribute('aria-hidden');
+    expect((topDialog as HTMLElement & { inert?: boolean }).inert).not.toBe(true);
+    await waitFor(() => expect(screen.getByRole('button', { name: '上位モーダルを閉じる' })).toHaveFocus());
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+
+    expect(screen.queryByRole('dialog', { name: '上位モーダル' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'ベースモーダル' })).toBeInTheDocument();
   });
 
   it('returns focus to the opener after closing', async () => {
