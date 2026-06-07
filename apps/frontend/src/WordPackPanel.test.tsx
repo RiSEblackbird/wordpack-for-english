@@ -330,9 +330,15 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     expect(input).toBeInTheDocument();
     // モデルドロップダウンが表示されている
     expect(screen.getByLabelText('モデル')).toBeInTheDocument();
+    const reasoningSelect = screen.getByLabelText('reasoning.effort') as HTMLSelectElement;
+    const verbositySelect = screen.getByLabelText('text.verbosity') as HTMLSelectElement;
+    expect(reasoningSelect).toHaveValue('minimal');
+    expect(verbositySelect).toHaveValue('medium');
     // 1回目の生成は mini モデルを選択する
     await act(async () => {
       await user.selectOptions(screen.getByLabelText('モデル'), 'gpt-5.4-mini');
+      await user.selectOptions(reasoningSelect, 'high');
+      await user.selectOptions(verbositySelect, 'low');
     });
     await act(async () => {
       await user.type(input, 'delta');
@@ -369,7 +375,12 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     const bodies = fetchMock.mock.calls
       .filter((c) => (typeof c[0] === 'string' ? (c[0] as string).endsWith('/api/word/pack') : ((c[0] as URL).toString().endsWith('/api/word/pack'))))
       .map((c) => (c[1]?.body ? JSON.parse(c[1]!.body as string) : {}));
-    expect(bodies.some((b) => b.model === 'gpt-5.4-mini' && b.reasoning && b.text && !('temperature' in b))).toBe(true);
+    expect(bodies.some((b) => (
+      b.model === 'gpt-5.4-mini'
+      && b.reasoning?.effort === 'high'
+      && b.text?.verbosity === 'low'
+      && !('temperature' in b)
+    ))).toBe(true);
 
     // gpt-5.4-mini を選択時は reasoning/text が入ること
     const user2 = userEvent.setup();

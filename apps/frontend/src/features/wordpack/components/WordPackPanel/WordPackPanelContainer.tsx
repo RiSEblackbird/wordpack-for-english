@@ -463,7 +463,7 @@ export const WordPackPanel: React.FC<Props> = ({
           </select>
         </GuestLock>
       </div>
-      {showAdvancedModelOptions && creationPanelPlacement !== 'inline' && (
+      {showAdvancedModelOptions && (
         <div className="sidebar-inline wordpack-create-panel__advanced">
           <div className="sidebar-field wordpack-create-panel__field">
             <label htmlFor="wordpack-reasoning-select">reasoning.effort</label>
