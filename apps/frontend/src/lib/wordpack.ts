@@ -40,8 +40,8 @@ export interface RegenerateSettings {
 }
 
 export interface NotificationsAdapter {
-  add: (input: { title: string; message?: string; status?: 'progress' | 'success' | 'error'; id?: string; model?: string; category?: string }) => string;
-  update: (id: string, patch: { title?: string; message?: string; status?: 'progress' | 'success' | 'error'; model?: string; category?: string }) => void;
+  add: (input: { title: string; message?: string; status?: 'progress' | 'success' | 'error'; id?: string; model?: string; category?: string; wordPackId?: string | null; lemma?: string | null }) => string;
+  update: (id: string, patch: { title?: string; message?: string; status?: 'progress' | 'success' | 'error'; model?: string; category?: string; wordPackId?: string | null; lemma?: string | null }) => void;
 }
 
 export interface RegenerateWordPackMessages {
@@ -70,6 +70,8 @@ export async function regenerateWordPackRequest(params: {
     message: messages?.progress || '処理を実行しています（LLM応答の受信と解析を待機中）',
     status: 'progress',
     model: model || undefined,
+    wordPackId,
+    lemma,
   });
 
   try {
@@ -105,15 +107,15 @@ export async function regenerateWordPackRequest(params: {
 
     if (latest.status !== 'succeeded') {
       const errMsg = latest.error || messages?.failure || '処理に失敗しました';
-      notify.update(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: errMsg, model: model || undefined });
+      notify.update(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: errMsg, model: model || undefined, wordPackId, lemma });
       throw new ApiError(errMsg, 502);
     }
 
-    notify.update(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: messages?.success || '処理が完了しました', model: model || undefined });
+    notify.update(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: messages?.success || '処理が完了しました', model: model || undefined, wordPackId, lemma });
     dispatchAppEvent(APP_EVENTS.wordPackUpdated);
   } catch (e) {
     const m = messages?.failure || (e instanceof ApiError ? e.message : '処理に失敗しました');
-    notify.update(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: m, model: model || undefined });
+    notify.update(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: m, model: model || undefined, wordPackId, lemma });
     throw e;
   }
 }

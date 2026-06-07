@@ -126,6 +126,8 @@ export const useExampleActions = ({
         status: 'progress',
         model,
         category,
+        wordPackId,
+        lemma: lemmaText,
       });
       try {
         const requestBody = buildModelRequest();
@@ -136,12 +138,12 @@ export const useExampleActions = ({
           timeoutMs: requestTimeoutMs,
         });
         setStatusMessage({ kind: 'status', text: `${category} に例文を2件追加しました` });
-        notify.update(notifId, { title: `【${lemmaText}】の生成完了！`, status: 'success', message: `${category} に例文を2件追加しました`, model, category });
+        notify.update(notifId, { title: `【${lemmaText}】の生成完了！`, status: 'success', message: `${category} に例文を2件追加しました`, model, category, wordPackId, lemma: lemmaText });
         await loadWordPack(wordPackId);
         try { onWordPackGenerated?.(wordPackId); } catch {}
       } catch (error) {
         if (ctrl.signal.aborted) {
-          notify.update(notifId, { title: `【${lemmaText}】の生成失敗`, status: 'error', message: '処理を中断しました', model, category });
+          notify.update(notifId, { title: `【${lemmaText}】の生成失敗`, status: 'error', message: '処理を中断しました', model, category, wordPackId, lemma: lemmaText });
           return;
         }
         const text = resolveErrorMessage(error, '例文の追加生成に失敗しました');
@@ -152,6 +154,8 @@ export const useExampleActions = ({
           message: `${category} の例文追加生成に失敗しました（${text}）`,
           model,
           category,
+          wordPackId,
+          lemma: lemmaText,
         });
       } finally {
         setExamplesLoading(false);

@@ -22,6 +22,12 @@ vi.mock('../../SettingsContext', () => ({
       requestTimeoutMs: 60000,
     },
   }),
+  useOptionalSettings: () => ({
+    settings: {
+      apiBase: '/api',
+      requestTimeoutMs: 60000,
+    },
+  }),
 }));
 
 vi.mock('../../components/WordPackPreviewModal', () => ({

@@ -154,7 +154,7 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
             body: reqBody,
             timeoutMs: settings.requestTimeoutMs,
           });
-          updateNotification(notifId, { title: '例文生成・記事化完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory });
+          updateNotification(notifId, { title: '例文生成・記事化完了', status: 'success', message: `【${res.lemma}】${res.generated_examples}件の例文から記事を作成しました`, model: selectedModel, category: (res.category as string | undefined) || selectedCategory, wordPackId: res.word_pack_id, lemma: res.lemma });
           return { category: selectedCategory, result: res };
         } catch (e) {
           const message = e instanceof ApiError ? e.message : '例文生成・記事化に失敗しました';

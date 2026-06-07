@@ -243,11 +243,85 @@
   display: grid;
   grid-template-columns: 1.75rem minmax(0, 1fr);
   gap: 0.62rem;
+  width: 100%;
   padding: 0.78rem;
   border: 1px solid var(--lexicon-line);
   border-radius: 8px;
   background: rgba(18, 31, 50, 0.78);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.generation-queue-item--preview {
+  appearance: none;
+  cursor: pointer;
+}
+
+.generation-queue-item--preview:hover,
+.generation-queue-item--preview:focus-visible {
+  border-color: rgba(188, 218, 255, 0.82);
+  background: rgba(24, 43, 70, 0.9);
+  box-shadow:
+    0 0 0 3px rgba(139, 196, 255, 0.22),
+    0 12px 30px rgba(55, 119, 255, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  outline: none;
+}
+
+.generation-queue-item--preview:disabled {
+  cursor: wait;
+  opacity: 0.86;
+}
+
+.generation-queue-item.is-updated {
+  animation: generation-queue-update-pulse 2s ease-out both;
+}
+
+@keyframes generation-queue-update-pulse {
+  0% {
+    border-color: rgba(236, 249, 255, 0.98);
+    box-shadow:
+      0 0 0 0 rgba(210, 239, 255, 0.72),
+      0 0 20px rgba(103, 171, 255, 0.5),
+      0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  }
+  22% {
+    border-color: rgba(172, 218, 255, 0.88);
+    box-shadow:
+      0 0 0 6px rgba(116, 188, 255, 0),
+      0 0 8px rgba(103, 171, 255, 0.22),
+      0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  }
+  42% {
+    border-color: rgba(238, 250, 255, 0.98);
+    box-shadow:
+      0 0 0 0 rgba(216, 242, 255, 0.66),
+      0 0 24px rgba(129, 190, 255, 0.54),
+      0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  }
+  70% {
+    border-color: rgba(164, 212, 255, 0.78);
+    box-shadow:
+      0 0 0 7px rgba(116, 188, 255, 0),
+      0 0 10px rgba(103, 171, 255, 0.2),
+      0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  }
+  100% {
+    border-color: var(--lexicon-line);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-queue-item.is-updated {
+    animation: none;
+    border-color: rgba(188, 218, 255, 0.82);
+    box-shadow:
+      0 0 0 3px rgba(139, 196, 255, 0.22),
+      0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  }
 }
 
 .generation-queue-item__status {
@@ -331,6 +405,23 @@
   color: var(--lexicon-muted);
   font-size: 0.82rem;
   line-height: 1.45;
+}
+
+.generation-queue-preview-message {
+  margin: 0;
+  padding: 0.58rem 0.68rem;
+  border: 1px solid rgba(130, 151, 186, 0.24);
+  border-radius: 7px;
+  background: rgba(8, 17, 31, 0.52);
+  color: var(--lexicon-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.generation-queue-preview-message.is-alert {
+  border-color: rgba(255, 107, 114, 0.38);
+  background: rgba(74, 18, 28, 0.36);
+  color: #ffd5d7;
 }
 
 .generation-queue-item__meta {
