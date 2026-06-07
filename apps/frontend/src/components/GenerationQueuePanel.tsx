@@ -1,5 +1,24 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNotifications, type NotificationItem } from '../NotificationsContext';
+import { useOptionalSettings } from '../SettingsContext';
+import { ApiError, fetchJson } from '../lib/fetcher';
+import { WordPackPreviewModal } from './WordPackPreviewModal';
+import type { WordPackListItem } from '../features/wordpack/types';
+
+interface LemmaLookupResponse {
+  found: boolean;
+  id?: string | null;
+  lemma?: string | null;
+  sense_title?: string | null;
+}
+
+interface QueuePreviewMeta {
+  id: string;
+  lemma: string;
+  senseTitle?: string | null;
+}
+
+type PreviewMessage = { kind: 'status' | 'alert'; text: string } | null;
 
 const formatElapsed = (ms: number): string => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -19,19 +38,65 @@ const notificationStatusLabel = (status: NotificationItem['status']): string => 
 );
 
 const buildLiveMessage = (item: NotificationItem): string => {
-  const lemma = extractLemma(item.title);
+  const lemma = item.lemma?.trim() || extractLemma(item.title);
   const statusLabel = notificationStatusLabel(item.status);
   return `${lemma} の生成状態は${statusLabel}です${item.message ? `。${item.message}` : ''}`;
 };
 
-const QueueItem: React.FC<{ item: NotificationItem; nowMs: number; onRemove: (id: string) => void }> = ({ item, nowMs, onRemove }) => {
+const bracketLemmaPattern = /【(.+?)】/;
+
+const resolvePreviewLemma = (item: NotificationItem): string => {
+  const storedLemma = item.lemma?.trim();
+  if (storedLemma) return storedLemma;
+  const match = item.title.match(bracketLemmaPattern);
+  if (match?.[1]) return match[1].trim();
+  return '';
+};
+
+const canOpenWordPackPreview = (item: NotificationItem): boolean => (
+  item.status === 'success' && Boolean(item.wordPackId || resolvePreviewLemma(item))
+);
+
+const findLatestNotification = (items: NotificationItem[]): NotificationItem | null => (
+  items.reduce<NotificationItem | null>((current, item) => {
+    if (!current) return item;
+    return item.updatedAt > current.updatedAt ? item : current;
+  }, null)
+);
+
+const buildUpdateKey = (item: NotificationItem | null): string => (
+  item ? `${item.id}:${item.status}:${item.updatedAt}` : 'empty'
+);
+
+const QueueItem: React.FC<{
+  item: NotificationItem;
+  nowMs: number;
+  onRemove: (id: string) => void;
+  isUpdated: boolean;
+  isResolvingPreview: boolean;
+  onOpenPreview: (item: NotificationItem) => void;
+}> = ({
+  item,
+  nowMs,
+  onRemove,
+  isUpdated,
+  isResolvingPreview,
+  onOpenPreview,
+}) => {
   const elapsedMs = item.status === 'progress' ? nowMs - item.createdAt : item.updatedAt - item.createdAt;
-  const lemma = extractLemma(item.title);
+  const lemma = resolvePreviewLemma(item) || extractLemma(item.title);
   const statusLabel = notificationStatusLabel(item.status);
   const progressValue = item.status === 'progress' ? 68 : item.status === 'success' ? 100 : 100;
-
-  return (
-    <article className={`generation-queue-item is-${item.status}`}>
+  const canOpenPreview = canOpenWordPackPreview(item);
+  const className = [
+    'generation-queue-item',
+    `is-${item.status}`,
+    canOpenPreview ? 'generation-queue-item--preview' : '',
+    isUpdated ? 'is-updated' : '',
+    isResolvingPreview ? 'is-resolving' : '',
+  ].filter(Boolean).join(' ');
+  const contents = (
+    <>
       <div className="generation-queue-item__status" aria-hidden="true">
         {item.status === 'progress' ? <span className="generation-queue-spinner" /> : item.status === 'success' ? '✓' : '!'}
       </div>
@@ -65,20 +130,53 @@ const QueueItem: React.FC<{ item: NotificationItem; nowMs: number; onRemove: (id
           </button>
         ) : null}
       </div>
-    </article>
+    </>
   );
+
+  if (canOpenPreview) {
+    return (
+      <button
+        type="button"
+        className={className}
+        onClick={() => onOpenPreview(item)}
+        disabled={isResolvingPreview}
+        aria-busy={isResolvingPreview ? true : undefined}
+        aria-label={`${lemma} の生成結果プレビューを開く`}
+      >
+        {contents}
+      </button>
+    );
+  }
+
+  return <article className={className}>{contents}</article>;
 };
 
 export const GenerationQueuePanel: React.FC = () => {
   const { notifications, clearAll, remove } = useNotifications();
+  const settingsContext = useOptionalSettings();
+  const apiBase = settingsContext?.settings.apiBase ?? '/api';
+  const requestTimeoutMs = settingsContext?.settings.requestTimeoutMs ?? 360000;
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [liveMessage, setLiveMessage] = useState('');
-  const lastAnnouncementKeyRef = useRef<string | null>(null);
+  const [updatedItemKeys, setUpdatedItemKeys] = useState<Record<string, string>>({});
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewWordPackId, setPreviewWordPackId] = useState<string | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<QueuePreviewMeta | null>(null);
+  const [previewMessage, setPreviewMessage] = useState<PreviewMessage>(null);
+  const [resolvingPreviewItemId, setResolvingPreviewItemId] = useState<string | null>(null);
+  const lastAnnouncementKeyRef = useRef<string>(buildUpdateKey(findLatestNotification(notifications)));
+  const updateTimersRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => (
+    () => {
+      Object.values(updateTimersRef.current).forEach((timer) => window.clearTimeout(timer));
+    }
+  ), []);
 
   const { progressItems, doneItems } = useMemo(() => {
     const progress = notifications.filter((item) => item.status === 'progress');
@@ -90,19 +188,76 @@ export const GenerationQueuePanel: React.FC = () => {
   }, [notifications]);
 
   useEffect(() => {
-    const latest = notifications.reduce<NotificationItem | null>((current, item) => {
-      if (!current) return item;
-      return item.updatedAt > current.updatedAt ? item : current;
-    }, null);
-    const nextKey = latest ? `${latest.id}:${latest.status}:${latest.updatedAt}` : 'empty';
-    if (lastAnnouncementKeyRef.current === null) {
-      lastAnnouncementKeyRef.current = nextKey;
-      return;
-    }
+    const latest = findLatestNotification(notifications);
+    const nextKey = buildUpdateKey(latest);
     if (lastAnnouncementKeyRef.current === nextKey) return;
     lastAnnouncementKeyRef.current = nextKey;
     setLiveMessage(latest ? buildLiveMessage(latest) : '生成キューを空にしました。');
+    if (!latest || (latest.status !== 'progress' && latest.status !== 'success')) return;
+    const pulseKey = `${latest.status}:${latest.updatedAt}`;
+    setUpdatedItemKeys((prev) => ({ ...prev, [latest.id]: pulseKey }));
+    const existingTimer = updateTimersRef.current[latest.id];
+    if (existingTimer) {
+      window.clearTimeout(existingTimer);
+    }
+    updateTimersRef.current[latest.id] = window.setTimeout(() => {
+      setUpdatedItemKeys((prev) => {
+        if (prev[latest.id] !== pulseKey) return prev;
+        const next = { ...prev };
+        delete next[latest.id];
+        return next;
+      });
+      delete updateTimersRef.current[latest.id];
+    }, 2000);
   }, [notifications]);
+
+  const previewWordPacks = useMemo<WordPackListItem[]>(() => {
+    if (!previewMeta) return [];
+    return [{
+      id: previewMeta.id,
+      lemma: previewMeta.lemma,
+      sense_title: previewMeta.senseTitle ?? undefined,
+      created_at: '',
+      updated_at: '',
+      checked_only_count: 0,
+      learned_count: 0,
+    }];
+  }, [previewMeta]);
+
+  const openPreview = useCallback(async (item: NotificationItem) => {
+    if (!canOpenWordPackPreview(item)) return;
+    const fallbackLemma = resolvePreviewLemma(item) || extractLemma(item.title);
+    let wordPackId = item.wordPackId?.trim() || '';
+    let lemma = fallbackLemma;
+    let senseTitle: string | null | undefined;
+
+    setPreviewMessage({ kind: 'status', text: `${lemma} の保存済みWordPackを確認しています。` });
+    setResolvingPreviewItemId(item.id);
+    try {
+      if (!wordPackId) {
+        const lookup = await fetchJson<LemmaLookupResponse>(
+          `${apiBase}/word/lemma/${encodeURIComponent(lemma)}`,
+          { timeoutMs: requestTimeoutMs },
+        );
+        if (!lookup.found || !lookup.id) {
+          setPreviewMessage({ kind: 'alert', text: `${lemma} の保存済みWordPackが見つからないため、プレビューを開けません。Lexiconの検索から開いてください。` });
+          return;
+        }
+        wordPackId = lookup.id;
+        lemma = lookup.lemma?.trim() || lemma;
+        senseTitle = lookup.sense_title;
+      }
+      setPreviewMeta({ id: wordPackId, lemma: lemma || 'WordPack', senseTitle });
+      setPreviewWordPackId(wordPackId);
+      setPreviewOpen(true);
+      setPreviewMessage(null);
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : '保存済みWordPackの確認に失敗しました';
+      setPreviewMessage({ kind: 'alert', text: `プレビューを開けませんでした。${message}` });
+    } finally {
+      setResolvingPreviewItemId(null);
+    }
+  }, [apiBase, requestTimeoutMs]);
 
   return (
     <section className="generation-queue-panel" aria-label="生成キュー">
@@ -115,6 +270,14 @@ export const GenerationQueuePanel: React.FC = () => {
           {notifications.length}
         </span>
       </div>
+      {previewMessage ? (
+        <p
+          className={`generation-queue-preview-message is-${previewMessage.kind}`}
+          role={previewMessage.kind === 'alert' ? 'alert' : 'status'}
+        >
+          {previewMessage.text}
+        </p>
+      ) : null}
 
       <div className="generation-queue-section">
         <div className="generation-queue-section__header">
@@ -124,7 +287,17 @@ export const GenerationQueuePanel: React.FC = () => {
         </div>
         {progressItems.length ? (
           <div className="generation-queue-list">
-            {progressItems.map((item) => <QueueItem key={item.id} item={item} nowMs={nowMs} onRemove={remove} />)}
+            {progressItems.map((item) => (
+              <QueueItem
+                key={item.id}
+                item={item}
+                nowMs={nowMs}
+                onRemove={remove}
+                isUpdated={Boolean(updatedItemKeys[item.id])}
+                isResolvingPreview={resolvingPreviewItemId === item.id}
+                onOpenPreview={openPreview}
+              />
+            ))}
           </div>
         ) : (
           <p className="generation-queue-empty">今は生成待ちのWordPackはありません。</p>
@@ -139,7 +312,17 @@ export const GenerationQueuePanel: React.FC = () => {
         </div>
         {doneItems.length ? (
           <div className="generation-queue-list">
-            {doneItems.map((item) => <QueueItem key={item.id} item={item} nowMs={nowMs} onRemove={remove} />)}
+            {doneItems.map((item) => (
+              <QueueItem
+                key={item.id}
+                item={item}
+                nowMs={nowMs}
+                onRemove={remove}
+                isUpdated={Boolean(updatedItemKeys[item.id])}
+                isResolvingPreview={resolvingPreviewItemId === item.id}
+                onOpenPreview={openPreview}
+              />
+            ))}
           </div>
         ) : (
           <p className="generation-queue-empty">完了した生成はここに残ります。</p>
@@ -151,6 +334,13 @@ export const GenerationQueuePanel: React.FC = () => {
           すべての履歴を消去
         </button>
       ) : null}
+      <WordPackPreviewModal
+        isOpen={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        wordPackId={previewWordPackId}
+        wordPacks={previewWordPacks}
+        onWordPackUpdated={() => undefined}
+      />
     </section>
   );
 };

@@ -162,6 +162,7 @@ export const useWordPack = ({
         title: `【${normalizedLemma}】の生成処理中...`,
         message: '新規のWordPackを生成しています（LLM応答の受信と解析を待機中）',
         status: 'progress',
+        lemma: normalizedLemma,
       });
       try {
         const res = await fetchJson<WordPack>(`${apiBase}/word/pack`, {
@@ -175,6 +176,7 @@ export const useWordPack = ({
           timeoutMs: requestTimeoutMs,
         });
         const normalized = normalizeWordPack(res);
+        const generatedWordPackId = res.id?.trim() || null;
         if (mountedRef.current) {
           setData(normalized);
           setCurrentWordPackId(null);
@@ -185,6 +187,8 @@ export const useWordPack = ({
           title: `【${res.lemma}】の生成完了！`,
           status: 'success',
           message: '新規生成が完了しました',
+          wordPackId: generatedWordPackId,
+          lemma: res.lemma,
         });
         dispatchAppEvent(APP_EVENTS.wordPackUpdated);
         try { onWordPackGenerated?.(null); } catch {}
@@ -199,6 +203,7 @@ export const useWordPack = ({
           title: `【${normalizedLemma}】の生成失敗`,
           status: 'error',
           message: `新規生成に失敗しました（${text}）`,
+          lemma: normalizedLemma,
         });
       } finally {
         if (mountedRef.current) {
@@ -226,6 +231,7 @@ export const useWordPack = ({
         title: `【${normalizedLemma}】の生成処理中...`,
         message: '空のWordPackを作成しています',
         status: 'progress',
+        lemma: normalizedLemma,
       });
       try {
         const res = await fetchJson<{ id: string }>(`${apiBase}/word/packs`, {
@@ -238,12 +244,12 @@ export const useWordPack = ({
         await loadWordPack(res.id);
         try { onWordPackGenerated?.(res.id); } catch {}
         dispatchAppEvent(APP_EVENTS.wordPackUpdated);
-        updateNotification(notifId, { title: `【${normalizedLemma}】の生成完了！`, status: 'success', message: '詳細読み込み完了' });
+        updateNotification(notifId, { title: `【${normalizedLemma}】の生成完了！`, status: 'success', message: '詳細読み込み完了', wordPackId: res.id, lemma: normalizedLemma });
       } catch (error) {
         if (ctrl.signal.aborted) return;
         const text = error instanceof ApiError ? error.message : '空のWordPack作成に失敗しました';
         setMessage({ kind: 'alert', text });
-        updateNotification(notifId, { title: `【${normalizedLemma}】の生成失敗`, status: 'error', message: `空のWordPackの作成に失敗しました（${text}）` });
+        updateNotification(notifId, { title: `【${normalizedLemma}】の生成失敗`, status: 'error', message: `空のWordPackの作成に失敗しました（${text}）`, lemma: normalizedLemma });
       } finally {
         setLoading(false);
       }
@@ -330,6 +336,8 @@ export const useWordPack = ({
           message: 'バックグラウンドで再生成しています（完了までしばらくお待ちください）',
           status: 'progress',
           model: model || undefined,
+          wordPackId,
+          lemma,
         });
 
         const job = await enqueueRegenerateWordPack({
@@ -377,6 +385,8 @@ export const useWordPack = ({
             status: 'success',
             message: 'バックグラウンド再生成が完了しました',
             model: model || undefined,
+            wordPackId,
+            lemma,
           });
           try { onWordPackGenerated?.(wordPackId); } catch {}
         } else {
@@ -387,6 +397,8 @@ export const useWordPack = ({
             status: 'error',
             message: errText,
             model: model || undefined,
+            wordPackId,
+            lemma,
           });
         }
       } catch (error) {

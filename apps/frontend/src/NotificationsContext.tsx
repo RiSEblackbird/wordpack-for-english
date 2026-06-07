@@ -11,12 +11,14 @@ export interface NotificationItem {
   updatedAt: number;
   model?: string; // 任意: 使用モデル名（表示用）
   category?: string; // 任意: 選択カテゴリ（表示用）
+  wordPackId?: string | null; // 任意: 完了カードからWordPackプレビューを開くためのID
+  lemma?: string | null; // 任意: IDがない古い通知や生成直後のlookup用
 }
 
 interface NotificationsContextValue {
   notifications: NotificationItem[];
-  add: (input: { title: string; message?: string; status?: NotificationStatus; id?: string; model?: string; category?: string }) => string;
-  update: (id: string, patch: Partial<Pick<NotificationItem, 'title' | 'message' | 'status' | 'model' | 'category'>>) => void;
+  add: (input: { title: string; message?: string; status?: NotificationStatus; id?: string; model?: string; category?: string; wordPackId?: string | null; lemma?: string | null }) => string;
+  update: (id: string, patch: Partial<Pick<NotificationItem, 'title' | 'message' | 'status' | 'model' | 'category' | 'wordPackId' | 'lemma'>>) => void;
   remove: (id: string) => void;
   clearAll: () => void;
 }
@@ -65,6 +67,8 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode } & { p
       updatedAt: now,
       model: input.model,
       category: input.category,
+      wordPackId: input.wordPackId,
+      lemma: input.lemma,
     };
     setNotifications((prev) => {
       const next = [...prev, item];
@@ -93,5 +97,4 @@ export function useNotifications(): NotificationsContextValue {
   if (!ctx) throw new Error('useNotifications must be used within NotificationsProvider');
   return ctx;
 }
-
 

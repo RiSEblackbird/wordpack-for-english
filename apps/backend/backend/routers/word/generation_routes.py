@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from ...logging import logger
-from ...models.word import WordPack, WordPackRequest
+from ...models.word import GeneratedWordPackResponse, WordPackRequest
 from .dependencies import get_run_wordpack_flow, get_store, next_word_pack_id, require_authenticated_user
 from .error_mapping import generation_error_mapping
 
@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.post(
     "/pack",
-    response_model=WordPack,
+    response_model=GeneratedWordPackResponse,
     response_model_exclude_none=True,
     summary="WordPack を生成",
     response_description="生成された WordPack を返します",
@@ -20,7 +20,7 @@ router = APIRouter()
 async def generate_word_pack(
     req: WordPackRequest,
     _user: dict[str, str] = Depends(require_authenticated_user),
-) -> WordPack:
+) -> GeneratedWordPackResponse:
     """Generate a new word pack using LangGraph flow."""
 
     try:
@@ -53,7 +53,7 @@ async def generate_word_pack(
             ),
             has_definition_any=any(bool(s.definition_ja) for s in word_pack.senses),
         )
-        return word_pack
+        return GeneratedWordPackResponse(id=word_pack_id, **word_pack.model_dump())
     except RuntimeError:
         # run_wordpack_flow 内で HTTPException へ変換済み。それ以外は上位へ委譲。
         raise
