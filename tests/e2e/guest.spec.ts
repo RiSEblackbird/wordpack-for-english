@@ -79,4 +79,52 @@ test.describe('ゲストモード', () => {
     expect(metrics.reservedHeight).toBe(`${metrics.navHeight}px`);
     expect(metrics.paddingBottom).toBeGreaterThanOrEqual(metrics.navHeight + 20);
   });
+
+  test('デスクトップでページ全体をスクロールしてもサイドバー下部のユーザー操作が追従する', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await mockConfig(page, { requestTimeoutMs: 20000, sessionAuthDisabled: false });
+
+    await page.route('**/api/auth/logout', ignoreRoute);
+    await page.route('**/api/auth/guest', (route) => route.fulfill(json({ mode: 'guest' })));
+    await page.route('**/api/word/packs?*', (route) =>
+      route.fulfill(json({ items: [{ id: 'wp:guest:1', lemma: 'guest', sense_title: 'guest' }], total: 1 })),
+    );
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'ゲスト閲覧モード' }).click();
+    await expect(page.getByLabel('アプリ内共通メニュー')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
+
+    await page.evaluate(() => {
+      const content = document.querySelector<HTMLElement>('.dictionary-content');
+      if (!content) {
+        throw new Error('main content target is missing');
+      }
+      const spacer = document.createElement('div');
+      spacer.setAttribute('data-testid', 'scroll-spacer');
+      spacer.style.height = '1400px';
+      content.appendChild(spacer);
+    });
+
+    const footer = page.locator('.sidebar-footer');
+    const sidebar = page.getByLabel('アプリ内共通メニュー');
+    const before = await footer.boundingBox();
+    if (!before) {
+      throw new Error('sidebar footer is missing');
+    }
+
+    await expect(sidebar).toHaveCSS('position', 'sticky');
+    await page.evaluate(() => window.scrollTo(0, 620));
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(500);
+
+    const after = await footer.boundingBox();
+    if (!after) {
+      throw new Error('sidebar footer disappeared after scrolling');
+    }
+
+    expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
+    expect(after.y).toBeGreaterThan(0);
+    expect(after.y + after.height).toBeLessThanOrEqual(720);
+    await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
+  });
 });
