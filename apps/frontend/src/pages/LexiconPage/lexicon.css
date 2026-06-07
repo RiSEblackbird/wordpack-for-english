@@ -555,10 +555,15 @@
   color: rgba(220, 230, 246, 0.42);
 }
 
-.wordpack-create-panel__advanced {
+.wordpack-create-panel .wordpack-create-panel__advanced {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.6rem;
+}
+
+.wordpack-create-panel .wordpack-create-panel__advanced .wordpack-create-panel__field {
+  grid-template-columns: 1fr;
+  align-items: stretch;
 }
 
 @media (max-width: 1180px) {
@@ -600,7 +605,7 @@
     grid-template-columns: 1fr;
   }
 
-  .wordpack-create-panel__advanced {
+  .wordpack-create-panel .wordpack-create-panel__advanced {
     grid-template-columns: 1fr;
   }
 }
