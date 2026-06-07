@@ -177,6 +177,52 @@ const toWordPackListItem = (id: string, wordPack: WordPack) => {
 };
 
 test.describe('WordPack 操作', () => {
+  test('入力エラーのヘルプは入力欄の列で読める', async ({ page, context }) => {
+    await page.setViewportSize({ width: 430, height: 640 });
+    await seedAuthenticatedSession(context, page);
+    await mockConfig(page, { requestTimeoutMs: 20000 });
+
+    await page.route('**/api/word/packs?*', (route) =>
+      route.fulfill(json({ items: [], total: 0, limit: 200, offset: 0 })),
+    );
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const input = page.getByLabel('見出し語');
+    await input.fill('日本語');
+
+    const helper = page.locator('#wordpack-lemma-help');
+    await expect(input).toHaveAttribute('aria-describedby', 'wordpack-lemma-help');
+    await expect(input).toHaveAttribute('aria-invalid', 'true');
+    await expect(helper).toContainText('英数字と半角スペース、ハイフン、アポストロフィのみ利用できます');
+
+    const metrics = await page.evaluate(() => {
+      const inputEl = document.querySelector<HTMLElement>('#wordpack-lemma-input');
+      const helperEl = document.querySelector<HTMLElement>('#wordpack-lemma-help');
+      if (!inputEl || !helperEl) {
+        throw new Error('lemma input or helper is missing');
+      }
+      const inputRect = inputEl.getBoundingClientRect();
+      const helperRect = helperEl.getBoundingClientRect();
+      const helperStyle = window.getComputedStyle(helperEl);
+      return {
+        inputLeft: inputRect.left,
+        inputWidth: inputRect.width,
+        helperLeft: helperRect.left,
+        helperWidth: helperRect.width,
+        gridColumnStart: helperStyle.gridColumnStart,
+        gridColumnEnd: helperStyle.gridColumnEnd,
+      };
+    });
+
+    expect(metrics.gridColumnStart).toBe('2');
+    expect(metrics.gridColumnEnd).toBe('-1');
+    expect(metrics.helperLeft).toBeGreaterThanOrEqual(metrics.inputLeft - 1);
+    expect(metrics.helperWidth).toBeGreaterThan(metrics.inputWidth * 0.85);
+    await runA11yCheck(page);
+  });
+
   test('例文の追加/削除/再生成を1本のシナリオで完結できる', async ({ page, context }) => {
     const store = createWordPackStore();
     const actionDurationsMs: number[] = [];

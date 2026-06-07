@@ -411,11 +411,14 @@ export const WordPackPanel: React.FC<Props> = ({
             ref={focusRef as React.RefObject<HTMLInputElement>}
             value={lemma}
             onChange={(e) => setLemma(e.target.value)}
+            aria-describedby="wordpack-lemma-help"
+            aria-invalid={isLemmaValid ? undefined : true}
             placeholder="見出し語を入力（英数字・ハイフン・アポストロフィ・半角スペースのみ）"
             disabled={isActionLoading}
           />
         </GuestLock>
         <p
+          id="wordpack-lemma-help"
           aria-live="polite"
           className={`sidebar-help wordpack-create-panel__help${isLemmaValid ? '' : ' is-invalid'}`}
         >
