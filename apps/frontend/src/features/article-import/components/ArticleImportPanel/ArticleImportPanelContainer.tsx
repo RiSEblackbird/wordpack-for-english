@@ -334,58 +334,60 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
             </button>
           </GuestLock>
         </div>
-        <div className={fieldClass}>
-          <label htmlFor={`article-model-select-${suffix}`}>モデル{sidebarSuffix}</label>
-          <GuestLock isGuest={isGuest}>
-            <select
-              id={`article-model-select-${suffix}`}
-              value={model}
-              onChange={(e) => handleChangeModel(e.target.value)}
-              disabled={loading}
-            >
-              {SUPPORTED_LLM_MODELS.map((name) => (
-                <option key={name} value={name}>{name}</option>
-              ))}
-            </select>
-          </GuestLock>
-        </div>
-        {showAdvancedModelOptions && (
-          <div className={inlineClass}>
-            <div className={fieldClass}>
-              <label htmlFor={`article-reasoning-select-${suffix}`}>reasoning.effort{sidebarSuffix}</label>
-              <GuestLock isGuest={isGuest}>
-                <select
-                  id={`article-reasoning-select-${suffix}`}
-                  aria-label={isSidebar ? 'reasoning.effort（サイドバー）' : 'reasoning.effort'}
-                  value={settings.reasoningEffort || 'minimal'}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
-                  disabled={loading}
-                >
-                  <option value="minimal">minimal</option>
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
-              </GuestLock>
-            </div>
-            <div className={fieldClass}>
-              <label htmlFor={`article-verbosity-select-${suffix}`}>text.verbosity{sidebarSuffix}</label>
-              <GuestLock isGuest={isGuest}>
-                <select
-                  id={`article-verbosity-select-${suffix}`}
-                  aria-label={isSidebar ? 'text.verbosity（サイドバー）' : 'text.verbosity'}
-                  value={settings.textVerbosity || 'medium'}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
-                  disabled={loading}
-                >
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
-              </GuestLock>
-            </div>
+        <div className={isSidebar ? inlineClass : 'article-import-llm-controls'}>
+          <div className={fieldClass}>
+            <label htmlFor={`article-model-select-${suffix}`}>モデル{sidebarSuffix}</label>
+            <GuestLock isGuest={isGuest}>
+              <select
+                id={`article-model-select-${suffix}`}
+                value={model}
+                onChange={(e) => handleChangeModel(e.target.value)}
+                disabled={loading}
+              >
+                {SUPPORTED_LLM_MODELS.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </GuestLock>
           </div>
-        )}
+          {showAdvancedModelOptions && (
+            <>
+              <div className={fieldClass}>
+                <label htmlFor={`article-reasoning-select-${suffix}`}>reasoning.effort{sidebarSuffix}</label>
+                <GuestLock isGuest={isGuest}>
+                  <select
+                    id={`article-reasoning-select-${suffix}`}
+                    aria-label={isSidebar ? 'reasoning.effort（サイドバー）' : 'reasoning.effort'}
+                    value={settings.reasoningEffort || 'minimal'}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, reasoningEffort: e.target.value as any }))}
+                    disabled={loading}
+                  >
+                    <option value="minimal">minimal</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </GuestLock>
+              </div>
+              <div className={fieldClass}>
+                <label htmlFor={`article-verbosity-select-${suffix}`}>text.verbosity{sidebarSuffix}</label>
+                <GuestLock isGuest={isGuest}>
+                  <select
+                    id={`article-verbosity-select-${suffix}`}
+                    aria-label={isSidebar ? 'text.verbosity（サイドバー）' : 'text.verbosity'}
+                    value={settings.textVerbosity || 'medium'}
+                    onChange={(e) => setSettings((prev) => ({ ...prev, textVerbosity: e.target.value as any }))}
+                    disabled={loading}
+                  >
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </GuestLock>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     );
   };
@@ -456,6 +458,20 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
           gap: 0.75rem;
+        }
+        .article-import-llm-controls {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 0.75rem;
+          align-items: end;
+        }
+        .article-import-llm-controls select {
+          width: 100%;
+        }
+        @media (max-width: 720px) {
+          .article-import-llm-controls {
+            grid-template-columns: 1fr;
+          }
         }
         .article-import-warning {
           color: var(--color-danger, #b00020);
