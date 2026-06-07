@@ -534,6 +534,7 @@ export const WordPackListPanel: React.FC = () => {
     });
   }, [filteredWordPacks, sortKey, sortOrder]);
 
+  const previewNavigationIds = useMemo(() => sortedWordPacks.map((wp) => wp.id), [sortedWordPacks]);
   const visibleWordPackIds = useMemo(() => sortedWordPacks.map((wp) => wp.id), [sortedWordPacks]);
   const selectedCount = selectedIds.size;
   const visibleSelectedCount = useMemo(
@@ -693,6 +694,22 @@ export const WordPackListPanel: React.FC = () => {
     setPreviewOpen(true);
     setModalOpen(true);
   }, [setModalOpen]);
+  const closePreview = useCallback(() => {
+    setPreviewOpen(false);
+    setPreviewWordPackId(null);
+    setModalOpen(false);
+  }, [setModalOpen]);
+  const previewNavigationState = useMemo(() => {
+    if (!previewWordPackId) return null;
+    const index = previewNavigationIds.indexOf(previewWordPackId);
+    if (index < 0) return null;
+    return {
+      index,
+      total: previewNavigationIds.length,
+      previousId: index > 0 ? previewNavigationIds[index - 1] : null,
+      nextId: index < previewNavigationIds.length - 1 ? previewNavigationIds[index + 1] : null,
+    };
+  }, [previewNavigationIds, previewWordPackId]);
 
   return (
     <section>
@@ -746,19 +763,19 @@ export const WordPackListPanel: React.FC = () => {
         .wp-card-actions { display: grid; grid-template-rows: auto auto; gap: 0.15rem; margin-left: auto; }
         .wp-card-actions-upper { display: flex; gap: 0.15rem; align-items: center; }
         .wp-card-actions-lower { display: flex; gap: 0.15rem; align-items: center; justify-content: flex-end; }
-        .wp-card-tts-btn { font-size: 0.55em; padding: 0.1rem 0.4rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #0f172a; cursor: pointer; }
-        .wp-card-title { font-size: 0.8em; font-weight: bold; color: #333; margin: 0; }
-        .wp-card-meta { font-size: 0.50em; color: #666; margin: 0.25rem 0; }
+        .wp-card-tts-btn { font-size: 0.82rem; padding: 0.15rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #0f172a; cursor: pointer; }
+        .wp-card-title { font-size: 1rem; font-weight: bold; color: #333; margin: 0; }
+        .wp-card-meta { font-size: 0.88rem; color: #333; margin: 0.25rem 0; }
         .wp-progress-badges { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.35rem; }
-        .wp-progress-badge { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.15rem 0.45rem; border-radius: 999px; font-size: 0.65em; font-weight: bold; border: 1px solid transparent; }
+        .wp-progress-badge { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.15rem 0.45rem; border-radius: 999px; font-size: 0.8rem; font-weight: bold; border: 1px solid transparent; }
         .wp-progress-badge.learned { background: #e8f5e9; border-color: #81c784; color: #1b5e20; }
         .wp-progress-badge.checked { background: #fff3e0; border-color: #ffcc80; color: #ef6c00; }
-        .wp-progress-badge.small { font-size: 0.55em; padding: 0.1rem 0.35rem; }
+        .wp-progress-badge.small { font-size: 0.75rem; padding: 0.1rem 0.35rem; }
         .wp-index-progress { display: inline-flex; gap: 0.25rem; align-items: center; }
         .wp-card-header-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-        .wp-sense-btn { font-size: 0.55em; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid #5c6bc0; background: #f5f7ff; color: #3f51b5; cursor: pointer; }
+        .wp-sense-btn { font-size: 0.82rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid #5c6bc0; background: #f5f7ff; color: #3f51b5; cursor: pointer; }
         .wp-sense-btn[aria-pressed="true"] { background: #e8eaf6; border-color: #3f51b5; color: #283593; }
-        .wp-generate-btn { font-size: 0.55em; padding: 0.1rem 0.4rem; border-radius: 4px; border: 1px solid #2e7d32; background: #e8f5e9; color: #1b5e20; cursor: pointer; }
+        .wp-generate-btn { font-size: 0.82rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid #2e7d32; background: #e8f5e9; color: #1b5e20; cursor: pointer; }
         .wp-generate-btn:hover:not(:disabled) { background: #d0f0d5; }
         .wp-sense-btn:disabled,
         .wp-generate-btn:disabled,
@@ -792,10 +809,16 @@ export const WordPackListPanel: React.FC = () => {
         .wp-index-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.2rem 0.3rem; border-bottom: 1px solid #eee; cursor: pointer; background: transparent; border-radius: 4px; }
         .wp-index-title-row { display: flex; align-items: baseline; gap: 0.4rem; flex: 1; min-width: 0; }
         .wp-index-actions { margin-left: auto; display: flex; gap: 0.25rem; align-items: center; }
-        .wp-index-tts-btn { font-size: 0.55em; padding: 0.05rem 0.3rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #0f172a; cursor: pointer; }
-        .wp-index-title { font-size: 0.75em; font-weight: bold; color:rgb(233, 233, 233); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .wp-index-sense { font-size: 0.55em; color: #212121; background: rgba(255,255,255,0.85); padding: 0.05rem 0.35rem; border-radius: 4px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .wp-index-meta { font-size: 0.10em; color: #666; }
+        .wp-index-tts-btn { font-size: 0.82rem; padding: 0.15rem 0.45rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #0f172a; cursor: pointer; }
+        .wp-index-open-button { font-size: 0.82rem; padding: 0.15rem 0.45rem; border-radius: 4px; border: 1px solid #1565c0; background: #ffffff; color: #1565c0; cursor: pointer; }
+        .wp-index-title { font-size: 0.95rem; font-weight: bold; color:rgb(233, 233, 233); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .wp-index-sense { font-size: 0.82rem; color: #212121; background: rgba(255,255,255,0.85); padding: 0.05rem 0.35rem; border-radius: 4px; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .wp-index-meta { font-size: 0.8rem; color: #333; }
+        .wp-preview-nav { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+        .wp-preview-nav__context { margin: 0; color: var(--color-subtle); }
+        .wp-preview-nav__actions { display: inline-flex; align-items: center; gap: 0.5rem; margin-left: auto; }
+        .wp-preview-nav__actions button { min-height: 2rem; padding: 0.25rem 0.7rem; }
+        .wp-preview-nav__position { color: var(--color-subtle); font-size: 0.9rem; }
         .wp-selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; font-size: 0.85em; }
         .wp-selection-bar button { padding: 0.25rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #0f172a; cursor: pointer; }
         .wp-selection-bar button:disabled { background: #e5e7eb; color: #374151; cursor: not-allowed; }
@@ -1072,8 +1095,8 @@ export const WordPackListPanel: React.FC = () => {
                     )}
                     <div className="wp-card-meta">
                       <div className="wp-progress-badges" aria-label="学習状況">
-                        <span className="wp-progress-badge learned">学 {wp.learned_count}</span>
-                        <span className="wp-progress-badge checked">難 {wp.checked_only_count}</span>
+                        <span className="wp-progress-badge learned">使える {wp.learned_count}</span>
+                        <span className="wp-progress-badge checked">確認済み {wp.checked_only_count}</span>
                       </div>
                       <div className="wp-card-status-row">
                         <span className={`wp-visibility-pill ${wp.guest_public ? 'is-public' : 'is-private'}`}>
@@ -1174,11 +1197,18 @@ export const WordPackListPanel: React.FC = () => {
                       )}
                       <span className="wp-index-meta">{wp.is_empty ? ' / 未' : ` / 例文: ${wp.totalExamples}件`}</span>
                       <span className="wp-index-progress" aria-label="学習状況">
-                        <span className="wp-progress-badge small learned">学 {wp.learned_count}</span>
-                        <span className="wp-progress-badge small checked">確 {wp.checked_only_count}</span>
+                        <span className="wp-progress-badge small learned">使える {wp.learned_count}</span>
+                        <span className="wp-progress-badge small checked">確認済み {wp.checked_only_count}</span>
                       </span>
                     </div>
                     <div className="wp-index-actions" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="wp-index-open-button"
+                        onClick={() => openPreview(wp.id)}
+                      >
+                        <MiniIcon name="open" />開く
+                      </button>
                       <button
                         type="button"
                         className="wp-sense-btn"
@@ -1247,16 +1277,44 @@ export const WordPackListPanel: React.FC = () => {
           </>
         )}
       </div>
-      <Modal 
+      <Modal
         isOpen={previewOpen} 
-        onClose={() => { 
-          setPreviewOpen(false);
-          setModalOpen(false);
-        }} 
-        title="WordPack プレビュー"
+        onClose={closePreview}
+        title={`WordPack プレビュー: ${previewMeta?.lemma ?? 'WordPack'}`}
+        closeLabel="WordPackプレビューを閉じる"
       >
         {previewWordPackId ? (
           <div data-testid="modal-wordpack-content">
+            <div className="wp-preview-nav" aria-label="Lexiconプレビューの文脈">
+              <p className="wp-preview-nav__context">
+                Lexiconの保存済み一覧から開いています。
+              </p>
+              {previewNavigationState ? (
+                <div className="wp-preview-nav__actions" aria-label="プレビュー移動">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (previewNavigationState.previousId) setPreviewWordPackId(previewNavigationState.previousId);
+                    }}
+                    disabled={!previewNavigationState.previousId}
+                  >
+                    前へ
+                  </button>
+                  <span className="wp-preview-nav__position">
+                    {previewNavigationState.index + 1} / {previewNavigationState.total}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (previewNavigationState.nextId) setPreviewWordPackId(previewNavigationState.nextId);
+                    }}
+                    disabled={!previewNavigationState.nextId}
+                  >
+                    次へ
+                  </button>
+                </div>
+              ) : null}
+            </div>
             <WordPackPanel
               focusRef={modalFocusRef}
               selectedWordPackId={previewWordPackId}
@@ -1267,6 +1325,8 @@ export const WordPackListPanel: React.FC = () => {
                 await loadWordPacks(offset);
               }}
               onStudyProgressRecorded={applyStudyProgress}
+              revealStudyCardImmediately
+              onRequestClose={closePreview}
             />
           </div>
         ) : null}

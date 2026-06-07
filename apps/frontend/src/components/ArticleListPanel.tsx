@@ -45,6 +45,7 @@ export const ArticleListPanel: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [preview, setPreview] = useState<ArticleDetailResponse | null>(null);
+  const [wpPreviewId, setWpPreviewId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const { run: runAbortable } = useAbortableAsync();
 
@@ -105,6 +106,7 @@ export const ArticleListPanel: React.FC = () => {
     try {
       const res = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/${id}`);
       setPreview(res);
+      setWpPreviewId(null);
       setPreviewOpen(true);
       try { setModalOpen(true); } catch {}
     } catch (e) {
@@ -354,11 +356,20 @@ export const ArticleListPanel: React.FC = () => {
 
       <ArticleDetailModal
         isOpen={previewOpen}
-        onClose={() => { setPreviewOpen(false); try { setModalOpen(false); } catch {} }}
+        onClose={() => { setPreviewOpen(false); setWpPreviewId(null); try { setModalOpen(false); } catch {} }}
         article={preview}
         title="文章プレビュー"
         onRegenerateWordPack={regenerateWordPack}
+        previewWordPackId={wpPreviewId}
+        onSelectWordPackPreview={setWpPreviewId}
         onDeleteWordPack={deleteWordPack}
+        onWordPackGenerated={async () => {
+          if (preview) {
+            const refreshed = await fetchJson<ArticleDetailResponse>(`${settings.apiBase}/article/${preview.id}`);
+            setPreview(refreshed);
+          }
+          dispatchAppEvent(APP_EVENTS.wordPackUpdated);
+        }}
       />
     </section>
   );

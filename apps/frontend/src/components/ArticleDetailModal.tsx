@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Modal } from './Modal';
 import { calculateDurationMs, formatDateJst, formatDurationMs } from '../lib/date';
 import { TTSButton } from './TTSButton';
 import { useAuth } from '../AuthContext';
 import { GuestLock } from './GuestLock';
+import { WordPackPanel, type WordPackPreviewMeta } from './WordPackPanel';
 
 export interface ArticleWordPackLink {
   word_pack_id: string;
@@ -38,7 +39,9 @@ interface Props {
   article: ArticleDetailData | null;
   title?: string;
   onRegenerateWordPack?: (wordPackId: string) => void;
-  onOpenWordPackPreview?: (wordPackId: string) => void;
+  previewWordPackId?: string | null;
+  onSelectWordPackPreview?: (wordPackId: string | null) => void;
+  onWordPackGenerated?: () => void | Promise<void>;
   onDeleteWordPack?: (wordPackId: string) => void;
 }
 
@@ -48,10 +51,13 @@ export const ArticleDetailModal: React.FC<Props> = ({
   article,
   title = '文章詳細',
   onRegenerateWordPack,
-  onOpenWordPackPreview,
+  previewWordPackId,
+  onSelectWordPackPreview,
+  onWordPackGenerated,
   onDeleteWordPack,
 }) => {
   const { isGuest } = useAuth();
+  const wordPackPreviewFocusRef = useRef<HTMLElement>(null);
   const formatDateWithFallback = (value?: string | null) => {
     if (!value) return null;
     const formatted = formatDateJst(value);
@@ -80,7 +86,7 @@ export const ArticleDetailModal: React.FC<Props> = ({
     return null;
   }, [article]);
 
-  const metaRows = React.useMemo(() => {
+  const metaRows = useMemo(() => {
     if (!article) return [] as { label: string; value: string }[];
     const rows: { label: string; value: string }[] = [];
     const created = formatDateWithFallback(article.generation_started_at || article.created_at) ?? '未記録';
@@ -106,12 +112,25 @@ export const ArticleDetailModal: React.FC<Props> = ({
     rows.push({ label: 'AIパラメータ', value: paramsLabel });
     return rows;
   }, [article, generationDuration]);
+  const previewWordPack = useMemo(
+    () => article?.related_word_packs.find((link) => link.word_pack_id === previewWordPackId) ?? null,
+    [article?.related_word_packs, previewWordPackId],
+  );
+  const previewMeta = useMemo<Pick<WordPackPreviewMeta, 'id' | 'lemma' | 'senseTitle'> | null>(() => {
+    if (!previewWordPack) return null;
+    return {
+      id: previewWordPack.word_pack_id,
+      lemma: previewWordPack.lemma,
+      senseTitle: previewWordPack.is_empty ? '例文未生成' : null,
+    };
+  }, [previewWordPack]);
 
   return (
     <Modal
       isOpen={!!article && isOpen}
       onClose={onClose}
       title={title}
+      closeLabel={`${title}を閉じる`}
     >
       {article ? (
         <div>
@@ -158,6 +177,51 @@ export const ArticleDetailModal: React.FC<Props> = ({
             .ai-badge { font-size: 0.68em; padding: 0.06rem 0.3rem; border-radius: 999px; border: 1px solid var(--color-border); }
             .ai-warnings { border: 1px solid #ffe08a; background: #fff8e1; padding: 0.5rem; border-radius: 4px; }
             .ai-warnings ul { margin: 0.25rem 0 0 1.2rem; padding: 0; }
+            .ai-wp-preview-button {
+              border: 0;
+              background: transparent;
+              color: var(--color-link);
+              padding: 0;
+              text-align: left;
+              cursor: pointer;
+              text-decoration: underline;
+              font: inherit;
+              flex: 1 0 100%;
+            }
+            .ai-wp-preview-button strong {
+              font-size: 0.9rem;
+            }
+            .ai-wp-card-header {
+              display: flex;
+              align-items: center;
+              gap: 0.35rem;
+              flex-wrap: wrap;
+            }
+            .article-wordpack-preview {
+              margin-top: 0.9rem;
+              border: 1px solid var(--color-border);
+              border-radius: 6px;
+              padding: 0.75rem;
+              background: var(--color-surface);
+            }
+            .article-wordpack-preview__header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              gap: 0.75rem;
+              margin-bottom: 0.75rem;
+            }
+            .article-wordpack-preview__header h4 {
+              margin: 0;
+            }
+            .article-wordpack-preview__header p {
+              margin: 0.25rem 0 0;
+              color: var(--color-subtle);
+            }
+            .article-wordpack-preview__close {
+              min-height: 2rem;
+              padding: 0.25rem 0.7rem;
+            }
           `}</style>
           <div
             style={{
@@ -195,16 +259,20 @@ export const ArticleDetailModal: React.FC<Props> = ({
           <div className="ai-wp-grid">
             {article.related_word_packs.map((l) => (
               <div key={l.word_pack_id} className="ai-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {onOpenWordPackPreview ? (
-                    <a href="#" onClick={(e) => { e.preventDefault(); onOpenWordPackPreview(l.word_pack_id); }}>
-                      <strong style={{ fontSize: '0.65em' }}>{l.lemma}</strong>
-                    </a>
+                <div className="ai-wp-card-header">
+                  {onSelectWordPackPreview ? (
+                    <button
+                      type="button"
+                      className="ai-wp-preview-button"
+                      onClick={() => onSelectWordPackPreview(l.word_pack_id)}
+                    >
+                      <strong>WordPack「{l.lemma}」をプレビュー</strong>
+                    </button>
                   ) : (
-                    <strong style={{ fontSize: '0.65em' }}>{l.lemma}</strong>
+                    <strong style={{ fontSize: '0.9rem' }}>{l.lemma}</strong>
                   )}
                   {l.is_empty ? (
-                    <span className="ai-badge" style={{ background: '#fff3cd', borderColor: '#ffe08a', color: '#7a5b00' }}>空</span>
+                    <span className="ai-badge" style={{ background: '#fff3cd', borderColor: '#ffe08a', color: '#7a5b00' }}>例文未生成</span>
                   ) : null}
                   {onRegenerateWordPack ? (
                     <GuestLock isGuest={isGuest}>
@@ -215,8 +283,8 @@ export const ArticleDetailModal: React.FC<Props> = ({
                     <GuestLock isGuest={isGuest}>
                       <button
                         onClick={() => onDeleteWordPack(l.word_pack_id)}
-                        aria-label={`delete-wordpack-${l.word_pack_id}`}
-                        style={{ marginLeft: 4, color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.05rem 0.2rem', borderRadius: 3, fontSize: '0.65em' }}
+                        aria-label={`WordPack「${l.lemma}」を関連一覧から削除`}
+                        style={{ marginLeft: 4, color: '#d32f2f', border: '1px solid #d32f2f', background: 'white', padding: '0.12rem 0.35rem', borderRadius: 3, fontSize: '0.78rem' }}
                       >
                         削除
                       </button>
@@ -236,6 +304,32 @@ export const ArticleDetailModal: React.FC<Props> = ({
               ))}
             </dl>
           ) : null}
+          {previewWordPackId && previewMeta ? (
+            <section className="article-wordpack-preview" aria-label={`Reader内WordPackプレビュー ${previewMeta.lemma}`}>
+              <div className="article-wordpack-preview__header">
+                <div>
+                  <h4>Reader / 関連WordPack: {previewMeta.lemma}</h4>
+                  <p>記事「{article.title_en}」から開いた関連WordPackです。閉じても記事詳細は保持されます。</p>
+                </div>
+                <button
+                  type="button"
+                  className="article-wordpack-preview__close"
+                  onClick={() => onSelectWordPackPreview?.(null)}
+                >
+                  プレビューを閉じる
+                </button>
+              </div>
+              <WordPackPanel
+                focusRef={wordPackPreviewFocusRef}
+                selectedWordPackId={previewWordPackId}
+                fallbackMeta={previewMeta}
+                onWordPackGenerated={onWordPackGenerated}
+                previewContext={`Readerの記事「${article.title_en}」から開いています。`}
+                revealStudyCardImmediately
+                onRequestClose={() => onSelectWordPackPreview?.(null)}
+              />
+            </section>
+          ) : null}
         </div>
       ) : null}
     </Modal>
@@ -243,4 +337,3 @@ export const ArticleDetailModal: React.FC<Props> = ({
 };
 
 export default ArticleDetailModal;
-

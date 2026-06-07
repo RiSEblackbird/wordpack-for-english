@@ -38,7 +38,7 @@ export const GuestPublicToggle: React.FC<GuestPublicToggleProps> = ({
       disabled={disabled}
       aria-describedby={helperId}
       title={tooltip}
-      style={{ width: compact ? 14 : 16, height: compact ? 14 : 16 }}
+      style={{ width: 24, height: 24, minWidth: 24, minHeight: 24 }}
     />
   );
 
@@ -51,14 +51,14 @@ export const GuestPublicToggle: React.FC<GuestPublicToggleProps> = ({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-        <label htmlFor={inputId} style={{ fontSize: compact ? '0.7em' : '0.85em', fontWeight: 600 }}>
+        <label htmlFor={inputId} style={{ fontSize: compact ? '0.82rem' : '0.9rem', fontWeight: 600 }}>
           ゲスト公開
         </label>
         <GuestLock isGuest={isGuest}>
           {toggleInput}
         </GuestLock>
         <span
-          style={{ fontSize: compact ? '0.65em' : '0.75em', color: 'var(--color-subtle)' }}
+          style={{ fontSize: compact ? '0.78rem' : '0.85rem', color: 'var(--color-subtle)' }}
           title={tooltip}
           aria-label="ゲスト公開の説明"
         >
@@ -68,7 +68,7 @@ export const GuestPublicToggle: React.FC<GuestPublicToggleProps> = ({
       <div
         id={helperId}
         style={{
-          fontSize: compact ? '0.65em' : '0.78em',
+          fontSize: compact ? '0.78rem' : '0.85rem',
           color: 'var(--color-subtle)',
           lineHeight: 1.4,
         }}

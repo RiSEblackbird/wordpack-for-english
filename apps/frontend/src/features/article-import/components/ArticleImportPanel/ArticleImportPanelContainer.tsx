@@ -5,8 +5,6 @@ import { useConfirmDialog } from '../../../../ConfirmDialogContext';
 import { useNotifications } from '../../../../NotificationsContext';
 import { fetchJson, ApiError } from '../../../../lib/fetcher';
 import { regenerateWordPackRequest } from '../../../../lib/wordpack';
-import { Modal } from '../../../../components/Modal';
-import { WordPackPanel } from '../../../../components/WordPackPanel';
 import ArticleDetailModal from '../../../../components/ArticleDetailModal';
 import { SidebarPortal } from '../../../../components/SidebarPortal';
 import { ARTICLE_IMPORT_TEXT_MAX_LENGTH } from '../../../../constants/article';
@@ -44,7 +42,6 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
   const [msg, setMsg] = useState<{ kind: 'status' | 'alert'; text: string } | null>(null);
   const [article, setArticle] = useState<ArticleDetailResponse | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [wpPreviewOpen, setWpPreviewOpen] = useState(false);
   const [wpPreviewId, setWpPreviewId] = useState<string | null>(null);
   const [selectedCategories, setSelectedCategories] = useState<ExampleCategory[]>(['Common']);
   const abortRef = useRef<AbortController | null>(null);
@@ -474,36 +471,22 @@ export const ArticleImportPanel: React.FC<ArticleImportPanelProps> = ({
 
       <ArticleDetailModal
         isOpen={!!article && detailOpen}
-        onClose={() => { setDetailOpen(false); try { setModalOpen(false); } catch {} }}
+        onClose={() => { setDetailOpen(false); setWpPreviewId(null); try { setModalOpen(false); } catch {} }}
         article={article}
         title="インポート結果"
         onRegenerateWordPack={regenerateWordPack}
-        onOpenWordPackPreview={(id) => { setWpPreviewId(id); setWpPreviewOpen(true); try { setModalOpen(true); } catch {} }}
+        previewWordPackId={wpPreviewId}
+        onSelectWordPackPreview={setWpPreviewId}
         onDeleteWordPack={deleteWordPack}
+        onWordPackGenerated={async () => {
+          // 詳細で再生成などがあったら記事詳細を更新
+          if (article) {
+            const refreshed = await fetchArticleDetail(settings.apiBase, article.id);
+            setArticle(refreshed);
+          }
+          dispatchAppEvent(APP_EVENTS.wordPackUpdated);
+        }}
       />
-
-      <Modal
-        isOpen={!!wpPreviewId && wpPreviewOpen}
-        onClose={() => { setWpPreviewOpen(false); setWpPreviewId(null); try { setModalOpen(false); } catch {} }}
-        title="WordPack プレビュー"
-      >
-        {wpPreviewId ? (
-          <div>
-            <WordPackPanel
-              focusRef={useRef<HTMLElement>(null)}
-              selectedWordPackId={wpPreviewId}
-              onWordPackGenerated={async () => {
-                // 詳細で再生成などがあったら記事詳細を更新
-                if (article) {
-                  const refreshed = await fetchArticleDetail(settings.apiBase, article.id);
-                  setArticle(refreshed);
-                }
-                dispatchAppEvent(APP_EVENTS.wordPackUpdated);
-              }}
-            />
-          </div>
-        ) : null}
-      </Modal>
       </section>
     </>
   );

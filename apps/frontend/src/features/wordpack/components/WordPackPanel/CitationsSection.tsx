@@ -3,10 +3,11 @@ import type { WordPack } from '../../../../hooks/useWordPack';
 
 interface CitationsSectionProps {
   citations: WordPack['citations'];
+  sectionId?: string;
 }
 
-export const CitationsSection: React.FC<CitationsSectionProps> = ({ citations }) => (
-  <section id="citations" className="wp-section">
+export const CitationsSection: React.FC<CitationsSectionProps> = ({ citations, sectionId = 'citations' }) => (
+  <section id={sectionId} className="wp-section">
     <h3>引用</h3>
     {citations?.length ? (
       <ol>

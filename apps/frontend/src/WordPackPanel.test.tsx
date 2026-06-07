@@ -245,6 +245,59 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     });
   });
 
+  it('shows a recovery panel instead of the loading placeholder when loading a selected WordPack fails', async () => {
+    vi.spyOn(global, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.endsWith('/api/config')) {
+        return new Response(JSON.stringify({ request_timeout_ms: 60000 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/api/word/packs/wp:error')) {
+        return new Response(JSON.stringify({ detail: 'WordPackデータを取得できませんでした' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+
+    render(
+      <AppProviders googleClientId="test-client">
+        <WordPackPanel
+          focusRef={{ current: null }}
+          selectedWordPackId="wp:error"
+          fallbackMeta={{ id: 'wp:error', lemma: 'failure', senseTitle: '失敗ケース' }}
+        />
+      </AppProviders>,
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('WordPackを読み込めませんでした');
+    expect(screen.getByRole('button', { name: '再試行' })).toBeInTheDocument();
+    expect(screen.queryByText('WordPack を読み込み中です。プレビューが準備されるまでお待ちください。')).not.toBeInTheDocument();
+  });
+
+  it('lets keyboard users reveal the self-check card without waiting', async () => {
+    setupFetchMocks();
+    render(
+      <AppProviders googleClientId="test-client">
+        <WordPackPanel focusRef={{ current: null }} selectedWordPackId="wp:selfcheck" />
+      </AppProviders>,
+    );
+
+    const user = userEvent.setup();
+    const revealButton = await screen.findByRole('button', { name: /セルフチェックを表示する/ });
+    revealButton.focus();
+    expect(revealButton).toHaveFocus();
+
+    await act(async () => {
+      await user.keyboard('{Enter}');
+    });
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /セルフチェックを表示する/ })).not.toBeInTheDocument());
+  });
+
   it('generates WordPack and shows examples', async () => {
     const fetchMock = setupFetchMocks();
     renderWithAuth();

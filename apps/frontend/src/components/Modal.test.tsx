@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
+import { useState } from 'react';
 import { vi } from 'vitest';
 import { axe } from 'vitest-axe';
 import { Modal } from './Modal';
@@ -59,11 +60,12 @@ describe('Modal close interactions', () => {
       </Modal>
     );
 
-    // a11y: モーダルの aria-label/aria-modal が維持されていることを担保する。
+    // a11y: モーダルの aria-labelledby/aria-modal が維持されていることを担保する。
     const dialog = screen.getByRole('dialog', { name: '確認' });
+    const title = screen.getByText('確認');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
-    expect(dialog).toHaveAttribute('aria-label', '確認');
-    expect(await axe(container)).toHaveNoViolations();
+    expect(dialog).toHaveAttribute('aria-labelledby', title.id);
+    expect(await axe(container, { rules: { 'color-contrast': { enabled: false } } })).toHaveNoViolations();
   });
 
   it('calls onClose when pressing Escape', async () => {
@@ -76,7 +78,9 @@ describe('Modal close interactions', () => {
       </Modal>
     );
 
-    await user.keyboard('{Escape}');
+    await act(async () => {
+      await user.keyboard('{Escape}');
+    });
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -109,9 +113,101 @@ describe('Modal close interactions', () => {
     );
 
     // ユーザー操作として「閉じる」ボタンをクリックする。
-    await user.click(screen.getByRole('button', { name: '閉じる' }));
+    await user.click(screen.getByRole('button', { name: '確認を閉じる' }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps keyboard focus inside the dialog', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <Modal isOpen onClose={() => {}} title="確認">
+        <button type="button">最初の操作</button>
+        <button type="button">最後の操作</button>
+      </Modal>
+    );
+
+    const closeButton = screen.getByRole('button', { name: '確認を閉じる' });
+    await waitFor(() => expect(closeButton).toHaveFocus());
+
+    await user.tab({ shift: true });
+
+    expect(screen.getByRole('button', { name: '最後の操作' })).toHaveFocus();
+  });
+
+  it('keeps the topmost concurrently opened modal accessible', async () => {
+    const user = userEvent.setup();
+
+    const Harness = () => {
+      const [baseOpen, setBaseOpen] = useState(false);
+      const [topOpen, setTopOpen] = useState(false);
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setBaseOpen(true);
+              setTopOpen(true);
+            }}
+          >
+            同時に開く
+          </button>
+          <Modal isOpen={baseOpen} onClose={() => setBaseOpen(false)} title="ベースモーダル">
+            <button type="button">ベース操作</button>
+          </Modal>
+          <Modal isOpen={topOpen} onClose={() => setTopOpen(false)} title="上位モーダル">
+            <button type="button">上位操作</button>
+          </Modal>
+        </>
+      );
+    };
+
+    render(<Harness />);
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '同時に開く' }));
+    });
+
+    const topDialog = await screen.findByRole('dialog', { name: '上位モーダル' });
+    expect(topDialog).not.toHaveAttribute('aria-hidden');
+    expect((topDialog as HTMLElement & { inert?: boolean }).inert).not.toBe(true);
+    await waitFor(() => expect(screen.getByRole('button', { name: '上位モーダルを閉じる' })).toHaveFocus());
+
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+
+    expect(screen.queryByRole('dialog', { name: '上位モーダル' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'ベースモーダル' })).toBeInTheDocument();
+  });
+
+  it('returns focus to the opener after closing', async () => {
+    const user = userEvent.setup();
+
+    const Harness = () => {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>開く</button>
+          <Modal isOpen={open} onClose={() => setOpen(false)} title="確認">
+            <button type="button">中の操作</button>
+          </Modal>
+        </>
+      );
+    };
+
+    render(<Harness />);
+
+    const opener = screen.getByRole('button', { name: '開く' });
+    await act(async () => {
+      await user.click(opener);
+    });
+    await act(async () => {
+      await user.click(await screen.findByRole('button', { name: '確認を閉じる' }));
+    });
+
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 });
 

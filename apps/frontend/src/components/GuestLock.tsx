@@ -66,7 +66,7 @@ export const GuestLock: React.FC<GuestLockProps> = ({ isGuest, children }) => {
 
   const describedBy = [
     children.props['aria-describedby'],
-    isGuest && tooltipVisible ? tooltipId : null,
+    isGuest ? tooltipId : null,
   ]
     .filter(Boolean)
     .join(' ') || undefined;
@@ -75,6 +75,7 @@ export const GuestLock: React.FC<GuestLockProps> = ({ isGuest, children }) => {
     ...(disableable ? { disabled: mergedDisabled } : null),
     ...(mergedAriaDisabled ? { 'aria-disabled': mergedAriaDisabled } : null),
     ...(describedBy ? { 'aria-describedby': describedBy } : null),
+    ...(isGuest && !children.props.title ? { title: TOOLTIP_TEXT } : null),
     ...(isGuest && !disableable ? { tabIndex: -1 } : null),
     ...(Object.keys(wrapperAutoMargins).length > 0 ? { style: nextChildStyle } : null),
   });
@@ -86,9 +87,13 @@ export const GuestLock: React.FC<GuestLockProps> = ({ isGuest, children }) => {
       onMouseLeave={handleMouseLeave}
     >
       {lockedChild}
+      {isGuest ? (
+        <span id={tooltipId} className="visually-hidden">
+          {TOOLTIP_TEXT}
+        </span>
+      ) : null}
       {isGuest && tooltipVisible ? (
         <span
-          id={tooltipId}
           role="tooltip"
           style={{
             position: 'absolute',

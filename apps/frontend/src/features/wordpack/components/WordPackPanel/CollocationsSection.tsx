@@ -4,6 +4,7 @@ import type { WordPack } from '../../../../hooks/useWordPack';
 interface CollocationsSectionProps {
   collocations: WordPack['collocations'];
   onSelectLemma: (lemma: string) => void;
+  sectionId?: string;
 }
 
 const CollocationLinks: React.FC<{
@@ -34,8 +35,9 @@ const CollocationLinks: React.FC<{
 export const CollocationsSection: React.FC<CollocationsSectionProps> = ({
   collocations,
   onSelectLemma,
+  sectionId = 'collocations',
 }) => (
-  <section id="collocations" className="wp-section">
+  <section id={sectionId} className="wp-section">
     <h3>共起</h3>
     <div>
       <h4>一般</h4>

@@ -3,13 +3,14 @@ import { Pronunciation } from '../../hooks/useWordPack';
 
 interface PronunciationSectionProps {
   pronunciation: Pronunciation;
+  sectionId?: string;
 }
 
 /**
  * 発音に関する情報のみを表示する専用セクション。
  */
-export const PronunciationSection: React.FC<PronunciationSectionProps> = ({ pronunciation }) => (
-  <section id="pronunciation" className="wp-section">
+export const PronunciationSection: React.FC<PronunciationSectionProps> = ({ pronunciation, sectionId = 'pronunciation' }) => (
+  <section id={sectionId} className="wp-section">
     <h3>発音</h3>
     <div className="kv mono">
       <div>IPA (GA)</div><div>{pronunciation?.ipa_GA ?? '-'}</div>

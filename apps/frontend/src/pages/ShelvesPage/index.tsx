@@ -139,6 +139,7 @@ export const ShelvesPage: React.FC = () => {
               <ShelfWordPackList
                 items={activeItems}
                 onOpenPreview={setPreviewWordPackId}
+                onClearSearch={query.trim() ? () => setQuery('') : undefined}
               />
             ) : (
               <EmptyState>棚データを読み込んでいます。</EmptyState>
@@ -166,6 +167,10 @@ export const ShelvesPage: React.FC = () => {
         onClose={() => setPreviewWordPackId(null)}
         wordPackId={previewWordPackId}
         wordPacks={wordPacks}
+        contextLabel={`Shelves / ${activeShelf?.title ?? '棚'}`}
+        contextDescription={`${activeShelf?.title ?? '選択中の棚'}から開いています。復習対象を棚の中で前後に確認できます。`}
+        navigationIds={activeItems.map((item) => item.id)}
+        onNavigate={setPreviewWordPackId}
         onWordPackUpdated={() => {
           void reload();
         }}

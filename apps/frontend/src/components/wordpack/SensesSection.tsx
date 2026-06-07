@@ -3,13 +3,14 @@ import { Sense } from '../../hooks/useWordPack';
 
 interface SensesSectionProps {
   senses: Sense[];
+  sectionId?: string;
 }
 
 /**
  * 語義一覧を責務として切り出したセクション。
  */
-export const SensesSection: React.FC<SensesSectionProps> = ({ senses }) => (
-  <section id="senses" className="wp-section">
+export const SensesSection: React.FC<SensesSectionProps> = ({ senses, sectionId = 'senses' }) => (
+  <section id={sectionId} className="wp-section">
     <h3>語義</h3>
     {senses?.length ? (
       <ol>
