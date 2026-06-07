@@ -281,6 +281,25 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     expect(screen.queryByText('WordPack を読み込み中です。プレビューが準備されるまでお待ちください。')).not.toBeInTheDocument();
   });
 
+  it('links invalid lemma guidance to the input', async () => {
+    setupFetchMocks();
+    renderWithAuth();
+
+    const user = userEvent.setup();
+    const input = await screen.findByLabelText('見出し語');
+
+    await act(async () => {
+      await user.clear(input);
+      await user.type(input, '日本語');
+    });
+
+    const helper = document.getElementById('wordpack-lemma-help');
+    expect(helper).toHaveTextContent('英数字と半角スペース、ハイフン、アポストロフィのみ利用できます');
+    expect(helper).toHaveClass('is-invalid');
+    expect(input).toHaveAttribute('aria-describedby', 'wordpack-lemma-help');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+  });
+
   it('lets keyboard users reveal the self-check card without waiting', async () => {
     setupFetchMocks();
     render(

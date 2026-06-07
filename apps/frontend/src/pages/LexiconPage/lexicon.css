@@ -517,7 +517,10 @@
 }
 
 .wordpack-create-panel__help.is-invalid {
+  grid-column: 2 / -1;
+  min-width: 0;
   color: #ff8b8f;
+  overflow-wrap: anywhere;
 }
 
 .wordpack-create-panel__actions {
