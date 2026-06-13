@@ -44,6 +44,7 @@ def test_firestore_repository_import_paths_and_composition() -> None:
         AppFirestoreRepository,
         FirestoreArticleRepository,
         FirestoreExampleRepository,
+        FirestoreRegenerateJobRepository,
         FirestoreUserRepository,
         FirestoreWordPackRepository,
     )
@@ -53,6 +54,7 @@ def test_firestore_repository_import_paths_and_composition() -> None:
         FirestoreArticleStore,
         FirestoreBaseStore,
         FirestoreExampleStore,
+        FirestoreRegenerateJobStore,
         FirestoreUserStore,
         FirestoreWordPackStore,
     )
@@ -63,18 +65,56 @@ def test_firestore_repository_import_paths_and_composition() -> None:
     assert issubclass(FirestoreExampleStore, FirestoreExampleRepository)
     assert issubclass(FirestoreArticleStore, FirestoreArticleRepository)
     assert issubclass(FirestoreUserStore, FirestoreUserRepository)
+    assert issubclass(FirestoreRegenerateJobStore, FirestoreRegenerateJobRepository)
 
     legacy_store = LegacyAppFirestoreStore(client=FakeFirestoreClient())
     assert isinstance(legacy_store.users, FirestoreUserStore)
     assert isinstance(legacy_store.wordpacks, FirestoreWordPackStore)
     assert isinstance(legacy_store.examples, FirestoreExampleStore)
     assert isinstance(legacy_store.articles, FirestoreArticleStore)
+    assert isinstance(legacy_store.regenerate_jobs, FirestoreRegenerateJobStore)
 
     repository_store = AppFirestoreRepository(client=FakeFirestoreClient())
     assert type(repository_store.users) is FirestoreUserRepository
     assert type(repository_store.wordpacks) is FirestoreWordPackRepository
     assert type(repository_store.examples) is FirestoreExampleRepository
     assert type(repository_store.articles) is FirestoreArticleRepository
+    assert type(repository_store.regenerate_jobs) is FirestoreRegenerateJobRepository
+
+
+def test_firestore_regenerate_job_roundtrip(firestore_store: AppFirestoreStore) -> None:
+    created = firestore_store.create_regenerate_job(
+        job_id="job-1",
+        word_pack_id="wp:demo",
+    )
+
+    assert created["job_id"] == "job-1"
+    assert created["word_pack_id"] == "wp:demo"
+    assert created["status"] == "pending"
+    assert created["error"] is None
+
+    running = firestore_store.update_regenerate_job("job-1", status="running")
+    assert running is not None
+    assert running["status"] == "running"
+
+    succeeded = firestore_store.update_regenerate_job(
+        "job-1",
+        status="succeeded",
+        result_json='{"lemma":"demo"}',
+    )
+    assert succeeded is not None
+    assert succeeded["status"] == "succeeded"
+    assert succeeded["result_json"] == '{"lemma":"demo"}'
+
+    failed = firestore_store.update_regenerate_job("job-1", status="failed", error="timeout")
+    assert failed is not None
+    assert failed["status"] == "failed"
+    assert failed["error"] == "timeout"
+
+    found = firestore_store.get_regenerate_job("job-1")
+    assert found is not None
+    assert found["word_pack_id"] == "wp:demo"
+    assert firestore_store.get_regenerate_job("missing") is None
 
 
 def test_firestore_word_pack_roundtrip(firestore_store: AppFirestoreStore) -> None:

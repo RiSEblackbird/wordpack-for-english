@@ -17,18 +17,52 @@ from backend.models.word import (  # noqa: E402
     Pronunciation,
     WordPack,
 )
+from backend.application.wordpack import regenerate_jobs as regenerate_jobs_module  # noqa: E402
 from backend.routers import word as word_router  # noqa: E402
+from backend.routers.word import regeneration_routes as regeneration_routes_module  # noqa: E402
 
 
 class _FakeStore:
     def __init__(self) -> None:
         self.data: dict[str, tuple[str, str, str | None, str | None]] = {}
+        self.jobs: dict[str, dict[str, str | None]] = {}
 
     def get_word_pack(self, word_pack_id: str):
         return self.data.get(word_pack_id)
 
     def save_word_pack(self, word_pack_id: str, lemma: str, data_json: str):
         self.data[word_pack_id] = (lemma, data_json, None, None)
+
+    def create_regenerate_job(self, *, job_id: str, word_pack_id: str, status: str = "pending"):
+        self.jobs[job_id] = {
+            "job_id": job_id,
+            "word_pack_id": word_pack_id,
+            "status": status,
+            "error": None,
+        }
+        return self.jobs[job_id]
+
+    def update_regenerate_job(
+        self,
+        job_id: str,
+        *,
+        status: str,
+        error: str | None = None,
+        result_json: str | None = None,
+    ):
+        job = self.jobs.get(job_id)
+        if not job:
+            return None
+        job["status"] = status
+        if error is not None:
+            job["error"] = error
+        if result_json is not None:
+            job["result_json"] = result_json
+        return job
+
+    def get_regenerate_job(self, job_id: str):
+        job = self.jobs.get(job_id)
+        return dict(job) if job else None
 
 
 def _dummy_word_pack(lemma: str = "idempotency") -> WordPack:
@@ -67,8 +101,17 @@ def patch_store_and_flow(monkeypatch: pytest.MonkeyPatch, fake_store: _FakeStore
 
     monkeypatch.setattr(word_router, "store", fake_store)
     monkeypatch.setattr(word_router, "run_wordpack_flow", _fake_run_flow)
+    monkeypatch.setattr(regeneration_routes_module, "get_store", lambda: fake_store)
+    monkeypatch.setattr(
+        regeneration_routes_module, "get_run_wordpack_flow", lambda: _fake_run_flow
+    )
+    monkeypatch.setattr(regenerate_jobs_module, "store", fake_store)
+    monkeypatch.setattr(regenerate_jobs_module, "run_wordpack_flow", _fake_run_flow)
     # Clear job registry between tests
     monkeypatch.setattr(word_router, "_regenerate_jobs", {})
+    monkeypatch.setattr(
+        regenerate_jobs_module, "_regenerate_jobs", word_router._regenerate_jobs
+    )
     yield
 
 
@@ -95,8 +138,33 @@ def test_regenerate_async_happy_path():
     assert result["lemma"] == "idempotency"
 
 
+def test_regenerate_async_status_survives_memory_registry_reset():
+    client = TestClient(app)
+    resp = client.post("/api/word/packs/wp:demo/regenerate/async", json={"regenerate_scope": "all"})
+    assert resp.status_code == 202
+    job_id = resp.json()["job_id"]
+
+    # Cloud Run の revision / instance 切替時はプロセスメモリの registry が空になる。
+    # Firestore 側の job record から status と保存済み結果を復元できることを固定する。
+    word_router._regenerate_jobs.clear()
+
+    status = None
+    result = None
+    for _ in range(10):
+        poll = client.get(f"/api/word/packs/wp:demo/regenerate/jobs/{job_id}")
+        assert poll.status_code == 200
+        body = poll.json()
+        status = body["status"]
+        result = body.get("result")
+        if status == "succeeded":
+            break
+        time.sleep(0.01)
+    assert status == "succeeded"
+    assert result
+    assert result["lemma"] == "idempotency"
+
+
 def test_regenerate_async_job_not_found():
     client = TestClient(app)
     resp = client.get("/api/word/packs/wp:demo/regenerate/jobs/not-found")
     assert resp.status_code == 404
-

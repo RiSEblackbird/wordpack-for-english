@@ -13,12 +13,13 @@ export interface NotificationItem {
   category?: string; // 任意: 選択カテゴリ（表示用）
   wordPackId?: string | null; // 任意: 完了カードからWordPackプレビューを開くためのID
   lemma?: string | null; // 任意: IDがない古い通知や生成直後のlookup用
+  jobId?: string | null; // 任意: 非同期再生成ジョブの状態確認用
 }
 
 interface NotificationsContextValue {
   notifications: NotificationItem[];
-  add: (input: { title: string; message?: string; status?: NotificationStatus; id?: string; model?: string; category?: string; wordPackId?: string | null; lemma?: string | null }) => string;
-  update: (id: string, patch: Partial<Pick<NotificationItem, 'title' | 'message' | 'status' | 'model' | 'category' | 'wordPackId' | 'lemma'>>) => void;
+  add: (input: { title: string; message?: string; status?: NotificationStatus; id?: string; model?: string; category?: string; wordPackId?: string | null; lemma?: string | null; jobId?: string | null }) => string;
+  update: (id: string, patch: Partial<Pick<NotificationItem, 'title' | 'message' | 'status' | 'model' | 'category' | 'wordPackId' | 'lemma' | 'jobId'>>) => void;
   remove: (id: string) => void;
   clearAll: () => void;
 }
@@ -69,6 +70,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode } & { p
       category: input.category,
       wordPackId: input.wordPackId,
       lemma: input.lemma,
+      jobId: input.jobId,
     };
     setNotifications((prev) => {
       const next = [...prev, item];
@@ -97,4 +99,3 @@ export function useNotifications(): NotificationsContextValue {
   if (!ctx) throw new Error('useNotifications must be used within NotificationsProvider');
   return ctx;
 }
-

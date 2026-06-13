@@ -40,8 +40,8 @@ export interface RegenerateSettings {
 }
 
 export interface NotificationsAdapter {
-  add: (input: { title: string; message?: string; status?: 'progress' | 'success' | 'error'; id?: string; model?: string; category?: string; wordPackId?: string | null; lemma?: string | null }) => string;
-  update: (id: string, patch: { title?: string; message?: string; status?: 'progress' | 'success' | 'error'; model?: string; category?: string; wordPackId?: string | null; lemma?: string | null }) => void;
+  add: (input: { title: string; message?: string; status?: 'progress' | 'success' | 'error'; id?: string; model?: string; category?: string; wordPackId?: string | null; lemma?: string | null; jobId?: string | null }) => string;
+  update: (id: string, patch: { title?: string; message?: string; status?: 'progress' | 'success' | 'error'; model?: string; category?: string; wordPackId?: string | null; lemma?: string | null; jobId?: string | null }) => void;
 }
 
 export interface RegenerateWordPackMessages {
@@ -85,6 +85,8 @@ export async function regenerateWordPackRequest(params: {
       abortSignal,
     });
 
+    notify.update(notifId, { jobId: job.job_id, model: model || undefined, wordPackId, lemma });
+
     let latest = job;
     const startedAt = Date.now();
     // 目的: Hosting/CDN 経由でも完了まで「待てる」ようにする。
@@ -107,11 +109,11 @@ export async function regenerateWordPackRequest(params: {
 
     if (latest.status !== 'succeeded') {
       const errMsg = latest.error || messages?.failure || '処理に失敗しました';
-      notify.update(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: errMsg, model: model || undefined, wordPackId, lemma });
+      notify.update(notifId, { title: `【${lemma}】の生成失敗`, status: 'error', message: errMsg, model: model || undefined, wordPackId, lemma, jobId: job.job_id });
       throw new ApiError(errMsg, 502);
     }
 
-    notify.update(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: messages?.success || '処理が完了しました', model: model || undefined, wordPackId, lemma });
+    notify.update(notifId, { title: `【${lemma}】の生成完了！`, status: 'success', message: messages?.success || '処理が完了しました', model: model || undefined, wordPackId, lemma, jobId: job.job_id });
     dispatchAppEvent(APP_EVENTS.wordPackUpdated);
   } catch (e) {
     const m = messages?.failure || (e instanceof ApiError ? e.message : '処理に失敗しました');

@@ -12,6 +12,13 @@ interface LemmaLookupResponse {
   sense_title?: string | null;
 }
 
+interface RegenerateJobResponse {
+  job_id: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  result?: { lemma?: string | null } | null;
+  error?: string | null;
+}
+
 interface QueuePreviewMeta {
   id: string;
   lemma: string;
@@ -44,6 +51,7 @@ const buildLiveMessage = (item: NotificationItem): string => {
 };
 
 const bracketLemmaPattern = /【(.+?)】/;
+const STALE_PROGRESS_RECONCILE_MS = 20 * 60 * 1000;
 
 const resolvePreviewLemma = (item: NotificationItem): string => {
   const storedLemma = item.lemma?.trim();
@@ -152,7 +160,7 @@ const QueueItem: React.FC<{
 };
 
 export const GenerationQueuePanel: React.FC = () => {
-  const { notifications, clearAll, remove } = useNotifications();
+  const { notifications, clearAll, remove, update } = useNotifications();
   const settingsContext = useOptionalSettings();
   const apiBase = settingsContext?.settings.apiBase ?? '/api';
   const requestTimeoutMs = settingsContext?.settings.requestTimeoutMs ?? 360000;
@@ -166,6 +174,7 @@ export const GenerationQueuePanel: React.FC = () => {
   const [resolvingPreviewItemId, setResolvingPreviewItemId] = useState<string | null>(null);
   const lastAnnouncementKeyRef = useRef<string>(buildUpdateKey(findLatestNotification(notifications)));
   const updateTimersRef = useRef<Record<string, number>>({});
+  const reconciliationRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -186,6 +195,68 @@ export const GenerationQueuePanel: React.FC = () => {
       .slice(0, 3);
     return { progressItems: progress, doneItems: done };
   }, [notifications]);
+
+  useEffect(() => {
+    progressItems.forEach((item) => {
+      if (reconciliationRef.current.has(item.id)) return;
+      if (nowMs - item.updatedAt < STALE_PROGRESS_RECONCILE_MS) return;
+      const lemma = resolvePreviewLemma(item) || extractLemma(item.title);
+      const wordPackId = item.wordPackId?.trim() || '';
+      reconciliationRef.current.add(item.id);
+
+      const reconcile = async () => {
+        if (!wordPackId || !item.jobId) {
+          update(item.id, {
+            title: `【${lemma || 'WordPack'}】の生成状態を確認できません`,
+            status: 'error',
+            message: 'ジョブIDが保存されていないため、完了状態を確認できません。保存済みWordPackを一覧で確認するか、必要ならもう一度生成してください。',
+            wordPackId: item.wordPackId,
+            lemma,
+          });
+          return;
+        }
+        try {
+          const job = await fetchJson<RegenerateJobResponse>(
+            `${apiBase}/word/packs/${wordPackId}/regenerate/jobs/${item.jobId}`,
+            { timeoutMs: requestTimeoutMs },
+          );
+          if (job.status === 'succeeded' && job.result) {
+            const resolvedLemma = job.result.lemma?.trim() || lemma;
+            update(item.id, {
+              title: `【${resolvedLemma || 'WordPack'}】の生成完了！`,
+              status: 'success',
+              message: '保存済みWordPackを確認しました',
+              wordPackId,
+              lemma: resolvedLemma || lemma,
+              jobId: item.jobId,
+            });
+            return;
+          }
+          const message = job.status === 'failed'
+            ? (job.error || '再生成ジョブが失敗しました。必要ならもう一度生成してください。')
+            : '再生成が長時間完了していません。保存済みWordPackを一覧で確認するか、時間をおいて再試行してください。';
+          update(item.id, {
+            title: `【${lemma || 'WordPack'}】の生成状態を確認できません`,
+            status: 'error',
+            message,
+            wordPackId,
+            lemma,
+            jobId: item.jobId,
+          });
+        } catch {
+          update(item.id, {
+            title: `【${lemma || 'WordPack'}】の生成状態を確認できません`,
+            status: 'error',
+            message: '再生成ジョブの状態を確認できませんでした。保存済みWordPackを一覧で確認するか、必要ならもう一度生成してください。',
+            wordPackId: item.wordPackId,
+            lemma,
+            jobId: item.jobId,
+          });
+        }
+      };
+      void reconcile();
+    });
+  }, [apiBase, nowMs, progressItems, requestTimeoutMs, update]);
 
   useEffect(() => {
     const latest = findLatestNotification(notifications);
