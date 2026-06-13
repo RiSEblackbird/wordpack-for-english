@@ -330,8 +330,9 @@ export const useWordPack = ({
       const ctrl = new AbortController();
       setLoading(true);
       setMessage(null);
+      let notifId: string | null = null;
       try {
-        const notifId = addNotification({
+        notifId = addNotification({
           title: `【${lemma}】の再生成ジョブ開始`,
           message: 'バックグラウンドで再生成しています（完了までしばらくお待ちください）',
           status: 'progress',
@@ -408,6 +409,16 @@ export const useWordPack = ({
           text = '再生成がタイムアウトしました（サーバ側で処理継続の可能性）。時間をおいて再試行してください。';
         }
         if (mountedRef.current) setMessage({ kind: 'alert', text });
+        if (notifId) {
+          updateNotification(notifId, {
+            title: `【${lemma}】の再生成状態を確認できません`,
+            status: 'error',
+            message: `${text}。保存済みWordPackを確認するか、時間をおいて再試行してください。`,
+            model: model || undefined,
+            wordPackId,
+            lemma,
+          });
+        }
       } finally {
         if (mountedRef.current) {
           setLoading(false);

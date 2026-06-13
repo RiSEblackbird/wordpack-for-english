@@ -3,6 +3,7 @@ from __future__ import annotations
 from .base import Any, Iterable, Mapping, Sequence, datetime, firestore
 from .articles import FirestoreArticleRepository
 from .examples import FirestoreExampleRepository
+from .regenerate_jobs import FirestoreRegenerateJobRepository, RegenerateJobStatus
 from .users import FirestoreUserRepository
 from .wordpacks import FirestoreWordPackRepository
 
@@ -14,6 +15,7 @@ class AppFirestoreRepository:
     wordpack_repository_cls = FirestoreWordPackRepository
     example_repository_cls = FirestoreExampleRepository
     article_repository_cls = FirestoreArticleRepository
+    regenerate_job_repository_cls = FirestoreRegenerateJobRepository
 
     def __init__(self, *, client: firestore.Client | None = None) -> None:
         self._client = client or firestore.Client()
@@ -21,6 +23,7 @@ class AppFirestoreRepository:
         self.wordpacks = self.wordpack_repository_cls(self._client)
         self.examples = self.example_repository_cls(self._client, self.wordpacks)
         self.articles = self.article_repository_cls(self._client)
+        self.regenerate_jobs = self.regenerate_job_repository_cls(self._client)
 
     # --- Users ---
     def record_user_login(
@@ -120,6 +123,36 @@ class AppFirestoreRepository:
             category_counts=category_counts,
             guest_public=guest_public,
         )
+
+    # --- Regenerate jobs ---
+    def create_regenerate_job(
+        self,
+        *,
+        job_id: str,
+        word_pack_id: str,
+        status: RegenerateJobStatus = "pending",
+    ) -> Mapping[str, Any]:
+        return self.regenerate_jobs.create_regenerate_job(
+            job_id=job_id,
+            word_pack_id=word_pack_id,
+            status=status,
+        )
+
+    def update_regenerate_job(
+        self,
+        job_id: str,
+        *,
+        status: RegenerateJobStatus,
+        error: str | None = None,
+    ) -> Mapping[str, Any] | None:
+        return self.regenerate_jobs.update_regenerate_job(
+            job_id,
+            status=status,
+            error=error,
+        )
+
+    def get_regenerate_job(self, job_id: str) -> Mapping[str, Any] | None:
+        return self.regenerate_jobs.get_regenerate_job(job_id)
 
     # --- Examples ---
     def update_example_study_progress(

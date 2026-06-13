@@ -44,6 +44,7 @@ const buildLiveMessage = (item: NotificationItem): string => {
 };
 
 const bracketLemmaPattern = /【(.+?)】/;
+const STALE_PROGRESS_RECONCILE_MS = 20 * 60 * 1000;
 
 const resolvePreviewLemma = (item: NotificationItem): string => {
   const storedLemma = item.lemma?.trim();
@@ -152,7 +153,7 @@ const QueueItem: React.FC<{
 };
 
 export const GenerationQueuePanel: React.FC = () => {
-  const { notifications, clearAll, remove } = useNotifications();
+  const { notifications, clearAll, remove, update } = useNotifications();
   const settingsContext = useOptionalSettings();
   const apiBase = settingsContext?.settings.apiBase ?? '/api';
   const requestTimeoutMs = settingsContext?.settings.requestTimeoutMs ?? 360000;
@@ -166,6 +167,7 @@ export const GenerationQueuePanel: React.FC = () => {
   const [resolvingPreviewItemId, setResolvingPreviewItemId] = useState<string | null>(null);
   const lastAnnouncementKeyRef = useRef<string>(buildUpdateKey(findLatestNotification(notifications)));
   const updateTimersRef = useRef<Record<string, number>>({});
+  const reconciliationRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
@@ -186,6 +188,63 @@ export const GenerationQueuePanel: React.FC = () => {
       .slice(0, 3);
     return { progressItems: progress, doneItems: done };
   }, [notifications]);
+
+  useEffect(() => {
+    progressItems.forEach((item) => {
+      if (reconciliationRef.current.has(item.id)) return;
+      if (nowMs - item.updatedAt < STALE_PROGRESS_RECONCILE_MS) return;
+      const lemma = resolvePreviewLemma(item) || extractLemma(item.title);
+      if (!item.wordPackId && !lemma) return;
+      reconciliationRef.current.add(item.id);
+
+      const reconcile = async () => {
+        try {
+          let wordPackId = item.wordPackId?.trim() || '';
+          let resolvedLemma = lemma;
+          if (!wordPackId) {
+            const lookup = await fetchJson<LemmaLookupResponse>(
+              `${apiBase}/word/lemma/${encodeURIComponent(lemma)}`,
+              { timeoutMs: requestTimeoutMs },
+            );
+            if (!lookup.found || !lookup.id) {
+              update(item.id, {
+                title: `【${lemma}】の生成状態を確認できません`,
+                status: 'error',
+                message: '保存済みWordPackが見つかりません。必要ならもう一度生成してください。',
+                wordPackId: null,
+                lemma,
+              });
+              return;
+            }
+            wordPackId = lookup.id;
+            resolvedLemma = lookup.lemma?.trim() || lemma;
+          } else {
+            const saved = await fetchJson<{ lemma?: string | null }>(
+              `${apiBase}/word/packs/${wordPackId}`,
+              { timeoutMs: requestTimeoutMs },
+            );
+            resolvedLemma = saved.lemma?.trim() || resolvedLemma;
+          }
+          update(item.id, {
+            title: `【${resolvedLemma || 'WordPack'}】の生成完了！`,
+            status: 'success',
+            message: '保存済みWordPackを確認しました',
+            wordPackId,
+            lemma: resolvedLemma || lemma,
+          });
+        } catch {
+          update(item.id, {
+            title: `【${lemma || 'WordPack'}】の生成状態を確認できません`,
+            status: 'error',
+            message: '保存済みWordPackを確認できませんでした。必要なら一覧を更新するか、もう一度生成してください。',
+            wordPackId: item.wordPackId,
+            lemma,
+          });
+        }
+      };
+      void reconcile();
+    });
+  }, [apiBase, nowMs, progressItems, requestTimeoutMs, update]);
 
   useEffect(() => {
     const latest = findLatestNotification(notifications);

@@ -186,4 +186,31 @@ describe('GenerationQueuePanel', () => {
       expect(requestedUrls.some((url) => url.endsWith('/api/word/packs/wp:alpha'))).toBe(true);
     });
   });
+
+  it('古い進行中カードは保存済みWordPackを確認して完了へ補正する', async () => {
+    const staleAt = Date.now() - 21 * 60 * 1000;
+    localStorage.setItem(
+      'wpfe.notifications.v1',
+      JSON.stringify([
+        {
+          id: 'n-stale-alpha',
+          title: '【alpha】の再生成ジョブ開始',
+          message: 'バックグラウンドで再生成しています（完了までしばらくお待ちください）',
+          status: 'progress',
+          createdAt: staleAt,
+          updatedAt: staleAt,
+          model: 'gpt-5.4-mini',
+          wordPackId: 'wp:alpha',
+          lemma: 'alpha',
+        },
+      ]),
+    );
+    renderQueue();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'alpha の生成結果プレビューを開く' })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'キューから隠す' })).not.toBeInTheDocument();
+    expect(requestedUrls.some((url) => url.endsWith('/api/word/packs/wp:alpha'))).toBe(true);
+  });
 });
