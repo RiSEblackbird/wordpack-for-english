@@ -14,10 +14,10 @@
 
 ## 観測した事実
 
-GCP Cloud Run logs で、次の流れを確認した。
+GCP Cloud Run logs で、次の流れを確認した。公開文書では、ログ原文、job ID、request ID、trace ID、完全なrevision名、秒単位の時刻は残さない。
 
-1. `2026-06-08 01:56:52 JST` に非同期再生成の enqueue が `202 Accepted` を返した。
-2. `2026-06-08 01:57:09 JST` に Cloud Run revision が `wordpack-backend-00085-8zt` へ切り替わった後、同じ再生成ジョブの status GET が `404 Not Found` になった。
+1. 2026-06-08 JST の時間帯に、非同期再生成の enqueue が `202 Accepted` を返した。
+2. その後 Cloud Run revision / instance が切り替わり、同じ再生成ジョブの status GET が `404 Not Found` になった。
 3. 同じ WordPack の通常 GET は後日 `200 OK` で返った。
 
 このため、生成結果そのものの消失ではなく、非同期再生成ジョブ状態をプロセスメモリだけで保持していたことが主な問題だった。
@@ -43,9 +43,9 @@ PR #449 で次を実装した。
 同種の問題を疑う場合は、秘密情報やユーザー入力全文を記録せず、次の順で確認する。
 
 1. Cloud Run logs で対象時間帯の `POST /regenerate/async` または `/packs/{word_pack_id}/regenerate/async` の `202` を探す。
-2. 同じ `job_id` に紐づく status GET の `404` を探す。
-3. status GET の `revision_name` / service revision と、enqueue 時点の revision が違うか確認する。
-4. 同じ `word_pack_id` の通常 GET が `200` で返るか確認し、生成結果の消失か job status の消失かを切り分ける。
+2. 同じ `job_id` に紐づく status GET の `404` を探す。ただし、公開文書には実際の `job_id` を残さない。
+3. status GET の service revision と enqueue 時点の revision が違うか確認する。ただし、公開文書には完全な revision 名を残さない。
+4. 同じ `word_pack_id` の通常 GET が `200` で返るか確認し、生成結果の消失か job status の消失かを切り分ける。ただし、公開文書には実際の `word_pack_id` を残さない。
 5. Firestore `regenerate_jobs/{job_id}` の存在、`status`, `result_json`, `error`, `updated_at` を確認する。
 6. フロントエンド通知に `jobId` が保存されているか確認する。
 
