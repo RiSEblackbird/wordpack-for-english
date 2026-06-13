@@ -1,42 +1,29 @@
-# Bug
+---
+name: Problem report
+about: Track unexpected behavior
+---
 
-## 現象
+# Problem report
 
-## 期待される挙動
+## What happened
 
-## 再現手順
+## Expected behavior
 
-- 手順:
-- 結果:
+## Steps
 
-## 発生環境
+- Step:
+- Result:
 
-- 画面 / API:
-- ブラウザ / OS:
-- backend / frontend / production / local / CI:
-- 関連データ条件:
+## Scope
 
-## 影響範囲
+- User impact:
+- Data impact:
 
-- ユーザー影響:
-- データ影響:
-- セキュリティ影響:
-- 本番ログ確認の要否:
+## Acceptance criteria
 
-## 仮説・調査方針
+- [ ] Cause or reproduction condition is documented
+- [ ] Expected behavior is verified
 
-## 受け入れ条件
+## Verification
 
-- [ ] 原因または再現条件が説明されている
-- [ ] 修正後の期待挙動が確認されている
-- [ ] 必要に応じて回帰テストが追加されている、または追加しない理由が書かれている
-
-## 検証方針
-
-## 非対象
-
-- N/A
-
-## 完了時に残す証跡
-
-## リスク
+## Risks
