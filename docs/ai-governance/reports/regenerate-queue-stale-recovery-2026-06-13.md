@@ -112,7 +112,7 @@
 ## 12. 証跡
 
 - スクリーンショット: 未取得。DOM構造・状態遷移の自動テストで代替
-- トレース: GCP Cloud Run logsで `2026-06-08 01:56:52 JST` の async 202 後、revision `00085-8zt` の job status GET が 404 になったことを確認
+- トレース: GCP Cloud Run logsで、2026-06-08 JST の時間帯に async 202 後、revision / instance 切替を挟んだ job status GET が404になったことを確認。ログ原文、job ID、request ID、trace ID、完全なrevision名、秒単位時刻は公開文書に残さない
 - テスト結果: `GenerationQueuePanel.test.tsx` で21分経過した進行中カードが job status 成功確認後に完了カードへ変わること、jobId がない古いカードを完了扱いしないことを確認
 - 手動確認: Playwright smoke 6件通過
 - 取得できなかった証跡と理由: 本番画面の直接操作は行っていない。変更はローカルコードで検証し、CI/PR後に本番反映される
