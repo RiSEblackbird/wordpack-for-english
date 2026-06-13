@@ -1,10 +1,31 @@
-## Summary
-- [ ] Feature / Fix description
+## Issue
+- Issue: <!-- Closes #123 / Fixes #123 / Resolves #123 / Refs #123 / Part of #123 / Related to #123 / Issue: N/A - 理由 -->
+- 対応範囲: <!-- この PR で Issue のどこまでを対応したか -->
+- 対応していないこと: <!-- 後続 Issue / 別 PR / 非対象。なければ N/A -->
 
-## Checklist
-- [ ] Docs: updated (README.md / UserManual.md / Cloud Run deploy script usage)
-- [ ] Tests: added or updated
-- [ ] UI/UX evidence added or marked N/A
+## 変更内容
+- <!-- 何を変更したか -->
 
-## Testing
-Describe the commands you executed and their results.
+## 保持した既存挙動
+- <!-- 既存互換、変更していない仕様、維持した API / UI / データ契約 -->
+
+## 完了条件との差分
+- <!-- Issue の受け入れ条件に対して満たしたこと / 残したこと。差分がなければ N/A -->
+
+## 検証結果
+- <!-- 実行したコマンド、CI、目視確認、ログ確認など。結果も書く -->
+
+## 未実行項目
+- <!-- 未実行の検証と理由。なければ N/A -->
+
+## 証跡
+- UI/UX 証跡: <!-- screenshot / state matrix / novice simulation / N/A -->
+- 本番ログ・実データ確認: <!-- 実施有無。未確認なら推定であることを書く -->
+- セキュリティ確認: <!-- 機密情報、個人情報、権限、公開文書安全性。関係なければ N/A -->
+
+## Codex review / review threads
+- Codex review: <!-- 確認結果。未実施なら理由 -->
+- 未解決 review thread: <!-- なし / あり。ありなら内容と対応方針 -->
+
+## 残るリスク
+- <!-- 既知のリスク、後続対応、運用上の注意。なければ N/A -->
