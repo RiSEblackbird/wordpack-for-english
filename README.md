@@ -99,13 +99,13 @@ npm install -g firebase-tools
 
 ## ブランチ運用（開発/本番）
 
-- **デフォルトブランチ**: `develop`（ローカル開発・日常的な変更はここへ集約）
-- **本番デプロイ用ブランチ**: `main`（GCP/Cloud Run へのリリースは `main` のみ）
+- **デフォルトブランチ**: `main`（日常的な変更の取り込み先。GCP/Cloud Run への本番リリースも `main` への反映を起点にします）
+- **開発用ブランチ**: 必要に応じて `feature/**` などの作業ブランチを作成し、Pull Request で `main` へ集約します
 
 GitHub Actions の挙動は次の方針に合わせています。
 
-- **CI**: `develop`（および `main`）への push、`develop`/`main` 向け pull_request で実行します。
-- **GCP を触り得る dry-run（Cloud Run リリース検証）**: `main` 向け pull_request と `main` への push のみで実行します（`develop` では実行しません）。
+- **CI**: `main` / `develop` / `feature/**` への push、`main` / `develop` 向け pull_request で実行します。
+- **GCP を触り得る dry-run（Cloud Run リリース検証）**: `main` 向け pull_request と `main` への push のみで実行します。
 
 ### Google OAuth クライアントの準備
 1. [Google Cloud Console](https://console.cloud.google.com/) にアクセスし、対象プロジェクトを作成または選択します。
