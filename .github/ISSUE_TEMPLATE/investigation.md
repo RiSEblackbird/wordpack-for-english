@@ -1,3 +1,8 @@
+---
+name: Investigation
+about: 調査依頼、設計調査、技術選定、CI調査、後続作業の切り分け
+---
+
 # Investigation
 
 ## 調査テーマ
