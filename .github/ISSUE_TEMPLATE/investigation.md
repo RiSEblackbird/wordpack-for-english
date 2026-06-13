@@ -1,47 +1,42 @@
----
-name: Investigation
-about: 調査依頼、設計調査、技術選定、CI調査、後続作業の切り分け
----
-
 # Investigation
 
-## 調査テーマ
+## Topic
 
-## 背景
+## Background
 
-## 決めたいこと
+## Questions to answer
 
-- [ ] 
-- [ ] 
+- [ ]
+- [ ]
 
-## 非対象
+## Out of scope
 
 - N/A
 
-## 調査観点
+## Review points
 
-- コード:
-- ドキュメント:
+- Code:
+- Docs:
 - CI / workflow:
-- 外部仕様:
+- External specs:
 - UI/UX:
-- セキュリティ:
+- Security:
 
-## 調査対象
+## Targets
 
-- 関連ファイル:
-- 関連画面:
-- 関連 Issue / PR:
-- 関連ログ / メトリクス:
+- Related files:
+- Related screens:
+- Related Issue / PR:
+- Related logs / metrics:
 
-## 受け入れ条件
+## Acceptance criteria
 
-- [ ] 調査結果が Issue コメントまたは PR 本文に整理されている
-- [ ] 実装が必要な場合、後続 Issue またはこの Issue の受け入れ条件が更新されている
-- [ ] 未確認範囲と次の最短アクションが明記されている
+- [ ] Findings are documented in the Issue comment or PR body
+- [ ] Follow-up implementation work is tracked when needed
+- [ ] Unknowns and next action are documented
 
-## 後続作業の扱い
+## Follow-up work
 
-## 完了時に残す証跡
+## Evidence to keep
 
-## リスク
+## Risks
