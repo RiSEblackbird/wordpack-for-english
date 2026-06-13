@@ -144,11 +144,13 @@ class AppFirestoreRepository:
         *,
         status: RegenerateJobStatus,
         error: str | None = None,
+        result_json: str | None = None,
     ) -> Mapping[str, Any] | None:
         return self.regenerate_jobs.update_regenerate_job(
             job_id,
             status=status,
             error=error,
+            result_json=result_json,
         )
 
     def get_regenerate_job(self, job_id: str) -> Mapping[str, Any] | None:

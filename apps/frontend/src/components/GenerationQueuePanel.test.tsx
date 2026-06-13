@@ -58,6 +58,16 @@ const setupFetchMocks = () => {
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    if (url.endsWith('/api/word/packs/wp:alpha/regenerate/jobs/job-alpha')) {
+      return new Response(JSON.stringify({
+        job_id: 'job-alpha',
+        status: 'succeeded',
+        result: wordPackResponse,
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
     if (url.endsWith('/api/word/lemma/alpha')) {
       return new Response(JSON.stringify({ found: true, id: 'wp:alpha', lemma: 'alpha', sense_title: 'alpha概説' }), {
         status: 200,
@@ -202,6 +212,7 @@ describe('GenerationQueuePanel', () => {
           model: 'gpt-5.4-mini',
           wordPackId: 'wp:alpha',
           lemma: 'alpha',
+          jobId: 'job-alpha',
         },
       ]),
     );
@@ -211,6 +222,32 @@ describe('GenerationQueuePanel', () => {
       expect(screen.getByRole('button', { name: 'alpha の生成結果プレビューを開く' })).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'キューから隠す' })).not.toBeInTheDocument();
-    expect(requestedUrls.some((url) => url.endsWith('/api/word/packs/wp:alpha'))).toBe(true);
+    expect(requestedUrls.some((url) => url.endsWith('/api/word/packs/wp:alpha/regenerate/jobs/job-alpha'))).toBe(true);
+  });
+
+  it('ジョブIDがない古い進行中カードは完了扱いしない', async () => {
+    const staleAt = Date.now() - 21 * 60 * 1000;
+    localStorage.setItem(
+      'wpfe.notifications.v1',
+      JSON.stringify([
+        {
+          id: 'n-stale-without-job',
+          title: '【alpha】の再生成ジョブ開始',
+          message: 'バックグラウンドで再生成しています（完了までしばらくお待ちください）',
+          status: 'progress',
+          createdAt: staleAt,
+          updatedAt: staleAt,
+          model: 'gpt-5.4-mini',
+          wordPackId: 'wp:alpha',
+          lemma: 'alpha',
+        },
+      ]),
+    );
+    renderQueue();
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/ジョブIDが保存されていないため/).length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByRole('button', { name: 'alpha の生成結果プレビューを開く' })).not.toBeInTheDocument();
   });
 });

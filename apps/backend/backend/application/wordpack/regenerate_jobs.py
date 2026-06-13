@@ -46,6 +46,17 @@ def _job_from_record(
     if status not in {"pending", "running", "succeeded", "failed"}:
         status = "failed"
     error = record.get("error")
+    if result is None and record.get("result_json") is not None:
+        try:
+            result = WordPack.model_validate_json(str(record.get("result_json")))
+        except Exception as exc:  # pragma: no cover - defensive logging for corrupt data
+            logger.error(
+                "wordpack_regenerate_result_parse_failed",
+                word_pack_id=str(record.get("word_pack_id") or ""),
+                job_id=str(record.get("job_id") or ""),
+                error_type=exc.__class__.__name__,
+                error_message=str(exc)[:200],
+            )
     return RegenerateJob(
         job_id=str(record.get("job_id") or ""),
         word_pack_id=str(record.get("word_pack_id") or ""),
@@ -53,23 +64,6 @@ def _job_from_record(
         result=result,
         error=str(error) if error is not None else None,
     )
-
-
-def _load_saved_word_pack_result(word_pack_id: str) -> WordPack | None:
-    result = store.get_word_pack(word_pack_id)
-    if result is None:
-        return None
-    _, data_json, _, _ = result
-    try:
-        return WordPack.model_validate_json(data_json)
-    except Exception as exc:  # pragma: no cover - defensive logging for corrupt data
-        logger.error(
-            "wordpack_regenerate_result_parse_failed",
-            word_pack_id=word_pack_id,
-            error_type=exc.__class__.__name__,
-            error_message=str(exc)[:200],
-        )
-        return None
 
 
 def _create_job_record(job_id: str, word_pack_id: str) -> RegenerateJob:
@@ -90,9 +84,15 @@ def _update_job_record(
     *,
     status: Literal["pending", "running", "succeeded", "failed"],
     error: str | None = None,
+    result: WordPack | None = None,
 ) -> RegenerateJob | None:
     if _store_supports_persistent_jobs():
-        record = store.update_regenerate_job(job_id, status=status, error=error)
+        record = store.update_regenerate_job(
+            job_id,
+            status=status,
+            error=error,
+            result_json=result.model_dump_json() if result is not None else None,
+        )
         if record is None:
             return None
         return _job_from_record(record)
@@ -102,6 +102,8 @@ def _update_job_record(
     job.status = status
     if error is not None:
         job.error = error
+    if result is not None:
+        job.result = result
     _regenerate_jobs[job_id] = job
     return job
 
@@ -111,13 +113,7 @@ def _get_job_record(job_id: str) -> RegenerateJob | None:
         record = store.get_regenerate_job(job_id)
         if record is None:
             return None
-        base_job = _job_from_record(record)
-        result = (
-            _load_saved_word_pack_result(base_job.word_pack_id)
-            if base_job.status == "succeeded"
-            else None
-        )
-        return base_job.model_copy(update={"result": result})
+        return _job_from_record(record)
     return _regenerate_jobs.get(job_id)
 
 
@@ -172,7 +168,7 @@ async def run_regenerate_job(
         )
         store.save_word_pack(word_pack_id, lemma, word_pack.model_dump_json())
         async with _regenerate_lock:
-            _update_job_record(job_id, status="succeeded")
+            _update_job_record(job_id, status="succeeded", result=word_pack)
         logger.info(
             "wordpack_regenerate_async_succeeded",
             word_pack_id=word_pack_id,

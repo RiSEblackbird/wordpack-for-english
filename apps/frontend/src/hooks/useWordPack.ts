@@ -355,6 +355,12 @@ export const useWordPack = ({
           lemma,
           abortSignal: ctrl.signal,
         });
+        updateNotification(notifId, {
+          jobId: job.job_id,
+          model: model || undefined,
+          wordPackId,
+          lemma,
+        });
 
         // requestTimeoutMs が短くても（例: 60_000）再生成は数分かかり得るため、
         // ここでは最低 15 分相当までポーリングを継続する。
@@ -388,6 +394,7 @@ export const useWordPack = ({
             model: model || undefined,
             wordPackId,
             lemma,
+            jobId: job.job_id,
           });
           try { onWordPackGenerated?.(wordPackId); } catch {}
         } else {
@@ -400,6 +407,7 @@ export const useWordPack = ({
             model: model || undefined,
             wordPackId,
             lemma,
+            jobId: job.job_id,
           });
         }
       } catch (error) {

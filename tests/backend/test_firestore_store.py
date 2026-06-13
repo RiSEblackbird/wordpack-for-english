@@ -97,6 +97,15 @@ def test_firestore_regenerate_job_roundtrip(firestore_store: AppFirestoreStore) 
     assert running is not None
     assert running["status"] == "running"
 
+    succeeded = firestore_store.update_regenerate_job(
+        "job-1",
+        status="succeeded",
+        result_json='{"lemma":"demo"}',
+    )
+    assert succeeded is not None
+    assert succeeded["status"] == "succeeded"
+    assert succeeded["result_json"] == '{"lemma":"demo"}'
+
     failed = firestore_store.update_regenerate_job("job-1", status="failed", error="timeout")
     assert failed is not None
     assert failed["status"] == "failed"

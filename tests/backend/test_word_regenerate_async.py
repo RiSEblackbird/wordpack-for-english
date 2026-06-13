@@ -42,13 +42,22 @@ class _FakeStore:
         }
         return self.jobs[job_id]
 
-    def update_regenerate_job(self, job_id: str, *, status: str, error: str | None = None):
+    def update_regenerate_job(
+        self,
+        job_id: str,
+        *,
+        status: str,
+        error: str | None = None,
+        result_json: str | None = None,
+    ):
         job = self.jobs.get(job_id)
         if not job:
             return None
         job["status"] = status
         if error is not None:
             job["error"] = error
+        if result_json is not None:
+            job["result_json"] = result_json
         return job
 
     def get_regenerate_job(self, job_id: str):
@@ -159,4 +168,3 @@ def test_regenerate_async_job_not_found():
     client = TestClient(app)
     resp = client.get("/api/word/packs/wp:demo/regenerate/jobs/not-found")
     assert resp.status_code == 404
-

@@ -27,6 +27,7 @@ class FirestoreRegenerateJobRepository(FirestoreBaseRepository):
             "job_id": job_id,
             "word_pack_id": word_pack_id,
             "status": status,
+            "result_json": None,
             "error": None,
             "created_at": now,
             "updated_at": now,
@@ -40,6 +41,7 @@ class FirestoreRegenerateJobRepository(FirestoreBaseRepository):
         *,
         status: RegenerateJobStatus,
         error: str | None = None,
+        result_json: str | None = None,
     ) -> Mapping[str, Any] | None:
         doc_ref = self._jobs.document(job_id)
         snapshot = doc_ref.get()
@@ -53,6 +55,8 @@ class FirestoreRegenerateJobRepository(FirestoreBaseRepository):
             updates["error"] = error or "再生成ジョブが失敗しました"
         elif error is not None:
             updates["error"] = error
+        if result_json is not None:
+            updates["result_json"] = result_json
         doc_ref.update(updates)
         updated = doc_ref.get()
         return updated.to_dict() or None

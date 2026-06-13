@@ -12,6 +12,13 @@ interface LemmaLookupResponse {
   sense_title?: string | null;
 }
 
+interface RegenerateJobResponse {
+  job_id: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  result?: { lemma?: string | null } | null;
+  error?: string | null;
+}
+
 interface QueuePreviewMeta {
   id: string;
   lemma: string;
@@ -194,51 +201,56 @@ export const GenerationQueuePanel: React.FC = () => {
       if (reconciliationRef.current.has(item.id)) return;
       if (nowMs - item.updatedAt < STALE_PROGRESS_RECONCILE_MS) return;
       const lemma = resolvePreviewLemma(item) || extractLemma(item.title);
-      if (!item.wordPackId && !lemma) return;
+      const wordPackId = item.wordPackId?.trim() || '';
       reconciliationRef.current.add(item.id);
 
       const reconcile = async () => {
-        try {
-          let wordPackId = item.wordPackId?.trim() || '';
-          let resolvedLemma = lemma;
-          if (!wordPackId) {
-            const lookup = await fetchJson<LemmaLookupResponse>(
-              `${apiBase}/word/lemma/${encodeURIComponent(lemma)}`,
-              { timeoutMs: requestTimeoutMs },
-            );
-            if (!lookup.found || !lookup.id) {
-              update(item.id, {
-                title: `【${lemma}】の生成状態を確認できません`,
-                status: 'error',
-                message: '保存済みWordPackが見つかりません。必要ならもう一度生成してください。',
-                wordPackId: null,
-                lemma,
-              });
-              return;
-            }
-            wordPackId = lookup.id;
-            resolvedLemma = lookup.lemma?.trim() || lemma;
-          } else {
-            const saved = await fetchJson<{ lemma?: string | null }>(
-              `${apiBase}/word/packs/${wordPackId}`,
-              { timeoutMs: requestTimeoutMs },
-            );
-            resolvedLemma = saved.lemma?.trim() || resolvedLemma;
-          }
+        if (!wordPackId || !item.jobId) {
           update(item.id, {
-            title: `【${resolvedLemma || 'WordPack'}】の生成完了！`,
-            status: 'success',
-            message: '保存済みWordPackを確認しました',
+            title: `【${lemma || 'WordPack'}】の生成状態を確認できません`,
+            status: 'error',
+            message: 'ジョブIDが保存されていないため、完了状態を確認できません。保存済みWordPackを一覧で確認するか、必要ならもう一度生成してください。',
+            wordPackId: item.wordPackId,
+            lemma,
+          });
+          return;
+        }
+        try {
+          const job = await fetchJson<RegenerateJobResponse>(
+            `${apiBase}/word/packs/${wordPackId}/regenerate/jobs/${item.jobId}`,
+            { timeoutMs: requestTimeoutMs },
+          );
+          if (job.status === 'succeeded' && job.result) {
+            const resolvedLemma = job.result.lemma?.trim() || lemma;
+            update(item.id, {
+              title: `【${resolvedLemma || 'WordPack'}】の生成完了！`,
+              status: 'success',
+              message: '保存済みWordPackを確認しました',
+              wordPackId,
+              lemma: resolvedLemma || lemma,
+              jobId: item.jobId,
+            });
+            return;
+          }
+          const message = job.status === 'failed'
+            ? (job.error || '再生成ジョブが失敗しました。必要ならもう一度生成してください。')
+            : '再生成が長時間完了していません。保存済みWordPackを一覧で確認するか、時間をおいて再試行してください。';
+          update(item.id, {
+            title: `【${lemma || 'WordPack'}】の生成状態を確認できません`,
+            status: 'error',
+            message,
             wordPackId,
-            lemma: resolvedLemma || lemma,
+            lemma,
+            jobId: item.jobId,
           });
         } catch {
           update(item.id, {
             title: `【${lemma || 'WordPack'}】の生成状態を確認できません`,
             status: 'error',
-            message: '保存済みWordPackを確認できませんでした。必要なら一覧を更新するか、もう一度生成してください。',
+            message: '再生成ジョブの状態を確認できませんでした。保存済みWordPackを一覧で確認するか、必要ならもう一度生成してください。',
             wordPackId: item.wordPackId,
             lemma,
+            jobId: item.jobId,
           });
         }
       };
