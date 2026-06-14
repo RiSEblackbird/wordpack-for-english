@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useSettings } from '../../../../SettingsContext';
 import { useModal } from '../../../../ModalContext';
 import { useConfirmDialog } from '../../../../ConfirmDialogContext';
@@ -129,6 +129,7 @@ export const WordPackPanel: React.FC<Props> = ({
   const isActionLoading = loading || examplesLoading || progressUpdating;
   const [guestPublicUpdating, setGuestPublicUpdating] = useState(false);
   const [activeSectionKey, setActiveSectionKey] = useState('overview');
+  const detachedGenerationInFlightRef = useRef<Set<string>>(new Set());
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-';
@@ -219,13 +220,23 @@ export const WordPackPanel: React.FC<Props> = ({
       return false;
     }
     const lemmaToGenerate = validation.normalizedLemma;
-    const generated = await generateDetachedWordPack(lemmaToGenerate);
-    if (!generated) return false;
+    const inFlightKey = lemmaToGenerate.toLowerCase();
+    if (detachedGenerationInFlightRef.current.has(inFlightKey)) {
+      setStatusMessage({ kind: 'status', text: `${lemmaToGenerate} のWordPackを生成中です` });
+      return false;
+    }
+    detachedGenerationInFlightRef.current.add(inFlightKey);
     try {
-      invalidateLemmaCache(lemmaToGenerate);
-    } catch {}
-    openGeneratedWordPack(generated.wordPack, generated.wordPackId);
-    return true;
+      const generated = await generateDetachedWordPack(lemmaToGenerate);
+      if (!generated) return false;
+      try {
+        invalidateLemmaCache(lemmaToGenerate);
+      } catch {}
+      openGeneratedWordPack(generated.wordPack, generated.wordPackId);
+      return true;
+    } finally {
+      detachedGenerationInFlightRef.current.delete(inFlightKey);
+    }
   }, [generateDetachedWordPack, invalidateLemmaCache, isGuest, openGeneratedWordPack, setStatusMessage]);
 
   const handleGenerate = useCallback(async () => {

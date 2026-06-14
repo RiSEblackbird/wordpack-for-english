@@ -58,7 +58,10 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     );
   }
 
-  function setupFetchMocks(seedLemmaById: Record<string, string> = {}) {
+  function setupFetchMocks(
+    seedLemmaById: Record<string, string> = {},
+    options: { wordPackPostGate?: Promise<void> } = {},
+  ) {
     const generated = new Set<string>();
     const lemmaById = new Map<string, string>();
     Object.entries(seedLemmaById).forEach(([id, lemma]) => lemmaById.set(id, lemma));
@@ -133,6 +136,9 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
       if (url.endsWith('/api/word/pack') && init?.method === 'POST') {
         const body = init?.body ? JSON.parse(init.body as string) : {};
         const lemma = body.lemma || 'test';
+        if (options.wordPackPostGate) {
+          await options.wordPackPostGate;
+        }
         const id = nextWordPackId();
         generated.add(lemma);
         lemmaById.set(id, lemma);
@@ -645,6 +651,76 @@ describe('WordPackPanel E2E (mocked fetch)', () => {
     ));
     expect(urls.some((url) => url.endsWith('/api/word/pack'))).toBe(true);
     expect(urls.filter((url) => url.includes('/api/word/lemma/Ghosts')).length).toBe(ghostLookupCountBeforeGenerate);
+  });
+
+  it('prevents duplicate detached generation requests while an unknown lemma is in flight', async () => {
+    const sourceId = 'wp:33333333333333333333333333333333';
+    let releaseGeneration: (() => void) | null = null;
+    const wordPackPostGate = new Promise<void>((resolve) => {
+      releaseGeneration = resolve;
+    });
+    const fetchMock = setupFetchMocks({ [sourceId]: 'theta' }, { wordPackPostGate });
+    render(
+      <AppProviders googleClientId="test-client">
+        <WordPackPreviewModal
+          isOpen
+          onClose={vi.fn()}
+          wordPackId={sourceId}
+          wordPacks={[{
+            id: sourceId,
+            lemma: 'theta',
+            sense_title: 'theta概説',
+            created_at: '2026-06-14T00:00:00Z',
+            updated_at: '2026-06-14T00:00:00Z',
+            checked_only_count: 0,
+            learned_count: 0,
+          }]}
+        />
+        <GenerationQueuePanel />
+      </AppProviders>,
+    );
+
+    const user = userEvent.setup();
+    const dialog = await screen.findByRole('dialog', { name: /WordPack プレビュー: theta/ });
+    const ghostToken = await within(dialog).findByText((content, element) => {
+      if (!element) return false;
+      if (!element.matches('span.lemma-token')) return false;
+      return content.trim() === 'Ghosts';
+    });
+
+    await act(async () => {
+      await user.hover(ghostToken);
+    });
+    await waitFor(() => {
+      const tipEl = Array.from(document.querySelectorAll('.lemma-tooltip')).find((el) => el.textContent === '未生成');
+      expect(tipEl).toBeTruthy();
+    });
+
+    const wordPackPostCount = () => fetchMock.mock.calls.filter((call) => {
+      const url = typeof call[0] === 'string' ? call[0] : (call[0] as URL).toString();
+      return url.endsWith('/api/word/pack') && call[1]?.method === 'POST';
+    }).length;
+
+    await act(async () => {
+      await user.click(ghostToken);
+    });
+    await waitFor(() => expect(wordPackPostCount()).toBe(1));
+
+    await act(async () => {
+      await user.click(ghostToken);
+    });
+    expect(wordPackPostCount()).toBe(1);
+
+    await act(async () => {
+      releaseGeneration?.();
+    });
+
+    const queue = await screen.findByRole('region', { name: '生成キュー', hidden: true });
+    await waitFor(() => {
+      expect(within(queue).getAllByText('Ghosts').length).toBeGreaterThan(0);
+      expect(within(queue).getAllByText('完了').length).toBeGreaterThan(0);
+    });
+    expect(wordPackPostCount()).toBe(1);
   });
 
   it('blocks guest unknown lemma generation from example tokens before write requests', async () => {

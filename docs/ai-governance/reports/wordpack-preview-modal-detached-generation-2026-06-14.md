@@ -28,6 +28,7 @@
 | 既存語トークン | 右下のWordPack概要へ通常表示 | トークンを開く | lookup失敗時は既存alert | Pass |
 | 未生成語ホバー | tooltipで未生成状態を表示 | クリックで生成 | 生成不可ならalert | Pass |
 | 未生成語クリック生成中 | 生成キュー進行中、元モーダル内容保持 | 待機 | 元プレビューの文脈を維持 | Pass |
+| 同一未生成語を生成中に再クリック | 生成中status、追加POSTなし | 最初の生成完了を待つ | 重複保存を防ぐ | Pass |
 | 未生成語生成成功 | 生成キュー完了、右下に生成語概要 | 概要を確認 | 元モーダルへ戻って読み続ける | Pass |
 | 未生成語生成失敗 | alertと生成キュー失敗 | 再試行/別語へ移動 | 元モーダル内容保持 | Pass |
 | ゲストモード | 生成前に権限alert | ログインへ進む | 書き込みリクエストなし | Pass |
@@ -71,7 +72,7 @@
 - 判定: Pass
 
 ## 9. Counter-review
-- 反証観点: 元モーダルの `data/currentWordPackId` を生成語で上書きしていないか、生成語概要が保存済みIDを失っていないか、ゲストの書き込み防止が残るか、tooltip lookup後に不要な再lookupが走らないかを確認した。
+- 反証観点: 元モーダルの `data/currentWordPackId` を生成語で上書きしていないか、生成語概要が保存済みIDを失っていないか、ゲストの書き込み防止が残るか、tooltip lookup後に不要な再lookupが走らないか、生成中の同一語クリックで重複POSTしないかを確認した。
 - P0候補: 元プレビュー内容が生成語の例文へ差し替わる場合はP0相当。回帰テストで `theta のCommon例文1` が残り `Ghosts のDev例文1` が混入しないことを固定した。
 - 証跡不足: 本番データでの確認は未実施。今回の変更はフロントエンド状態遷移の修正で、本番ログ調査対象ではない。
 - 残リスク: 実ブラウザでIssue #309の完全同一データを再現したわけではないが、同じコンポーネント構造を使った回帰テストで状態遷移を固定している。
@@ -80,11 +81,12 @@
 | 優先度 | 箇所 | 問題 | 影響 | 修正 | 状態 |
 |---|---|---|---|---|---|
 | P0 | WordPackプレビューモーダル内の未生成語生成 | 生成語が元モーダルの表示対象を上書きする | 読んでいたWordPack文脈を失う | state非破壊の生成関数を追加し、生成結果を右下概要へ開く | 対応済 |
+| P2 | WordPackプレビューモーダル内の未生成語生成 | 生成中に同じ未生成語を再クリックすると重複POSTできる | 同一lemmaのWordPackが複数保存される | normalized lemma単位のin-flight guardを追加 | 対応済 |
 
 ## 11. 検証証跡
-- `cd apps/frontend && npm test -- --silent WordPackPanel.test.tsx`: 12 tests passed
+- `cd apps/frontend && npm test -- --silent WordPackPanel.test.tsx`: 13 tests passed
 - `cd apps/frontend && npx tsc -p tsconfig.json`: passed
-- `cd apps/frontend && npm test -- --coverage --silent`: 160 passed, 1 skipped
+- `cd apps/frontend && npm test -- --coverage --silent`: 161 passed, 1 skipped
 - `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts`: 6 passed
 - `git diff --check`: passed
 
