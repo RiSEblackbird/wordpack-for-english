@@ -1,0 +1,62 @@
+version = 1
+name = "wordpack-for-english"
+
+[setup]
+script = '''
+set -e
+WORKTREE_PATH="${CODEX_WORKTREE_PATH:-$PWD}"
+cd "$WORKTREE_PATH"
+export PIP_CACHE_DIR="$WORKTREE_PATH/.cache/pip"
+export PLAYWRIGHT_BROWSERS_PATH="$WORKTREE_PATH/.cache/ms-playwright"
+python3 - <<'PY'
+import sys
+
+if sys.version_info < (3, 13):
+    raise SystemExit(
+        f"Python 3.13+ is required, but python3 at {sys.executable} "
+        f"is {sys.version.split()[0]}"
+    )
+PY
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+npm ci --no-audit
+cd apps/frontend
+npm ci --no-audit
+cd "$WORKTREE_PATH"
+npm run prepare:frontend-env
+npx playwright install --with-deps
+'''
+
+[setup.darwin]
+script = '''
+set -e
+WORKTREE_PATH="${CODEX_WORKTREE_PATH:-$PWD}"
+cd "$WORKTREE_PATH"
+export PIP_CACHE_DIR="$WORKTREE_PATH/.cache/pip"
+export PLAYWRIGHT_BROWSERS_PATH="$WORKTREE_PATH/.cache/ms-playwright"
+python3 - <<'PY'
+import sys
+
+if sys.version_info < (3, 13):
+    raise SystemExit(
+        f"Python 3.13+ is required, but python3 at {sys.executable} "
+        f"is {sys.version.split()[0]}"
+    )
+PY
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+npm ci --no-audit
+cd apps/frontend
+npm ci --no-audit
+cd "$WORKTREE_PATH"
+npm run prepare:frontend-env
+npx playwright install --with-deps
+'''
+
+[cleanup]
+script = ""
+
+[cleanup.darwin]
+script = "docker compose down --remove-orphans"

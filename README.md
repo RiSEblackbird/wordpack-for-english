@@ -69,7 +69,7 @@
 ### セットアップ
 ```bash
 # Python（リポジトリルートで）
-python -m venv .venv
+python3 -m venv .venv
 # macOS / Linux
 source .venv/bin/activate
 # Windows PowerShell
@@ -78,7 +78,7 @@ source .venv/bin/activate
 # source .venv/Scripts/activate
 # WSL
 # source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
 # Frontend
 cd apps/frontend

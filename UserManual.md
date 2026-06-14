@@ -207,13 +207,18 @@
 - ドキュメント作成: `docs-authoring.mdc`
 
 ### B-1. ローカル実行（開発用）
-- 必要環境: Python 3.11+（venv 推奨）, Node.js 20.19.0+
+- 必要環境: Python 3.13+（venv 推奨）, Node.js 20.19.0+
 - 依存インストール:
   ```bash
   # Python
-  python -m venv .venv
-  . .venv/Scripts/activate   # Windows PowerShell: .venv\Scripts\Activate.ps1
-  pip install -r requirements.txt
+  python3 -m venv .venv
+  # macOS / Linux
+  source .venv/bin/activate
+  # Windows PowerShell
+  # .venv\Scripts\Activate.ps1
+  # Windows (Git Bash)
+  # source .venv/Scripts/activate
+  python -m pip install -r requirements.txt
 
   # Frontend
   cd apps/frontend
