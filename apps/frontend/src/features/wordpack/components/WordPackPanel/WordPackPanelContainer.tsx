@@ -87,6 +87,7 @@ export const WordPackPanel: React.FC<Props> = ({
     message,
     setStatusMessage,
     generateWordPack,
+    generateDetachedWordPack,
     createEmptyWordPack,
     loadWordPack,
     regenerateWordPack,
@@ -98,6 +99,7 @@ export const WordPackPanel: React.FC<Props> = ({
     explorer: lemmaExplorer,
     explorerContent,
     openLemmaExplorer: onLemmaOpen,
+    openGeneratedWordPack,
     closeLemmaExplorer,
     minimizeLemmaExplorer,
     restoreLemmaExplorer,
@@ -217,13 +219,14 @@ export const WordPackPanel: React.FC<Props> = ({
       return false;
     }
     const lemmaToGenerate = validation.normalizedLemma;
-    await generateWordPack(lemmaToGenerate);
+    const generated = await generateDetachedWordPack(lemmaToGenerate);
+    if (!generated) return false;
     try {
       invalidateLemmaCache(lemmaToGenerate);
     } catch {}
-    onLemmaOpen(lemmaToGenerate);
+    openGeneratedWordPack(generated.wordPack, generated.wordPackId);
     return true;
-  }, [generateWordPack, invalidateLemmaCache, isGuest, onLemmaOpen, setStatusMessage]);
+  }, [generateDetachedWordPack, invalidateLemmaCache, isGuest, openGeneratedWordPack, setStatusMessage]);
 
   const handleGenerate = useCallback(async () => {
     if (!lemmaValidation.valid) {
