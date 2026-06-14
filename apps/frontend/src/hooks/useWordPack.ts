@@ -21,6 +21,11 @@ interface AiMeta {
   params?: string | null;
 }
 
+interface GeneratedWordPackResult {
+  wordPack: WordPack;
+  wordPackId: string | null;
+}
+
 interface UseWordPackResult {
   aiMeta: AiMeta | null;
   currentWordPackId: string | null;
@@ -31,6 +36,7 @@ interface UseWordPackResult {
   clearMessage: () => void;
   setStatusMessage: (next: WordPackMessage) => void;
   generateWordPack: (lemma: string) => Promise<void>;
+  generateDetachedWordPack: (lemma: string) => Promise<GeneratedWordPackResult | null>;
   createEmptyWordPack: (lemma: string) => Promise<void>;
   loadWordPack: (wordPackId: string) => Promise<void>;
   regenerateWordPack: (wordPackId: string, lemma: string) => Promise<void>;
@@ -212,6 +218,64 @@ export const useWordPack = ({
       }
     },
     [addNotification, apiBase, applyModelRequestFields, extractAiMeta, normalizeWordPack, onWordPackGenerated, pronunciationEnabled, regenerateScope, requestTimeoutMs, updateNotification],
+  );
+
+  const generateDetachedWordPack = useCallback(
+    async (lemma: string): Promise<GeneratedWordPackResult | null> => {
+      const validation = validateLemmaInput(lemma);
+      if (!validation.valid) {
+        setMessage({ kind: 'alert', text: validation.message });
+        return null;
+      }
+      const normalizedLemma = validation.normalizedLemma;
+      const notifId = addNotification({
+        title: `【${normalizedLemma}】の生成処理中...`,
+        message: '新規のWordPackを生成しています（元のプレビューは保持されます）',
+        status: 'progress',
+        lemma: normalizedLemma,
+      });
+      try {
+        const res = await fetchJson<WordPack>(`${apiBase}/word/pack`, {
+          method: 'POST',
+          body: applyModelRequestFields({
+            lemma: normalizedLemma,
+            pronunciation_enabled: pronunciationEnabled,
+            regenerate_scope: regenerateScope,
+          }),
+          timeoutMs: requestTimeoutMs,
+        });
+        const normalized = normalizeWordPack(res);
+        const generatedWordPackId = res.id?.trim() || null;
+        if (mountedRef.current) {
+          setMessage({ kind: 'status', text: `${res.lemma} のWordPackを生成しました` });
+        }
+        updateNotification(notifId, {
+          title: `【${res.lemma}】の生成完了！`,
+          status: 'success',
+          message: '新規生成が完了しました',
+          wordPackId: generatedWordPackId,
+          lemma: res.lemma,
+        });
+        dispatchAppEvent(APP_EVENTS.wordPackUpdated);
+        return { wordPack: normalized, wordPackId: generatedWordPackId };
+      } catch (error) {
+        let text = error instanceof ApiError ? error.message : 'WordPack の生成に失敗しました';
+        if (error instanceof ApiError && error.status === 0 && /timed out/i.test(error.message)) {
+          text = 'タイムアウトしました（サーバ側で処理継続の可能性があります）。時間をおいて更新または保存済みを開いてください。';
+        }
+        if (mountedRef.current) {
+          setMessage({ kind: 'alert', text });
+        }
+        updateNotification(notifId, {
+          title: `【${normalizedLemma}】の生成失敗`,
+          status: 'error',
+          message: `新規生成に失敗しました（${text}）`,
+          lemma: normalizedLemma,
+        });
+        return null;
+      }
+    },
+    [addNotification, apiBase, applyModelRequestFields, normalizeWordPack, pronunciationEnabled, regenerateScope, requestTimeoutMs, updateNotification],
   );
 
   const createEmptyWordPack = useCallback(
@@ -459,6 +523,7 @@ export const useWordPack = ({
     clearMessage,
     setStatusMessage,
     generateWordPack,
+    generateDetachedWordPack,
     createEmptyWordPack,
     loadWordPack,
     regenerateWordPack,

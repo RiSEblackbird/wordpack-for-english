@@ -31,6 +31,7 @@ interface UseLemmaExplorerResult {
   explorer: LemmaExplorerState | null;
   explorerContent: React.ReactNode;
   openLemmaExplorer: (raw: string) => Promise<void>;
+  openGeneratedWordPack: (wordPack: WordPack, wordPackId?: string | null) => void;
   closeLemmaExplorer: () => void;
   minimizeLemmaExplorer: () => void;
   restoreLemmaExplorer: () => void;
@@ -159,6 +160,31 @@ export const useLemmaExplorer = ({ apiBase, requestTimeoutMs, onStatusMessage }:
     [apiBase, lookupLemmaMetadata, onStatusMessage, requestTimeoutMs],
   );
 
+  const openGeneratedWordPack = useCallback(
+    (wordPack: WordPack, wordPackId?: string | null) => {
+      const normalized = normalizeWordPack(wordPack);
+      const id = wordPackId?.trim() || normalized.id?.trim() || `generated:${normalized.lemma}`;
+      const cache = ensureLemmaCache();
+      cache.set(`lemma:${normalized.lemma.trim().toLowerCase()}`, {
+        found: true,
+        id,
+        lemma: normalized.lemma,
+        sense_title: normalized.sense_title,
+      });
+      setExplorer((prev) => ({
+        lemma: normalized.lemma,
+        senseTitle: normalized.sense_title ?? null,
+        wordPackId: id,
+        status: 'ready',
+        data: normalized,
+        errorMessage: null,
+        minimized: false,
+        width: prev?.width ?? 360,
+      }));
+    },
+    [ensureLemmaCache],
+  );
+
   /**
    * 画面上からウィンドウを閉じて状態を破棄する。
    */
@@ -262,6 +288,7 @@ export const useLemmaExplorer = ({ apiBase, requestTimeoutMs, onStatusMessage }:
     explorer,
     explorerContent,
     openLemmaExplorer,
+    openGeneratedWordPack,
     closeLemmaExplorer,
     minimizeLemmaExplorer,
     restoreLemmaExplorer,
@@ -270,4 +297,3 @@ export const useLemmaExplorer = ({ apiBase, requestTimeoutMs, onStatusMessage }:
     invalidateLemmaCache,
   };
 };
-
