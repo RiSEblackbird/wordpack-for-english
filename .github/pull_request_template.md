@@ -5,10 +5,12 @@
 大型Issueの一部: Part of #123 （自動クローズしない）
 関連のみ: Related to #123 （自動クローズしない）
 Issue省略: Issue: N/A — 省略理由
+default branch 以外を base にするPRでは closing keyword による自動クローズへ依存しない
 -->
 - Issue:
 - 対応範囲:
 - 対応していないこと:
+- 完了条件との差分:
 
 ## 変更内容
 -
