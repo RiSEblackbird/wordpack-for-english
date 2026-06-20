@@ -30,7 +30,7 @@ def _extract_on_block(yml: str) -> str:
 
 def test_ci_runs_on_develop_and_prs_to_develop() -> None:
     """
-    Contract: develop is the default branch for day-to-day development.
+    Contract: develop remains a day-to-day CI target even though main is the default branch.
     CI must run for pushes to develop and PRs targeting develop.
     """
     yml = _read_text(".github/workflows/ci.yml")
@@ -94,4 +94,3 @@ def test_deploy_production_workflow_runs_on_main_push_or_manual_only() -> None:
     _assert_contains_all(on_block, ["push:", "branches:", "main", "workflow_dispatch:"])
     _assert_contains_none(on_block, ["workflow_run:", "pull_request:"])
     _assert_contains_none(yml, ["github.event.workflow_run."])
-
