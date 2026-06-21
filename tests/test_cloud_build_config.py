@@ -21,3 +21,19 @@ def test_cloud_build_has_backend_config_and_deploy_script_uses_it() -> None:
     assert (
         "cloudbuild.backend.yaml" in deploy_script
     ), "deploy_cloud_run.sh must use cloudbuild.backend.yaml via --config"
+
+
+def test_deploy_script_always_defines_github_check_substitutions() -> None:
+    """
+    Contract: cloudbuild.backend.yaml references _GITHUB_* substitutions even when
+    GitHub Checks integration is disabled. The deploy script must pass empty
+    values instead of omitting them, otherwise gcloud builds submit can fail
+    before Cloud Run deployment starts.
+    """
+
+    deploy_script = Path("scripts/deploy_cloud_run.sh").read_text(encoding="utf-8")
+    assert '_GITHUB_CHECKS_TOKEN=${GITHUB_CHECKS_TOKEN:-}' in deploy_script
+    assert '_GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-}' in deploy_script
+    assert '_GITHUB_SHA=${GITHUB_SHA:-}' in deploy_script
+    assert '_GITHUB_RUN_URL=${GITHUB_RUN_URL:-}' in deploy_script
+    assert 'if [[ -n "${GITHUB_CHECKS_TOKEN:-}" ]]' not in deploy_script

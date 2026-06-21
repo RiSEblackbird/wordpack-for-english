@@ -12,13 +12,32 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write
-  checks: write
 
 jobs:
+  security_text_scan:
+    name: Security text scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Scan source text for invisible controls
+        run: python scripts/security_scan_text.py
+
   backend:
     name: Backend tests (pytest)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
       FIRESTORE_PROJECT_ID: wordpack-ci
       FIRESTORE_EMULATOR_PORT: 8080
@@ -30,6 +49,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -55,7 +76,7 @@ jobs:
           PYTHONPATH: apps/backend
         run: |
           if [ "${ENABLE_FIRESTORE_EMULATOR}" = "true" ]; then
-            npm install -g firebase-tools
+            npm install -g firebase-tools@15.22.0
             FIRESTORE_EMULATOR_HOST="127.0.0.1:${FIRESTORE_EMULATOR_PORT}" FIRESTORE_PROJECT_ID="${FIRESTORE_PROJECT_ID}" firebase emulators:exec --only firestore --project "${FIRESTORE_PROJECT_ID}" --config firebase.json "pytest" | cat
           else
             pytest | cat
@@ -64,9 +85,12 @@ jobs:
   security_headers:
     name: Security headers tests (pytest)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -106,12 +130,15 @@ jobs:
   frontend:
     name: Frontend tests (vitest)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/frontend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Use Node.js
         uses: actions/setup-node@v4
@@ -132,6 +159,7 @@ jobs:
   playwright_smoke:
     name: Playwright smoke (PR critical flows)
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     needs:
       - backend
       - frontend
@@ -140,6 +168,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4
@@ -202,11 +232,14 @@ jobs:
   cloud_run_guard:
     name: Cloud Run config guard
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs:
       - security_headers
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5

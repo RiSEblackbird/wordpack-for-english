@@ -11,13 +11,19 @@ concurrency:
   group: playwright-visual-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   playwright_visual:
     name: Playwright visual regression
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Use Node.js 22
         uses: actions/setup-node@v4

@@ -147,7 +147,7 @@ for index in indexes:
     stdout = proc.stdout or ""
     already_exists = "ALREADY_EXISTS" in stderr or "already exists" in stderr.lower()
     if already_exists:
-        print(f"[deploy_firestore_indexes] ℹ️ 既存のためスキップ: {index_label}")
+        print(f"[deploy_firestore_indexes] 既存のためスキップ: {index_label}")
         continue
 
     sys.stderr.write(stderr or stdout)
