@@ -542,7 +542,7 @@ gcloud iam service-accounts keys create ./gcp-deploy-key.json \
   --iam-account="${SA_EMAIL}"
 ```
 
-> ⚠️ **注意**: このファイルは機密情報です。`.gitignore` に含まれていることを確認し、絶対にコミットしないでください。
+> **注意**: このファイルは機密情報です。`.gitignore` に含まれていることを確認し、絶対にコミットしないでください。
 
 **GitHub シークレットに登録:**
 

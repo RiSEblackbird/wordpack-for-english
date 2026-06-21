@@ -9,10 +9,14 @@ concurrency:
   group: perf-backend-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   backend_performance:
     name: Backend p95 regression (pytest)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       API_P95_THRESHOLD_MS: "2000"
     strategy:
@@ -21,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5

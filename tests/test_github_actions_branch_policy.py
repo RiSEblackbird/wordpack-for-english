@@ -60,7 +60,7 @@ def test_deploy_dry_run_is_main_only() -> None:
         yml,
         [
             "github.event.workflow_run.head_branch == 'main'",
-            "github.event.workflow_run.pull_requests[0].base.ref == 'main'",
+            "github.event.workflow_run.event == 'push'",
         ],
     )
     assert "develop" not in yml, "deploy-dry-run must not run on develop"
