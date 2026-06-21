@@ -239,4 +239,34 @@ describe('QuizPage', () => {
       expect(screen.getByRole('dialog', { name: 'WordPack プレビュー' })).toHaveTextContent('wp:mitigate');
     });
   });
+
+  it('switches the selected quiz detail into a full-width reading layout', async () => {
+    renderQuizPage();
+    expect(await screen.findByRole('heading', { name: 'Reliable API Deployments' })).toBeInTheDocument();
+
+    const generator = screen.getByRole('form', { name: 'Quiz生成フォーム' });
+    const savedList = screen.getByRole('region', { name: '保存済みQuiz' });
+    const user = userEvent.setup();
+
+    const focusButton = screen.getByRole('button', { name: '本文/問題を全幅表示' });
+    expect(focusButton).toHaveAttribute('aria-pressed', 'false');
+    expect(generator).toBeVisible();
+    expect(savedList).toBeVisible();
+
+    await act(async () => {
+      await user.click(focusButton);
+    });
+
+    expect(screen.getByRole('button', { name: '3カラム表示に戻す' })).toHaveAttribute('aria-pressed', 'true');
+    expect(generator).not.toBeVisible();
+    expect(savedList).not.toBeVisible();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '3カラム表示に戻す' }));
+    });
+
+    expect(screen.getByRole('button', { name: '本文/問題を全幅表示' })).toHaveAttribute('aria-pressed', 'false');
+    expect(generator).toBeVisible();
+    expect(savedList).toBeVisible();
+  });
 });
