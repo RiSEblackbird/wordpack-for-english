@@ -11,9 +11,10 @@
 ## 主な機能
 - バックエンド: FastAPI / フロントエンド: React + TypeScript + Vite
 - WordPack の生成・再生成・永続化
-- Lexicon / Reader / Examples Corpus / Explore / Shelves / Settings の辞書型UI。`/lexicon`、`/reader`、`/examples`、`/explore`、`/shelves`、`/settings`、`/wordpacks/:id` のURLで直接開けます。
+- Lexicon / Reader / Examples Corpus / Explore / Shelves / Quiz / Settings の辞書型UI。`/lexicon`、`/reader`、`/examples`、`/explore`、`/shelves`、`/quiz`、`/settings`、`/wordpacks/:id` のURLで直接開けます。
 - Explore は保存済みWordPackの `senses` / `collocations` / `contrast` / `examples` を読み取り、関連語・共起・対比・例文由来のつながりを横断する Connection Explorer として動作します。候補は「保存済み」「空のWordPack」「未登録」の状態で区別され、未登録語はその場で空のWordPackとして追加できます。
 - Shelves は `GET /word/packs` の一覧データを、最近更新・未生成・例文が多い・ゲスト公開中・カテゴリ別などへ自動分類する Smart Shelves として動作します。
+- Quiz は保存済み WordPack または任意 lemma から、`format_profile` / `generation_domain` / `domain_intensity` を指定した長文読解クイズを非同期生成し、本文・大問/小問・4択・採点・根拠解説・本文中 WordPack プレビューを同じ画面で扱えます。
 - WordPack再生成は非同期ジョブ化し、ジョブIDを返して完了までポーリング（長時間処理でもUIが切れない）
 - 発音情報（IPA/音節/強勢）の付与
 - 例文（Dev/CS/LLM/Business/Common）の追加・削除
@@ -28,8 +29,8 @@
 - WordPack・文章・例文の一覧で複数選択して一括削除できる管理機能
 - 例文一覧で訳文を一括開閉できる「訳一括表示」スイッチ
 - 例文詳細モーダルから文字起こしタイピング練習を記録し、一覧にもバッジとして**累計入力文字数**を反映する「文字起こしタイピング」機能
-- デスクトップでは共通サイドバーを左側に常時表示し、Lexicon / Reader / Examples / Explore / Shelves / Settings へ移動可能。900px以下では画面左上のハンバーガーボタンでサイドバーを開閉し、モバイルでは主要画面への下部ナビも表示されます
-- 生成・再生成・例文追加の進行状況は、Lexicon だけでなく Reader / Examples / Explore / Shelves / Settings / WordPack詳細でも共通の「生成キュー」に集約されます。進行中/完了チケットの更新時は約2秒間、枠が青白く明滅し、WordPackを特定できる完了履歴からはプレビューを開けます。画面移動後も同じ履歴を確認できます。
+- デスクトップでは共通サイドバーを左側に常時表示し、Lexicon / Reader / Examples / Explore / Shelves / Quiz / Settings へ移動可能。900px以下では画面左上のハンバーガーボタンでサイドバーを開閉し、モバイルでは主要画面への下部ナビも表示されます
+- 生成・再生成・例文追加・Quiz生成の進行状況は、Lexicon だけでなく Reader / Examples / Explore / Shelves / Quiz / Settings / WordPack詳細でも共通の「生成キュー」に集約されます。進行中/完了チケットの更新時は約2秒間、枠が青白く明滅し、WordPackを特定できる完了履歴からはプレビューを開けます。画面移動後も同じ履歴を確認できます。
 - サイドバー下部に GitHub リンクと「ログアウト」ボタンを常設。どのタブからでもワンクリックでセッションを終了でき、共有端末の利用でも安全にサインアウトできます
 - WordPack プレビューの例文中ハイライト（lemma）にマウスオーバー約0.5秒で `sense_title` のツールチップを表示します。例文中の単語にマウスを重ねると、保存済み WordPack を検索して語義タイトルを表示します。未生成の単語はツールチップが「未生成」となり、下線付き表示になります。ログイン中で見出し語の入力条件を満たす未生成語をクリックすると WordPack 生成が開始され、完了後に「WordPack概要」ウインドウが自動で開きます。ゲスト閲覧や入力条件外の候補では、生成せず理由を表示します。
 - Settings では辞書操作として「未生成語クリックで即生成」、hover tooltip delay、生成後に開く場所、既定の表示密度を調整できます。
@@ -47,7 +48,7 @@
 - **概要**: ログインせずに画面を閲覧できる読み取り専用モードです。ログイン画面の「ゲスト閲覧モード」ボタンから入り、ヘッダー右側の「ログアウト」ボタンで終了できます。
 - **制限事項**: AI の生成・再生成・削除は利用できません。音声再生も無効です。さらに **POST/DELETE のリクエスト（追加・更新・削除）** はすべて拒否され、閲覧用の GET のみ許可されます。
 - **UIロックの範囲**: 生成・インポート用の入力欄（見出し語/文章/モデル/カテゴリ/advanced設定）や一覧のチェックボックス・全選択/解除ボタンも無効になり、ホバーで同じツールチップが表示されます。
-- **公開範囲**: ゲスト閲覧で表示されるのは `word_packs.metadata.guest_public=true` の WordPack のみです。例文は WordPack に紐づいて公開されるため、WordPack 単位の公開フラグが基準になります（必要に応じて例文単位の公開フラグへ拡張可能）。
+- **公開範囲**: ゲスト閲覧で表示されるのは `word_packs.metadata.guest_public=true` の WordPack と `quizzes.guest_public=true` の Quiz のみです。例文は WordPack に紐づいて公開されるため、WordPack 単位の公開フラグが基準になります（必要に応じて例文単位の公開フラグへ拡張可能）。
 - **ログイン手順（通常モード）**:
   1. ログイン画面で「Google でログイン」ボタンを押します。
   2. Google のポップアップでアカウントを選択し、許可を確定します。

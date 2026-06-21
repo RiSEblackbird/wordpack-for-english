@@ -66,6 +66,12 @@ const NavIcon: React.FC<{ item: NavigationItem['key'] }> = ({ item }) => {
           <path d="M6 4h3.5v16H6V4Zm5.2 0H15v16h-3.8V4Zm5.5.6 3.2 14.8-2.8.6-3.2-14.8 2.8-.6Z" />
         </svg>
       );
+    case 'quiz':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 4.5h12A1.5 1.5 0 0 1 19.5 6v12A1.5 1.5 0 0 1 18 19.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Zm3 4h6M9 12h6M9 15.5h3" />
+        </svg>
+      );
     case 'settings':
       return (
         <svg viewBox="0 0 24 24" aria-hidden="true">

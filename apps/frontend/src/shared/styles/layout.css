@@ -768,7 +768,7 @@ body.theme-dark .dictionary-reader-canvas {
     bottom: calc(0.75rem + env(safe-area-inset-bottom));
     z-index: 850;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
     gap: 0.25rem;
     padding: 0.45rem;
     border: 1px solid var(--dict-border);

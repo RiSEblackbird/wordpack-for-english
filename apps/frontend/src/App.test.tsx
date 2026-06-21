@@ -130,6 +130,22 @@ const setupFetchForAuthenticatedFlow = (fetchMock: FetchMock) => {
     if (url.endsWith('/api/auth/logout')) {
       return Promise.resolve(logoutSuccess());
     }
+    if (url.includes('/api/quiz?')) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ items: [], total: 0, limit: 50, offset: 0 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    }
+    if (url.includes('/api/word/packs?')) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ items: [], total: 0, limit: 100, offset: 0 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    }
     return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
   });
 };
@@ -537,6 +553,11 @@ describe('App navigation', () => {
     });
     expect(await screen.findByLabelText('発音を有効化')).toBeInTheDocument();
     expect(screen.queryByLabelText('temperature')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await user.keyboard('{Alt>}{8}{/Alt}');
+    });
+    expect(await screen.findByRole('heading', { name: 'Quiz' })).toBeInTheDocument();
   });
 
   it('keeps the desktop sidebar visible after selecting a tab', async () => {

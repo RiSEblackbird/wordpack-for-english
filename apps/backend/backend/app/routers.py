@@ -9,6 +9,7 @@ from ..logging import logger
 from ..routers import article as article_router
 from ..routers import auth as auth_router
 from ..routers import config as cfg
+from ..routers import quiz as quiz_router
 from ..routers import debug, diagnostics, health, tts, word
 
 
@@ -27,6 +28,11 @@ def include_routers(app: FastAPI, app_settings: Any) -> None:
     app.include_router(
         article_router.router,
         prefix="/api/article",
+        dependencies=protected_dependency,
+    )
+    app.include_router(
+        quiz_router.router,
+        prefix="/api/quiz",
         dependencies=protected_dependency,
     )
     app.include_router(debug.router)

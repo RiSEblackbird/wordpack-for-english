@@ -13,6 +13,7 @@ export const NAV_ITEMS: NavigationItem[] = [
   { key: 'examples', label: 'Examples', legacyLabel: '例文一覧', shortLabel: '用例' },
   { key: 'explore', label: 'Explore', legacyLabel: 'Explore', shortLabel: 'Explore' },
   { key: 'shelves', label: 'Shelves', legacyLabel: 'Shelves', shortLabel: '棚' },
+  { key: 'quiz', label: 'Quiz', legacyLabel: 'Quiz', shortLabel: 'Quiz' },
   { key: 'settings', label: 'Settings', legacyLabel: '設定', shortLabel: '設定' },
 ];
 
