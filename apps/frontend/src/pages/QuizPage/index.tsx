@@ -365,6 +365,7 @@ export const QuizPage: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [previewWordPackId, setPreviewWordPackId] = useState<string | null>(null);
   const [relatedLinks, setRelatedLinks] = useState<QuizWordPackLink[]>([]);
+  const [detailFocusMode, setDetailFocusMode] = useState(false);
 
   const [formatProfile, setFormatProfile] = useState<QuizFormatProfile>('single_passage');
   const [generationDomain, setGenerationDomain] = useState<QuizGenerationDomain>('technical');
@@ -425,6 +426,7 @@ export const QuizPage: React.FC = () => {
   useEffect(() => {
     if (!selectedQuizId) {
       setSelectedQuiz(null);
+      setDetailFocusMode(false);
       return;
     }
     const ctrl = new AbortController();
@@ -657,8 +659,8 @@ export const QuizPage: React.FC = () => {
         </div>
       ) : null}
 
-      <div className="quiz-workspace">
-        <form className="quiz-generator" onSubmit={handleCreateQuiz} aria-label="Quiz生成フォーム">
+      <div className={`quiz-workspace ${detailFocusMode ? 'is-detail-focus' : ''}`}>
+        <form className="quiz-generator" onSubmit={handleCreateQuiz} aria-label="Quiz生成フォーム" hidden={detailFocusMode}>
           <div className="quiz-panel-heading">
             <div>
               <h3>長文読解クイズを生成</h3>
@@ -739,7 +741,7 @@ export const QuizPage: React.FC = () => {
           </GuestLock>
         </form>
 
-        <section className="quiz-list-panel" aria-label="保存済みQuiz">
+        <section className="quiz-list-panel" aria-label="保存済みQuiz" hidden={detailFocusMode}>
           <div className="quiz-panel-heading">
             <div>
               <h3>保存済みQuiz</h3>
@@ -788,14 +790,24 @@ export const QuizPage: React.FC = () => {
                   <h3>{selectedQuiz.title_en}</h3>
                   <p>{selectedQuiz.notes_ja || '本文を読み、設問に答えてから根拠を確認します。'}</p>
                 </div>
-                <div className="quiz-attempt-summary" aria-live="polite">
-                  <strong>{attempt ? `${attempt.score}/${attempt.total}` : `未回答 ${unansweredCount}`}</strong>
-                  <span>{attempt ? `${Math.round(attempt.percentage)}%` : '採点前'}</span>
-                  <GuestLock isGuest={false}>
-                    <button type="button" className="quiz-primary-button" onClick={() => void handleGrade()} disabled={Boolean(attempt)}>
-                      採点する
-                    </button>
-                  </GuestLock>
+                <div className="quiz-detail-actions">
+                  <button
+                    type="button"
+                    className="quiz-focus-toggle"
+                    aria-pressed={detailFocusMode}
+                    onClick={() => setDetailFocusMode((prev) => !prev)}
+                  >
+                    {detailFocusMode ? '3カラムに戻す' : '本文/問題を広げる'}
+                  </button>
+                  <div className="quiz-attempt-summary" aria-live="polite">
+                    <strong>{attempt ? `${attempt.score}/${attempt.total}` : `未回答 ${unansweredCount}`}</strong>
+                    <span>{attempt ? `${Math.round(attempt.percentage)}%` : '採点前'}</span>
+                    <GuestLock isGuest={false}>
+                      <button type="button" className="quiz-primary-button" onClick={() => void handleGrade()} disabled={Boolean(attempt)}>
+                        採点する
+                      </button>
+                    </GuestLock>
+                  </div>
                 </div>
               </div>
               {isGuest ? (
