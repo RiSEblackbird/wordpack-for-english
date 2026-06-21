@@ -248,7 +248,7 @@ describe('QuizPage', () => {
     const savedList = screen.getByRole('region', { name: '保存済みQuiz' });
     const user = userEvent.setup();
 
-    const focusButton = screen.getByRole('button', { name: '本文/問題を全幅表示' });
+    const focusButton = screen.getByRole('button', { name: '本文/問題を広げる' });
     expect(focusButton).toHaveAttribute('aria-pressed', 'false');
     expect(generator).toBeVisible();
     expect(savedList).toBeVisible();
@@ -257,15 +257,15 @@ describe('QuizPage', () => {
       await user.click(focusButton);
     });
 
-    expect(screen.getByRole('button', { name: '3カラム表示に戻す' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: '3カラムに戻す' })).toHaveAttribute('aria-pressed', 'true');
     expect(generator).not.toBeVisible();
     expect(savedList).not.toBeVisible();
 
     await act(async () => {
-      await user.click(screen.getByRole('button', { name: '3カラム表示に戻す' }));
+      await user.click(screen.getByRole('button', { name: '3カラムに戻す' }));
     });
 
-    expect(screen.getByRole('button', { name: '本文/問題を全幅表示' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: '本文/問題を広げる' })).toHaveAttribute('aria-pressed', 'false');
     expect(generator).toBeVisible();
     expect(savedList).toBeVisible();
   });

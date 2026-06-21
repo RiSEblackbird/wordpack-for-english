@@ -795,7 +795,6 @@ export const QuizPage: React.FC = () => {
                     type="button"
                     className="quiz-focus-toggle"
                     aria-pressed={detailFocusMode}
-                    aria-label={detailFocusMode ? '3カラム表示に戻す' : '本文/問題を全幅表示'}
                     onClick={() => setDetailFocusMode((prev) => !prev)}
                   >
                     {detailFocusMode ? '3カラムに戻す' : '本文/問題を広げる'}

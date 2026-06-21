@@ -191,24 +191,24 @@ test.describe('ゲストモード', () => {
     await expect(savedList).toBeVisible();
 
     const widthBefore = await detailPanel.evaluate((element) => element.getBoundingClientRect().width);
-    const focusButton = page.getByRole('button', { name: '本文/問題を全幅表示' });
+    const focusButton = page.getByRole('button', { name: '本文/問題を広げる' });
     await expect(focusButton).toHaveAttribute('aria-pressed', 'false');
     await focusButton.click();
 
-    await expect(page.getByRole('button', { name: '3カラム表示に戻す' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: '3カラムに戻す' })).toHaveAttribute('aria-pressed', 'true');
     await expect(generator).toBeHidden();
     await expect(savedList).toBeHidden();
     const widthAfter = await detailPanel.evaluate((element) => element.getBoundingClientRect().width);
     expect(widthAfter).toBeGreaterThan(widthBefore + 280);
     await runA11yCheck(page);
 
-    await page.getByRole('button', { name: '3カラム表示に戻す' }).click();
-    await expect(page.getByRole('button', { name: '本文/問題を全幅表示' })).toHaveAttribute('aria-pressed', 'false');
+    await page.getByRole('button', { name: '3カラムに戻す' }).click();
+    await expect(page.getByRole('button', { name: '本文/問題を広げる' })).toHaveAttribute('aria-pressed', 'false');
     await expect(generator).toBeVisible();
     await expect(savedList).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('button', { name: '本文/問題を全幅表示' }).click();
+    await page.getByRole('button', { name: '本文/問題を広げる' }).click();
     await expect(generator).toBeHidden();
     await expect(savedList).toBeHidden();
     const mobileOverflow = await page.evaluate(() => {
