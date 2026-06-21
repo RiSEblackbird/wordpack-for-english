@@ -79,27 +79,36 @@ const flattenExamples = (examples: Partial<Examples> | undefined): RawExploreRel
 
 export const buildExploreRelations = (wordPack: WordPack): RawExploreRelation[] => {
   const senses = Array.isArray(wordPack.senses) ? wordPack.senses : [];
-  const related = senses.flatMap((sense, senseIndex) => [
-    ...toTextList(sense.synonyms).map((label, index) => ({
-      id: `synonym-${senseIndex}-${index}`,
-      kind: 'related' as const,
-      label,
-      source: 'synonym',
-    })),
-    ...toTextList(sense.antonyms).map((label, index) => ({
-      id: `antonym-${senseIndex}-${index}`,
-      kind: 'related' as const,
-      label,
-      source: 'antonym',
-    })),
-    ...toTextList(sense.patterns).map((label, index) => ({
-      id: `pattern-${senseIndex}-${index}`,
-      kind: 'related' as const,
-      label,
-      source: 'pattern',
-      description: toText(sense.gloss_ja),
-    })),
-  ]);
+  const related = senses.flatMap((sense: unknown, senseIndex) => {
+    if (!sense || typeof sense !== 'object') return [];
+    const senseRecord = sense as {
+      antonyms?: unknown;
+      gloss_ja?: unknown;
+      patterns?: unknown;
+      synonyms?: unknown;
+    };
+    return [
+      ...toTextList(senseRecord.synonyms).map((label, index) => ({
+        id: `synonym-${senseIndex}-${index}`,
+        kind: 'related' as const,
+        label,
+        source: 'synonym',
+      })),
+      ...toTextList(senseRecord.antonyms).map((label, index) => ({
+        id: `antonym-${senseIndex}-${index}`,
+        kind: 'related' as const,
+        label,
+        source: 'antonym',
+      })),
+      ...toTextList(senseRecord.patterns).map((label, index) => ({
+        id: `pattern-${senseIndex}-${index}`,
+        kind: 'related' as const,
+        label,
+        source: 'pattern',
+        description: toText(senseRecord.gloss_ja),
+      })),
+    ];
+  });
 
   const collocations = [
     ...flattenCollocationGroup('general', wordPack.collocations?.general),

@@ -96,6 +96,8 @@ describe('exploreRelations', () => {
     const malformedDetail = {
       ...baseWordPack,
       senses: [
+        null,
+        'legacy sense sentence',
         {
           id: 's1',
           gloss_ja: '検証版',
@@ -145,6 +147,7 @@ describe('exploreRelations', () => {
       ]),
     );
     expect(labels).not.toContain('legacy contrast sentence');
+    expect(labels).not.toContain('legacy sense sentence');
     expect(labels).not.toContain('42');
     expect(labels).not.toContain('123');
   });
