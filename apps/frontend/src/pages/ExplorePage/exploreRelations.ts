@@ -19,24 +19,42 @@ export interface ExploreRelation extends RawExploreRelation {
 
 const EXAMPLE_CATEGORIES: ExampleCategory[] = ['Dev', 'CS', 'LLM', 'Business', 'Common'];
 
-const normalize = (value: string): string => value.trim().toLowerCase();
+const toText = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+const toTextList = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value.map(toText).filter(Boolean);
+};
+
+const normalize = (value: unknown): string => toText(value).toLowerCase();
 
 const compactUnique = (items: RawExploreRelation[]): RawExploreRelation[] => {
   const seen = new Set<string>();
-  return items.filter((item) => {
-    const key = `${item.kind}:${normalize(item.label)}:${item.source}`;
-    if (!item.label.trim() || seen.has(key)) return false;
+  const result: RawExploreRelation[] = [];
+  items.forEach((item) => {
+    const label = toText(item.label);
+    if (!label) return;
+    const source = toText(item.source) || item.kind;
+    const description = toText(item.description);
+    const key = `${item.kind}:${normalize(label)}:${normalize(source)}`;
+    if (seen.has(key)) return;
     seen.add(key);
-    return true;
+    result.push({
+      ...item,
+      label,
+      source,
+      ...(description ? { description } : {}),
+    });
   });
+  return result;
 };
 
 const flattenCollocationGroup = (
   groupName: 'general' | 'academic',
-  lists: WordPack['collocations']['general'],
+  lists: Partial<WordPack['collocations']['general']> | undefined,
 ): RawExploreRelation[] =>
-  (Object.entries(lists) as [string, string[]][]).flatMap(([listName, values]) =>
-    values.map((value, index) => ({
+  Object.entries(lists ?? {}).flatMap(([listName, values]) =>
+    toTextList(values).map((value, index) => ({
       id: `collocation-${groupName}-${listName}-${index}`,
       kind: 'collocations' as const,
       label: value,
@@ -44,52 +62,63 @@ const flattenCollocationGroup = (
     })),
   );
 
-const flattenExamples = (examples: Examples): RawExploreRelation[] =>
+const flattenExamples = (examples: Partial<Examples> | undefined): RawExploreRelation[] =>
   EXAMPLE_CATEGORIES.flatMap((category) =>
-    (examples[category] ?? []).map((example, index) => ({
-      id: `example-${category}-${index}`,
-      kind: 'examples' as const,
-      label: example.en,
-      description: example.ja,
-      source: category,
-    })),
+    (Array.isArray(examples?.[category]) ? examples[category] : []).flatMap((example, index) => {
+      const label = toText(example?.en);
+      if (!label) return [];
+      return [{
+        id: `example-${category}-${index}`,
+        kind: 'examples' as const,
+        label,
+        description: toText(example?.ja),
+        source: category,
+      }];
+    }),
   );
 
 export const buildExploreRelations = (wordPack: WordPack): RawExploreRelation[] => {
-  const related = wordPack.senses.flatMap((sense, senseIndex) => [
-    ...(sense.synonyms ?? []).map((label, index) => ({
+  const senses = Array.isArray(wordPack.senses) ? wordPack.senses : [];
+  const related = senses.flatMap((sense, senseIndex) => [
+    ...toTextList(sense.synonyms).map((label, index) => ({
       id: `synonym-${senseIndex}-${index}`,
       kind: 'related' as const,
       label,
       source: 'synonym',
     })),
-    ...(sense.antonyms ?? []).map((label, index) => ({
+    ...toTextList(sense.antonyms).map((label, index) => ({
       id: `antonym-${senseIndex}-${index}`,
       kind: 'related' as const,
       label,
       source: 'antonym',
     })),
-    ...(sense.patterns ?? []).map((label, index) => ({
+    ...toTextList(sense.patterns).map((label, index) => ({
       id: `pattern-${senseIndex}-${index}`,
       kind: 'related' as const,
       label,
       source: 'pattern',
-      description: sense.gloss_ja,
+      description: toText(sense.gloss_ja),
     })),
   ]);
 
   const collocations = [
-    ...flattenCollocationGroup('general', wordPack.collocations.general),
-    ...flattenCollocationGroup('academic', wordPack.collocations.academic),
+    ...flattenCollocationGroup('general', wordPack.collocations?.general),
+    ...flattenCollocationGroup('academic', wordPack.collocations?.academic),
   ];
 
-  const contrasts = wordPack.contrast.map((item, index) => ({
-    id: `contrast-${index}`,
-    kind: 'contrast' as const,
-    label: item.with,
-    description: item.diff_ja,
-    source: 'contrast',
-  }));
+  const contrasts = (Array.isArray(wordPack.contrast) ? wordPack.contrast : []).flatMap((item, index) => {
+    if (!item || typeof item !== 'object') return [];
+    const itemRecord = item as { with?: unknown; with_?: unknown; diff_ja?: unknown };
+    const label = toText(itemRecord.with ?? itemRecord.with_);
+    if (!label) return [];
+    return [{
+      id: `contrast-${index}`,
+      kind: 'contrast' as const,
+      label,
+      description: toText(itemRecord.diff_ja),
+      source: 'contrast',
+    }];
+  });
 
   return compactUnique([...related, ...collocations, ...contrasts, ...flattenExamples(wordPack.examples)]);
 };
@@ -100,12 +129,15 @@ const findWordPackForRelation = (
   currentLemma: string,
 ): WordPackListItem | undefined => {
   const normalizedCurrent = normalize(currentLemma);
-  const byLemma = new Map(wordPacks.map((wordPack) => [normalize(wordPack.lemma), wordPack]));
+  const byLemma = new Map(
+    wordPacks
+      .map((wordPack) => [normalize(wordPack.lemma), wordPack] as const)
+      .filter(([lemma]) => Boolean(lemma)),
+  );
   const exact = byLemma.get(normalize(label));
   if (exact && normalize(exact.lemma) !== normalizedCurrent) return exact;
 
-  const tokens = label
-    .toLowerCase()
+  const tokens = normalize(label)
     .split(/[^a-z0-9'-]+/)
     .map((token) => token.trim())
     .filter((token) => token.length >= 3 && token !== normalizedCurrent);
