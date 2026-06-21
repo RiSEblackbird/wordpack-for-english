@@ -98,7 +98,7 @@ jobs:
 
       - name: Set up Node.js for Firebase CLI
         # Firestore インデックス同期に Firebase CLI（GA）を使用するため Node.js を用意する。
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '22'
 
