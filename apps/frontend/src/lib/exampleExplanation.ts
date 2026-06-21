@@ -78,8 +78,18 @@ const pushBreakdownWithOptionalSummary = (value: string, detailParts: string[], 
 const splitEnglishSentences = (value: string) => {
   const normalized = normalizeInlineText(value);
   if (!normalized) return [];
-  const parts = normalized.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) ?? [normalized];
-  return parts.map((part) => part.trim()).filter(Boolean);
+  const periodPlaceholder = '\uE000';
+  const protectedText = normalized
+    .replace(/\b(?:[A-Za-z]\.){2,}/g, (match) => match.replace(/\./g, periodPlaceholder))
+    .replace(/\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|No)\./gi, (match) =>
+      match.replace(/\./g, periodPlaceholder),
+    )
+    .replace(/\b(?:Node|Next|React|Vue)\.js\b/gi, (match) => match.replace(/\./g, periodPlaceholder))
+    .replace(/(\d)\.(?=\d)/g, `$1${periodPlaceholder}`);
+  const parts = protectedText.match(/[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g) ?? [protectedText];
+  return parts
+    .map((part) => part.replace(/\uE000/g, '.').trim())
+    .filter(Boolean);
 };
 
 const splitJapaneseSentences = (value: string) => {

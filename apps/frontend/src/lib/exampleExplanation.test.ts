@@ -36,6 +36,26 @@ describe('buildExampleTranslationPairs', () => {
       },
     ]);
   });
+
+  it('does not split common abbreviations or version numbers as sentence boundaries', () => {
+    const result = buildExampleTranslationPairs(
+      'The API accepts e.g. cached payloads in Node.js. The client retries v1.2 requests.',
+      'APIは例えばキャッシュ済みペイロードをNode.jsで受け入れます。クライアントはv1.2リクエストを再試行します。',
+    );
+
+    expect(result).toEqual([
+      {
+        index: 1,
+        en: 'The API accepts e.g. cached payloads in Node.js.',
+        ja: 'APIは例えばキャッシュ済みペイロードをNode.jsで受け入れます。',
+      },
+      {
+        index: 2,
+        en: 'The client retries v1.2 requests.',
+        ja: 'クライアントはv1.2リクエストを再試行します。',
+      },
+    ]);
+  });
 });
 
 describe('splitExampleExplanation', () => {
