@@ -122,6 +122,44 @@ def test_firestore_regenerate_job_roundtrip(firestore_store: AppFirestoreStore) 
     assert firestore_store.get_regenerate_job("missing") is None
 
 
+def test_firestore_quiz_generation_job_roundtrip(firestore_store: AppFirestoreStore) -> None:
+    created = firestore_store.create_quiz_generation_job(job_id="quiz-job:demo")
+
+    assert created["job_id"] == "quiz-job:demo"
+    assert created["status"] == "queued"
+    assert created["quiz_id"] is None
+    assert created["error"] is None
+
+    running = firestore_store.update_quiz_generation_job("quiz-job:demo", status="running")
+    assert running is not None
+    assert running["status"] == "running"
+
+    succeeded = firestore_store.update_quiz_generation_job(
+        "quiz-job:demo",
+        status="succeeded",
+        quiz_id="quiz:demo",
+        result_json='{"id":"quiz:demo"}',
+    )
+    assert succeeded is not None
+    assert succeeded["status"] == "succeeded"
+    assert succeeded["quiz_id"] == "quiz:demo"
+    assert succeeded["result_json"] == '{"id":"quiz:demo"}'
+
+    failed = firestore_store.update_quiz_generation_job(
+        "quiz-job:demo",
+        status="failed",
+        error="timeout",
+    )
+    assert failed is not None
+    assert failed["status"] == "failed"
+    assert failed["error"] == "timeout"
+
+    found = firestore_store.get_quiz_generation_job("quiz-job:demo")
+    assert found is not None
+    assert found["job_id"] == "quiz-job:demo"
+    assert firestore_store.get_quiz_generation_job("missing") is None
+
+
 def test_firestore_quiz_roundtrip_and_attempt_cleanup(firestore_store: AppFirestoreStore) -> None:
     quiz_payload = {
         "id": "quiz:test",

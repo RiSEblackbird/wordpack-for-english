@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from .base import Any, FirestoreBaseRepository, Mapping, firestore, json
+
+QuizGenerationJobStatus = Literal["queued", "running", "succeeded", "failed"]
 
 
 def _json_dump(value: Any) -> str:
@@ -26,6 +30,7 @@ class FirestoreQuizRepository(FirestoreBaseRepository):
         self._quizzes = client.collection("quizzes")
         self._quiz_word_packs = client.collection("quiz_word_packs")
         self._quiz_attempts = client.collection("quiz_attempts")
+        self._quiz_generation_jobs = client.collection("quiz_generation_jobs")
 
     def save_quiz(
         self,
@@ -216,7 +221,61 @@ class FirestoreQuizRepository(FirestoreBaseRepository):
             for attempt_id, data in sliced
         ]
 
+    def create_quiz_generation_job(
+        self,
+        *,
+        job_id: str,
+        status: QuizGenerationJobStatus = "queued",
+    ) -> Mapping[str, Any]:
+        now = self._now_iso()
+        payload: dict[str, Any] = {
+            "job_id": job_id,
+            "status": status,
+            "quiz_id": None,
+            "result_json": None,
+            "error": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._quiz_generation_jobs.document(job_id).set(payload)
+        return payload
+
+    def update_quiz_generation_job(
+        self,
+        job_id: str,
+        *,
+        status: QuizGenerationJobStatus,
+        quiz_id: str | None = None,
+        result_json: str | None = None,
+        error: str | None = None,
+    ) -> Mapping[str, Any] | None:
+        doc_ref = self._quiz_generation_jobs.document(job_id)
+        snapshot = doc_ref.get()
+        if not snapshot.exists:
+            return None
+        updates: dict[str, Any] = {
+            "status": status,
+            "updated_at": self._now_iso(),
+        }
+        if quiz_id is not None:
+            updates["quiz_id"] = quiz_id
+        if result_json is not None:
+            updates["result_json"] = result_json
+        if status == "failed":
+            updates["error"] = error or "Quiz generation job failed"
+        elif error is not None:
+            updates["error"] = error
+        doc_ref.update(updates)
+        updated = doc_ref.get()
+        return updated.to_dict() or None
+
+    def get_quiz_generation_job(self, job_id: str) -> Mapping[str, Any] | None:
+        snapshot = self._quiz_generation_jobs.document(job_id).get()
+        if not snapshot.exists:
+            return None
+        return snapshot.to_dict() or None
+
 
 FirestoreQuizStore = FirestoreQuizRepository
 
-__all__ = ["FirestoreQuizRepository", "FirestoreQuizStore"]
+__all__ = ["FirestoreQuizRepository", "FirestoreQuizStore", "QuizGenerationJobStatus"]

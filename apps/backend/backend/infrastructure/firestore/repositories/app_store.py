@@ -3,7 +3,7 @@ from __future__ import annotations
 from .base import Any, Iterable, Mapping, Sequence, datetime, firestore
 from .articles import FirestoreArticleRepository
 from .examples import FirestoreExampleRepository
-from .quizzes import FirestoreQuizRepository
+from .quizzes import FirestoreQuizRepository, QuizGenerationJobStatus
 from .regenerate_jobs import FirestoreRegenerateJobRepository, RegenerateJobStatus
 from .users import FirestoreUserRepository
 from .wordpacks import FirestoreWordPackRepository
@@ -289,6 +289,37 @@ class AppFirestoreRepository:
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         return self.quizzes.list_quiz_attempts(quiz_id, limit=limit, offset=offset)
+
+    def create_quiz_generation_job(
+        self,
+        *,
+        job_id: str,
+        status: QuizGenerationJobStatus = "queued",
+    ) -> Mapping[str, Any]:
+        return self.quizzes.create_quiz_generation_job(
+            job_id=job_id,
+            status=status,
+        )
+
+    def update_quiz_generation_job(
+        self,
+        job_id: str,
+        *,
+        status: QuizGenerationJobStatus,
+        quiz_id: str | None = None,
+        result_json: str | None = None,
+        error: str | None = None,
+    ) -> Mapping[str, Any] | None:
+        return self.quizzes.update_quiz_generation_job(
+            job_id,
+            status=status,
+            quiz_id=quiz_id,
+            result_json=result_json,
+            error=error,
+        )
+
+    def get_quiz_generation_job(self, job_id: str) -> Mapping[str, Any] | None:
+        return self.quizzes.get_quiz_generation_job(job_id)
 
 
 AppFirestoreStore = AppFirestoreRepository

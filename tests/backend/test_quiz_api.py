@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import sys
 
@@ -125,6 +126,40 @@ def test_quiz_list_and_detail_endpoints_return_saved_quiz(client: TestClient) ->
     quiz = detail.json()
     assert quiz["title_en"] == "Reliable API Deployments"
     assert quiz["related_word_packs"][0]["lemma"] == "mitigate"
+
+
+def test_quiz_detail_rehydrates_missing_word_pack_link(client: TestClient) -> None:
+    from backend.store import store as backend_store
+
+    payload = _quiz_payload(quiz_id="quiz:rehydrate")
+    payload["related_word_packs"].append(
+        {
+            "word_pack_id": None,
+            "lemma": "fallback",
+            "status": "missing",
+            "is_empty": False,
+            "occurrences": [{"passage_id": "p1", "start": 35, "end": 43}],
+            "warning": None,
+        }
+    )
+    backend_store.save_quiz(
+        "quiz:rehydrate",
+        payload,
+        payload["related_word_packs"],
+    )
+    backend_store.save_word_pack(
+        "wp:fallback",
+        "fallback",
+        json.dumps({"lemma": "fallback", "examples": {}}, ensure_ascii=False),
+    )
+
+    detail = client.get("/api/quiz/quiz:rehydrate")
+
+    assert detail.status_code == 200
+    links = {link["lemma"]: link for link in detail.json()["related_word_packs"]}
+    assert links["fallback"]["word_pack_id"] == "wp:fallback"
+    assert links["fallback"]["status"] == "existing"
+    assert links["fallback"]["is_empty"] is True
 
 
 def test_quiz_attempt_endpoint_scores_and_persists_attempt(client: TestClient) -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -15,6 +16,7 @@ from ..models.quiz import (
     QuizGenerationJobResponse,
     QuizListItem,
     QuizListResponse,
+    QuizWordPackLink,
 )
 from .word.dependencies import get_store, require_authenticated_user
 
@@ -46,6 +48,40 @@ def _list_item_from_quiz(quiz: Quiz) -> QuizListItem:
     )
 
 
+def _is_empty_word_pack(repository: object, word_pack_id: str) -> bool:
+    metadata = repository.get_word_pack_metadata(word_pack_id)
+    if not isinstance(metadata, Mapping):
+        return False
+    counts = metadata.get("examples_category_counts") or {}
+    if not isinstance(counts, Mapping):
+        return False
+    return sum(int(value or 0) for value in counts.values()) == 0
+
+
+def _rehydrate_related_word_pack_links(repository: object, quiz: Quiz) -> Quiz:
+    links: list[QuizWordPackLink] = []
+    changed = False
+    for link in quiz.related_word_packs:
+        if link.word_pack_id or link.status == "skipped":
+            links.append(link)
+            continue
+        word_pack_id = repository.find_word_pack_id_by_lemma(link.lemma)
+        if not word_pack_id:
+            links.append(link)
+            continue
+        links.append(
+            link.model_copy(
+                update={
+                    "word_pack_id": word_pack_id,
+                    "status": "existing",
+                    "is_empty": _is_empty_word_pack(repository, word_pack_id),
+                }
+            )
+        )
+        changed = True
+    return quiz.model_copy(update={"related_word_packs": links}) if changed else quiz
+
+
 @router.post(
     "/generate/jobs",
     response_model=QuizGenerationJobResponse,
@@ -68,7 +104,7 @@ async def get_quiz_generation_job_status(
     job_id: str,
     _user: dict[str, str] = Depends(require_authenticated_user),
 ) -> QuizGenerationJobResponse:
-    job = await get_quiz_generation_job(job_id)
+    job = await get_quiz_generation_job(job_id, get_store())
     if job is None:
         raise HTTPException(status_code=404, detail="Quiz generation job not found")
     return job
@@ -98,13 +134,14 @@ async def list_quizzes(
     summary="保存済みQuiz詳細を取得",
 )
 async def get_quiz(request: Request, quiz_id: str) -> Quiz:
-    row = get_store().get_quiz(quiz_id)
+    repository = get_store()
+    row = repository.get_quiz(quiz_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Quiz not found")
     quiz = Quiz.model_validate(row)
     if bool(getattr(request.state, "guest", False)) and not quiz.guest_public:
         raise HTTPException(status_code=404, detail="Quiz not found")
-    return quiz
+    return _rehydrate_related_word_pack_links(repository, quiz)
 
 
 @router.delete(

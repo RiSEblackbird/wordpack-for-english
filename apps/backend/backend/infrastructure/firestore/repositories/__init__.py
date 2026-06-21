@@ -4,7 +4,7 @@ from .app_store import AppFirestoreRepository, AppFirestoreStore
 from .articles import FirestoreArticleRepository, FirestoreArticleStore
 from .base import FirestoreBaseRepository, FirestoreBaseStore
 from .examples import FirestoreExampleRepository, FirestoreExampleStore
-from .quizzes import FirestoreQuizRepository, FirestoreQuizStore
+from .quizzes import FirestoreQuizRepository, FirestoreQuizStore, QuizGenerationJobStatus
 from .regenerate_jobs import FirestoreRegenerateJobRepository, FirestoreRegenerateJobStore
 from .users import FirestoreUserRepository, FirestoreUserStore
 from .wordpacks import FirestoreWordPackRepository, FirestoreWordPackStore
@@ -20,6 +20,7 @@ __all__ = [
     "FirestoreExampleStore",
     "FirestoreQuizRepository",
     "FirestoreQuizStore",
+    "QuizGenerationJobStatus",
     "FirestoreRegenerateJobRepository",
     "FirestoreRegenerateJobStore",
     "FirestoreUserRepository",
