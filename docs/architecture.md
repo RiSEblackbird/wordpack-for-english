@@ -1,7 +1,7 @@
 # アーキテクチャ概要
 
 この文書は、backend/frontend の責務配置を把握するための内部構造メモである。
-API path、Firestore collection/document schema、認証・ゲスト閲覧の契約は README と各 API テストを正とし、
+API path、Firestore collection/document schema、認証・ゲスト閲覧の契約は `docs/api-reference.md`、`docs/firestore.md`、`docs/authentication.md`、`docs/guest_public_api.md` と各 API テストを正とし、
 ここでは実装上の依存方向だけを扱う。
 
 ## Backend
