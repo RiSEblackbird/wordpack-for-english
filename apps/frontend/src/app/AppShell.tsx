@@ -30,6 +30,7 @@ export const AppShell: React.FC = () => {
   const focusRef = useRef<HTMLElement>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isOverlaySidebar, setIsOverlaySidebar] = useState(false);
+  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
   const sidebarRef = useRef<HTMLElement>(null);
   const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const firstSidebarItemRef = useRef<HTMLButtonElement>(null);
@@ -129,6 +130,10 @@ export const AppShell: React.FC = () => {
       setIsSidebarOpen((prev) => !prev);
     });
 
+  const toggleDesktopSidebar = useCallback(() => {
+    setIsDesktopSidebarCollapsed((prev) => !prev);
+  }, []);
+
   const handleSelectRoute = (next: NavigationItem['key']) => {
     navigate({ key: next });
     if (isOverlaySidebar) {
@@ -147,10 +152,11 @@ export const AppShell: React.FC = () => {
   const activeNavKey: NavigationItem['key'] = route.key === 'wordpackDetail' ? 'lexicon' : route.key;
   const fixedSafeAreaClass = ' safe-area-adjusted';
   const shellStyle: ShellStyle = { '--main-max-width': `${MAIN_MAX_WIDTH}px` };
+  const isSidebarCollapsed = !isOverlaySidebar && isDesktopSidebarCollapsed;
 
   return (
     <main
-      className={`app-shell dictionary-shell${isSidebarVisible ? ' sidebar-open' : ''}`}
+      className={`app-shell dictionary-shell${isSidebarVisible ? ' sidebar-open' : ''}${isSidebarCollapsed ? ' sidebar-collapsed' : ''}`}
       style={shellStyle}
     >
       <h1 className="visually-hidden">{MAIN_HEADING_TEXT}</h1>
@@ -169,9 +175,12 @@ export const AppShell: React.FC = () => {
           firstSidebarItemRef={firstSidebarItemRef}
           isAuthenticating={isAuthenticating}
           isGuest={isGuest}
+          isOverlaySidebar={isOverlaySidebar}
+          isSidebarCollapsed={isSidebarCollapsed}
           isSidebarOpen={isSidebarVisible}
           onSelectRoute={handleSelectRoute}
           onSignOut={handleHeaderSignOut}
+          onToggleDesktopCollapse={toggleDesktopSidebar}
           sidebarRef={sidebarRef}
         />
         <div className="main-column">

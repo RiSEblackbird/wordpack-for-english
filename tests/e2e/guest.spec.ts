@@ -127,4 +127,104 @@ test.describe('ゲストモード', () => {
     expect(after.y + after.height).toBeLessThanOrEqual(720);
     await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
   });
+
+  test('デスクトップでサイドバーを折りたたんでも主要メニューを使える', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await mockConfig(page, { requestTimeoutMs: 20000, sessionAuthDisabled: false });
+
+    await page.route('**/api/auth/logout', ignoreRoute);
+    await page.route('**/api/auth/guest', (route) => route.fulfill(json({ mode: 'guest' })));
+    await page.route('**/api/word/packs?*', (route) =>
+      route.fulfill(json({ items: [{ id: 'wp:guest:1', lemma: 'guest', sense_title: 'guest' }], total: 1 })),
+    );
+    await page.route('**/api/word/examples?*', (route) =>
+      route.fulfill(json({ items: [], total: 0, limit: 200, offset: 0 })),
+    );
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'ゲスト閲覧モード' }).click();
+    await expect(page.getByLabel('アプリ内共通メニュー')).toBeVisible();
+
+    const before = await page.evaluate(() => {
+      const sidebar = document.querySelector<HTMLElement>('.sidebar');
+      const main = document.querySelector<HTMLElement>('.main-inner');
+      if (!sidebar || !main) {
+        throw new Error('layout metrics target is missing');
+      }
+      return {
+        mainLeft: main.getBoundingClientRect().left,
+        sidebarWidth: sidebar.getBoundingClientRect().width,
+      };
+    });
+
+    const collapseButton = page.getByRole('button', { name: 'サイドメニューを折りたたむ' });
+    await expect(collapseButton).toHaveAttribute('aria-expanded', 'true');
+    await collapseButton.click();
+    await expect(page.getByRole('button', { name: 'サイドメニューを展開' })).toHaveAttribute('aria-expanded', 'false');
+
+    const after = await page.evaluate(() => {
+      const sidebar = document.querySelector<HTMLElement>('.sidebar');
+      const main = document.querySelector<HTMLElement>('.main-inner');
+      const controls = document.querySelector<HTMLElement>('.sidebar-controls');
+      const footer = document.querySelector<HTMLElement>('.sidebar-footer');
+      if (!sidebar || !main || !controls || !footer) {
+        throw new Error('collapsed layout metrics target is missing');
+      }
+      return {
+        controlsDisplay: getComputedStyle(controls).display,
+        footerDisplay: getComputedStyle(footer).display,
+        mainLeft: main.getBoundingClientRect().left,
+        sidebarWidth: sidebar.getBoundingClientRect().width,
+      };
+    });
+
+    expect(after.sidebarWidth).toBeLessThan(before.sidebarWidth);
+    expect(after.sidebarWidth).toBeLessThanOrEqual(80);
+    expect(after.mainLeft).toBeLessThan(before.mainLeft);
+    expect(after.controlsDisplay).toBe('none');
+    expect(after.footerDisplay).toBe('none');
+
+    await page.getByRole('button', { name: '例文一覧' }).click();
+    await expect(page.getByRole('heading', { name: '例文一覧' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'サイドメニューを展開' }).click();
+    await expect(page.getByRole('button', { name: 'サイドメニューを折りたたむ' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
+  });
+
+  test('低いデスクトップ表示でも折りたたみサイドバーをスクロールできる', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 320 });
+    await mockConfig(page, { requestTimeoutMs: 20000, sessionAuthDisabled: false });
+
+    await page.route('**/api/auth/logout', ignoreRoute);
+    await page.route('**/api/auth/guest', (route) => route.fulfill(json({ mode: 'guest' })));
+    await page.route('**/api/word/packs?*', (route) =>
+      route.fulfill(json({ items: [{ id: 'wp:guest:1', lemma: 'guest', sense_title: 'guest' }], total: 1 })),
+    );
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'ゲスト閲覧モード' }).click();
+    await page.getByRole('button', { name: 'サイドメニューを折りたたむ' }).click();
+    await expect(page.getByRole('button', { name: 'サイドメニューを展開' })).toHaveAttribute('aria-expanded', 'false');
+
+    const railScroll = await page.locator('.sidebar-main').evaluate((element) => {
+      const sidebarMain = element as HTMLElement;
+      sidebarMain.scrollTop = sidebarMain.scrollHeight;
+      return {
+        canScroll: sidebarMain.scrollHeight > sidebarMain.clientHeight,
+        overflowY: getComputedStyle(sidebarMain).overflowY,
+        scrollTop: sidebarMain.scrollTop,
+      };
+    });
+
+    expect(railScroll.overflowY).toBe('auto');
+    expect(railScroll.canScroll).toBe(true);
+    expect(railScroll.scrollTop).toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: '設定' }).click();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  });
 });
