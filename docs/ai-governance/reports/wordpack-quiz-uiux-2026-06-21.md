@@ -87,7 +87,7 @@ Judgment: pass. Introductory text is short and does not block repeated use.
 - Guest state: locked operations use the existing GuestLock pattern; local scoring explicitly says it was not saved.
 - Safety: prompt policy avoids official test reproduction and unsafe technical instructions.
 
-Judgment: pass with one residual risk: generation jobs are in-memory as designed for MVP, so instance recycle can lose job status.
+Judgment: pass. Generation status is persisted through the repository store when the Firestore-backed app store is available, with an in-memory fallback only for non-persistent test or legacy store implementations.
 
 ## Counter-Review
 
