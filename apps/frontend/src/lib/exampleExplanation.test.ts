@@ -1,5 +1,62 @@
 import { describe, expect, it } from 'vitest';
-import { splitExampleExplanation } from './exampleExplanation';
+import { buildExampleTranslationPairs, splitExampleExplanation } from './exampleExplanation';
+
+describe('buildExampleTranslationPairs', () => {
+  it('pairs English and Japanese sentences by position when sentence counts match', () => {
+    const result = buildExampleTranslationPairs(
+      'The cache serves fresh data. The platform keeps latency low.',
+      'キャッシュは新しいデータを提供します。プラットフォームは低遅延を保ちます。',
+    );
+
+    expect(result).toEqual([
+      {
+        index: 1,
+        en: 'The cache serves fresh data.',
+        ja: 'キャッシュは新しいデータを提供します。',
+      },
+      {
+        index: 2,
+        en: 'The platform keeps latency low.',
+        ja: 'プラットフォームは低遅延を保ちます。',
+      },
+    ]);
+  });
+
+  it('falls back to one full-text pair when sentence counts do not match', () => {
+    const result = buildExampleTranslationPairs(
+      'The cache serves fresh data. The platform keeps latency low.',
+      'キャッシュは新しいデータを提供し、プラットフォームは低遅延を保ちます。',
+    );
+
+    expect(result).toEqual([
+      {
+        index: 1,
+        en: 'The cache serves fresh data. The platform keeps latency low.',
+        ja: 'キャッシュは新しいデータを提供し、プラットフォームは低遅延を保ちます。',
+      },
+    ]);
+  });
+
+  it('does not split common abbreviations or version numbers as sentence boundaries', () => {
+    const result = buildExampleTranslationPairs(
+      'The API accepts e.g. cached payloads in Node.js. The client retries v1.2 requests.',
+      'APIは例えばキャッシュ済みペイロードをNode.jsで受け入れます。クライアントはv1.2リクエストを再試行します。',
+    );
+
+    expect(result).toEqual([
+      {
+        index: 1,
+        en: 'The API accepts e.g. cached payloads in Node.js.',
+        ja: 'APIは例えばキャッシュ済みペイロードをNode.jsで受け入れます。',
+      },
+      {
+        index: 2,
+        en: 'The client retries v1.2 requests.',
+        ja: 'クライアントはv1.2リクエストを再試行します。',
+      },
+    ]);
+  });
+});
 
 describe('splitExampleExplanation', () => {
   it('separates summary and part-of-speech details from numbered explanation text', () => {
@@ -19,5 +76,14 @@ describe('splitExampleExplanation', () => {
 
     expect(result.summary).toBe('文の核はSVOで、authentication が目的語です。');
     expect(result.details).toContain('authentication');
+  });
+
+  it('splits inline breakdown and explanation when they share one paragraph', () => {
+    const result = splitExampleExplanation(
+      'The cache 【名/主語】 / serves 【動詞】 / fresh data 【名/目的語】。\n文の核はSVOで、fresh data が目的語です。',
+    );
+
+    expect(result.summary).toBe('文の核はSVOで、fresh data が目的語です。');
+    expect(result.details).toBe('The cache 【名/主語】 / serves 【動詞】 / fresh data 【名/目的語】。');
   });
 });

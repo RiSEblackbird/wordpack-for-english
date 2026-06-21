@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { ExampleDetailModal, type ExampleItemData } from './ExampleDetailModal';
@@ -70,6 +70,26 @@ describe('ExampleDetailModal', () => {
     expect(screen.getByText(item.ja)).toBeInTheDocument();
   });
 
+  it('aligns original and translated sentences in matching rows', () => {
+    const enriched: ExampleItemData = {
+      ...item,
+      en: 'The cache serves fresh data. The platform keeps latency low.',
+      ja: 'キャッシュは新しいデータを提供します。プラットフォームは低遅延を保ちます。',
+    };
+    render(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={enriched} />
+      </SettingsProvider>
+    );
+
+    const pairs = within(screen.getByRole('list', { name: '原文と日本語訳の対応' })).getAllByRole('listitem');
+    expect(pairs).toHaveLength(2);
+    expect(pairs[0]).toHaveTextContent('The cache serves fresh data.');
+    expect(pairs[0]).toHaveTextContent('キャッシュは新しいデータを提供します。');
+    expect(pairs[1]).toHaveTextContent('The platform keeps latency low.');
+    expect(pairs[1]).toHaveTextContent('プラットフォームは低遅延を保ちます。');
+  });
+
   it('shows study progress buttons with counts', () => {
     const enriched: ExampleItemData = { ...item, checked_only_count: 2, learned_count: 1 };
     render(
@@ -96,6 +116,25 @@ describe('ExampleDetailModal', () => {
     expect(screen.getByRole('heading', { name: '解説' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '要点' })).toBeInTheDocument();
     expect(screen.getByText(/文の核はSVO/)).toBeInTheDocument();
+    expect(screen.getByText('品詞分解を表示')).toBeInTheDocument();
+  });
+
+  it('keeps inline part-of-speech breakdown out of the explanation summary', () => {
+    const enriched: ExampleItemData = {
+      ...item,
+      grammar_ja:
+        'The cache 【名/主語】 / serves 【動詞】 / fresh data 【名/目的語】。\n文の核はSVOで、fresh data が目的語です。',
+    };
+    render(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={enriched} />
+      </SettingsProvider>
+    );
+
+    const summaryCard = screen.getByRole('heading', { name: '要点' }).closest('article');
+    expect(summaryCard).not.toBeNull();
+    expect(summaryCard as HTMLElement).toHaveTextContent('文の核はSVO');
+    expect(summaryCard as HTMLElement).not.toHaveTextContent('The cache 【名/主語】');
     expect(screen.getByText('品詞分解を表示')).toBeInTheDocument();
   });
 
