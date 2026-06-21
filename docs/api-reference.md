@@ -22,7 +22,7 @@ Request:
 
 ```json
 {
-  "credential": "<google-id-token>"
+  "id_token": "<google-id-token>"
 }
 ```
 
@@ -129,7 +129,7 @@ Request:
 
 ```json
 {
-  "example_ids": ["example-1", "example-2"]
+  "ids": [1, 2]
 }
 ```
 
@@ -141,7 +141,7 @@ Request:
 
 ```json
 {
-  "typed_text": "This is a sample sentence."
+  "input_length": 26
 }
 ```
 
@@ -156,7 +156,7 @@ Request:
 ```json
 {
   "text": "English article text...",
-  "category": "Common",
+  "generation_category": "Common",
   "model": "gpt-5.4-mini"
 }
 ```

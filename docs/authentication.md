@@ -41,7 +41,7 @@ VITE_GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com
 
 1. ユーザーが「Googleでログイン」を押します。
 2. Google の popup で account を選びます。
-3. frontend が `credential` を `/api/auth/google` へ送ります。
+3. frontend が Google から受け取った credential を `id_token` として `/api/auth/google` へ送ります。
 4. backend が token、audience、email、email verification、hosted domain、allowlist を検証します。
 5. 成功時、backend が通常セッション Cookie を発行します。
 6. frontend はユーザー表示情報だけを local storage に保存します。
