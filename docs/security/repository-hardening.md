@@ -11,6 +11,8 @@ This checklist tracks GitHub repository settings that cannot be fully changed fr
 - [ ] Dependabot alerts are enabled.
 - [ ] Dependabot security updates are enabled.
 - [ ] Code scanning alerts are visible after the CodeQL workflow runs.
+- [ ] Dependency review is enabled on dependency and workflow changes.
+- [ ] OpenSSF Scorecard advisory results are reviewed after the weekly run.
 
 ## GitHub Actions Settings
 
@@ -24,6 +26,8 @@ This checklist tracks GitHub repository settings that cannot be fully changed fr
 - [ ] `main` cannot be deleted.
 - [ ] Required checks are limited to stable, low-noise checks.
 - [ ] CodeQL is not required until false positives and runtime are reviewed.
+- [ ] Dependency review is required only after false positives are understood.
+- [ ] OpenSSF Scorecard is not required while it is advisory-only.
 
 ## Production Environment
 

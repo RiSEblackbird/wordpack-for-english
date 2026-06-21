@@ -26,6 +26,8 @@ If a public issue or pull request accidentally includes a secret, revoke or rota
 - Do not expose repository secrets to forked pull requests.
 - Prefer short-lived cloud credentials via OIDC over long-lived service account keys.
 - Pin global CLIs and review dependency updates before merging.
+- Treat dependency review failures at `high` or `critical` severity as blockers unless a maintainer documents why the finding is not applicable.
+- Use OpenSSF Scorecard results as advisory input before making them required checks.
 
 ## Codex / LLM Agent Usage
 
