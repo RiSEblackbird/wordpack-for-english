@@ -437,7 +437,8 @@ body.theme-dark .guest-badge {
 
 .sidebar.is-collapsed .sidebar-main {
   gap: 0.75rem;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .sidebar.is-collapsed .sidebar-brand {

@@ -5,9 +5,9 @@
 - 対象PR / 作業: Issue #468 サイドメニューを折りたたみ可能にする
 - 変更した画面・コンポーネント: 共通AppShell、デスクトップSidebar、主要メニュー、サイドバー詳細領域、関連テスト、README、UserManual
 - 判定: Pass
-- P0件数: 0
-- P1件数: 0
-- P2件数: 0
+- 未対応P0件数: 0
+- 未対応P1件数: 0
+- 未対応P2件数: 0
 
 ## 2. ユーザー価値
 
@@ -45,7 +45,7 @@
 | 権限不足 | ゲスト制限とサイドバー状態 | ログアウト、閲覧継続 | 折りたたみ時は詳細操作を非表示、展開で確認 | guest.spec | Pass |
 | オフライン/利用不可 | 通信失敗は本文側または既存toast | 再試行、画面移動 | sidebar状態は通信失敗を隠さない | review | Pass |
 | 狭幅 | 900px以下は既存hamburger overlay | メニュー開閉、下部ナビ | mobileは既存 `メニューを開く/閉じる` を維持 | guest.spec | Pass |
-| 文字拡大 | 折りたたみ中はアイコン操作、展開で全文ラベル | 展開して詳細確認 | 操作対象は24px超、focus visible維持 | CSS review / tests | Pass |
+| 文字拡大・低いviewport | 折りたたみ中はアイコン操作、展開で全文ラベル | 展開して詳細確認、rail内scroll | 操作対象は24px超、focus visibleと`overflow-y:auto`維持 | CSS review / guest.spec | Pass |
 | 長文・大量データ | サイドバー幅を縮め本文領域を広げられる | 折りたたみ、画面移動 | navはaccessible nameを維持 | guest.spec metrics | Pass |
 
 ## 5. アクセシビリティ確認
@@ -99,7 +99,7 @@
 
 ## 10. 反証レビュー
 
-- 実装を落とす観点で見つけた問題: desktop collapseを既存mobile open stateに混ぜるとinert/focus復帰が壊れるため、desktop専用stateとして分離した
+- 実装を落とす観点で見つけた問題: desktop collapseを既存mobile open stateに混ぜるとinert/focus復帰が壊れるため、desktop専用stateとして分離した。Codex reviewで、低いviewportのcollapsed railがscroll不能になるP2リスクを検出し修正した
 - P0候補: 折りたたみ中に詳細操作へTab移動できる、主要メニュー名が支援技術へ伝わらない、mobile hamburgerが壊れる
 - 証跡不足: 実ユーザーテストは未実施。AI/自動ブラウザ検証に限定
 - 残リスク: Linux環境の見え方はCI visual regressionで最終確認する
@@ -111,13 +111,14 @@
 | P1 | Sidebar state | mobile開閉stateとdesktop折りたたみstateを共有するとfocus/inertが壊れる | mobile overlayやkeyboard操作が退行する | desktop専用stateをAppShellに追加 | 対応済 |
 | P1 | 折りたたみ中の詳細操作 | 非表示でもfocus可能だとキーボード利用者が迷う | 見えない操作へ到達する | 詳細領域を非表示/aria-hidden、select disabled、footer tabIndex=-1 | 対応済 |
 | P1 | 主要メニュー | アイコンだけで意味が伝わらない可能性 | 初見理解とa11y低下 | accessible nameを維持し、折りたたみ時にtitleを付与 | 対応済 |
+| P2 | collapsed rail scroll | 低いdesktop viewportで`.sidebar-main`がscrollできない | Quiz/Settingsなど下部メニューへポインタで届かない | collapsed時も`overflow-y:auto`を維持し、短いviewportのE2Eを追加 | 対応済 |
 
 ## 12. 証跡
 
 - スクリーンショット: `tests/e2e/visual.spec.ts` の5画面 `toHaveScreenshot` が差分許容内でPass
 - トレース: Playwright成功時のtraceは保存していない
 - テスト結果: typecheck、frontend unit、guest E2E、standard smoke、visual regressionがPass
-- 手動確認: 代替としてPlaywright metricsで折りたたみ後のsidebar width、main left、詳細領域display、nav遷移を確認
+- 手動確認: 代替としてPlaywright metricsで折りたたみ後のsidebar width、main left、詳細領域display、rail scroll、nav遷移を確認
 - 取得できなかった証跡と理由: 実ユーザー観察は未実施。ローカル成功時スクリーンショットは成果物として追跡しない
 
 ## 13. 実行した検証

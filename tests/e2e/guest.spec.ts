@@ -194,4 +194,37 @@ test.describe('ゲストモード', () => {
     );
     await expect(page.getByRole('button', { name: 'ログアウト' })).toBeVisible();
   });
+
+  test('低いデスクトップ表示でも折りたたみサイドバーをスクロールできる', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 320 });
+    await mockConfig(page, { requestTimeoutMs: 20000, sessionAuthDisabled: false });
+
+    await page.route('**/api/auth/logout', ignoreRoute);
+    await page.route('**/api/auth/guest', (route) => route.fulfill(json({ mode: 'guest' })));
+    await page.route('**/api/word/packs?*', (route) =>
+      route.fulfill(json({ items: [{ id: 'wp:guest:1', lemma: 'guest', sense_title: 'guest' }], total: 1 })),
+    );
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'ゲスト閲覧モード' }).click();
+    await page.getByRole('button', { name: 'サイドメニューを折りたたむ' }).click();
+    await expect(page.getByRole('button', { name: 'サイドメニューを展開' })).toHaveAttribute('aria-expanded', 'false');
+
+    const railScroll = await page.locator('.sidebar-main').evaluate((element) => {
+      const sidebarMain = element as HTMLElement;
+      sidebarMain.scrollTop = sidebarMain.scrollHeight;
+      return {
+        canScroll: sidebarMain.scrollHeight > sidebarMain.clientHeight,
+        overflowY: getComputedStyle(sidebarMain).overflowY,
+        scrollTop: sidebarMain.scrollTop,
+      };
+    });
+
+    expect(railScroll.overflowY).toBe('auto');
+    expect(railScroll.canScroll).toBe(true);
+    expect(railScroll.scrollTop).toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: '設定' }).click();
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  });
 });
