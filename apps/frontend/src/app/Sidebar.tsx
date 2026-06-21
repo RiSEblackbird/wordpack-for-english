@@ -8,9 +8,12 @@ interface SidebarProps {
   firstSidebarItemRef: React.RefObject<HTMLButtonElement>;
   isAuthenticating: boolean;
   isGuest: boolean;
+  isOverlaySidebar: boolean;
+  isSidebarCollapsed: boolean;
   isSidebarOpen: boolean;
   onSelectRoute: (next: NavigationItem['key']) => void;
   onSignOut: () => void;
+  onToggleDesktopCollapse: () => void;
   sidebarRef: React.RefObject<HTMLElement>;
 }
 
@@ -31,6 +34,22 @@ const BrandMark: React.FC = () => (
     <path d="M14 2 25 14 14 26 3 14 14 2Z" fill="#2f73ff" />
     <path d="M14 2v24M3 14h22" stroke="#93c5fd" strokeWidth="2" strokeLinecap="round" />
     <path d="m8.8 8.8 10.4 10.4M19.2 8.8 8.8 19.2" stroke="#0b1220" strokeOpacity=".42" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const CollapseIcon: React.FC<{ isCollapsed: boolean }> = ({ isCollapsed }) => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    {isCollapsed ? <path d="m9 5 7 7-7 7" /> : <path d="m15 5-7 7 7 7" />}
   </svg>
 );
 
@@ -88,85 +107,113 @@ export const Sidebar: React.FC<SidebarProps> = ({
   firstSidebarItemRef,
   isAuthenticating,
   isGuest,
+  isOverlaySidebar,
+  isSidebarCollapsed,
   isSidebarOpen,
   onSelectRoute,
   onSignOut,
+  onToggleDesktopCollapse,
   sidebarRef,
-}) => (
-  <aside
-    id={SIDEBAR_ID}
-    className="sidebar"
-    aria-label="アプリ内共通メニュー"
-    aria-hidden={isSidebarOpen ? 'false' : 'true'}
-    ref={sidebarRef}
-    style={isSidebarOpen ? { transform: 'translateX(0)' } : undefined}
-  >
-    <div className="sidebar-content" style={{ width: '100%', boxSizing: 'border-box' }}>
-      <div className="sidebar-main">
-        <div className="sidebar-brand" aria-label="アプリタイトル">
-          <BrandMark />
-          <span className="sidebar-title">WordPack</span>
+}) => {
+  const isSidebarDetailAvailable = isSidebarOpen && !isSidebarCollapsed;
+  const desktopToggleLabel = isSidebarCollapsed ? 'サイドメニューを展開' : 'サイドメニューを折りたたむ';
+
+  return (
+    <aside
+      id={SIDEBAR_ID}
+      className={`sidebar${isSidebarCollapsed ? ' is-collapsed' : ''}`}
+      aria-label="アプリ内共通メニュー"
+      aria-hidden={isSidebarOpen ? 'false' : 'true'}
+      ref={sidebarRef}
+      style={isSidebarOpen ? { transform: 'translateX(0)' } : undefined}
+    >
+      <div className="sidebar-content" style={{ width: '100%', boxSizing: 'border-box' }}>
+        <div className="sidebar-main">
+          <div className="sidebar-brand" aria-label="アプリタイトル">
+            <BrandMark />
+            <span className="sidebar-title">WordPack</span>
+            {!isOverlaySidebar ? (
+              <button
+                type="button"
+                className="sidebar-collapse-toggle"
+                aria-label={desktopToggleLabel}
+                aria-expanded={isSidebarCollapsed ? 'false' : 'true'}
+                aria-controls={SIDEBAR_ID}
+                title={desktopToggleLabel}
+                onClick={onToggleDesktopCollapse}
+              >
+                <CollapseIcon isCollapsed={isSidebarCollapsed} />
+                <span className="sidebar-collapse-label">{isSidebarCollapsed ? '展開' : '折りたたむ'}</span>
+              </button>
+            ) : null}
+          </div>
+          <nav className="sidebar-nav" aria-label="主要メニュー">
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className="sidebar-nav-button"
+                aria-label={item.legacyLabel}
+                aria-pressed={activeNavKey === item.key}
+                aria-current={activeNavKey === item.key ? 'page' : undefined}
+                onClick={() => onSelectRoute(item.key)}
+                tabIndex={isSidebarOpen ? 0 : -1}
+                title={isSidebarCollapsed ? item.legacyLabel : undefined}
+                ref={item.key === NAV_ITEMS[0].key ? firstSidebarItemRef : undefined}
+              >
+                <span className="sidebar-nav-icon"><NavIcon item={item.key} /></span>
+                <span className="sidebar-nav-label" aria-hidden="true">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+          <SidebarPlaybackRateControl isSidebarOpen={isSidebarDetailAvailable} />
+          <div
+            id={SIDEBAR_PORTAL_CONTAINER_ID}
+            className="sidebar-controls"
+            role="region"
+            aria-label="ページ固有の操作"
+            aria-hidden={isSidebarDetailAvailable ? 'false' : 'true'}
+          />
         </div>
-        <nav className="sidebar-nav" aria-label="主要メニュー">
-          {NAV_ITEMS.map((item) => (
-            <button
-              key={item.key}
-              type="button"
-              className="sidebar-nav-button"
-              aria-label={item.legacyLabel}
-              aria-pressed={activeNavKey === item.key}
-              aria-current={activeNavKey === item.key ? 'page' : undefined}
-              onClick={() => onSelectRoute(item.key)}
-              tabIndex={isSidebarOpen ? 0 : -1}
-              ref={item.key === NAV_ITEMS[0].key ? firstSidebarItemRef : undefined}
-            >
-              <span className="sidebar-nav-icon"><NavIcon item={item.key} /></span>
-              <span aria-hidden="true">{item.label}</span>
-            </button>
-          ))}
-        </nav>
-        <SidebarPlaybackRateControl isSidebarOpen={isSidebarOpen} />
         <div
-          id={SIDEBAR_PORTAL_CONTAINER_ID}
-          className="sidebar-controls"
-          role="region"
-          aria-label="ページ固有の操作"
-        />
-      </div>
-      <div className="sidebar-footer" aria-label="アカウントと外部リンク">
-        <div className="sidebar-user-card" aria-label={isGuest ? 'ゲストユーザー' : 'ログインユーザー'}>
-          <span className="sidebar-user-avatar" aria-hidden="true">U</span>
-          <span>
-            <strong>User</strong>
-            <small>{isGuest ? 'ゲスト' : 'ログイン中'}</small>
-          </span>
-        </div>
-        <a
-          href="https://github.com/RiSEblackbird/wordpack-for-english"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="GitHubリポジトリを開く"
-          className="github-link sidebar-github-link"
-          tabIndex={isSidebarOpen ? 0 : -1}
+          className="sidebar-footer"
+          aria-label="アカウントと外部リンク"
+          aria-hidden={isSidebarDetailAvailable ? 'false' : 'true'}
         >
-          <GithubIcon />
-          <span>GitHub</span>
-        </a>
-        <div className="sidebar-auth">
-          {isGuest ? (
-            <span className="guest-badge">ゲスト閲覧モード</span>
-          ) : null}
-          <button
-            type="button"
-            className="logout-button"
-            onClick={onSignOut}
-            disabled={isAuthenticating}
-            tabIndex={isSidebarOpen ? 0 : -1}
+          <div className="sidebar-user-card" aria-label={isGuest ? 'ゲストユーザー' : 'ログインユーザー'}>
+            <span className="sidebar-user-avatar" aria-hidden="true">U</span>
+            <span>
+              <strong>User</strong>
+              <small>{isGuest ? 'ゲスト' : 'ログイン中'}</small>
+            </span>
+          </div>
+          <a
+            href="https://github.com/RiSEblackbird/wordpack-for-english"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHubリポジトリを開く"
+            className="github-link sidebar-github-link"
+            tabIndex={isSidebarDetailAvailable ? 0 : -1}
           >
-            ログアウト
-          </button>
+            <GithubIcon />
+            <span>GitHub</span>
+          </a>
+          <div className="sidebar-auth">
+            {isGuest ? (
+              <span className="guest-badge">ゲスト閲覧モード</span>
+            ) : null}
+            <button
+              type="button"
+              className="logout-button"
+              onClick={onSignOut}
+              disabled={isAuthenticating}
+              tabIndex={isSidebarDetailAvailable ? 0 : -1}
+            >
+              ログアウト
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  </aside>
-);
+    </aside>
+  );
+};

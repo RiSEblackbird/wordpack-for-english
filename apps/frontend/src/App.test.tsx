@@ -570,6 +570,10 @@ describe('App navigation', () => {
     const sidebar = screen.getByLabelText('アプリ内共通メニュー');
     expect(sidebar).toHaveAttribute('aria-hidden', 'false');
     expect(screen.queryByRole('button', { name: 'メニューを開く' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'サイドメニューを折りたたむ' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
 
     const computed = window.getComputedStyle(sidebar);
     expect(computed.display).toBe('block');
@@ -593,6 +597,60 @@ describe('App navigation', () => {
     const mainRect = mainInner.getBoundingClientRect();
     expect(Math.round(sidebarRect.left)).toBe(0);
     expect(mainRect.left).toBeGreaterThanOrEqual(sidebarRect.right);
+  });
+
+  it('collapses the desktop sidebar into a navigable icon rail', async () => {
+    setupFetchForAuthenticatedFlow(fetchMock);
+    renderWithProviders();
+
+    const user = userEvent.setup();
+    await completeLogin(fetchMock, user);
+
+    const sidebar = screen.getByLabelText('アプリ内共通メニュー');
+    const appShell = document.querySelector('.app-shell');
+    if (!appShell) {
+      throw new Error('app shell not found');
+    }
+
+    const collapseButton = screen.getByRole('button', { name: 'サイドメニューを折りたたむ' });
+    await act(async () => {
+      await user.click(collapseButton);
+    });
+
+    expect(appShell).toHaveClass('sidebar-collapsed');
+    expect(sidebar).toHaveClass('is-collapsed');
+    expect(screen.getByRole('button', { name: 'サイドメニューを展開' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(screen.queryByRole('heading', { name: '音声コントロール' })).not.toBeInTheDocument();
+
+    const playbackSelect = document.getElementById('sidebar-tts-playback') as HTMLSelectElement | null;
+    expect(playbackSelect).toBeTruthy();
+    expect(playbackSelect).toBeDisabled();
+
+    const examplesButton = await screen.findByRole('button', { name: '例文一覧' });
+    expect(examplesButton).toHaveAttribute('title', '例文一覧');
+    await act(async () => {
+      await user.click(examplesButton);
+    });
+
+    expect(await screen.findByRole('heading', { name: '例文一覧' })).toBeInTheDocument();
+    expect(sidebar).toHaveAttribute('aria-hidden', 'false');
+
+    const expandButton = screen.getByRole('button', { name: 'サイドメニューを展開' });
+    await act(async () => {
+      await user.click(expandButton);
+    });
+
+    expect(appShell).not.toHaveClass('sidebar-collapsed');
+    expect(sidebar).not.toHaveClass('is-collapsed');
+    expect(screen.getByRole('button', { name: 'サイドメニューを折りたたむ' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(await screen.findByRole('heading', { name: '音声コントロール' })).toBeInTheDocument();
+    expect(playbackSelect).toBeEnabled();
   });
 
   it('places the mobile hamburger button on the viewport left edge', async () => {
