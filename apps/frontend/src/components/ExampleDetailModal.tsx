@@ -6,7 +6,7 @@ import { fetchJson, ApiError } from '../lib/fetcher';
 import { useAuth } from '../AuthContext';
 import { GuestLock } from './GuestLock';
 import { formatDateJst } from '../lib/date';
-import { splitExampleExplanation } from '../lib/exampleExplanation';
+import { buildExampleTranslationPairs, splitExampleExplanation } from '../lib/exampleExplanation';
 
 export interface ExampleItemData {
   id: number;
@@ -60,6 +60,7 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
   const [transcriptionInput, setTranscriptionInput] = useState('');
   const [transcriptionUpdating, setTranscriptionUpdating] = useState(false);
   const [transcriptionFeedback, setTranscriptionFeedback] = useState<string | null>(null);
+  const readingHeadingId = useId();
   const transcriptionHelpId = useId();
   const transcriptionStatusId = useId();
 
@@ -171,6 +172,7 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
   const transcriptionRecordDisabled =
     transcriptionUpdating || !isTranscriptionWithinRange || transcriptionInput.trim().length === 0;
   const explanationSections = splitExampleExplanation(item?.grammar_ja);
+  const translationPairs = item ? buildExampleTranslationPairs(item.en, item.ja) : [];
   const formattedPackUpdatedAt = item?.word_pack_updated_at ? formatDateJst(item.word_pack_updated_at) || item.word_pack_updated_at : null;
   const formattedCreatedAt = item ? formatDateJst(item.created_at) || item.created_at : null;
 
@@ -182,36 +184,111 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
           .example-detail-modal {
             display: grid;
             gap: 1rem;
-            max-width: 56rem;
+            max-width: 58rem;
           }
-          .example-detail-block {
+          .example-detail-reading {
             display: grid;
-            gap: 0.35rem;
-            max-width: 48rem;
+            gap: 0.75rem;
           }
-          .example-detail-block__header {
+          .example-detail-reading__header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+          }
+          .example-detail-reading__header h3 {
+            margin: 0;
+          }
+          .example-detail-tts-row {
             display: flex;
             align-items: center;
             gap: 0.5rem;
             flex-wrap: wrap;
           }
-          .example-detail-block h3,
-          .example-detail-block h4 {
+          .example-detail-pairs {
+            list-style: none;
             margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 0.65rem;
           }
-          .example-detail-block p {
+          .example-detail-pair {
+            display: grid;
+            grid-template-columns: 2rem minmax(0, 1fr) minmax(0, 1fr);
+            gap: 0.75rem;
+            align-items: stretch;
+            padding: 0.75rem;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            background: var(--color-surface);
+          }
+          .example-detail-pair__index {
+            align-self: start;
+            justify-self: center;
+            display: inline-grid;
+            place-items: center;
+            width: 1.75rem;
+            height: 1.75rem;
+            border-radius: 999px;
+            background: var(--color-accent-bg);
+            color: var(--color-accent);
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+          }
+          .example-detail-pair__text {
+            min-width: 0;
+            display: grid;
+            gap: 0.25rem;
+            align-content: start;
+          }
+          .example-detail-label {
+            color: var(--color-subtle);
+            font-size: 0.85rem;
+            font-weight: 700;
+          }
+          .example-detail-pair p,
+          .example-detail-note p,
+          .example-detail-grammar-details p {
             margin: 0;
             line-height: 1.65;
             white-space: pre-wrap;
+            overflow-wrap: anywhere;
           }
           .example-detail-explanation {
-            border-left: 3px solid var(--color-border);
-            padding-left: 0.75rem;
+            display: grid;
+            gap: 0.7rem;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 0.8rem;
+            background: var(--color-surface);
           }
-          .example-detail-explanation details {
-            margin-top: 0.5rem;
+          .example-detail-explanation h3,
+          .example-detail-note h4 {
+            margin: 0;
           }
-          .example-detail-explanation summary,
+          .example-detail-explanation__grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+            gap: 0.65rem;
+          }
+          .example-detail-note {
+            display: grid;
+            gap: 0.35rem;
+            padding: 0.65rem 0.75rem;
+            border-left: 3px solid var(--color-accent);
+            border-radius: 6px;
+            background: var(--color-accent-bg);
+          }
+          .example-detail-grammar-details {
+            border: 1px dashed var(--color-border);
+            border-radius: 6px;
+            padding: 0.6rem 0.75rem;
+          }
+          .example-detail-grammar-details[open] summary {
+            margin-bottom: 0.45rem;
+          }
+          .example-detail-grammar-details summary,
           .example-detail-meta summary {
             cursor: pointer;
             font-weight: 600;
@@ -249,38 +326,61 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
             color: var(--color-subtle);
             line-height: 1.5;
           }
+          @media (max-width: 640px) {
+            .example-detail-pair {
+              grid-template-columns: 2rem minmax(0, 1fr);
+            }
+            .example-detail-pair__text {
+              grid-column: 2;
+            }
+            .example-detail-pair__index {
+              grid-row: 1 / span 2;
+            }
+          }
         `}</style>
-        <div className="example-detail-block">
-          <div className="example-detail-block__header">
-            <h3>原文</h3>
-            <TTSButton text={item.en} label="音声" ariaLabel="原文の音声" style={{ fontSize: '0.85em', padding: '0.15rem 0.5rem', borderRadius: 4 }} />
+        <section className="example-detail-reading" aria-labelledby={readingHeadingId}>
+          <div className="example-detail-reading__header">
+            <h3 id={readingHeadingId}>原文と日本語訳</h3>
+            <div className="example-detail-tts-row">
+              <TTSButton text={item.en} label="原文の音声" ariaLabel="原文の音声" style={{ fontSize: '0.85em', padding: '0.15rem 0.5rem', borderRadius: 4 }} />
+              <TTSButton text={item.ja} label="訳の音声" ariaLabel="日本語訳の音声" style={{ fontSize: '0.85em', padding: '0.15rem 0.5rem', borderRadius: 4 }} />
+            </div>
           </div>
-          <p>{item.en}</p>
-        </div>
-        <div className="example-detail-block">
-          <div className="example-detail-block__header">
-            <h3>日本語訳</h3>
-            <TTSButton text={item.ja} label="音声" ariaLabel="日本語訳の音声" style={{ fontSize: '0.85em', padding: '0.15rem 0.5rem', borderRadius: 4 }} />
-          </div>
-          <p>{item.ja}</p>
-        </div>
+          <ol className="example-detail-pairs" aria-label="原文と日本語訳の対応">
+            {translationPairs.map((pair) => (
+              <li key={`${pair.index}-${pair.en}`} className="example-detail-pair">
+                <span className="example-detail-pair__index" aria-hidden="true">{pair.index}</span>
+                <div className="example-detail-pair__text">
+                  <span className="example-detail-label">原文</span>
+                  <p>{pair.en}</p>
+                </div>
+                <div className="example-detail-pair__text">
+                  <span className="example-detail-label">日本語訳</span>
+                  <p>{pair.ja}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
         {item.grammar_ja ? (
-          <section className="example-detail-block example-detail-explanation" aria-label="例文の解説">
+          <section className="example-detail-explanation" aria-label="例文の解説">
             <h3>解説</h3>
-            {explanationSections.summary ? (
-              <div>
-                <h4>要点</h4>
-                <p>{explanationSections.summary}</p>
-              </div>
-            ) : null}
-            {explanationSections.structure ? (
-              <div>
-                <h4>構文</h4>
-                <p>{explanationSections.structure}</p>
-              </div>
-            ) : null}
+            <div className="example-detail-explanation__grid">
+              {explanationSections.summary ? (
+                <article className="example-detail-note">
+                  <h4>要点</h4>
+                  <p>{explanationSections.summary}</p>
+                </article>
+              ) : null}
+              {explanationSections.structure ? (
+                <article className="example-detail-note">
+                  <h4>構文</h4>
+                  <p>{explanationSections.structure}</p>
+                </article>
+              ) : null}
+            </div>
             {explanationSections.details ? (
-              <details>
+              <details className="example-detail-grammar-details">
                 <summary>品詞分解を表示</summary>
                 <p>{explanationSections.details}</p>
               </details>
@@ -317,7 +417,7 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
                   borderRadius: 6,
                   border: '1px solid #ffa726',
                   backgroundColor: '#fff3e0',
-                  color: '#ef6c00',
+                  color: '#8a3a00',
                 }}
               >
                 確認済みにする ({localCounts.checked})
@@ -364,7 +464,7 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
                   borderRadius: 6,
                   border: '1px solid #64b5f6',
                   backgroundColor: transcriptionFormVisible ? '#e3f2fd' : '#f5faff',
-                  color: '#1e88e5',
+                  color: '#0d47a1',
                   textAlign: 'left',
                 }}
               >
