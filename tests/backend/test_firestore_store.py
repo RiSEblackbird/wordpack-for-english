@@ -44,6 +44,7 @@ def test_firestore_repository_import_paths_and_composition() -> None:
         AppFirestoreRepository,
         FirestoreArticleRepository,
         FirestoreExampleRepository,
+        FirestoreQuizRepository,
         FirestoreRegenerateJobRepository,
         FirestoreUserRepository,
         FirestoreWordPackRepository,
@@ -54,6 +55,7 @@ def test_firestore_repository_import_paths_and_composition() -> None:
         FirestoreArticleStore,
         FirestoreBaseStore,
         FirestoreExampleStore,
+        FirestoreQuizStore,
         FirestoreRegenerateJobStore,
         FirestoreUserStore,
         FirestoreWordPackStore,
@@ -64,6 +66,7 @@ def test_firestore_repository_import_paths_and_composition() -> None:
     assert issubclass(FirestoreWordPackStore, FirestoreWordPackRepository)
     assert issubclass(FirestoreExampleStore, FirestoreExampleRepository)
     assert issubclass(FirestoreArticleStore, FirestoreArticleRepository)
+    assert issubclass(FirestoreQuizStore, FirestoreQuizRepository)
     assert issubclass(FirestoreUserStore, FirestoreUserRepository)
     assert issubclass(FirestoreRegenerateJobStore, FirestoreRegenerateJobRepository)
 
@@ -72,6 +75,7 @@ def test_firestore_repository_import_paths_and_composition() -> None:
     assert isinstance(legacy_store.wordpacks, FirestoreWordPackStore)
     assert isinstance(legacy_store.examples, FirestoreExampleStore)
     assert isinstance(legacy_store.articles, FirestoreArticleStore)
+    assert isinstance(legacy_store.quizzes, FirestoreQuizStore)
     assert isinstance(legacy_store.regenerate_jobs, FirestoreRegenerateJobStore)
 
     repository_store = AppFirestoreRepository(client=FakeFirestoreClient())
@@ -79,6 +83,7 @@ def test_firestore_repository_import_paths_and_composition() -> None:
     assert type(repository_store.wordpacks) is FirestoreWordPackRepository
     assert type(repository_store.examples) is FirestoreExampleRepository
     assert type(repository_store.articles) is FirestoreArticleRepository
+    assert type(repository_store.quizzes) is FirestoreQuizRepository
     assert type(repository_store.regenerate_jobs) is FirestoreRegenerateJobRepository
 
 
@@ -115,6 +120,160 @@ def test_firestore_regenerate_job_roundtrip(firestore_store: AppFirestoreStore) 
     assert found is not None
     assert found["word_pack_id"] == "wp:demo"
     assert firestore_store.get_regenerate_job("missing") is None
+
+
+def test_firestore_quiz_generation_job_roundtrip(firestore_store: AppFirestoreStore) -> None:
+    created = firestore_store.create_quiz_generation_job(job_id="quiz-job:demo")
+
+    assert created["job_id"] == "quiz-job:demo"
+    assert created["status"] == "queued"
+    assert created["quiz_id"] is None
+    assert created["error"] is None
+
+    running = firestore_store.update_quiz_generation_job("quiz-job:demo", status="running")
+    assert running is not None
+    assert running["status"] == "running"
+
+    succeeded = firestore_store.update_quiz_generation_job(
+        "quiz-job:demo",
+        status="succeeded",
+        quiz_id="quiz:demo",
+        result_json='{"id":"quiz:demo"}',
+    )
+    assert succeeded is not None
+    assert succeeded["status"] == "succeeded"
+    assert succeeded["quiz_id"] == "quiz:demo"
+    assert succeeded["result_json"] == '{"id":"quiz:demo"}'
+
+    failed = firestore_store.update_quiz_generation_job(
+        "quiz-job:demo",
+        status="failed",
+        error="timeout",
+    )
+    assert failed is not None
+    assert failed["status"] == "failed"
+    assert failed["error"] == "timeout"
+
+    found = firestore_store.get_quiz_generation_job("quiz-job:demo")
+    assert found is not None
+    assert found["job_id"] == "quiz-job:demo"
+    assert firestore_store.get_quiz_generation_job("missing") is None
+
+
+def test_firestore_quiz_roundtrip_and_attempt_cleanup(firestore_store: AppFirestoreStore) -> None:
+    quiz_payload = {
+        "id": "quiz:test",
+        "title_en": "Reliable API Deployments",
+        "format_profile": "single_passage",
+        "generation_domain": "technical",
+        "domain_intensity": "standard",
+        "difficulty": "medium",
+        "passages": [
+            {
+                "id": "p1",
+                "order": 1,
+                "kind": "article",
+                "title": "Deployment review",
+                "body_en": "Teams mitigate latency by adding a fallback.",
+                "body_ja": "チームはフォールバックを追加してレイテンシを軽減する。",
+                "speaker_labels": [],
+            }
+        ],
+        "notes_ja": "根拠を本文から確認します。",
+        "sections": [
+            {
+                "id": "s1",
+                "order": 1,
+                "title": "Reading",
+                "description_ja": "本文理解",
+                "passage_ids": ["p1"],
+                "questions": [
+                    {
+                        "id": "q1",
+                        "order": 1,
+                        "type": "detail",
+                        "prompt": "What reduces latency?",
+                        "choices": [
+                            {"id": "A", "text": "A fallback"},
+                            {"id": "B", "text": "A redesign"},
+                            {"id": "C", "text": "A delay"},
+                            {"id": "D", "text": "A meeting"},
+                        ],
+                        "correct_choice_id": "A",
+                        "explanation": {
+                            "explanation_ja": "fallback が latency を軽減する根拠です。",
+                            "evidence_passage_id": "p1",
+                            "evidence_text": "mitigate latency by adding a fallback",
+                            "evidence_start": 6,
+                            "evidence_end": 43,
+                            "wrong_choice_explanations_ja": {},
+                            "related_lemmas": ["mitigate", "latency", "fallback"],
+                        },
+                    }
+                ],
+            }
+        ],
+        "related_word_packs": [
+            {
+                "word_pack_id": "wp:mitigate",
+                "lemma": "mitigate",
+                "status": "existing",
+                "is_empty": False,
+                "occurrences": [{"passage_id": "p1", "start": 6, "end": 14}],
+                "warning": None,
+            }
+        ],
+        "source_word_pack_ids": ["wp:mitigate"],
+        "source_lemmas": ["mitigate"],
+        "topic_seed": "API deploy",
+        "avoid_topics": [],
+        "llm_model": "gpt-5.4-mini",
+        "llm_params": "reasoning.effort=minimal;text.verbosity=medium",
+        "guest_public": True,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "updated_at": "2024-01-02T00:00:00+00:00",
+    }
+
+    firestore_store.save_quiz(
+        "quiz:test",
+        quiz_payload,
+        quiz_payload["related_word_packs"],
+    )
+
+    stored = firestore_store.get_quiz("quiz:test")
+    assert stored is not None
+    assert stored["title_en"] == "Reliable API Deployments"
+    assert stored["passages"][0]["body_en"].startswith("Teams mitigate")
+    assert stored["related_word_packs"][0]["lemma"] == "mitigate"
+    assert firestore_store.count_quizzes(public_only=True) == 1
+    assert firestore_store.list_quizzes(public_only=True)[0]["id"] == "quiz:test"
+
+    firestore_store.save_quiz_attempt(
+        "attempt:test",
+        {
+            "quiz_id": "quiz:test",
+            "answers": [{"question_id": "q1", "selected_choice_id": "A"}],
+            "results": [
+                {
+                    "question_id": "q1",
+                    "selected_choice_id": "A",
+                    "correct_choice_id": "A",
+                    "is_correct": True,
+                }
+            ],
+            "score": 1,
+            "total": 1,
+            "percentage": 100.0,
+            "submitted_at": "2024-01-02T00:00:00+00:00",
+            "created_at": "2024-01-02T00:00:00+00:00",
+        },
+    )
+
+    attempts = firestore_store.list_quiz_attempts("quiz:test")
+    assert attempts[0]["score"] == 1
+    assert firestore_store.delete_quiz("quiz:test") is True
+    assert firestore_store.get_quiz("quiz:test") is None
+    assert firestore_store.list_quiz_attempts("quiz:test") == []
 
 
 def test_firestore_word_pack_roundtrip(firestore_store: AppFirestoreStore) -> None:

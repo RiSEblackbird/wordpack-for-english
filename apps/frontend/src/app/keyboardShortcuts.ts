@@ -28,6 +28,7 @@ export const bindAppKeyboardShortcuts = ({
       if (event.key === '5') navigate({ key: 'examples' });
       if (event.key === '6') navigate({ key: 'explore' });
       if (event.key === '7') navigate({ key: 'shelves' });
+      if (event.key === '8') navigate({ key: 'quiz' });
     } else if (event.key === '/') {
       event.preventDefault();
       focusRef.current?.focus();

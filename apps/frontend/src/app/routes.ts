@@ -5,6 +5,7 @@ export type AppRouteKey =
   | 'examples'
   | 'explore'
   | 'shelves'
+  | 'quiz'
   | 'settings';
 
 export interface AppRouteState {
@@ -33,7 +34,7 @@ export const parseAppRoute = (pathname: string): AppRouteState => {
   if (normalized === '/examples') return { key: 'examples' };
   if (normalized === '/explore') return { key: 'explore' };
   if (normalized === '/shelves') return { key: 'shelves' };
+  if (normalized === '/quiz') return { key: 'quiz' };
   if (normalized === '/settings') return { key: 'settings' };
   return { key: 'lexicon' };
 };
-

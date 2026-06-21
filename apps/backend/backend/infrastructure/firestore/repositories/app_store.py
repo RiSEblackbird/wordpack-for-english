@@ -3,6 +3,7 @@ from __future__ import annotations
 from .base import Any, Iterable, Mapping, Sequence, datetime, firestore
 from .articles import FirestoreArticleRepository
 from .examples import FirestoreExampleRepository
+from .quizzes import FirestoreQuizRepository, QuizGenerationJobStatus
 from .regenerate_jobs import FirestoreRegenerateJobRepository, RegenerateJobStatus
 from .users import FirestoreUserRepository
 from .wordpacks import FirestoreWordPackRepository
@@ -15,6 +16,7 @@ class AppFirestoreRepository:
     wordpack_repository_cls = FirestoreWordPackRepository
     example_repository_cls = FirestoreExampleRepository
     article_repository_cls = FirestoreArticleRepository
+    quiz_repository_cls = FirestoreQuizRepository
     regenerate_job_repository_cls = FirestoreRegenerateJobRepository
 
     def __init__(self, *, client: firestore.Client | None = None) -> None:
@@ -23,6 +25,7 @@ class AppFirestoreRepository:
         self.wordpacks = self.wordpack_repository_cls(self._client)
         self.examples = self.example_repository_cls(self._client, self.wordpacks)
         self.articles = self.article_repository_cls(self._client)
+        self.quizzes = self.quiz_repository_cls(self._client)
         self.regenerate_jobs = self.regenerate_job_repository_cls(self._client)
 
     # --- Users ---
@@ -245,6 +248,78 @@ class AppFirestoreRepository:
 
     def delete_article(self, article_id: str) -> bool:
         return self.articles.delete_article(article_id)
+
+    # --- Quizzes ---
+    def save_quiz(
+        self,
+        quiz_id: str,
+        payload: Mapping[str, Any],
+        related_word_packs: list[Mapping[str, Any]],
+    ) -> None:
+        self.quizzes.save_quiz(quiz_id, payload, related_word_packs)
+
+    def get_quiz(self, quiz_id: str) -> dict[str, Any] | None:
+        return self.quizzes.get_quiz(quiz_id)
+
+    def list_quizzes(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        *,
+        public_only: bool = False,
+    ) -> list[dict[str, Any]]:
+        return self.quizzes.list_quizzes(limit=limit, offset=offset, public_only=public_only)
+
+    def count_quizzes(self, *, public_only: bool = False) -> int:
+        return self.quizzes.count_quizzes(public_only=public_only)
+
+    def delete_quiz(self, quiz_id: str) -> bool:
+        return self.quizzes.delete_quiz(quiz_id)
+
+    def save_quiz_attempt(self, attempt_id: str, payload: Mapping[str, Any]) -> None:
+        self.quizzes.save_quiz_attempt(attempt_id, payload)
+
+    def get_quiz_attempt(self, attempt_id: str) -> dict[str, Any] | None:
+        return self.quizzes.get_quiz_attempt(attempt_id)
+
+    def list_quiz_attempts(
+        self,
+        quiz_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        return self.quizzes.list_quiz_attempts(quiz_id, limit=limit, offset=offset)
+
+    def create_quiz_generation_job(
+        self,
+        *,
+        job_id: str,
+        status: QuizGenerationJobStatus = "queued",
+    ) -> Mapping[str, Any]:
+        return self.quizzes.create_quiz_generation_job(
+            job_id=job_id,
+            status=status,
+        )
+
+    def update_quiz_generation_job(
+        self,
+        job_id: str,
+        *,
+        status: QuizGenerationJobStatus,
+        quiz_id: str | None = None,
+        result_json: str | None = None,
+        error: str | None = None,
+    ) -> Mapping[str, Any] | None:
+        return self.quizzes.update_quiz_generation_job(
+            job_id,
+            status=status,
+            quiz_id=quiz_id,
+            result_json=result_json,
+            error=error,
+        )
+
+    def get_quiz_generation_job(self, job_id: str) -> Mapping[str, Any] | None:
+        return self.quizzes.get_quiz_generation_job(job_id)
 
 
 AppFirestoreStore = AppFirestoreRepository

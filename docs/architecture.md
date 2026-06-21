@@ -46,6 +46,8 @@ WordPack の API router は `backend.routers.word` package に分割し、route 
 生成、lookup、空 WordPack 作成、学習進捗、guest public、再生成 job registry は `backend.application.wordpack` に置く。
 LLM prompt と JSON parser は `backend.infrastructure.llm` に置き、code fence 除去と control character sanitize を共通化する。
 
+Quiz は WordPack とは別 feature として、`backend.models.quiz`、`backend.routers.quiz`、`backend.flows.quiz_generate`、`backend.application.quiz.*`、`backend.domain.quiz.prompt_policy`、`backend.infrastructure.firestore.repositories.quizzes` に分離する。`format_profile` は出題構造、`generation_domain` は題材、`domain_intensity` は専門性の強さを制御し、特定試験名や公式問題の再現を UI/DB/prompt の主要カテゴリにしない。Firestore では `quizzes`、`quiz_word_packs`、`quiz_attempts` を使い、`AppFirestoreStore` facade から保存・一覧・詳細・削除・Attempt 保存を公開する。
+
 Article import の lemma filtering は `backend.domain.article.lemma_filter` に集約する。
 function word/basic lemma の除外、多語句の保持、重複排除はこの domain 関数を通す。
 
@@ -69,12 +71,14 @@ Firestore helper は `backend.infrastructure.firestore.batch` / `search_terms` /
 | `src/app/keyboardShortcuts.ts` | Esc、Alt+数字、`/` focus の keyboard shortcut |
 | `src/app/navigation.ts` | nav item と shell 定数 |
 | `src/app/styles/*` | app shell / login CSS。旧 inline CSS から移動 |
-| `src/app/routes.ts` | `/lexicon`、`/wordpacks/:id`、`/reader`、`/examples`、`/explore`、`/shelves`、`/settings` の軽量 route 互換 |
-| `src/pages/*Page` | Lexicon / WordPack Detail / Reader / Examples / Explore / Shelves / Settings の画面単位の構成 |
+| `src/app/routes.ts` | `/lexicon`、`/wordpacks/:id`、`/reader`、`/examples`、`/explore`、`/shelves`、`/quiz`、`/settings` の軽量 route 互換 |
+| `src/pages/*Page` | Lexicon / WordPack Detail / Reader / Examples / Explore / Shelves / Quiz / Settings の画面単位の構成 |
 | `src/pages/ExplorePage` | 既存WordPack詳細を読み取り、関連語・共起・対比・例文の接続カードへ変換する Connection Explorer |
 | `src/pages/ShelvesPage` | 既存WordPack一覧を条件別に自動分類する Smart Shelves |
+| `src/pages/QuizPage` | Quiz 生成フォーム、保存済みQuiz一覧、本文読解、採点、解説、本文中 WordPack 操作をまとめる学習画面 |
 | `src/features/auth` | Google OAuth telemetry と sanitization |
 | `src/features/wordpack` | WordPack domain types、API helper、feature hooks/components。旧 `src/components/WordPackPanel.tsx` は re-export |
+| `src/features/quiz` | Quiz domain types、API helper、表示ラベル。QuizPage はここから API/type を利用する |
 | `src/features/article-import` | Article import API/type/hook/components。旧 `src/components/ArticleImportPanel.tsx` は re-export |
 | `src/shared/api` | `ApiError`、JSON fetch、FastAPI detail parse、401 event dispatch |
 | `src/shared/events` | `auth:unauthorized`、`wordpack:updated`、`wordpack:study-progress`、`article:updated` の typed event helper |

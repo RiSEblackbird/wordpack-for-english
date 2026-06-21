@@ -6,6 +6,7 @@ import { WordPackDetailPage } from '../pages/WordPackDetailPage';
 import { ReaderPage } from '../pages/ReaderPage';
 import { ExamplesPage } from '../pages/ExamplesPage';
 import { ExplorePage } from '../pages/ExplorePage';
+import { QuizPage } from '../pages/QuizPage';
 import { ShelvesPage } from '../pages/ShelvesPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { BottomNav } from './BottomNav';
@@ -201,6 +202,7 @@ export const AppShell: React.FC = () => {
               {route.key === 'examples' && <ExamplesPage />}
               {route.key === 'explore' && <ExplorePage />}
               {route.key === 'shelves' && <ShelvesPage />}
+              {route.key === 'quiz' && <QuizPage />}
               {route.key === 'settings' && <SettingsPage focusRef={focusRef} />}
             </section>
             <footer className="app-footer">

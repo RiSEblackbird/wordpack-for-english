@@ -11,13 +11,13 @@ os.environ.setdefault("STRICT_MODE", "false")
 @pytest.fixture(scope="module")
 def client_with_openai_llm():
     """OpenAI LLMを使用するテストクライアント"""
-    os.environ["LLM_PROVIDER"] = "openai"
-    os.environ["LLM_MODEL"] = "gpt-5.4-mini"
-    os.environ["STRICT_MODE"] = "false"
+    env_patch = pytest.MonkeyPatch()
+    env_patch.setenv("LLM_PROVIDER", "openai")
+    env_patch.setenv("LLM_MODEL", "gpt-5.4-mini")
+    env_patch.setenv("STRICT_MODE", "false")
 
-    # OpenAI APIキーが設定されていない場合はダミーキーを使用
-    if not os.environ.get("OPENAI_API_KEY"):
-        os.environ["OPENAI_API_KEY"] = "test-key"
+    # 実キーや外部ネットワークに依存しないよう、プロバイダのテスト用応答を使う。
+    env_patch.setenv("OPENAI_API_KEY", "test-key")
 
     # src を import パスに追加
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "backend"))
@@ -34,7 +34,15 @@ def client_with_openai_llm():
 
     # アプリをロード
     from backend.main import app
-    return TestClient(app)
+    client = TestClient(app)
+    try:
+        yield client
+    finally:
+        client.close()
+        env_patch.undo()
+        for name in list(sys.modules.keys()):
+            if name == "backend" or name.startswith("backend."):
+                sys.modules.pop(name)
 
 
 def test_word_pack_integration_openai_llm(client_with_openai_llm):

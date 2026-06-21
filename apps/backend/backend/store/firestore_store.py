@@ -14,6 +14,7 @@ from ..infrastructure.firestore.repositories.base import (
     firestore,
 )
 from ..infrastructure.firestore.repositories.examples import FirestoreExampleRepository
+from ..infrastructure.firestore.repositories.quizzes import FirestoreQuizRepository
 from ..infrastructure.firestore.repositories.regenerate_jobs import FirestoreRegenerateJobRepository
 from ..infrastructure.firestore.repositories.users import FirestoreUserRepository
 from ..infrastructure.firestore.repositories.wordpacks import FirestoreWordPackRepository
@@ -71,6 +72,10 @@ class FirestoreArticleStore(_LegacyClockMixin, FirestoreArticleRepository):
     """Legacy import path for the article repository."""
 
 
+class FirestoreQuizStore(_LegacyClockMixin, FirestoreQuizRepository):
+    """Legacy import path for the quiz repository."""
+
+
 class FirestoreRegenerateJobStore(_LegacyClockMixin, FirestoreRegenerateJobRepository):
     """Legacy import path for the regenerate job repository."""
 
@@ -82,6 +87,7 @@ class AppFirestoreStore(AppFirestoreRepository):
     wordpack_repository_cls = FirestoreWordPackStore
     example_repository_cls = FirestoreExampleStore
     article_repository_cls = FirestoreArticleStore
+    quiz_repository_cls = FirestoreQuizStore
     regenerate_job_repository_cls = FirestoreRegenerateJobStore
 
 
@@ -90,6 +96,7 @@ __all__ = [
     "FirestoreArticleStore",
     "FirestoreBaseStore",
     "FirestoreExampleStore",
+    "FirestoreQuizStore",
     "FirestoreRegenerateJobStore",
     "FirestoreUserStore",
     "FirestoreWordPackStore",

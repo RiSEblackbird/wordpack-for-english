@@ -10,4 +10,5 @@ export {
   createEmptyWordPackRequest,
   fetchWordPack,
   fetchWordPackList,
+  generateWordPackRequest,
 } from './api/wordpackApi';
