@@ -8,6 +8,7 @@ This checklist tracks GitHub repository settings that cannot be fully changed fr
 
 - [ ] Secret scanning is enabled.
 - [ ] Push protection is enabled.
+- [ ] Dependency graph is enabled.
 - [ ] Dependabot alerts are enabled.
 - [ ] Dependabot security updates are enabled.
 - [ ] Code scanning alerts are visible after the CodeQL workflow runs.
