@@ -64,3 +64,28 @@ def test_examples_cross_corpus_descending_sort_indexes_exist() -> None:
 
   missing = required - configured_fields
   assert not missing, f"examples cross-corpus sort indexes are missing: {sorted(missing)}"
+
+
+def test_guest_public_wordpack_list_index_exists() -> None:
+  firestore_indexes = json.loads(FIRESTORE_INDEXES_PATH.read_text(encoding="utf-8"))
+  indexes = firestore_indexes.get("indexes", [])
+
+  configured_fields = {
+    tuple(
+      (
+        field.get("fieldPath"),
+        field.get("order"),
+        field.get("arrayConfig"),
+      )
+      for field in index.get("fields", [])
+    )
+    for index in indexes
+    if index.get("collectionGroup") == "word_packs"
+  }
+  required = (
+    ("metadata.guest_public", "ASCENDING", None),
+    ("created_at", "DESCENDING", None),
+    ("__name__", "DESCENDING", None),
+  )
+
+  assert required in configured_fields, "guest public WordPack list index is missing"
