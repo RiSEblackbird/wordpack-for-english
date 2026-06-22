@@ -12,6 +12,15 @@
       "collectionGroup": "word_packs",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "metadata.guest_public", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "word_packs",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "lemma_label_lower", "order": "ASCENDING" },
         { "fieldPath": "updated_at", "order": "DESCENDING" },
         { "fieldPath": "__name__", "order": "DESCENDING" }
