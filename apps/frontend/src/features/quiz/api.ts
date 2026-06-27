@@ -67,3 +67,18 @@ export const deleteQuiz = (
   signal: options?.signal,
   timeoutMs: options?.timeoutMs,
 });
+
+export const updateQuizGuestPublic = (
+  apiBase: string,
+  quizId: string,
+  guestPublic: boolean,
+  options?: { signal?: AbortSignal; timeoutMs?: number },
+) => fetchJson<{ quiz_id: string; guest_public: boolean }>(
+  `${apiBase}/quiz/${encodeURIComponent(quizId)}/guest-public`,
+  {
+    method: 'POST',
+    body: { guest_public: guestPublic },
+    signal: options?.signal,
+    timeoutMs: options?.timeoutMs,
+  },
+);

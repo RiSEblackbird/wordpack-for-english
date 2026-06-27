@@ -54,7 +54,7 @@ VITE_GOOGLE_CLIENT_ID=12345-abcdefgh.apps.googleusercontent.com
 
 - 開始: `POST /api/auth/guest`
 - 終了: `POST /api/auth/logout`
-- 閲覧可能: `guest_public=true` の WordPack と公開対象 Quiz
+- 閲覧可能: `guest_public=true` の WordPack、公開 WordPack に紐づく例文、`guest_public=true` の Reader 記事、`guest_public=true` の Quiz
 - 禁止: 生成、再生成、削除、保存、音声再生、書き込み API
 
 ゲスト公開フラグ API の詳細は [docs/guest_public_api.md](./guest_public_api.md) を参照してください。
