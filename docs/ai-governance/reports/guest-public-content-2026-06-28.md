@@ -35,6 +35,7 @@
 |---|---|---|---|---|
 | ログイン済み・項目あり | 全例文を表示 | 公開/非公開ラベルと切替を表示 | 公開/非公開ラベルと切替を表示 | Pass |
 | ログイン済み・空 | 既存空状態 | 「インポート済み文章はまだありません。」 | 「保存済みQuizはまだありません。」 | Pass |
+| ログイン済み・ページ空 | N/A | ページ外れとして表示し、前ページへ戻れる | N/A | Pass |
 | ゲスト・公開項目あり | 公開WordPack由来の例文のみ表示 | 公開Reader記事のみ表示、切替なし | 公開Quizのみ表示、切替なし | Pass |
 | ゲスト・空 | 公開WordPack由来の例文がない旨を表示 | 公開Reader記事がない旨を表示 | 公開Quizがない旨を表示 | Pass |
 | 公開切替成功 | N/A | 成功メッセージ、状態更新 | 成功メッセージ、状態更新 | Pass |
@@ -92,7 +93,7 @@
 
 ## 10. 反証レビュー
 
-- 実装を落とす観点で見つけた問題: ゲスト時に公開切替ボタンをdisabled表示すると管理できる範囲を誤認させるため、非表示に修正済み。
+- 実装を落とす観点で見つけた問題: ゲスト時に公開切替ボタンをdisabled表示すると管理できる範囲を誤認させるため、非表示に修正済み。Reader一覧の現在ページだけが空のときに全体空と誤読される表示も、ページ空状態へ分離済み。
 - P0候補: 非公開Reader記事や非公開Quizがゲスト詳細で見える問題はテストで404を確認済み。
 - 証跡不足: 専用スクリーンショットは未取得。既存Playwright smokeとDOMテストで主要操作を確認。
 - 残リスク: Exampleのゲストフィルタは親WordPackを参照してアプリ側で絞るため、大量データ時の読み取り量は増える可能性がある。
@@ -107,7 +108,7 @@
 
 - スクリーンショット: 未取得
 - トレース: Playwright smoke 9 passed
-- テスト結果: 対象backend 24 passed / 1 skipped、frontend target 6 passed、frontend full 173 passed / 1 skipped、full backend pytest はローカルで未通過
+- テスト結果: 対象backend 24 passed / 1 skipped、frontend target 6 passed、ArticleListPanel focused 3 passed、frontend full 173 passed / 1 skipped、full backend pytest はローカルで未通過
 - 手動確認: 差分レビューでゲスト非公開フィルタ、関連WordPackフィルタ、公開切替ロールバック、空状態文言を確認
 - 取得できなかった証跡と理由: 専用スクリーンショットは既存E2E対象にReader/Quiz公開切替シナリオがないため未取得。DOMテストで公開切替の可視文言とAPI呼び出しを確認した。
 

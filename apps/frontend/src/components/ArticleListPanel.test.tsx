@@ -128,4 +128,49 @@ describe('ArticleListPanel', () => {
     );
     expect(screen.getByText('Reader記事をゲスト公開しました')).toBeInTheDocument();
   });
+
+  it('shows a page-empty state when the current Reader page is out of range', async () => {
+    authState.isGuest = false;
+    const firstPage = {
+      items: [
+        {
+          id: 'art:1',
+          title_en: 'Article A',
+          created_at: '2024-05-01T09:00:00+09:00',
+          updated_at: '2024-05-01T09:10:00+09:00',
+          guest_public: true,
+        },
+      ],
+      total: 21,
+      limit: 20,
+      offset: 0,
+    };
+    mockFetchJson
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce({
+        items: [],
+        total: 21,
+        limit: 20,
+        offset: 20,
+      })
+      .mockResolvedValueOnce(firstPage);
+
+    render(<ArticleListPanel />);
+
+    await screen.findByText('Article A');
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '次へ' }));
+    });
+
+    expect(await screen.findByText('このページに表示できるReader記事がありません。')).toBeInTheDocument();
+    expect(screen.queryByText('インポート済み文章はまだありません。')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '前のページへ戻る' }));
+    });
+
+    expect(await screen.findByText('Article A')).toBeInTheDocument();
+  });
 });

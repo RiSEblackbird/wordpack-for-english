@@ -259,6 +259,8 @@ export const ArticleListPanel: React.FC = () => {
   const hasNext = offset + LIST_LIMIT < total;
   const hasPrev = offset > 0;
   const selectedCount = selectedIds.size;
+  const showGlobalEmpty = items.length === 0 && !loading && total === 0;
+  const showPageEmpty = items.length === 0 && !loading && total > 0;
 
   const deleteSelectedArticles = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -418,7 +420,7 @@ export const ArticleListPanel: React.FC = () => {
           </div>
         ))}
       </div>
-      {items.length === 0 && !loading ? (
+      {showGlobalEmpty ? (
         <div className="al-empty-state">
           <strong>{isGuest ? 'ゲスト公開中のReader記事はまだありません。' : 'インポート済み文章はまだありません。'}</strong>
           <span>
@@ -426,6 +428,20 @@ export const ArticleListPanel: React.FC = () => {
               ? 'ログイン済みユーザーが公開したReader記事だけがここに表示されます。'
               : '文章をインポートすると、ここから本文と関連WordPackを開けます。'}
           </span>
+        </div>
+      ) : null}
+      {showPageEmpty ? (
+        <div className="al-empty-state">
+          <strong>{isGuest ? 'このページに表示できるゲスト公開Reader記事がありません。' : 'このページに表示できるReader記事がありません。'}</strong>
+          <span>前のページへ戻ると、残っているReader記事を確認できます。</span>
+          <button
+            type="button"
+            className="al-public-button"
+            onClick={() => load(Math.max(0, offset - LIST_LIMIT))}
+            disabled={!hasPrev || loading}
+          >
+            前のページへ戻る
+          </button>
         </div>
       ) : null}
       {(hasPrev || hasNext) && (
