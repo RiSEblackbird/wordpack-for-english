@@ -28,9 +28,8 @@ from ..models.article import (
     ArticleListResponse,
     ArticleWordPackLink,
 )
-from ..models.word import ExampleCategory, WordPack
+from ..models.word import ExampleCategory
 from ..observability import request_trace, span
-from ..providers import get_llm_provider
 from ..store import store as _default_store
 from ..store.proxy import CurrentStoreProxy
 from .word.dependencies import require_authenticated_user
