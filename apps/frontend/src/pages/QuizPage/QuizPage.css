@@ -133,6 +133,7 @@
 .quiz-danger-button,
 .quiz-focus-toggle,
 .quiz-primary-button,
+.quiz-secondary-button,
 .quiz-lemma-row button,
 .quiz-inline-word__actions button {
   min-height: 2.3rem;
@@ -190,6 +191,7 @@
 .quiz-danger-button:focus-visible,
 .quiz-focus-toggle:focus-visible,
 .quiz-primary-button:focus-visible,
+.quiz-secondary-button:focus-visible,
 .quiz-list-item button:focus-visible,
 .quiz-choice input:focus-visible + .quiz-choice__id,
 .quiz-inline-word__button:focus-visible,
@@ -299,6 +301,48 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+}
+
+.quiz-public-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.quiz-public-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  border: 1px solid rgba(125, 146, 178, 0.32);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.quiz-public-pill.is-public {
+  border-color: rgba(105, 211, 145, 0.44);
+  background: rgba(28, 84, 55, 0.22);
+  color: #baf4cc;
+}
+
+.quiz-public-pill.is-private {
+  background: rgba(130, 151, 186, 0.12);
+  color: var(--quiz-muted);
+}
+
+.quiz-secondary-button {
+  border: 1px solid var(--quiz-line);
+  background: rgba(130, 151, 186, 0.14);
+  color: var(--quiz-text);
+  padding: 0.35rem 0.65rem;
+}
+
+.quiz-secondary-button:disabled {
+  cursor: not-allowed;
+  color: rgba(220, 230, 246, 0.52);
+  background: rgba(130, 151, 186, 0.08);
 }
 
 .quiz-list-item__lemmas span,

@@ -14,6 +14,8 @@ from ..models.quiz import (
     QuizAttemptResponse,
     QuizGenerateRequest,
     QuizGenerationJobResponse,
+    QuizGuestPublicUpdateRequest,
+    QuizGuestPublicUpdateResponse,
     QuizListItem,
     QuizListResponse,
     QuizWordPackLink,
@@ -142,6 +144,22 @@ async def get_quiz(request: Request, quiz_id: str) -> Quiz:
     if bool(getattr(request.state, "guest", False)) and not quiz.guest_public:
         raise HTTPException(status_code=404, detail="Quiz not found")
     return _rehydrate_related_word_pack_links(repository, quiz)
+
+
+@router.post(
+    "/{quiz_id}/guest-public",
+    response_model=QuizGuestPublicUpdateResponse,
+    summary="Quizのゲスト公開フラグを更新",
+)
+async def update_quiz_guest_public(
+    quiz_id: str,
+    req: QuizGuestPublicUpdateRequest,
+    _user: dict[str, str] = Depends(require_authenticated_user),
+) -> QuizGuestPublicUpdateResponse:
+    updated = get_store().update_quiz_guest_public(quiz_id, req.guest_public)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    return QuizGuestPublicUpdateResponse(quiz_id=quiz_id, guest_public=updated)
 
 
 @router.delete(

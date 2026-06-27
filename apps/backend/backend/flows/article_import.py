@@ -1090,6 +1090,7 @@ CEFR A1〜A2 の日常語（挨拶・カレンダー/時間語・基本動詞 ge
                 generation_started_at_db,
                 generation_completed_at_db,
                 generation_duration_ms_db,
+                _guest_public_db,
                 links,
             ) = got
             link_models: list[ArticleWordPackLink] = [

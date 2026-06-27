@@ -13,7 +13,7 @@
 - Lexicon / Reader / Examples / Explore / Shelves / Quiz / Settings を横断する辞書型 UI
 - WordPack の生成、再生成、保存、公開設定、学習記録、例文管理
 - 保存済み WordPack を使った関連語探索、Smart Shelves、長文読解 Quiz
-- Google ログインとゲスト閲覧モード。ゲストは公開済み WordPack / Quiz を読み取り専用で閲覧
+- Google ログインとゲスト閲覧モード。ゲストは公開済み WordPack / Example / Reader / Quiz を読み取り専用で閲覧
 - OpenAI LLM による語義・例文・記事化と、gpt-4o-mini-tts による音声再生
 - Firestore を使った WordPack / 例文 / 記事 / Quiz の永続化
 - Cloud Run + Firebase Hosting を想定した本番デプロイと GitHub Actions CI/CD

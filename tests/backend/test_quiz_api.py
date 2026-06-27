@@ -192,3 +192,22 @@ def test_quiz_delete_removes_saved_quiz(client: TestClient) -> None:
     response = client.delete("/api/quiz/quiz:api")
     assert response.status_code == 200
     assert client.get("/api/quiz/quiz:api").status_code == 404
+
+
+def test_quiz_guest_public_update_endpoint(client: TestClient) -> None:
+    _seed_quiz()
+
+    response = client.post("/api/quiz/quiz:api/guest-public", json={"guest_public": True})
+
+    assert response.status_code == 200
+    assert response.json() == {"quiz_id": "quiz:api", "guest_public": True}
+
+    listed = client.get("/api/quiz")
+    assert listed.status_code == 200
+    assert listed.json()["items"][0]["guest_public"] is True
+
+
+def test_quiz_guest_public_update_returns_404_for_missing_quiz(client: TestClient) -> None:
+    response = client.post("/api/quiz/missing/guest-public", json={"guest_public": True})
+
+    assert response.status_code == 404

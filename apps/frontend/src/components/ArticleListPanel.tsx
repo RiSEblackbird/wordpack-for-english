@@ -19,6 +19,7 @@ interface ArticleListItem {
   title_en: string;
   created_at: string;
   updated_at: string;
+  guest_public?: boolean;
 }
 
 interface ArticleListResponse {
@@ -61,7 +62,7 @@ export const ArticleListPanel: React.FC = () => {
             { signal },
           ),
         );
-        setItems(res.items);
+        setItems(res.items.map((item) => ({ ...item, guest_public: item.guest_public ?? false })));
         setTotal(res.total);
         setOffset((prev) => (prev === newOffset ? prev : newOffset));
       } catch (e) {
@@ -133,6 +134,46 @@ export const ArticleListPanel: React.FC = () => {
       setMsg({ kind: 'alert', text: m });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleArticleGuestPublic = async (item: ArticleListItem) => {
+    if (isGuest) return;
+    const previous = Boolean(item.guest_public);
+    const nextValue = !previous;
+    setItems((prev) => prev.map((article) => (
+      article.id === item.id ? { ...article, guest_public: nextValue } : article
+    )));
+    setPreview((prev) => (
+      prev?.id === item.id ? { ...prev, guest_public: nextValue } : prev
+    ));
+    try {
+      const response = await fetchJson<{ article_id: string; guest_public: boolean }>(
+        `${settings.apiBase}/article/${encodeURIComponent(item.id)}/guest-public`,
+        {
+          method: 'POST',
+          body: { guest_public: nextValue },
+        },
+      );
+      setItems((prev) => prev.map((article) => (
+        article.id === item.id ? { ...article, guest_public: response.guest_public } : article
+      )));
+      setPreview((prev) => (
+        prev?.id === item.id ? { ...prev, guest_public: response.guest_public } : prev
+      ));
+      setMsg({
+        kind: 'status',
+        text: response.guest_public ? 'Reader記事をゲスト公開しました' : 'Reader記事を非公開にしました',
+      });
+    } catch (e) {
+      setItems((prev) => prev.map((article) => (
+        article.id === item.id ? { ...article, guest_public: previous } : article
+      )));
+      setPreview((prev) => (
+        prev?.id === item.id ? { ...prev, guest_public: previous } : prev
+      ));
+      const m = e instanceof ApiError ? e.message : 'Reader記事の公開設定を更新できませんでした';
+      setMsg({ kind: 'alert', text: m });
     }
   };
 
@@ -218,6 +259,8 @@ export const ArticleListPanel: React.FC = () => {
   const hasNext = offset + LIST_LIMIT < total;
   const hasPrev = offset > 0;
   const selectedCount = selectedIds.size;
+  const showGlobalEmpty = items.length === 0 && !loading && total === 0;
+  const showPageEmpty = items.length === 0 && !loading && total > 0;
 
   const deleteSelectedArticles = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -265,10 +308,18 @@ export const ArticleListPanel: React.FC = () => {
         .al-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 0.5rem; background: var(--color-surface); cursor: pointer; }
         .al-card-header { display: flex; align-items: center; gap: 0.5rem; }
         .al-card-title-row { display: flex; align-items: center; gap: 0.5rem; flex: 1; }
+        .al-public-row { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.45rem; }
+        .al-public-pill { display: inline-flex; align-items: center; min-height: 1.6rem; padding: 0.15rem 0.5rem; border: 1px solid #cbd5e1; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+        .al-public-pill.is-public { border-color: #86efac; background: #f0fdf4; color: #166534; }
+        .al-public-pill.is-private { background: #f8fafc; color: #475569; }
+        .al-public-button { min-height: 2.3rem; padding: 0.3rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #0f172a; cursor: pointer; }
+        .al-empty-state { padding: 1.25rem; border: 1px dashed var(--color-border); border-radius: 8px; color: var(--color-subtle); background: var(--color-surface); }
+        .al-empty-state strong { display: block; color: inherit; margin-bottom: 0.25rem; }
         .al-list-header { display: flex; align-items: center; justify-content: space-between; }
         .al-pagination { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
         .al-list-header > button,
         .al-card-title-row button,
+        .al-public-button,
         .al-pagination button {
           padding: 0.25rem 0.75rem;
           border: 1px solid #cbd5e1;
@@ -279,11 +330,17 @@ export const ArticleListPanel: React.FC = () => {
         }
         .al-list-header > button:hover:not(:disabled),
         .al-card-title-row button:hover:not(:disabled),
+        .al-public-button:hover:not(:disabled),
         .al-pagination button:hover:not(:disabled) {
           background: #f8fafc;
         }
+        .al-public-button:focus-visible {
+          outline: 3px solid rgba(37, 99, 235, 0.35);
+          outline-offset: 2px;
+        }
         .al-list-header > button:disabled,
         .al-card-title-row button:disabled,
+        .al-public-button:disabled,
         .al-pagination button:disabled {
           background: #e5e7eb;
           color: #374151;
@@ -342,10 +399,51 @@ export const ArticleListPanel: React.FC = () => {
                 </GuestLock>
               </div>
             </div>
+            <div className="al-public-row">
+              <span className={`al-public-pill ${it.guest_public ? 'is-public' : 'is-private'}`}>
+                {it.guest_public ? '公開中' : '非公開'}
+              </span>
+              {!isGuest ? (
+                <button
+                  type="button"
+                  className="al-public-button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void toggleArticleGuestPublic(it);
+                  }}
+                >
+                  {it.guest_public ? '非公開にする' : '公開にする'}
+                </button>
+              ) : null}
+            </div>
             <div style={{ fontSize: '10px', color: 'var(--color-subtle)' }}>更新: {formatDateJst(it.updated_at)}</div>
           </div>
         ))}
       </div>
+      {showGlobalEmpty ? (
+        <div className="al-empty-state">
+          <strong>{isGuest ? 'ゲスト公開中のReader記事はまだありません。' : 'インポート済み文章はまだありません。'}</strong>
+          <span>
+            {isGuest
+              ? 'ログイン済みユーザーが公開したReader記事だけがここに表示されます。'
+              : '文章をインポートすると、ここから本文と関連WordPackを開けます。'}
+          </span>
+        </div>
+      ) : null}
+      {showPageEmpty ? (
+        <div className="al-empty-state">
+          <strong>{isGuest ? 'このページに表示できるゲスト公開Reader記事がありません。' : 'このページに表示できるReader記事がありません。'}</strong>
+          <span>前のページへ戻ると、残っているReader記事を確認できます。</span>
+          <button
+            type="button"
+            className="al-public-button"
+            onClick={() => load(Math.max(0, offset - LIST_LIMIT))}
+            disabled={!hasPrev || loading}
+          >
+            前のページへ戻る
+          </button>
+        </div>
+      ) : null}
       {(hasPrev || hasNext) && (
         <div className="al-pagination">
           <button onClick={() => load(offset - LIST_LIMIT)} disabled={!hasPrev || loading}>前へ</button>

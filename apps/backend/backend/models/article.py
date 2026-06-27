@@ -68,6 +68,7 @@ class Article(BaseModel):
     generation_started_at: str | None = None
     generation_completed_at: str | None = None
     generation_duration_ms: int | None = None
+    guest_public: bool = False
 
 
 class ArticleDetailResponse(Article):
@@ -88,6 +89,7 @@ class ArticleListItem(BaseModel):
     title_en: str
     created_at: str
     updated_at: str
+    guest_public: bool = False
 
 
 class ArticleListResponse(BaseModel):
@@ -95,3 +97,12 @@ class ArticleListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ArticleGuestPublicUpdateRequest(BaseModel):
+    guest_public: bool = Field(description="記事をゲスト閲覧へ公開するか")
+
+
+class ArticleGuestPublicUpdateResponse(BaseModel):
+    article_id: str
+    guest_public: bool = Field(description="更新後のゲスト公開フラグ")

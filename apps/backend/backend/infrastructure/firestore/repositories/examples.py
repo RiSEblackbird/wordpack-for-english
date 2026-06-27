@@ -93,6 +93,19 @@ class FirestoreExampleRepository(FirestoreBaseRepository):
             ordered = ordered.start_after(cursor)
         return list(ordered.limit(limit).stream())
 
+    def _ordered_examples_query(
+        self,
+        query: firestore.Query | firestore.CollectionReference,
+        *,
+        primary_order: str,
+        secondary_order: str | None,
+        direction: firestore.Query.DESCENDING | firestore.Query.ASCENDING,
+    ) -> firestore.Query:
+        ordered = query.order_by(primary_order, direction=direction)
+        if secondary_order and secondary_order != primary_order:
+            ordered = ordered.order_by(secondary_order, direction=direction)
+        return ordered.order_by("__name__", direction=firestore.Query.ASCENDING)
+
     def _normalize_example_snapshot(
         self, snapshot: firestore.DocumentSnapshot
     ) -> dict[str, Any]:
@@ -250,6 +263,7 @@ class FirestoreExampleRepository(FirestoreBaseRepository):
         search_mode: str = "contains",
         category: str | None = None,
         word_pack_id: str | None = None,
+        public_only: bool = False,
     ) -> int:
         base_query = self._build_examples_query(
             word_pack_id=word_pack_id, category=category
@@ -257,6 +271,13 @@ class FirestoreExampleRepository(FirestoreBaseRepository):
         filtered_query, _order_hint = self._apply_search_filters(
             base_query, search=search, search_mode=search_mode
         )
+        if public_only:
+            pack_cache: dict[str, Mapping[str, Any]] = {}
+            return sum(
+                1
+                for snapshot in filtered_query.stream()
+                if self._example_snapshot_is_guest_public(snapshot, pack_cache)
+            )
         try:
             aggregation = filtered_query.count().get()
         except AttributeError:
@@ -276,6 +297,7 @@ class FirestoreExampleRepository(FirestoreBaseRepository):
         search_mode: str = "contains",
         category: str | None = None,
         word_pack_id: str | None = None,
+        public_only: bool = False,
     ) -> list[
         tuple[int, str, str, str, str, str, str | None, str, str | None, int, int, int]
     ]:
@@ -302,14 +324,31 @@ class FirestoreExampleRepository(FirestoreBaseRepository):
             base_query, search=search, search_mode=search_mode
         )
         primary_order = search_order or requested_order
-        snapshots = self._paginate_ordered_query(
-            filtered_query,
-            primary_order=primary_order,
-            secondary_order=requested_order if search_order else None,
-            direction=direction,
-            offset=normalized_offset,
-            limit=normalized_limit,
-        )
+        if public_only:
+            ordered_query = self._ordered_examples_query(
+                filtered_query,
+                primary_order=primary_order,
+                secondary_order=requested_order if search_order else None,
+                direction=direction,
+            )
+            pack_cache: dict[str, Mapping[str, Any]] = {}
+            public_snapshots = [
+                snapshot
+                for snapshot in ordered_query.stream()
+                if self._example_snapshot_is_guest_public(snapshot, pack_cache)
+            ]
+            snapshots = public_snapshots[
+                normalized_offset : normalized_offset + normalized_limit
+            ]
+        else:
+            snapshots = self._paginate_ordered_query(
+                filtered_query,
+                primary_order=primary_order,
+                secondary_order=requested_order if search_order else None,
+                direction=direction,
+                offset=normalized_offset,
+                limit=normalized_limit,
+            )
 
         pack_cache: dict[str, Mapping[str, Any]] = {}
         results: list[
@@ -344,6 +383,22 @@ class FirestoreExampleRepository(FirestoreBaseRepository):
                 )
             )
         return results
+
+    def _example_snapshot_is_guest_public(
+        self,
+        snapshot: firestore.DocumentSnapshot,
+        pack_cache: dict[str, Mapping[str, Any]],
+    ) -> bool:
+        entry = self._normalize_example_snapshot(snapshot)
+        pack_id = str(entry.get("word_pack_id") or "")
+        if not pack_id:
+            return False
+        if pack_id not in pack_cache:
+            pack_cache[pack_id] = self._wordpacks.get_word_pack_metadata(pack_id) or {}
+        metadata = pack_cache.get(pack_id, {}).get("metadata") or {}
+        if not isinstance(metadata, Mapping):
+            return False
+        return bool(metadata.get("guest_public", False))
 
     def update_example_transcription_typing(
         self, example_id: int, input_length: int

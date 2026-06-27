@@ -19,6 +19,7 @@ import {
   fetchQuizGenerationJob,
   fetchQuizList,
   submitQuizAttempt,
+  updateQuizGuestPublic,
 } from '../../features/quiz/api';
 import {
   DIFFICULTY_LABELS,
@@ -543,6 +544,41 @@ export const QuizPage: React.FC = () => {
     }
   };
 
+  const handleToggleQuizPublic = async (quiz: QuizListItem) => {
+    if (isGuest) return;
+    const nextValue = !Boolean(quiz.guest_public);
+    setItems((prev) => prev.map((item) => (
+      item.id === quiz.id ? { ...item, guest_public: nextValue } : item
+    )));
+    setSelectedQuiz((prev) => (
+      prev?.id === quiz.id ? { ...prev, guest_public: nextValue } : prev
+    ));
+    try {
+      const response = await updateQuizGuestPublic(apiBase, quiz.id, nextValue, {
+        timeoutMs: settings.requestTimeoutMs,
+      });
+      setItems((prev) => prev.map((item) => (
+        item.id === quiz.id ? { ...item, guest_public: response.guest_public } : item
+      )));
+      setSelectedQuiz((prev) => (
+        prev?.id === quiz.id ? { ...prev, guest_public: response.guest_public } : prev
+      ));
+      setMessage({
+        kind: 'status',
+        text: response.guest_public ? 'Quizをゲスト公開しました。' : 'Quizを非公開にしました。',
+      });
+    } catch (error) {
+      setItems((prev) => prev.map((item) => (
+        item.id === quiz.id ? { ...item, guest_public: Boolean(quiz.guest_public) } : item
+      )));
+      setSelectedQuiz((prev) => (
+        prev?.id === quiz.id ? { ...prev, guest_public: Boolean(quiz.guest_public) } : prev
+      ));
+      const text = error instanceof ApiError ? error.message : 'Quizの公開設定を更新できませんでした。';
+      setMessage({ kind: 'alert', text });
+    }
+  };
+
   const handleGrade = async () => {
     if (!selectedQuiz) return;
     if (isGuest) {
@@ -751,8 +787,12 @@ export const QuizPage: React.FC = () => {
           </div>
           {items.length === 0 ? (
             <div className="quiz-empty-state">
-              <strong>保存済みQuizはまだありません。</strong>
-              <span>左のフォームで対象語を指定し、長文読解クイズを生成してください。</span>
+              <strong>{isGuest ? 'ゲスト公開中のQuizはまだありません。' : '保存済みQuizはまだありません。'}</strong>
+              <span>
+                {isGuest
+                  ? 'ログイン済みユーザーが公開したQuizだけがここに表示されます。'
+                  : '左のフォームで対象語を指定し、長文読解クイズを生成してください。'}
+              </span>
             </div>
           ) : (
             <div className="quiz-list">
@@ -763,6 +803,20 @@ export const QuizPage: React.FC = () => {
                     <span>{FORMAT_PROFILE_LABELS[item.format_profile]} / {GENERATION_DOMAIN_LABELS[item.generation_domain]} / {DOMAIN_INTENSITY_LABELS[item.domain_intensity]}</span>
                     <small>{item.question_count}問・{item.passage_count}本文・{formatDate(item.updated_at)}</small>
                   </button>
+                  <div className="quiz-public-row">
+                    <span className={`quiz-public-pill ${item.guest_public ? 'is-public' : 'is-private'}`}>
+                      {item.guest_public ? '公開中' : '非公開'}
+                    </span>
+                    {!isGuest ? (
+                      <button
+                        type="button"
+                        className="quiz-secondary-button"
+                        onClick={() => void handleToggleQuizPublic(item)}
+                      >
+                        {item.guest_public ? '非公開にする' : '公開にする'}
+                      </button>
+                    ) : null}
+                  </div>
                   <div className="quiz-list-item__lemmas">
                     {item.source_lemmas.slice(0, 5).map((lemma) => <span key={lemma}>{lemma}</span>)}
                   </div>

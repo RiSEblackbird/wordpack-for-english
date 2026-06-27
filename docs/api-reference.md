@@ -121,6 +121,10 @@ Request:
 
 ## 例文
 
+### `GET /api/word/examples`
+
+保存済み例文を WordPack 横断で返します。ゲスト閲覧では、`guest_public=true` の WordPack に紐づく例文だけを返します。
+
 ### `POST /api/word/examples/bulk-delete`
 
 例文 ID の配列を受け取り、一括削除します。
@@ -170,6 +174,26 @@ Request:
 
 カテゴリから例文を生成し、記事として保存します。一部だけ記事化できた場合は成功レスポンスに警告を含め、全件失敗時は 502 を返します。
 
+### `GET /api/article`
+
+保存済み Reader 記事の一覧を返します。ゲスト閲覧では `guest_public=true` の記事だけを返します。
+
+### `GET /api/article/{id}`
+
+指定 Reader 記事の詳細を返します。ゲスト閲覧では非公開記事は 404 です。公開記事の関連 WordPack は、ゲスト公開中の WordPack だけを返します。
+
+### `POST /api/article/{id}/guest-public`
+
+Reader 記事のゲスト公開フラグを更新します。
+
+Request:
+
+```json
+{
+  "guest_public": true
+}
+```
+
 ## Quiz
 
 Quiz API は保存済み WordPack や lemma から長文読解 Quiz を生成、保存、取得、削除、採点 attempt 保存するために使います。
@@ -180,6 +204,26 @@ Quiz API は保存済み WordPack や lemma から長文読解 Quiz を生成、
 - `generation_domain`: 題材
 - `domain_intensity`: 専門性の強さ
 - ゲスト閲覧では公開済み Quiz の閲覧とローカル採点のみ許可
+
+### `GET /api/quiz`
+
+保存済み Quiz の一覧を返します。ゲスト閲覧では `guest_public=true` の Quiz だけを返します。
+
+### `GET /api/quiz/{id}`
+
+指定 Quiz の詳細を返します。ゲスト閲覧では非公開 Quiz は 404 です。
+
+### `POST /api/quiz/{id}/guest-public`
+
+Quiz のゲスト公開フラグを更新します。
+
+Request:
+
+```json
+{
+  "guest_public": true
+}
+```
 
 ## Text-to-Speech
 
