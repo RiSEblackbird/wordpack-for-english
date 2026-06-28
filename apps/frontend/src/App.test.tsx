@@ -599,6 +599,25 @@ describe('App navigation', () => {
     expect(mainRect.left).toBeGreaterThanOrEqual(sidebarRect.right);
   });
 
+  it('keeps Reader import controls in the page body only', async () => {
+    setupFetchForAuthenticatedFlow(fetchMock);
+    renderWithProviders();
+
+    const user = userEvent.setup();
+    await completeLogin(fetchMock, user);
+
+    const readerButton = await screen.findByRole('button', { name: '文章インポート' });
+    await act(async () => {
+      await user.click(readerButton);
+    });
+
+    expect(await screen.findByRole('heading', { name: 'Reader' })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('文章を貼り付け（日本語/英語）')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'ページ固有の操作' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '文章インポート（サイドバー）' })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('文章を貼り付け（サイドバー）')).not.toBeInTheDocument();
+  });
+
   it('collapses the desktop sidebar into a navigable icon rail', async () => {
     setupFetchForAuthenticatedFlow(fetchMock);
     renderWithProviders();
