@@ -477,7 +477,9 @@ export const ExampleListPanel: React.FC = () => {
         </div>
 
         {items.length === 0 && !loading ? (
-          <div style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>保存済みの例文がありません。</div>
+          <div style={{ textAlign: 'center', color: '#666', padding: '2rem' }}>
+            {isGuest ? 'ゲスト公開中のWordPackに紐づく例文はまだありません。' : '保存済みの例文がありません。'}
+          </div>
         ) : (
           <>
             {viewMode === 'card' ? (

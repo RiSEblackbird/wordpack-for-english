@@ -94,3 +94,24 @@ def test_deploy_production_workflow_runs_on_main_push_or_manual_only() -> None:
     _assert_contains_all(on_block, ["push:", "branches:", "main", "workflow_dispatch:"])
     _assert_contains_none(on_block, ["workflow_run:", "pull_request:"])
     _assert_contains_none(yml, ["github.event.workflow_run."])
+
+
+def test_deploy_production_prepares_short_lived_firebase_cli_token() -> None:
+    """
+    Contract: Firebase CLI deploys must use a short-lived token minted from the
+    authenticated service account, not a long-lived repository secret.
+    """
+    yml = _read_text(".github/workflows/deploy-production.yml")
+
+    _assert_contains_all(
+        yml,
+        [
+            "Prepare Firebase CLI auth token",
+            "gcloud auth print-access-token",
+            "::add-mask::${token}",
+            'echo "FIREBASE_TOKEN=${token}" >> "${GITHUB_ENV}"',
+            "firebase deploy --only hosting",
+            "TOOL=firebase",
+        ],
+    )
+    _assert_contains_none(yml, ["secrets.FIREBASE_TOKEN"])

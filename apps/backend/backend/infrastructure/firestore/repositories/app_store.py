@@ -186,8 +186,14 @@ class AppFirestoreRepository:
         search: str | None = None,
         search_mode: str = "contains",
         category: str | None = None,
+        public_only: bool = False,
     ) -> int:
-        return self.examples.count_examples(search=search, search_mode=search_mode, category=category)
+        return self.examples.count_examples(
+            search=search,
+            search_mode=search_mode,
+            category=category,
+            public_only=public_only,
+        )
 
     def list_examples(
         self,
@@ -199,6 +205,7 @@ class AppFirestoreRepository:
         search: str | None = None,
         search_mode: str = "contains",
         category: str | None = None,
+        public_only: bool = False,
     ) -> list[
         tuple[int, str, str, str, str, str, str | None, str, str | None, int, int, int]
     ]:
@@ -210,6 +217,7 @@ class AppFirestoreRepository:
             search=search,
             search_mode=search_mode,
             category=category,
+            public_only=public_only,
         )
 
     def update_example_transcription_typing(
@@ -236,15 +244,23 @@ class AppFirestoreRepository:
         str | None,
         str | None,
         int | None,
+        bool,
         list[tuple[str, str, str]],
     ] | None:
         return self.articles.get_article(article_id)
 
-    def list_articles(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str]]:
-        return self.articles.list_articles(limit=limit, offset=offset)
+    def list_articles(
+        self, limit: int = 50, offset: int = 0, *, public_only: bool = False
+    ) -> list[tuple[str, str, str, str, bool]]:
+        return self.articles.list_articles(
+            limit=limit, offset=offset, public_only=public_only
+        )
 
-    def count_articles(self) -> int:
-        return self.articles.count_articles()
+    def count_articles(self, *, public_only: bool = False) -> int:
+        return self.articles.count_articles(public_only=public_only)
+
+    def update_article_guest_public(self, article_id: str, guest_public: bool) -> bool | None:
+        return self.articles.update_article_guest_public(article_id, guest_public)
 
     def delete_article(self, article_id: str) -> bool:
         return self.articles.delete_article(article_id)
@@ -275,6 +291,9 @@ class AppFirestoreRepository:
 
     def delete_quiz(self, quiz_id: str) -> bool:
         return self.quizzes.delete_quiz(quiz_id)
+
+    def update_quiz_guest_public(self, quiz_id: str, guest_public: bool) -> bool | None:
+        return self.quizzes.update_quiz_guest_public(quiz_id, guest_public)
 
     def save_quiz_attempt(self, attempt_id: str, payload: Mapping[str, Any]) -> None:
         self.quizzes.save_quiz_attempt(attempt_id, payload)

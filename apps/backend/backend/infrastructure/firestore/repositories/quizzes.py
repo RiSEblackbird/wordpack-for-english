@@ -159,6 +159,15 @@ class FirestoreQuizRepository(FirestoreBaseRepository):
                     link.reference.delete()
         return True
 
+    def update_quiz_guest_public(self, quiz_id: str, guest_public: bool) -> bool | None:
+        doc_ref = self._quizzes.document(quiz_id)
+        snapshot = doc_ref.get()
+        if not snapshot.exists:
+            return None
+        value = bool(guest_public)
+        doc_ref.update({"guest_public": value, "updated_at": self._now_iso()})
+        return value
+
     def save_quiz_attempt(self, attempt_id: str, payload: Mapping[str, Any]) -> None:
         now = self._now_iso()
         self._quiz_attempts.document(attempt_id).set(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...application.wordpack.errors import handle_flow_runtime_error
 from ...application.wordpack.generate_wordpack import build_llm_info, get_override_value
@@ -121,6 +121,7 @@ async def generate_examples_for_word_pack(
     summary="例文一覧を取得（WordPackを横断）",
 )
 async def list_examples(
+    request: Request,
     limit: int = Query(default=50, ge=1, le=200, description="取得件数上限"),
     offset: int = Query(default=0, ge=0, description="オフセット"),
     order_by: str = Query(
@@ -138,6 +139,7 @@ async def list_examples(
     """`word_pack_examples` を元に横断的な例文一覧を返す。"""
 
     repository = get_store()
+    public_only = bool(getattr(request.state, "guest", False))
     items_raw = repository.list_examples(
         limit=limit,
         offset=offset,
@@ -146,11 +148,13 @@ async def list_examples(
         search=search,
         search_mode=search_mode,
         category=category.value if category is not None else None,
+        public_only=public_only,
     )
     total = repository.count_examples(
         search=search,
         search_mode=search_mode,
         category=category.value if category is not None else None,
+        public_only=public_only,
     )
 
     items: list[ExampleListItem] = []

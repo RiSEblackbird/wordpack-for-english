@@ -282,6 +282,15 @@ class QuizListResponse(BaseModel):
     offset: int
 
 
+class QuizGuestPublicUpdateRequest(BaseModel):
+    guest_public: bool = Field(description="Quizをゲスト閲覧へ公開するか")
+
+
+class QuizGuestPublicUpdateResponse(BaseModel):
+    quiz_id: str
+    guest_public: bool = Field(description="更新後のゲスト公開フラグ")
+
+
 class QuizAnswerInput(BaseModel):
     question_id: str
     selected_choice_id: Literal["A", "B", "C", "D"] | None = None
