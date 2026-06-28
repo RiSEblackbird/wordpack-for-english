@@ -41,14 +41,14 @@ class _HostingApiHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         self._record()
-        self._send_json({"name": "projects/demo-project/sites/demo-project"})
+        self._send_json({"name": "sites/demo-project"})
 
     def do_POST(self) -> None:
         record = self._record()
-        if record["path"] == "/v1beta1/projects/-/sites/demo-project/versions":
-            self._send_json({"name": "projects/-/sites/demo-project/versions/version-1"})
+        if record["path"] == "/v1beta1/sites/demo-project/versions":
+            self._send_json({"name": "sites/demo-project/versions/version-1"})
             return
-        if record["path"] == "/v1beta1/projects/-/sites/demo-project/versions/version-1:populateFiles":
+        if record["path"] == "/v1beta1/sites/demo-project/versions/version-1:populateFiles":
             files = record["body"]["files"]  # type: ignore[index]
             self._send_json(
                 {
@@ -60,7 +60,7 @@ class _HostingApiHandler(BaseHTTPRequestHandler):
         if record["path"].startswith("/upload/"):
             self._send_json({})
             return
-        if record["path"] == "/v1beta1/projects/-/sites/demo-project/channels/live/releases":
+        if record["path"] == "/v1beta1/sites/demo-project/channels/live/releases":
             self._send_json({"name": "release-1"})
             return
         self.send_error(404)
@@ -157,7 +157,8 @@ def test_deploy_firebase_hosting_uses_hosting_api_and_gcloud_token(tmp_path: Pat
     assert [request["method"] for request in requests] == ["GET", "POST", "POST", "POST", "POST", "PATCH", "POST"]
     assert all(request["authorization"] == "Bearer fake-hosting-token" for request in requests)
     assert requests[2]["body"]["files"].keys() == {"/assets/app.js", "/index.html"}  # type: ignore[index, union-attr]
-    assert requests[5]["path"] == "/v1beta1/projects/-/sites/demo-project/versions/version-1"
+    assert requests[0]["path"] == "/v1beta1/sites/demo-project"
+    assert requests[5]["path"] == "/v1beta1/sites/demo-project/versions/version-1"
     assert requests[5]["query"] == {"updateMask": ["status,config"]}
     assert requests[5]["body"]["config"] == {  # type: ignore[index]
         "rewrites": [
@@ -168,5 +169,5 @@ def test_deploy_firebase_hosting_uses_hosting_api_and_gcloud_token(tmp_path: Pat
             {"glob": "**", "path": "/index.html"},
         ]
     }
-    assert requests[6]["path"] == "/v1beta1/projects/-/sites/demo-project/channels/live/releases"
-    assert requests[6]["query"] == {"versionName": ["projects/-/sites/demo-project/versions/version-1"]}
+    assert requests[6]["path"] == "/v1beta1/sites/demo-project/channels/live/releases"
+    assert requests[6]["query"] == {"versionName": ["sites/demo-project/versions/version-1"]}

@@ -227,12 +227,13 @@ def deploy() -> None:
 
     token = run_gcloud_access_token()
     api = HostingApi(token, os.environ.get("FIREBASE_HOSTING_API_BASE_URL", DEFAULT_API_BASE))
+    quoted_site = urllib.parse.quote(site, safe="")
 
     print(f"[deploy_firebase_hosting] Verifying Firebase Hosting site {site}")
-    api.request("GET", f"/projects/{urllib.parse.quote(args.project, safe='')}/sites/{urllib.parse.quote(site, safe='')}")
+    api.request("GET", f"/sites/{quoted_site}")
 
     print("[deploy_firebase_hosting] Creating Hosting version")
-    create_result = api.request("POST", f"/projects/-/sites/{urllib.parse.quote(site, safe='')}/versions", {"status": "CREATED"})
+    create_result = api.request("POST", f"/sites/{quoted_site}/versions", {"status": "CREATED"})
     name = create_result.get("name")
     if not isinstance(name, str) or not name:
         raise HostingDeployError("Firebase Hosting API did not return a version name")
@@ -262,7 +263,7 @@ def deploy() -> None:
     print("[deploy_firebase_hosting] Finalizing Hosting version")
     api.request(
         "PATCH",
-        f"/projects/-/sites/{urllib.parse.quote(site, safe='')}/versions/{urllib.parse.quote(vid, safe='')}",
+        f"/sites/{quoted_site}/versions/{urllib.parse.quote(vid, safe='')}",
         {"status": "FINALIZED", "config": final_config},
         query={"updateMask": "status,config"},
     )
@@ -270,7 +271,7 @@ def deploy() -> None:
     print(f"[deploy_firebase_hosting] Releasing version to channel {args.channel}")
     api.request(
         "POST",
-        f"/projects/-/sites/{urllib.parse.quote(site, safe='')}/channels/{urllib.parse.quote(args.channel, safe='')}/releases",
+        f"/sites/{quoted_site}/channels/{urllib.parse.quote(args.channel, safe='')}/releases",
         {},
         query={"versionName": name},
     )
