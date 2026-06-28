@@ -96,11 +96,11 @@ def test_deploy_production_workflow_runs_on_main_push_or_manual_only() -> None:
     _assert_contains_none(yml, ["github.event.workflow_run."])
 
 
-def test_deploy_production_prepares_firebase_cli_credentials_file() -> None:
+def test_deploy_production_uses_api_based_hosting_deploy() -> None:
     """
     Contract: production deploy must not pass a gcloud access token as
-    FIREBASE_TOKEN. Firebase CLI gets a service account credentials file, while
-    Firestore index sync uses gcloud-authenticated Admin API requests for that step.
+    FIREBASE_TOKEN. Firestore index sync and Firebase Hosting deploy both use
+    gcloud-authenticated API requests, avoiding Firebase CLI auth in CI.
     """
     yml = _read_text(".github/workflows/deploy-production.yml")
 
@@ -111,10 +111,9 @@ def test_deploy_production_prepares_firebase_cli_credentials_file() -> None:
             "credentials_json: ${{ secrets.GCP_SA_KEY }}",
             "create_credentials_file: true",
             "export_environment_variables: true",
-            "Prepare Firebase CLI credentials file",
-            "GOOGLE_APPLICATION_CREDENTIALS=${firebase_credentials_file}",
-            "FIREBASE_CREDENTIALS_FILE=${firebase_credentials_file}",
-            "firebase deploy --only hosting",
+            "python scripts/deploy_firebase_hosting.py",
+            "--site \"${FIREBASE_PROJECT_ID}\"",
+            "npm --prefix ./apps/frontend run build",
             "TOOL=gcloud",
         ],
     )
@@ -122,6 +121,9 @@ def test_deploy_production_prepares_firebase_cli_credentials_file() -> None:
         yml,
         [
             "FIREBASE_TOKEN",
+            "firebase deploy --only hosting",
+            "npm install -g firebase-tools",
+            "Prepare Firebase CLI credentials file",
             "gcloud auth print-access-token",
             "Prepare Firebase CLI auth token",
             "TOOL=firebase",
