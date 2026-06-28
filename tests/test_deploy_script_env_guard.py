@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 
@@ -50,7 +53,46 @@ def test_release_cloud_run_stops_when_index_sync_fails(tmp_path: Path) -> None:
     assert "CLOUD_RUN_SCRIPT_RAN" not in combined_output
 
 
-def test_gcloud_index_sync_applies_field_overrides(tmp_path: Path) -> None:
+class _FirestoreAdminApiHandler(BaseHTTPRequestHandler):
+    requests: list[dict[str, object]] = []
+
+    def _record(self, status: int, payload: dict[str, object]) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(length).decode("utf-8") if length else ""
+        self.requests.append(
+            {
+                "method": self.command,
+                "path": self.path,
+                "authorization": self.headers.get("Authorization"),
+                "body": json.loads(body) if body else {},
+            }
+        )
+        encoded = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def do_POST(self) -> None:
+        self._record(
+            409,
+            {"error": {"status": "ALREADY_EXISTS", "message": "index already exists"}},
+        )
+
+    def do_PATCH(self) -> None:
+        self._record(200, {"name": "operations/mock"})
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+
+def test_gcloud_index_sync_uses_firestore_admin_api_for_indexes_and_field_overrides(tmp_path: Path) -> None:
+    _FirestoreAdminApiHandler.requests = []
+    server = HTTPServer(("127.0.0.1", 0), _FirestoreAdminApiHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     gcloud_log = tmp_path / "gcloud.log"
@@ -58,7 +100,12 @@ def test_gcloud_index_sync_applies_field_overrides(tmp_path: Path) -> None:
     fake_gcloud.write_text(
         "#!/usr/bin/env bash\n"
         "printf '%s\\n' \"$*\" >> \"${GCLOUD_LOG}\"\n"
-        "exit 0\n",
+        "if [ \"$1\" = \"auth\" ] && [ \"$2\" = \"print-access-token\" ]; then\n"
+        "  printf 'fake-token\\n'\n"
+        "  exit 0\n"
+        "fi\n"
+        "printf 'unexpected gcloud command: %s\\n' \"$*\" >&2\n"
+        "exit 2\n",
         encoding="utf-8",
     )
     fake_gcloud.chmod(0o755)
@@ -90,34 +137,75 @@ def test_gcloud_index_sync_applies_field_overrides(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    proc = subprocess.run(
-        [
-            "scripts/deploy_firestore_indexes.sh",
-            "--project",
-            "demo-project",
-            "--tool",
-            "gcloud",
-            "--index-file",
-            str(index_file),
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        env={
-            **os.environ,
-            "PATH": f"{fake_bin}:{os.environ['PATH']}",
-            "GCLOUD_LOG": str(gcloud_log),
-        },
-    )
+    try:
+        proc = subprocess.run(
+            [
+                "scripts/deploy_firestore_indexes.sh",
+                "--project",
+                "demo-project",
+                "--tool",
+                "gcloud",
+                "--index-file",
+                str(index_file),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "FIRESTORE_ADMIN_API_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1",
+                "GCLOUD_LOG": str(gcloud_log),
+            },
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
     combined_output = proc.stdout + proc.stderr
     assert proc.returncode == 0, combined_output
+    assert "既存のためスキップ" in combined_output
+    assert "fieldOverride 同期済み" in combined_output
 
     calls = gcloud_log.read_text(encoding="utf-8").splitlines()
-    assert any("alpha firestore indexes composite create" in call for call in calls)
-    assert any(
-        "firestore indexes fields update normalized_label" in call
-        and "--collection-group=lemmas" in call
-        and "--index=order=ascending" in call
-        for call in calls
+    assert calls == ["auth print-access-token --quiet"]
+    assert "alpha" not in "\n".join(calls)
+
+    requests = _FirestoreAdminApiHandler.requests
+    assert [request["method"] for request in requests] == ["POST", "PATCH"]
+    assert requests[0]["authorization"] == "Bearer fake-token"
+    assert requests[1]["authorization"] == "Bearer fake-token"
+    assert requests[0]["path"] == (
+        "/v1/projects/demo-project/databases/%28default%29/"
+        "collectionGroups/examples/indexes"
     )
+    assert requests[1]["path"] == (
+        "/v1/projects/demo-project/databases/%28default%29/"
+        "collectionGroups/lemmas/fields/normalized_label?updateMask=indexConfig"
+    )
+
+    composite_body = requests[0]["body"]
+    assert composite_body == {
+        "queryScope": "COLLECTION",
+        "fields": [
+            {"fieldPath": "category", "order": "ASCENDING"},
+            {"fieldPath": "created_at", "order": "DESCENDING"},
+        ],
+    }
+
+    field_override_body = requests[1]["body"]
+    assert field_override_body == {
+        "name": (
+            "projects/demo-project/databases/(default)/"
+            "collectionGroups/lemmas/fields/normalized_label"
+        ),
+        "indexConfig": {
+            "indexes": [
+                {
+                    "queryScope": "COLLECTION",
+                    "fields": [{"fieldPath": "normalized_label", "order": "ASCENDING"}],
+                }
+            ]
+        },
+    }
