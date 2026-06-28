@@ -165,6 +165,8 @@ firebase deploy --only hosting --project <firebase-project-id>
 | `GCP_SA_KEY` | デプロイ用 service account JSON |
 | `CLOUD_RUN_ENV_FILE_BASE64` | `.env.deploy` を base64 化した値 |
 
+Firebase CLI は Firestore index 同期と Firebase Hosting 更新に使います。workflow 内では `GCP_SA_KEY` で Google Cloud に認証した後、`gcloud auth print-access-token` で短命 token を発行し、実行中の job にだけ `FIREBASE_TOKEN` として渡します。長期保存する `FIREBASE_TOKEN` secret は使いません。
+
 サービスアカウントに必要な代表ロール:
 
 - `roles/run.admin`

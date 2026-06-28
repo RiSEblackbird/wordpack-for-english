@@ -106,6 +106,19 @@ jobs:
         # firebase deploy --only firestore:indexes は GA であり、gcloud alpha より安定している。
         run: npm install -g firebase-tools@15.22.0
 
+      - name: Prepare Firebase CLI auth token
+        # Firebase CLI は GitHub Actions の ADC ファイルを読めない場合があるため、
+        # 認証済み gcloud から短命 access token を発行して Firebase CLI に渡す。
+        run: |
+          set -euo pipefail
+          token="$(gcloud auth print-access-token)"
+          if [ -z "${token}" ]; then
+            echo "::error::Failed to mint Firebase CLI access token from the authenticated service account." >&2
+            exit 1
+          fi
+          echo "::add-mask::${token}"
+          echo "FIREBASE_TOKEN=${token}" >> "${GITHUB_ENV}"
+
       - name: Install frontend dependencies
         # predeploy の tsc が @types などの devDependencies を必要とするため、事前に導入しておく。
         env:
@@ -144,7 +157,6 @@ jobs:
         # Cloud Run デプロイ後に Firebase Hosting を更新し、フロントエンドを同じリリースで揃える。
         env:
           FIREBASE_PROJECT_ID: ${{ env.FIREBASE_PROJECT_ID }}
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.gcp-auth.outputs.credentials_file_path }}
         run: |
           firebase deploy --only hosting \
             --project "${FIREBASE_PROJECT_ID}" \

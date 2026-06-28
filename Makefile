@@ -54,7 +54,6 @@ release-cloud-run: ENV_FILE ?= .env.deploy
 # `.env.deploy` などの env ファイル存在チェックと dry-run 成功を必須条件にしています。
 release-cloud-run:
 	@set -euo pipefail; \
-	# 一連のリリース処理で必須パラメータや前提ファイルの欠落を早期に検出する。
 	PROJECT_ID_VALUE="$(PROJECT_ID)"; \
 	REGION_VALUE="$(REGION)"; \
 	ENV_FILE_PATH="$(ENV_FILE)"; \
