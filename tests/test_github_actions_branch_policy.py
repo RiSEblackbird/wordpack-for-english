@@ -100,7 +100,7 @@ def test_deploy_production_prepares_firebase_cli_credentials_file() -> None:
     """
     Contract: production deploy must not pass a gcloud access token as
     FIREBASE_TOKEN. Firebase CLI gets a service account credentials file, while
-    Firestore index sync uses gcloud to avoid Firebase CLI auth for that step.
+    Firestore index sync uses gcloud-authenticated Admin API requests for that step.
     """
     yml = _read_text(".github/workflows/deploy-production.yml")
 

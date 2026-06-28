@@ -6,7 +6,7 @@
 
 - backend は `Dockerfile.backend` でビルドし、Cloud Run にデプロイします。
 - frontend は React + Vite の build artifact を Firebase Hosting に配置します。
-- Firestore の複合インデックスは `firestore.indexes.json` を Firebase CLI または gcloud 経由で同期します。
+- Firestore の複合インデックスと single-field override は `firestore.indexes.json` を同期します。既定の `gcloud` 経路は gcloud の認証情報で Firestore Admin API を直接呼び、Firebase CLI と `gcloud alpha` component には依存しません。
 - GitHub Actions の本番デプロイは `main` への push と `workflow_dispatch` をトリガーにします。
 - PR では本番デプロイ job を作らず、Cloud Run config guard の dry-run で設定ミスを検知します。
 
@@ -165,7 +165,7 @@ firebase deploy --only hosting --project <firebase-project-id>
 | `GCP_SA_KEY` | デプロイ用 service account JSON |
 | `CLOUD_RUN_ENV_FILE_BASE64` | `.env.deploy` を base64 化した値 |
 
-Firestore index 同期は `gcloud` 経由で行い、Firebase CLI 認証に依存させません。Firebase Hosting 更新では、workflow 内で `GCP_SA_KEY` から runner の一時 service account credentials file を作成し、`GOOGLE_APPLICATION_CREDENTIALS` として Firebase CLI に渡します。長期保存する `FIREBASE_TOKEN` secret や、`gcloud auth print-access-token` で発行した access token の `FIREBASE_TOKEN` 代入は使いません。
+Firestore index 同期は `gcloud` 認証の Firestore Admin API 経由で行い、Firebase CLI 認証や `gcloud alpha` component に依存させません。Firebase Hosting 更新では、workflow 内で `GCP_SA_KEY` から runner の一時 service account credentials file を作成し、`GOOGLE_APPLICATION_CREDENTIALS` として Firebase CLI に渡します。長期保存する `FIREBASE_TOKEN` secret や、`gcloud auth print-access-token` で発行した access token の `FIREBASE_TOKEN` 代入は使いません。
 
 サービスアカウントに必要な代表ロール:
 

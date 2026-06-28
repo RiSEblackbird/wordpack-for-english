@@ -39,6 +39,8 @@ Cloud Firestore を使う場合は、プロジェクト ID と認証情報を明
 make deploy-firestore-indexes PROJECT_ID=<project-id>
 ```
 
+既定では `gcloud auth print-access-token` で取得した短命の認証情報を使い、Firestore Admin API に直接 `indexes` と `fieldOverrides` を同期します。この経路は Firebase CLI 認証や `gcloud alpha` component を必要としません。
+
 Firebase CLI を使う場合:
 
 ```bash

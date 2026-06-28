@@ -168,7 +168,7 @@ jobs:
 
       - name: Run production Cloud Run release
         # Firestore インデックス同期の有無は環境変数で制御し、Makefile 側で一元管理する。
-        # TOOL=gcloud で Firebase CLI 認証に依存せず Firestore index を同期する。
+        # TOOL=gcloud で gcloud 認証の Firestore Admin API を使い、Firebase CLI と gcloud alpha に依存しない。
         env:
           CLOUD_RUN_PROJECT_ID: ${{ env.CLOUD_RUN_PROJECT_ID }}
           CLOUD_RUN_REGION: ${{ env.CLOUD_RUN_REGION }}
