@@ -229,10 +229,7 @@ def deploy() -> None:
     api = HostingApi(token, os.environ.get("FIREBASE_HOSTING_API_BASE_URL", DEFAULT_API_BASE))
     quoted_site = urllib.parse.quote(site, safe="")
 
-    print(f"[deploy_firebase_hosting] Verifying Firebase Hosting site {site}")
-    api.request("GET", f"/sites/{quoted_site}")
-
-    print("[deploy_firebase_hosting] Creating Hosting version")
+    print(f"[deploy_firebase_hosting] Creating Hosting version for site {site}")
     create_result = api.request("POST", f"/sites/{quoted_site}/versions", {"status": "CREATED"})
     name = create_result.get("name")
     if not isinstance(name, str) or not name:
@@ -265,13 +262,17 @@ def deploy() -> None:
         "PATCH",
         f"/sites/{quoted_site}/versions/{urllib.parse.quote(vid, safe='')}",
         {"status": "FINALIZED", "config": final_config},
-        query={"updateMask": "status,config"},
+        query={"update_mask": "status,config"},
     )
 
     print(f"[deploy_firebase_hosting] Releasing version to channel {args.channel}")
+    if args.channel == "live":
+        release_path = f"/sites/{quoted_site}/releases"
+    else:
+        release_path = f"/sites/{quoted_site}/channels/{urllib.parse.quote(args.channel, safe='')}/releases"
     api.request(
         "POST",
-        f"/sites/{quoted_site}/channels/{urllib.parse.quote(args.channel, safe='')}/releases",
+        release_path,
         {},
         query={"versionName": name},
     )
