@@ -107,7 +107,7 @@ QUIZ_JSON_SCHEMA_PROMPT = """Return JSON only with this shape:
             "evidence_text": string | null,
             "evidence_start": number | null,
             "evidence_end": number | null,
-            "wrong_choice_explanations_ja": {"A": string, "B": string, "C": string, "D": string},
+            "wrong_choice_explanations_ja": {"incorrect_choice_id": string},
             "related_lemmas": [string]
           }
         }
@@ -135,7 +135,7 @@ def build_quiz_generation_prompt(
     avoid = ", ".join(f'"{topic}"' for topic in avoid_topics) or "(none)"
     topic = topic_seed or "(none)"
     translation_rule = (
-        "Include Japanese body_ja translations for passages."
+        "Include Japanese body_ja translations for passages. Keep the same paragraph breaks as body_en: if body_en uses a blank line between paragraphs, body_ja must use a blank line at the corresponding boundary and keep the same sentence order."
         if include_translation
         else "Set body_ja to null unless translation is essential for review."
     )
@@ -168,7 +168,9 @@ Rules:
 - Avoid unsafe, illegal, or individually actionable medical/legal/financial advice.
 - Create exactly {section_count} sections and exactly {questions_per_section} questions in each section.
 - Each question must have exactly four choices A, B, C, D.
-- Each explanation must be in Japanese and include evidence_text when possible.
+- evidence_text should be a complete supporting sentence or a concise contiguous excerpt. Do not return only a tiny keyword fragment when the surrounding clause is needed to understand the answer.
+- explanation_ja must be in Japanese, detailed, and learner-friendly. Aim for about 2 to 4 clear Japanese sentences: explain what the question is asking, how the evidence supports the correct answer, and what trap or contrast learners should notice.
+- wrong_choice_explanations_ja must include only incorrect choice ids and must omit correct_choice_id. For each incorrect choice, write a specific Japanese reason that references the passage or the logic gap; avoid terse labels such as "本文にありません" alone.
 - {translation_rule}
 - Return JSON only.
 

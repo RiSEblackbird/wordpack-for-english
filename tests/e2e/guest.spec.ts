@@ -98,8 +98,8 @@ test.describe('ゲストモード', () => {
           kind: 'article',
           title: 'Dashboard review',
           body_en:
-            'A product team noticed that a dashboard could distort decisions when it overlooked late records. They added a buffer and audited the query so reports became reliable again.',
-          body_ja: 'チームは遅延レコードを見落とすと判断が歪むことに気づき、バッファと監査を追加しました。',
+            'A product team noticed that a dashboard could distort decisions when it overlooked late records. They added a buffer and audited the query.\n\nThe reports became reliable again.',
+          body_ja: 'プロダクトチームは、遅延レコードを見落とすとダッシュボードが判断を歪める可能性に気づきました。チームはバッファを追加し、クエリを監査しました。レポートは再び信頼できるものになりました。',
           speaker_labels: [],
         },
       ],
@@ -128,8 +128,8 @@ test.describe('ゲストモード', () => {
                 explanation_ja: '本文はダッシュボードの信頼性を高める対応について述べています。',
                 evidence_passage_id: 'p1',
                 evidence_text: 'reports became reliable again',
-                evidence_start: 140,
-                evidence_end: 169,
+                evidence_start: 129,
+                evidence_end: 158,
                 wrong_choice_explanations_ja: {},
                 related_lemmas: ['reliable'],
               },
@@ -184,6 +184,19 @@ test.describe('ゲストモード', () => {
     await page.getByRole('button', { name: 'Quiz' }).click();
     await expect(page.getByRole('heading', { name: 'Reliable Reading Focus' })).toBeVisible();
 
+    await page.getByText('日本語訳').click();
+    await expect(page.locator('.quiz-passage-paragraph')).toHaveCount(2);
+    await expect(page.locator('.quiz-translation__paragraph')).toHaveCount(2);
+    const englishSecondSentence = page.getByRole('group', { name: '英文 2: 日本語訳と対応' });
+    const japaneseSecondSentence = page.getByRole('group', { name: '日本語訳 2: 英文と対応' });
+    await englishSecondSentence.hover();
+    await expect(englishSecondSentence).toHaveClass(/is-active/);
+    await expect(japaneseSecondSentence).toHaveClass(/is-active/);
+    await japaneseSecondSentence.click();
+    await expect(englishSecondSentence).toHaveClass(/is-pinned/);
+    await expect(japaneseSecondSentence).toHaveClass(/is-pinned/);
+    await runA11yCheck(page);
+
     const generator = page.getByRole('form', { name: 'Quiz生成フォーム' });
     const savedList = page.getByRole('region', { name: '保存済みQuiz' });
     const detailPanel = page.getByRole('region', { name: '選択中Quiz詳細' });
@@ -222,6 +235,21 @@ test.describe('ゲストモード', () => {
       };
     });
     expect(mobileOverflow.rootScrollWidth).toBeLessThanOrEqual(mobileOverflow.viewportWidth + 1);
+
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '20px';
+    });
+    const scaledOverflow = await page.evaluate(() => {
+      const root = document.querySelector<HTMLElement>('#root');
+      if (!root) {
+        throw new Error('root is missing');
+      }
+      return {
+        rootScrollWidth: root.scrollWidth,
+        viewportWidth: window.innerWidth,
+      };
+    });
+    expect(scaledOverflow.rootScrollWidth).toBeLessThanOrEqual(scaledOverflow.viewportWidth + 1);
   });
 
   test('デスクトップでページ全体をスクロールしてもサイドバー下部のユーザー操作が追従する', async ({ page }) => {
