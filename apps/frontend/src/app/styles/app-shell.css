@@ -65,7 +65,7 @@ footer {
 }
 
 .app-shell {
-  --app-sidebar-width: 248px;
+  --app-sidebar-width: 280px;
   --app-sidebar-collapsed-width: 72px;
   --sidebar-title-toggle-clearance: 3rem;
   margin: 0 auto;
