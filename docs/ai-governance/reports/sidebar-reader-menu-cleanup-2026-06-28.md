@@ -113,13 +113,13 @@
 
 - スクリーンショット: local Playwrightで `/tmp/wordpack-sidebar-after.png` と `/tmp/wordpack-reader-after.png` を取得
 - トレース: なし
-- テスト結果: `npx tsc -p tsconfig.json`、`npm test -- --silent src/App.test.tsx`、`npm test -- --coverage --silent`、`git diff --check`
+- テスト結果: `apps/frontend` で `npx tsc -p tsconfig.json`、`npm test -- --silent src/App.test.tsx`、`npm test -- --coverage --silent`、repo rootで `git diff --check`
 - 手動確認: Playwright metricsで sidebar width 280px、title scrollWidth 147 / clientWidth 147、collapse toggle right 255.02px、playback / volume select right 260.63px、brand scrollWidth 249 / clientWidth 249、Reader body textarea true、sidebar textarea false、sidebar import region false
 - 取得できなかった証跡と理由: 実ユーザーテストはこの変更範囲では未実施
 
 ## 13. 実行した検証
 
-- [x] typecheck
+- [x] typecheck (`apps/frontend` で実行)
 - [x] unit test
 - [x] accessibility check
 - [x] keyboard check
