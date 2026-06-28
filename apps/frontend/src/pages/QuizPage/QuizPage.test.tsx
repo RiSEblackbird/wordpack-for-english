@@ -47,8 +47,8 @@ const quiz: Quiz = {
       order: 1,
       kind: 'article',
       title: 'Deployment review',
-      body_en: 'Teams mitigate latency by adding a fallback. They document the trade-off.\n\nThe process keeps release reviews reliable.',
-      body_ja: 'チームはフォールバックを追加してレイテンシを軽減する。チームはトレードオフを文書化する。このプロセスによりリリースレビューの信頼性が保たれる。',
+      body_en: 'Teams mitigate latency by adding a fallback. API v2.0 rollout succeeded.\n\nThe process keeps release reviews reliable.',
+      body_ja: 'チームはフォールバックを追加してレイテンシを軽減する。API v2.0の展開は成功した。このプロセスによりリリースレビューの信頼性が保たれる。',
       speaker_labels: [],
     },
   ],
@@ -240,9 +240,14 @@ describe('QuizPage', () => {
 
     const user = userEvent.setup();
     await act(async () => {
+      await user.click(screen.getByText('日本語訳'));
+    });
+    const firstEnglishSentence = screen.getByRole('group', { name: '英文 1: 日本語訳と対応' });
+    await act(async () => {
       await user.click(screen.getByRole('button', { name: 'mitigate のWordPack操作を開く' }));
     });
 
+    expect(firstEnglishSentence).not.toHaveClass('is-pinned');
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: 'WordPack プレビュー' })).toHaveTextContent('wp:mitigate');
     });
@@ -262,6 +267,7 @@ describe('QuizPage', () => {
 
     const englishSecondSentence = screen.getByRole('group', { name: '英文 2: 日本語訳と対応' });
     const japaneseSecondSentence = screen.getByRole('group', { name: '日本語訳 2: 英文と対応' });
+    expect(englishSecondSentence).toHaveTextContent('API v2.0 rollout succeeded.');
 
     await act(async () => {
       await user.hover(englishSecondSentence);

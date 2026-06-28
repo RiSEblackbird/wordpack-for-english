@@ -107,7 +107,7 @@ QUIZ_JSON_SCHEMA_PROMPT = """Return JSON only with this shape:
             "evidence_text": string | null,
             "evidence_start": number | null,
             "evidence_end": number | null,
-            "wrong_choice_explanations_ja": {"A": string, "B": string, "C": string, "D": string},
+            "wrong_choice_explanations_ja": {"incorrect_choice_id": string},
             "related_lemmas": [string]
           }
         }
@@ -170,7 +170,7 @@ Rules:
 - Each question must have exactly four choices A, B, C, D.
 - evidence_text should be a complete supporting sentence or a concise contiguous excerpt. Do not return only a tiny keyword fragment when the surrounding clause is needed to understand the answer.
 - explanation_ja must be in Japanese, detailed, and learner-friendly. Aim for about 2 to 4 clear Japanese sentences: explain what the question is asking, how the evidence supports the correct answer, and what trap or contrast learners should notice.
-- wrong_choice_explanations_ja must explain every choice A, B, C, and D. For each incorrect choice, write a specific Japanese reason that references the passage or the logic gap; avoid terse labels such as "本文にありません" alone. For the correct choice, briefly state why it is correct.
+- wrong_choice_explanations_ja must include only incorrect choice ids and must omit correct_choice_id. For each incorrect choice, write a specific Japanese reason that references the passage or the logic gap; avoid terse labels such as "本文にありません" alone.
 - {translation_rule}
 - Return JSON only.
 

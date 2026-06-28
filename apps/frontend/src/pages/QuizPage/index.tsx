@@ -167,25 +167,51 @@ const passageBreakPattern = /((?:\r?\n)[\t ]*(?:\r?\n)+)/g;
 const englishSentencePattern = /[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g;
 const japaneseSentencePattern = /[^。！？!?]+[。！？!?]+["'）】」』]*|[^。！？!?]+$/gu;
 
+type SentenceSegmenter = {
+  segment: (input: string) => Iterable<{ segment: string; index: number }>;
+};
+
+const getEnglishSentenceSegmenter = (): SentenceSegmenter | null => {
+  const SegmenterCtor = (Intl as unknown as {
+    Segmenter?: new (locale: string, options: { granularity: 'sentence' }) => SentenceSegmenter;
+  }).Segmenter;
+  return typeof SegmenterCtor === 'function' ? new SegmenterCtor('en', { granularity: 'sentence' }) : null;
+};
+
+const trimSentenceSegment = (
+  raw: string,
+  absoluteStart: number,
+): { text: string; start: number; end: number } | null => {
+  const leading = raw.match(/^\s*/)?.[0].length ?? 0;
+  const trailing = raw.match(/\s*$/)?.[0].length ?? 0;
+  const start = absoluteStart + leading;
+  const end = absoluteStart + raw.length - trailing;
+  if (end <= start) return null;
+  return { text: raw.slice(leading, raw.length - trailing), start, end };
+};
+
 const splitPassageSentences = (
   text: string,
   paragraphStart: number,
   language: PassageLanguage,
 ): Array<{ text: string; start: number; end: number }> => {
+  if (language === 'en') {
+    const segmenter = getEnglishSentenceSegmenter();
+    if (segmenter) {
+      const segmented = Array.from(segmenter.segment(text))
+        .map((segment) => trimSentenceSegment(segment.segment, paragraphStart + segment.index))
+        .filter((sentence): sentence is { text: string; start: number; end: number } => Boolean(sentence));
+      if (segmented.length) return segmented;
+    }
+  }
   const pattern = language === 'ja'
     ? new RegExp(japaneseSentencePattern.source, japaneseSentencePattern.flags)
     : new RegExp(englishSentencePattern.source, englishSentencePattern.flags);
   const sentences: Array<{ text: string; start: number; end: number }> = [];
   let match = pattern.exec(text);
   while (match) {
-    const raw = match[0];
-    const leading = raw.match(/^\s*/)?.[0].length ?? 0;
-    const trailing = raw.match(/\s*$/)?.[0].length ?? 0;
-    const start = paragraphStart + match.index + leading;
-    const end = paragraphStart + match.index + raw.length - trailing;
-    if (end > start) {
-      sentences.push({ text: raw.slice(leading, raw.length - trailing), start, end });
-    }
+    const sentence = trimSentenceSegment(match[0], paragraphStart + match.index);
+    if (sentence) sentences.push(sentence);
     match = pattern.exec(text);
   }
   if (sentences.length) return sentences;
@@ -349,6 +375,11 @@ const sentenceLabel = (language: PassageLanguage, sentence: PassageSentence) => 
     : `日本語訳 ${sentence.displayIndex}: 英文と対応`
 );
 
+const shouldIgnoreSentenceClick = (target: EventTarget | null, currentTarget: HTMLElement): boolean => {
+  if (!(target instanceof Element) || target === currentTarget) return false;
+  return Boolean(target.closest('button, a, input, select, textarea, summary, [role="button"]'));
+};
+
 const InlineWordPackAnchor: React.FC<{
   link: QuizWordPackLink;
   text: string;
@@ -367,7 +398,8 @@ const InlineWordPackAnchor: React.FC<{
         ? '未生成'
         : 'WordPack';
 
-  const handleClick = () => {
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
     if (canOpen && link.word_pack_id) {
       onOpenWordPack(link.word_pack_id);
       return;
@@ -388,7 +420,12 @@ const InlineWordPackAnchor: React.FC<{
         <small>{label}</small>
       </button>
       {open && !canOpen ? (
-        <span className="quiz-inline-word__popover" role="dialog" aria-label={`${link.lemma} のWordPack操作`}>
+        <span
+          className="quiz-inline-word__popover"
+          role="dialog"
+          aria-label={`${link.lemma} のWordPack操作`}
+          onClick={(event) => event.stopPropagation()}
+        >
           <strong>{link.lemma}</strong>
           <span>
             {isGuest
@@ -461,8 +498,9 @@ const QuizSentenceSpan: React.FC<{
       onBlur={() => {
         if (enabled) onHoverSentence(null);
       }}
-      onClick={() => {
-        if (enabled && sentence.pairKey) onTogglePinnedSentence(sentence.pairKey);
+      onClick={(event) => {
+        if (!enabled || !sentence.pairKey || shouldIgnoreSentenceClick(event.target, event.currentTarget)) return;
+        onTogglePinnedSentence(sentence.pairKey);
       }}
       onKeyDown={handleKeyDown}
     >
@@ -1279,7 +1317,7 @@ export const QuizPage: React.FC = () => {
                   .sort((a, b) => a.order - b.order)
                   .map((passage) => (
                     <QuizPassageArticle
-                      key={passage.id}
+                      key={`${selectedQuiz.id}:${passage.id}`}
                       passage={passage}
                       links={relatedLinks}
                       isGuest={isGuest}

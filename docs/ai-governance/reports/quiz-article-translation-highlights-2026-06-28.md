@@ -7,7 +7,7 @@
 - 判定: Pass
 - P0件数: 0
 - P1件数: 0
-- P2件数: 0
+- P2件数: 0（未解決なし。PR reviewで見つかったP2 4件は追加修正済み）
 
 ## 2. ユーザー価値
 
@@ -50,7 +50,7 @@
 ## 5. アクセシビリティ確認
 
 - キーボード: 対応文は訳文展開中のみ `tabIndex=0` の group とし、focusで対応文が強調される。Enter/Spaceで固定できる。
-- フォーカス: `.quiz-sentence:focus-visible` を追加。既存のinline WordPack button focusも維持。
+- フォーカス: `.quiz-sentence:focus-visible` を追加。既存のinline WordPack button focusも維持。WordPack button操作は文固定ハイライトへ伝播しない。
 - 名前・ラベル: 英文は `英文 N: 日本語訳と対応`、訳文は `日本語訳 N: 英文と対応` の accessible name。
 - 見出し・構造: Articleカード、details summary、Section/Question構造は既存を維持。
 - コントラスト: active/pinned は背景と枠線を併用し、色だけに依存しない。
@@ -81,7 +81,7 @@
 
 - 主要反復タスク: Quizを選び、本文を読み、訳文を開き、設問に答え、解説を確認する。
 - 手数: 訳文展開は従来と同じ1操作。文対応は hover だけでも確認可能で、click固定もできる。
-- 再入力・再選択: Quiz選択、回答、集中表示状態の既存保持を壊していない。
+- 再入力・再選択: Quiz選択、回答、集中表示状態の既存保持を壊していない。文対応の展開/固定状態はQuiz単位で分離し、別Quizへ切り替えた時に前の状態を引き継がない。
 - 近道: keyboard focusとEnter/Space固定に対応。
 - 初心者向け説明の影響: 追加説明を常時表示していないため、熟練者の読み進めを妨げない。
 - 判定: Pass
@@ -93,12 +93,14 @@
 - 失敗時: 既存alertで失敗を通知。
 - 危険操作: 今回の変更に危険操作はない。削除/公開操作は既存導線を変更していない。
 - データ・権限・個人情報: 新規送信データなし。文対応は保存済みQuiz本文/訳文のクライアント表示のみ。
-- トーン: 解説は丁寧に、誤答理由は具体的にする生成契約へ更新。
+- トーン: 解説は丁寧に、誤答理由は不正解の選択肢だけを具体的に説明する生成契約へ更新。正答理由を誤答理由欄へ混ぜない。
 - 判定: Pass
 
 ## 10. 反証レビュー
 
 - 実装を落とす観点で見つけた問題: 旧データで英文/訳文の文数が完全一致しない場合、対応は同じ順序の範囲までになる。誤対応を避けるため、訳文段落の再構成は全文の文数が一致する時に限定した。
+- PR reviewで追加確認した問題: inline WordPack button clickが文固定に伝播する可能性、同じpassage idを持つ別Quizへの状態混入、正答理由が誤答理由欄へ混ざる生成契約、`API v2.0` のようなピリオドを含む英文分割の誤りを確認し、すべて修正した。
+- 文分割の残リスク: 英文は `Intl.Segmenter` を優先し、未対応環境だけ既存regex fallbackを使う。fallback環境では一部の略語や特殊表記で分割精度が落ちる可能性が残る。
 - P0候補: keyboardで対応確認できない問題は focus/Enter/Space対応で解消。色だけ依存は枠線併用で回避。狭幅/文字拡大 overflow はE2Eで確認。
 - 証跡不足: 実ユーザーテストは未実施。AI/自動検証での確認に留まる。
 - 残リスク: LLM生成が文数対応を崩す場合、UIは順序ベースで可能な範囲だけ対応する。プロンプトで同じ段落・文順を要求したが、生成品質はLLM依存。
@@ -110,6 +112,10 @@
 | P0 | Quiz訳文 | 旧表示では訳文が長い1段落になり、英文段落と対応しにくい | 原文/訳文照合に時間がかかる | 英文段落の文数に合わせて訳文段落を再構成 | 対応済 |
 | P0 | Quiz訳文 | 文単位の原文/訳文対応が見えない | どの訳がどの英文に対応するか推測が必要 | hover/click/focusで同じ文ペアをハイライト | 対応済 |
 | P1 | Quiz解説生成 | 根拠/解説/誤答理由が短すぎる | 復習時に判断根拠が不足する | 生成プロンプトで具体量と内容要件を追加 | 対応済 |
+| P2 | inline WordPack操作 | WordPack buttonクリックが親文の固定ハイライトも切り替える可能性 | 語の確認中に意図しない文固定が残る | interactive child clickを文固定から除外し、button/popoverで伝播を止める | 対応済 |
+| P2 | Quiz切替 | 同じpassage idの別Quizで展開/固定状態が残る可能性 | 別Quizの文対応を誤認する | Article component keyをQuiz id + passage idにする | 対応済 |
+| P2 | 誤答理由 | 正答理由まで `wrong_choice_explanations_ja` に含める契約だった | UI上の「誤答理由」に正答説明が混じる | 不正解選択肢だけを含め、correct_choice_idを除外する契約へ修正 | 対応済 |
+| P2 | 英文分割 | `API v2.0` などのピリオドで文が分割される可能性 | 対応ハイライトが文単位でずれる | 英文は `Intl.Segmenter` を優先し、回帰テストに小数点表記を追加 | 対応済 |
 
 ## 12. 証跡
 
@@ -121,6 +127,10 @@
   - `cd apps/frontend && npm test -- --coverage --silent`: 39 files passed / 1 skipped, 175 passed / 1 skipped, coverage 87.39%
   - `PYTHONPATH=apps/backend pytest -q --no-cov tests/backend/test_quiz_models.py tests/backend/test_quiz_flow.py tests/backend/test_quiz_api.py tests/backend/test_quiz_generation_jobs.py tests/backend/test_quiz_prompt_policy.py`: 14 passed
   - `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/guest.spec.ts -g "Quiz本文と問題を全幅表示へ切り替えられる" --trace on`: 1 passed
+  - PR review対応後の再確認: `cd apps/frontend && npm test -- QuizPage.test.tsx`: 5 passed
+  - PR review対応後の再確認: `PYTHONPATH=apps/backend pytest -q --no-cov tests/backend/test_quiz_prompt_policy.py`: 1 passed
+  - PR review対応後の再確認: `cd apps/frontend && npx tsc -p tsconfig.json`: passed
+  - PR review対応後の再確認: `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/guest.spec.ts -g "Quiz本文と問題を全幅表示へ切り替えられる" --trace on`: 1 passed
 - 手動確認: Playwright上で訳文展開、英文hover、訳文click固定、3カラム集中表示、390px幅、root font-size 20pxの横overflowなしを確認。
 - 取得できなかった証跡と理由: 実ユーザーテストは実施していない。生成LLMの実出力サンプルは外部API呼び出しを避けたため未取得。
 

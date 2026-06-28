@@ -32,5 +32,6 @@ def test_quiz_prompt_requests_aligned_translation_paragraphs_and_detailed_explan
 
     assert "Keep the same paragraph breaks as body_en" in prompt
     assert "about 2 to 4 clear Japanese sentences" in prompt
-    assert "must explain every choice A, B, C, and D" in prompt
+    assert "must include only incorrect choice ids" in prompt
+    assert "must omit correct_choice_id" in prompt
     assert "Do not return only a tiny keyword fragment" in prompt
