@@ -85,10 +85,13 @@ jobs:
 
       - name: Authenticate to Google Cloud with service account key
         # CI 成功後にのみ実行される本番デプロイなので、サービスアカウントキーで明示的に認証する。
+        # Firebase CLI は GOOGLE_APPLICATION_CREDENTIALS 経由でこの認証情報を使う。
         id: gcp-auth
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+          create_credentials_file: true
+          export_environment_variables: true
 
       - name: Set up gcloud SDK
         # gcloud CLI をプロジェクト/リージョンに合わせて準備する。Cloud Run / Cloud Build は GA コマンドのみ使用。
@@ -105,19 +108,6 @@ jobs:
       - name: Install Firebase CLI
         # firebase deploy --only firestore:indexes は GA であり、gcloud alpha より安定している。
         run: npm install -g firebase-tools@15.22.0
-
-      - name: Prepare Firebase CLI auth token
-        # Firebase CLI は GitHub Actions の ADC ファイルを読めない場合があるため、
-        # 認証済み gcloud から短命 access token を発行して Firebase CLI に渡す。
-        run: |
-          set -euo pipefail
-          token="$(gcloud auth print-access-token)"
-          if [ -z "${token}" ]; then
-            echo "::error::Failed to mint Firebase CLI access token from the authenticated service account." >&2
-            exit 1
-          fi
-          echo "::add-mask::${token}"
-          echo "FIREBASE_TOKEN=${token}" >> "${GITHUB_ENV}"
 
       - name: Install frontend dependencies
         # predeploy の tsc が @types などの devDependencies を必要とするため、事前に導入しておく。
