@@ -1,38 +1,38 @@
+"""Article ルーター。backend.providers パッケージの新構造に追随する。"""
+
 from __future__ import annotations
 
 import json
-"""Article ルーター。backend.providers パッケージの新構造に追随する。"""
-
 import uuid
+from functools import partial
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query, status
+import anyio
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from ..config import settings
 from ..domain.article.lemma_filter import STOP_LEMMAS, filter_article_lemmas
+from ..flows.article_import import ArticleImportFlow
+from ..flows.category_generate_import import CategoryGenerateAndImportFlow
 from ..logging import logger
 from ..llm_models import ensure_supported_llm_model
 from ..models.article import (
     ARTICLE_IMPORT_TEXT_MAX_LENGTH,
-    ArticleImportRequest,
     ArticleDetailResponse,
+    ArticleGuestPublicUpdateRequest,
+    ArticleGuestPublicUpdateResponse,
+    ArticleImportRequest,
     ArticleListItem,
     ArticleListResponse,
     ArticleWordPackLink,
 )
-from ..models.word import WordPack
-from ..providers import get_llm_provider
+from ..models.word import ExampleCategory
+from ..observability import request_trace, span
 from ..store import store as _default_store
 from ..store.proxy import CurrentStoreProxy
-from ..observability import request_trace, span
-from ..flows.article_import import ArticleImportFlow
-from ..models.word import ExampleCategory
-from pydantic import BaseModel, Field
-from ..flows.category_generate_import import CategoryGenerateAndImportFlow
-import anyio
-from functools import partial
+from .word.dependencies import require_authenticated_user
 
 
 router = APIRouter(tags=["article"])
@@ -116,31 +116,35 @@ async def import_article(payload: dict[str, Any] = Body(...)) -> ArticleDetailRe
 
 @router.get("/", response_model=ArticleListResponse)
 async def list_articles(
+    request: Request,
     limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)
 ) -> ArticleListResponse:
-    items_raw = store.list_articles(limit=limit, offset=offset)
+    public_only = bool(getattr(request.state, "guest", False))
+    items_raw = store.list_articles(limit=limit, offset=offset, public_only=public_only)
     items = [
-        ArticleListItem(id=i[0], title_en=i[1], created_at=i[2], updated_at=i[3])
+        ArticleListItem(
+            id=i[0],
+            title_en=i[1],
+            created_at=i[2],
+            updated_at=i[3],
+            guest_public=bool(i[4]),
+        )
         for i in items_raw
     ]
-    total = store.count_articles()
+    total = store.count_articles(public_only=public_only)
     return ArticleListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 # Trailing-slashless alias to avoid 307 redirects in some environments
 @router.get("", response_model=ArticleListResponse, include_in_schema=False)
 async def list_articles_no_slash(
+    request: Request,
     limit: int = Query(default=50, ge=1, le=100), offset: int = Query(default=0, ge=0)
 ) -> ArticleListResponse:
-    return await list_articles(limit=limit, offset=offset)
+    return await list_articles(request=request, limit=limit, offset=offset)
 
 
-@router.get(
-    "/{article_id}",
-    response_model=ArticleDetailResponse,
-    response_model_exclude_none=True,
-)
-async def get_article(article_id: str) -> ArticleDetailResponse:
+async def _get_article_response(request: Request, article_id: str) -> ArticleDetailResponse:
     result = store.get_article(article_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Article not found")
@@ -157,8 +161,12 @@ async def get_article(article_id: str) -> ArticleDetailResponse:
         generation_started_at,
         generation_completed_at,
         generation_duration_ms,
+        guest_public,
         links,
     ) = result
+    is_guest = bool(getattr(request.state, "guest", False))
+    if is_guest and not guest_public:
+        raise HTTPException(status_code=404, detail="Article not found")
     duration_value = (
         int(generation_duration_ms)
         if isinstance(generation_duration_ms, (int, float))
@@ -167,6 +175,8 @@ async def get_article(article_id: str) -> ArticleDetailResponse:
     )
     link_models: list[ArticleWordPackLink] = []
     for wp_id, lemma, status in links:
+        if is_guest and not store.is_word_pack_guest_public(wp_id):
+            continue
         is_empty = True
         try:
             got = store.get_word_pack(wp_id)
@@ -203,6 +213,35 @@ async def get_article(article_id: str) -> ArticleDetailResponse:
         generation_started_at=generation_started_at,
         generation_completed_at=generation_completed_at,
         generation_duration_ms=duration_value,
+        guest_public=bool(guest_public),
+    )
+
+
+@router.get(
+    "/{article_id}",
+    response_model=ArticleDetailResponse,
+    response_model_exclude_none=True,
+)
+async def get_article(request: Request, article_id: str) -> ArticleDetailResponse:
+    return await _get_article_response(request, article_id)
+
+
+@router.post(
+    "/{article_id}/guest-public",
+    response_model=ArticleGuestPublicUpdateResponse,
+    summary="Reader記事のゲスト公開フラグを更新",
+)
+async def update_article_guest_public(
+    article_id: str,
+    req: ArticleGuestPublicUpdateRequest,
+    _user: dict[str, str] = Depends(require_authenticated_user),
+) -> ArticleGuestPublicUpdateResponse:
+    updated = store.update_article_guest_public(article_id, req.guest_public)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return ArticleGuestPublicUpdateResponse(
+        article_id=article_id,
+        guest_public=updated,
     )
 
 

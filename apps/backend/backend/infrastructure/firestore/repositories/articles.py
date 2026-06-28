@@ -44,6 +44,7 @@ class FirestoreArticleRepository(FirestoreBaseRepository):
                 if generation_duration_ms is not None
                 else stored.get("generation_duration_ms")
             ),
+            "guest_public": bool(kwargs.get("guest_public", stored.get("guest_public", False))),
         }
         doc_ref.set(payload, merge=True)
         if related_word_packs is not None:
@@ -79,6 +80,7 @@ class FirestoreArticleRepository(FirestoreBaseRepository):
         str | None,
         str | None,
         int | None,
+        bool,
         list[tuple[str, str, str]],
     ] | None:
         doc = self._articles.document(article_id).get()
@@ -110,11 +112,17 @@ class FirestoreArticleRepository(FirestoreBaseRepository):
             data.get("generation_started_at"),
             data.get("generation_completed_at"),
             data.get("generation_duration_ms"),
+            bool(data.get("guest_public", False)),
             related,
         )
 
-    def list_articles(self, limit: int = 50, offset: int = 0) -> list[tuple[str, str, str, str]]:
-        docs = list(self._articles.stream())
+    def list_articles(
+        self, limit: int = 50, offset: int = 0, *, public_only: bool = False
+    ) -> list[tuple[str, str, str, str, bool]]:
+        query = self._articles
+        if public_only:
+            query = query.where("guest_public", "==", True)
+        docs = list(query.stream())
         docs.sort(key=lambda d: str((d.to_dict() or {}).get("created_at") or ""), reverse=True)
         sliced = docs[offset : offset + limit]
         return [
@@ -123,12 +131,25 @@ class FirestoreArticleRepository(FirestoreBaseRepository):
                 str((doc.to_dict() or {}).get("title_en") or ""),
                 str((doc.to_dict() or {}).get("created_at") or ""),
                 str((doc.to_dict() or {}).get("updated_at") or ""),
+                bool((doc.to_dict() or {}).get("guest_public", False)),
             )
             for doc in sliced
         ]
 
-    def count_articles(self) -> int:
-        return sum(1 for _ in self._articles.stream())
+    def count_articles(self, *, public_only: bool = False) -> int:
+        query = self._articles
+        if public_only:
+            query = query.where("guest_public", "==", True)
+        return sum(1 for _ in query.stream())
+
+    def update_article_guest_public(self, article_id: str, guest_public: bool) -> bool | None:
+        doc_ref = self._articles.document(article_id)
+        snapshot = doc_ref.get()
+        if not snapshot.exists:
+            return None
+        value = bool(guest_public)
+        doc_ref.update({"guest_public": value, "updated_at": self._now_iso()})
+        return value
 
     def delete_article(self, article_id: str) -> bool:
         doc_ref = self._articles.document(article_id)

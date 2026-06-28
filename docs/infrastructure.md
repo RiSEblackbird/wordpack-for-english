@@ -104,12 +104,14 @@ python -m uvicorn backend.main:app --reload --app-dir apps/backend
 cd apps/frontend && npm run dev
 ```
 
-### 環境変数による切り替え
+### Firestore 接続先
 
-| ENVIRONMENT | データストア | 用途 |
+| 条件 | データストア | 用途 |
 |-------------|-------------|------|
-| `development` | Firestore Emulator (`FIRESTORE_EMULATOR_HOST`) | ローカル開発 |
-| `production` | Cloud Firestore | 本番 |
+| `FIRESTORE_EMULATOR_HOST` あり | Firestore Emulator | ローカル開発 / CI |
+| `FIRESTORE_EMULATOR_HOST` なし | Cloud Firestore | 本番 / 検証 |
+
+`ENVIRONMENT` は認証やセキュリティ既定値に使い、Firestore の接続先切り替えには使わない。詳細は [docs/firestore.md](./firestore.md) を参照する。
 
 ---
 
@@ -300,8 +302,10 @@ flowchart TB
 
 ## 参照
 
-- [README.md](../README.md) - セットアップ手順・環境変数の詳細
+- [README.md](../README.md) - プロダクト概要と最短起動
 - [docs/環境変数の意味.md](./環境変数の意味.md) - 環境変数の一覧と説明
+- [docs/deployment.md](./deployment.md) - Cloud Run / Firebase Hosting / GitHub Actions デプロイ手順
+- [docs/firestore.md](./firestore.md) - Firestore インデックス、エミュレータ、シード、削除運用
 - [docs/flows.md](./flows.md) - API フロー図
 - [docs/models.md](./models.md) - データモデル定義
 - [firestore.indexes.json](../firestore.indexes.json) - Firestore インデックス定義

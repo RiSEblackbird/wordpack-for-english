@@ -91,6 +91,122 @@ def _seed_public_wordpack(store: AppFirestoreStore, lemma: str) -> None:
     )
 
 
+def _seed_wordpack_with_example(
+    store: AppFirestoreStore, lemma: str, *, guest_public: bool
+) -> None:
+    """例文一覧のゲスト公開フィルタを検証するための WordPack を保存する。"""
+
+    payload = {
+        "lemma": lemma,
+        "sense_title": f"{lemma} title",
+        "examples": {
+            "Common": [
+                {
+                    "en": f"{lemma} appears in context.",
+                    "ja": f"{lemma} が文脈に出てきます。",
+                }
+            ]
+        },
+    }
+    metadata = {"guest_public": True} if guest_public else None
+    store.save_word_pack(
+        f"wp-{lemma}",
+        lemma,
+        json.dumps(payload, ensure_ascii=False),
+        metadata=metadata,
+    )
+
+
+def _seed_article(
+    store: AppFirestoreStore,
+    article_id: str,
+    *,
+    title: str,
+    guest_public: bool,
+    links: list[tuple[str, str, str]] | None = None,
+) -> None:
+    store.save_article(
+        article_id,
+        title_en=title,
+        body_en=f"{title} body",
+        body_ja=f"{title} の本文",
+        notes_ja=None,
+        related_word_packs=links or [],
+        guest_public=guest_public,
+    )
+
+
+def _seed_quiz(
+    store: AppFirestoreStore,
+    quiz_id: str,
+    *,
+    title: str,
+    guest_public: bool,
+) -> None:
+    payload = {
+        "id": quiz_id,
+        "title_en": title,
+        "format_profile": "single_passage",
+        "generation_domain": "technical",
+        "domain_intensity": "standard",
+        "difficulty": "medium",
+        "passages": [
+            {
+                "id": "p1",
+                "order": 1,
+                "kind": "article",
+                "title": "Guest reading",
+                "body_en": "Guests can read public content.",
+                "body_ja": "ゲストは公開コンテンツを読めます。",
+                "speaker_labels": [],
+            }
+        ],
+        "notes_ja": None,
+        "sections": [
+            {
+                "id": "s1",
+                "order": 1,
+                "title": "Reading",
+                "description_ja": None,
+                "passage_ids": ["p1"],
+                "questions": [
+                    {
+                        "id": "q1",
+                        "order": 1,
+                        "type": "detail",
+                        "prompt": "What can guests read?",
+                        "choices": [
+                            {"id": "A", "text": "Public content"},
+                            {"id": "B", "text": "Private drafts"},
+                            {"id": "C", "text": "Deleted content"},
+                            {"id": "D", "text": "Credentials"},
+                        ],
+                        "correct_choice_id": "A",
+                        "explanation": {
+                            "explanation_ja": "本文に public content とあります。",
+                            "evidence_passage_id": "p1",
+                            "evidence_text": "public content",
+                            "evidence_start": 16,
+                            "evidence_end": 30,
+                            "wrong_choice_explanations_ja": {},
+                            "related_lemmas": [],
+                        },
+                    }
+                ],
+            }
+        ],
+        "related_word_packs": [],
+        "source_word_pack_ids": [],
+        "source_lemmas": ["public"],
+        "topic_seed": None,
+        "avoid_topics": [],
+        "guest_public": guest_public,
+        "created_at": "2024-01-01T00:00:00+00:00",
+        "updated_at": "2024-01-02T00:00:00+00:00",
+    }
+    store.save_quiz(quiz_id, payload, payload["related_word_packs"])
+
+
 def test_guest_session_cookie_is_issued(guest_test_client: tuple[TestClient, AppFirestoreStore]) -> None:
     """ゲストセッション発行エンドポイントが署名済み Cookie を返すことを確認する。"""
 
@@ -259,6 +375,92 @@ def test_guest_list_filters_private_wordpacks(
     assert "private" not in lemmas
 
 
+def test_guest_example_list_filters_private_wordpack_examples(
+    guest_test_client: tuple[TestClient, AppFirestoreStore],
+) -> None:
+    """ゲスト閲覧の例文一覧は公開 WordPack に紐づく例文だけを返す。"""
+
+    client, store = guest_test_client
+    _seed_wordpack_with_example(store, "public-example", guest_public=True)
+    _seed_wordpack_with_example(store, "private-example", guest_public=False)
+
+    response = client.post("/api/auth/guest")
+    assert response.status_code == HTTPStatus.OK
+
+    listing = client.get("/api/word/examples?limit=50&offset=0")
+
+    assert listing.status_code == HTTPStatus.OK
+    payload = listing.json()
+    lemmas = [item["lemma"] for item in payload.get("items", [])]
+    assert lemmas == ["public-example"]
+    assert payload["total"] == 1
+
+
+def test_guest_article_list_and_detail_filter_private_content(
+    guest_test_client: tuple[TestClient, AppFirestoreStore],
+) -> None:
+    """ゲスト閲覧の Reader は公開記事だけを返し、非公開 WordPack link を隠す。"""
+
+    client, store = guest_test_client
+    _seed_public_wordpack(store, "public-link")
+    _seed_wordpack(store, "private-link")
+    _seed_article(
+        store,
+        "article-public",
+        title="Public Article",
+        guest_public=True,
+        links=[
+            ("wp-public-link", "public-link", "existing"),
+            ("wp-private-link", "private-link", "existing"),
+        ],
+    )
+    _seed_article(store, "article-private", title="Private Article", guest_public=False)
+
+    response = client.post("/api/auth/guest")
+    assert response.status_code == HTTPStatus.OK
+
+    listing = client.get("/api/article?limit=50&offset=0")
+    assert listing.status_code == HTTPStatus.OK
+    payload = listing.json()
+    assert [item["id"] for item in payload["items"]] == ["article-public"]
+    assert payload["items"][0]["guest_public"] is True
+    assert payload["total"] == 1
+
+    detail = client.get("/api/article/article-public")
+    assert detail.status_code == HTTPStatus.OK
+    links = detail.json()["related_word_packs"]
+    assert [link["word_pack_id"] for link in links] == ["wp-public-link"]
+
+    hidden = client.get("/api/article/article-private")
+    assert hidden.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_guest_quiz_list_and_detail_filter_private_content(
+    guest_test_client: tuple[TestClient, AppFirestoreStore],
+) -> None:
+    """ゲスト閲覧の Quiz は guest_public=true の Quiz だけを返す。"""
+
+    client, store = guest_test_client
+    _seed_quiz(store, "quiz-public", title="Public Quiz", guest_public=True)
+    _seed_quiz(store, "quiz-private", title="Private Quiz", guest_public=False)
+
+    response = client.post("/api/auth/guest")
+    assert response.status_code == HTTPStatus.OK
+
+    listing = client.get("/api/quiz?limit=50&offset=0")
+    assert listing.status_code == HTTPStatus.OK
+    payload = listing.json()
+    assert [item["id"] for item in payload["items"]] == ["quiz-public"]
+    assert payload["items"][0]["guest_public"] is True
+    assert payload["total"] == 1
+
+    public_detail = client.get("/api/quiz/quiz-public")
+    assert public_detail.status_code == HTTPStatus.OK
+
+    hidden = client.get("/api/quiz/quiz-private")
+    assert hidden.status_code == HTTPStatus.NOT_FOUND
+
+
 def test_guest_delete_is_denied(guest_test_client: tuple[TestClient, AppFirestoreStore]) -> None:
     """ゲストセッションが DELETE 要求を拒否することを確認する。"""
 
@@ -279,6 +481,8 @@ def test_guest_public_update_is_denied(
 
     client, store = guest_test_client
     _seed_wordpack(store, "blocked")
+    _seed_article(store, "article-blocked", title="Blocked Article", guest_public=False)
+    _seed_quiz(store, "quiz-blocked", title="Blocked Quiz", guest_public=False)
 
     response = client.post("/api/auth/guest")
     assert response.status_code == HTTPStatus.OK
@@ -286,6 +490,20 @@ def test_guest_public_update_is_denied(
     denied = client.post("/api/word/packs/wp-blocked/guest-public", json={"guest_public": True})
     assert denied.status_code == HTTPStatus.FORBIDDEN
     assert denied.json()["detail"] == "Guest mode cannot perform write operations"
+
+    article_denied = client.post(
+        "/api/article/article-blocked/guest-public",
+        json={"guest_public": True},
+    )
+    assert article_denied.status_code == HTTPStatus.FORBIDDEN
+    assert article_denied.json()["detail"] == "Guest mode cannot perform write operations"
+
+    quiz_denied = client.post(
+        "/api/quiz/quiz-blocked/guest-public",
+        json={"guest_public": True},
+    )
+    assert quiz_denied.status_code == HTTPStatus.FORBIDDEN
+    assert quiz_denied.json()["detail"] == "Guest mode cannot perform write operations"
 
 
 def test_authenticated_user_not_treated_as_guest_when_cookie_lingers(

@@ -156,6 +156,14 @@ const setupFetch = () => {
         new Response(JSON.stringify(quiz), { status: 200, headers: { 'Content-Type': 'application/json' } }),
       );
     }
+    if (url === '/api/quiz/quiz%3Aalpha/guest-public' && init?.method === 'POST') {
+      return Promise.resolve(
+        new Response(JSON.stringify({ quiz_id: quiz.id, guest_public: false }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    }
     if (url.startsWith('/api/word/packs?')) {
       return Promise.resolve(
         new Response(JSON.stringify({
@@ -268,5 +276,21 @@ describe('QuizPage', () => {
     expect(screen.getByRole('button', { name: '本文/問題を広げる' })).toHaveAttribute('aria-pressed', 'false');
     expect(generator).toBeVisible();
     expect(savedList).toBeVisible();
+  });
+
+  it('lets authenticated users toggle guest public visibility from the quiz list', async () => {
+    authState.isGuest = false;
+    const fetchMock = setupFetch();
+    renderQuizPage();
+
+    expect(await screen.findByRole('heading', { name: 'Reliable API Deployments' })).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByRole('button', { name: '非公開にする' }));
+    });
+
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/quiz/quiz%3Aalpha/guest-public')).toBe(true);
+    expect(screen.getByText('Quizを非公開にしました。')).toBeInTheDocument();
   });
 });

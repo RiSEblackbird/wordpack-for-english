@@ -31,6 +31,7 @@ export interface ArticleDetailData {
   generation_started_at?: string | null;
   generation_completed_at?: string | null;
   generation_duration_ms?: number | null;
+  guest_public?: boolean;
 }
 
 interface Props {
