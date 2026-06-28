@@ -47,8 +47,8 @@ const quiz: Quiz = {
       order: 1,
       kind: 'article',
       title: 'Deployment review',
-      body_en: 'Teams mitigate latency by adding a fallback.',
-      body_ja: 'チームはフォールバックを追加してレイテンシを軽減する。',
+      body_en: 'Teams mitigate latency by adding a fallback. They document the trade-off.\n\nThe process keeps release reviews reliable.',
+      body_ja: 'チームはフォールバックを追加してレイテンシを軽減する。チームはトレードオフを文書化する。このプロセスによりリリースレビューの信頼性が保たれる。',
       speaker_labels: [],
     },
   ],
@@ -246,6 +246,37 @@ describe('QuizPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: 'WordPack プレビュー' })).toHaveTextContent('wp:mitigate');
     });
+  });
+
+  it('keeps translation paragraphs aligned with English paragraphs and highlights paired sentences', async () => {
+    const { container } = renderQuizPage();
+    expect(await screen.findByRole('heading', { name: 'Reliable API Deployments' })).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByText('日本語訳'));
+    });
+
+    expect(container.querySelectorAll('.quiz-passage-paragraph')).toHaveLength(2);
+    expect(container.querySelectorAll('.quiz-translation__paragraph')).toHaveLength(2);
+
+    const englishSecondSentence = screen.getByRole('group', { name: '英文 2: 日本語訳と対応' });
+    const japaneseSecondSentence = screen.getByRole('group', { name: '日本語訳 2: 英文と対応' });
+
+    await act(async () => {
+      await user.hover(englishSecondSentence);
+    });
+
+    expect(englishSecondSentence).toHaveClass('is-active');
+    expect(japaneseSecondSentence).toHaveClass('is-active');
+
+    await act(async () => {
+      await user.unhover(englishSecondSentence);
+      await user.click(japaneseSecondSentence);
+    });
+
+    expect(englishSecondSentence).toHaveClass('is-pinned');
+    expect(japaneseSecondSentence).toHaveClass('is-pinned');
   });
 
   it('switches the selected quiz detail into a full-width reading layout', async () => {

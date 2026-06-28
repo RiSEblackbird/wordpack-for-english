@@ -38,6 +38,7 @@ import type {
   QuizGenerateRequest,
   QuizGenerationDomain,
   QuizListItem,
+  QuizPassage,
   QuizQuestion,
   QuizQuestionResult,
   QuizSection,
@@ -135,6 +136,219 @@ const buildLocalAttempt = (quiz: Quiz, answers: Answers): QuizAttemptResponse =>
   };
 };
 
+type PassageLanguage = 'en' | 'ja';
+
+interface PassageSentence {
+  key: string;
+  pairKey: string | null;
+  displayIndex: number;
+  text: string;
+  start: number;
+  end: number;
+}
+
+interface PassageParagraph {
+  key: string;
+  sentences: PassageSentence[];
+}
+
+interface PassageAlignment {
+  englishParagraphs: PassageParagraph[];
+  japaneseParagraphs: PassageParagraph[];
+}
+
+type PassageWordOccurrence = {
+  start: number;
+  end: number;
+  link: QuizWordPackLink;
+};
+
+const passageBreakPattern = /((?:\r?\n)[\t ]*(?:\r?\n)+)/g;
+const englishSentencePattern = /[^.!?]+[.!?]+["')\]]*|[^.!?]+$/g;
+const japaneseSentencePattern = /[^。！？!?]+[。！？!?]+["'）】」』]*|[^。！？!?]+$/gu;
+
+const splitPassageSentences = (
+  text: string,
+  paragraphStart: number,
+  language: PassageLanguage,
+): Array<{ text: string; start: number; end: number }> => {
+  const pattern = language === 'ja'
+    ? new RegExp(japaneseSentencePattern.source, japaneseSentencePattern.flags)
+    : new RegExp(englishSentencePattern.source, englishSentencePattern.flags);
+  const sentences: Array<{ text: string; start: number; end: number }> = [];
+  let match = pattern.exec(text);
+  while (match) {
+    const raw = match[0];
+    const leading = raw.match(/^\s*/)?.[0].length ?? 0;
+    const trailing = raw.match(/\s*$/)?.[0].length ?? 0;
+    const start = paragraphStart + match.index + leading;
+    const end = paragraphStart + match.index + raw.length - trailing;
+    if (end > start) {
+      sentences.push({ text: raw.slice(leading, raw.length - trailing), start, end });
+    }
+    match = pattern.exec(text);
+  }
+  if (sentences.length) return sentences;
+  const fallback = text.trim();
+  if (!fallback) return [];
+  const start = paragraphStart + (text.match(/^\s*/)?.[0].length ?? 0);
+  return [{ text: fallback, start, end: start + fallback.length }];
+};
+
+const buildLanguageParagraphs = (value: string, language: PassageLanguage): PassageParagraph[] => {
+  const chunks = value.split(passageBreakPattern);
+  const paragraphs: PassageParagraph[] = [];
+  let cursor = 0;
+  let sentenceCounter = 0;
+  chunks.forEach((chunk) => {
+    if (!chunk) return;
+    if (passageBreakPattern.test(chunk)) {
+      passageBreakPattern.lastIndex = 0;
+      cursor += chunk.length;
+      return;
+    }
+    passageBreakPattern.lastIndex = 0;
+    const leading = chunk.match(/^\s*/)?.[0].length ?? 0;
+    const trailing = chunk.match(/\s*$/)?.[0].length ?? 0;
+    const start = cursor + leading;
+    const end = cursor + chunk.length - trailing;
+    if (end > start) {
+      const paragraphIndex = paragraphs.length;
+      const paragraphText = value.slice(start, end);
+      const sentences = splitPassageSentences(paragraphText, start, language).map((sentence, sentenceIndex) => {
+        sentenceCounter += 1;
+        return {
+          key: `${language}-p${paragraphIndex}-s${sentenceIndex}`,
+          pairKey: null,
+          displayIndex: sentenceCounter,
+          ...sentence,
+        };
+      });
+      if (sentences.length) {
+        paragraphs.push({
+          key: `${language}-p${paragraphIndex}`,
+          sentences,
+        });
+      }
+    }
+    cursor += chunk.length;
+  });
+  return paragraphs;
+};
+
+const flattenSentences = (paragraphs: PassageParagraph[]) => paragraphs.flatMap((paragraph) => paragraph.sentences);
+
+const regroupJapaneseParagraphs = (
+  englishParagraphs: PassageParagraph[],
+  japaneseParagraphs: PassageParagraph[],
+): PassageParagraph[] => {
+  if (englishParagraphs.length <= 1 || japaneseParagraphs.length === englishParagraphs.length) {
+    return japaneseParagraphs;
+  }
+  const englishCounts = englishParagraphs.map((paragraph) => paragraph.sentences.length);
+  const englishSentenceTotal = englishCounts.reduce((sum, count) => sum + count, 0);
+  const japaneseSentences = flattenSentences(japaneseParagraphs);
+  if (japaneseSentences.length !== englishSentenceTotal) {
+    return japaneseParagraphs;
+  }
+  let cursor = 0;
+  return englishCounts.map((count, paragraphIndex) => {
+    const sentences = japaneseSentences.slice(cursor, cursor + count).map((sentence, sentenceIndex) => ({
+      ...sentence,
+      key: `ja-p${paragraphIndex}-s${sentenceIndex}`,
+    }));
+    cursor += count;
+    return {
+      key: `ja-p${paragraphIndex}`,
+      sentences,
+    };
+  });
+};
+
+const assignPairKeys = (
+  englishParagraphs: PassageParagraph[],
+  japaneseParagraphs: PassageParagraph[],
+): PassageAlignment => {
+  const englishSentences = flattenSentences(englishParagraphs);
+  const japaneseSentences = flattenSentences(japaneseParagraphs);
+  const pairableCount = Math.min(englishSentences.length, japaneseSentences.length);
+  const applyPairKeys = (paragraphs: PassageParagraph[]) => paragraphs.map((paragraph) => ({
+    ...paragraph,
+    sentences: paragraph.sentences.map((sentence) => {
+      const pairIndex = sentence.displayIndex - 1;
+      return {
+        ...sentence,
+        pairKey: pairIndex < pairableCount ? `sentence-${pairIndex + 1}` : null,
+      };
+    }),
+  }));
+
+  return {
+    englishParagraphs: applyPairKeys(englishParagraphs),
+    japaneseParagraphs: applyPairKeys(japaneseParagraphs),
+  };
+};
+
+const buildPassageAlignment = (bodyEn: string, bodyJa?: string | null): PassageAlignment => {
+  const englishParagraphs = buildLanguageParagraphs(bodyEn, 'en');
+  const japaneseBaseParagraphs = bodyJa ? buildLanguageParagraphs(bodyJa, 'ja') : [];
+  const japaneseParagraphs = regroupJapaneseParagraphs(englishParagraphs, japaneseBaseParagraphs);
+  return assignPairKeys(englishParagraphs, japaneseParagraphs);
+};
+
+const buildPassageWordOccurrences = (
+  body: string,
+  links: QuizWordPackLink[],
+  passageId: string,
+): PassageWordOccurrence[] => {
+  const explicitOccurrences = links.flatMap((link) =>
+    (link.occurrences ?? [])
+      .filter((occurrence) => (occurrence.passage_id ?? passageId) === passageId)
+      .map((occurrence) => ({ start: occurrence.start, end: occurrence.end, link })),
+  );
+  const fallbackOccurrences = links.flatMap((link) => findFallbackOccurrences(body, link, passageId));
+  return [...explicitOccurrences, ...fallbackOccurrences]
+    .filter((occurrence) => (
+      occurrence.start >= 0
+      && occurrence.end > occurrence.start
+      && occurrence.end <= body.length
+    ))
+    .sort((a, b) => a.start - b.start);
+};
+
+const buildSentenceSegments = (
+  body: string,
+  sentence: PassageSentence,
+  occurrences: PassageWordOccurrence[],
+): Array<{ key: string; text: string; link?: QuizWordPackLink }> => {
+  const out: Array<{ key: string; text: string; link?: QuizWordPackLink }> = [];
+  let cursor = sentence.start;
+  occurrences.forEach((occurrence, index) => {
+    if (occurrence.start < cursor || occurrence.start < sentence.start || occurrence.end > sentence.end) {
+      return;
+    }
+    if (occurrence.start > cursor) {
+      out.push({ key: `text-${sentence.key}-${index}-${cursor}`, text: body.slice(cursor, occurrence.start) });
+    }
+    out.push({
+      key: `word-${sentence.key}-${index}-${occurrence.start}`,
+      text: body.slice(occurrence.start, occurrence.end),
+      link: occurrence.link,
+    });
+    cursor = occurrence.end;
+  });
+  if (cursor < sentence.end) {
+    out.push({ key: `text-${sentence.key}-end-${cursor}`, text: body.slice(cursor, sentence.end) });
+  }
+  return out.length ? out : [{ key: `text-${sentence.key}`, text: sentence.text }];
+};
+
+const sentenceLabel = (language: PassageLanguage, sentence: PassageSentence) => (
+  language === 'en'
+    ? `英文 ${sentence.displayIndex}: 日本語訳と対応`
+    : `日本語訳 ${sentence.displayIndex}: 英文と対応`
+);
+
 const InlineWordPackAnchor: React.FC<{
   link: QuizWordPackLink;
   text: string;
@@ -199,64 +413,245 @@ const InlineWordPackAnchor: React.FC<{
   );
 };
 
+const QuizSentenceSpan: React.FC<{
+  sentence: PassageSentence;
+  language: PassageLanguage;
+  highlightEnabled: boolean;
+  activeSentenceKey: string | null;
+  pinnedSentenceKey: string | null;
+  onHoverSentence: (key: string | null) => void;
+  onTogglePinnedSentence: (key: string) => void;
+  children: React.ReactNode;
+}> = ({
+  sentence,
+  language,
+  highlightEnabled,
+  activeSentenceKey,
+  pinnedSentenceKey,
+  onHoverSentence,
+  onTogglePinnedSentence,
+  children,
+}) => {
+  const enabled = highlightEnabled && Boolean(sentence.pairKey);
+  const isActive = enabled && activeSentenceKey === sentence.pairKey;
+  const isPinned = enabled && pinnedSentenceKey === sentence.pairKey;
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
+    if (!enabled || !sentence.pairKey) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onTogglePinnedSentence(sentence.pairKey);
+    }
+  };
+
+  return (
+    <span
+      className={`quiz-sentence ${enabled ? 'is-paired' : ''} ${isActive ? 'is-active' : ''} ${isPinned ? 'is-pinned' : ''}`}
+      role={enabled ? 'group' : undefined}
+      tabIndex={enabled ? 0 : undefined}
+      aria-label={enabled ? sentenceLabel(language, sentence) : undefined}
+      onMouseEnter={() => {
+        if (enabled) onHoverSentence(sentence.pairKey);
+      }}
+      onMouseLeave={() => {
+        if (enabled) onHoverSentence(null);
+      }}
+      onFocus={() => {
+        if (enabled) onHoverSentence(sentence.pairKey);
+      }}
+      onBlur={() => {
+        if (enabled) onHoverSentence(null);
+      }}
+      onClick={() => {
+        if (enabled && sentence.pairKey) onTogglePinnedSentence(sentence.pairKey);
+      }}
+      onKeyDown={handleKeyDown}
+    >
+      {children}
+    </span>
+  );
+};
+
 const QuizPassageText: React.FC<{
   passageId: string;
   body: string;
+  paragraphs: PassageParagraph[];
+  links: QuizWordPackLink[];
+  isGuest: boolean;
+  highlightEnabled: boolean;
+  activeSentenceKey: string | null;
+  pinnedSentenceKey: string | null;
+  onHoverSentence: (key: string | null) => void;
+  onTogglePinnedSentence: (key: string) => void;
+  onOpenWordPack: (wordPackId: string) => void;
+  onCreateEmpty: (lemma: string) => void;
+  onGenerate: (lemma: string) => void;
+}> = ({
+  passageId,
+  body,
+  paragraphs,
+  links,
+  isGuest,
+  highlightEnabled,
+  activeSentenceKey,
+  pinnedSentenceKey,
+  onHoverSentence,
+  onTogglePinnedSentence,
+  onOpenWordPack,
+  onCreateEmpty,
+  onGenerate,
+}) => {
+  const occurrences = useMemo(() => buildPassageWordOccurrences(body, links, passageId), [body, links, passageId]);
+
+  return (
+    <div className="quiz-passage-body" aria-label="英文本文">
+      {paragraphs.map((paragraph) => (
+        <p key={paragraph.key} className="quiz-passage-paragraph">
+          {paragraph.sentences.map((sentence, sentenceIndex) => {
+            const segments = buildSentenceSegments(body, sentence, occurrences);
+            return (
+              <React.Fragment key={sentence.key}>
+                <QuizSentenceSpan
+                  sentence={sentence}
+                  language="en"
+                  highlightEnabled={highlightEnabled}
+                  activeSentenceKey={activeSentenceKey}
+                  pinnedSentenceKey={pinnedSentenceKey}
+                  onHoverSentence={onHoverSentence}
+                  onTogglePinnedSentence={onTogglePinnedSentence}
+                >
+                  {segments.map((segment) => (
+                    segment.link ? (
+                      <InlineWordPackAnchor
+                        key={segment.key}
+                        link={segment.link}
+                        text={segment.text}
+                        isGuest={isGuest}
+                        onOpenWordPack={onOpenWordPack}
+                        onCreateEmpty={onCreateEmpty}
+                        onGenerate={onGenerate}
+                      />
+                    ) : (
+                      <React.Fragment key={segment.key}>{segment.text}</React.Fragment>
+                    )
+                  ))}
+                </QuizSentenceSpan>
+                {sentenceIndex < paragraph.sentences.length - 1 ? ' ' : null}
+              </React.Fragment>
+            );
+          })}
+        </p>
+      ))}
+    </div>
+  );
+};
+
+const QuizTranslationText: React.FC<{
+  paragraphs: PassageParagraph[];
+  highlightEnabled: boolean;
+  activeSentenceKey: string | null;
+  pinnedSentenceKey: string | null;
+  onHoverSentence: (key: string | null) => void;
+  onTogglePinnedSentence: (key: string) => void;
+}> = ({
+  paragraphs,
+  highlightEnabled,
+  activeSentenceKey,
+  pinnedSentenceKey,
+  onHoverSentence,
+  onTogglePinnedSentence,
+}) => (
+  <div className="quiz-translation__body" aria-label="日本語訳本文">
+    {paragraphs.map((paragraph) => (
+      <p key={paragraph.key} className="quiz-translation__paragraph">
+        {paragraph.sentences.map((sentence, sentenceIndex) => (
+          <React.Fragment key={sentence.key}>
+            <QuizSentenceSpan
+              sentence={sentence}
+              language="ja"
+              highlightEnabled={highlightEnabled}
+              activeSentenceKey={activeSentenceKey}
+              pinnedSentenceKey={pinnedSentenceKey}
+              onHoverSentence={onHoverSentence}
+              onTogglePinnedSentence={onTogglePinnedSentence}
+            >
+              {sentence.text}
+            </QuizSentenceSpan>
+            {sentenceIndex < paragraph.sentences.length - 1 ? ' ' : null}
+          </React.Fragment>
+        ))}
+      </p>
+    ))}
+  </div>
+);
+
+const QuizPassageArticle: React.FC<{
+  passage: QuizPassage;
   links: QuizWordPackLink[];
   isGuest: boolean;
   onOpenWordPack: (wordPackId: string) => void;
   onCreateEmpty: (lemma: string) => void;
   onGenerate: (lemma: string) => void;
-}> = ({ passageId, body, links, isGuest, onOpenWordPack, onCreateEmpty, onGenerate }) => {
-  const segments = useMemo(() => {
-    const explicitOccurrences = links.flatMap((link) =>
-      (link.occurrences ?? [])
-        .filter((occurrence) => (occurrence.passage_id ?? passageId) === passageId)
-        .map((occurrence) => ({ ...occurrence, link })),
-    );
-    const fallbackOccurrences = links.flatMap((link) => findFallbackOccurrences(body, link, passageId));
-    const occurrences = [...explicitOccurrences, ...fallbackOccurrences];
-    occurrences.sort((a, b) => a.start - b.start);
-    const out: Array<{ text: string; link?: QuizWordPackLink; key: string }> = [];
-    let cursor = 0;
-    occurrences.forEach((occurrence, index) => {
-      if (occurrence.start < cursor || occurrence.end <= occurrence.start || occurrence.end > body.length) {
-        return;
-      }
-      if (occurrence.start > cursor) {
-        out.push({ key: `text-${index}-${cursor}`, text: body.slice(cursor, occurrence.start) });
-      }
-      out.push({
-        key: `word-${index}-${occurrence.start}`,
-        text: body.slice(occurrence.start, occurrence.end),
-        link: occurrence.link,
-      });
-      cursor = occurrence.end;
-    });
-    if (cursor < body.length) {
-      out.push({ key: `text-end-${cursor}`, text: body.slice(cursor) });
-    }
-    return out.length ? out : [{ key: 'text-only', text: body }];
-  }, [body, links, passageId]);
-
+}> = ({ passage, links, isGuest, onOpenWordPack, onCreateEmpty, onGenerate }) => {
+  const [translationOpen, setTranslationOpen] = useState(false);
+  const [hoveredSentenceKey, setHoveredSentenceKey] = useState<string | null>(null);
+  const [pinnedSentenceKey, setPinnedSentenceKey] = useState<string | null>(null);
+  const alignment = useMemo(
+    () => buildPassageAlignment(passage.body_en, passage.body_ja),
+    [passage.body_en, passage.body_ja],
+  );
+  const activeSentenceKey = translationOpen ? hoveredSentenceKey ?? pinnedSentenceKey : null;
+  const togglePinnedSentence = (key: string) => {
+    setPinnedSentenceKey((current) => (current === key ? null : key));
+  };
   return (
-    <p className="quiz-passage-body">
-      {segments.map((segment) => (
-        segment.link ? (
-          <InlineWordPackAnchor
-            key={segment.key}
-            link={segment.link}
-            text={segment.text}
-            isGuest={isGuest}
-            onOpenWordPack={onOpenWordPack}
-            onCreateEmpty={onCreateEmpty}
-            onGenerate={onGenerate}
+    <article className={`quiz-passage ${translationOpen ? 'is-translation-open' : ''}`}>
+      <div className="quiz-passage__header">
+        <div>
+          <p className="quiz-question__meta">{passage.kind}</p>
+          <h4>{passage.title || `本文 ${passage.order}`}</h4>
+        </div>
+        <TTSButton text={passage.body_en} label="本文を聞く" ariaLabel={`${passage.title || `本文 ${passage.order}`}を聞く`} />
+      </div>
+      <QuizPassageText
+        passageId={passage.id}
+        body={passage.body_en}
+        paragraphs={alignment.englishParagraphs}
+        links={links}
+        isGuest={isGuest}
+        highlightEnabled={translationOpen}
+        activeSentenceKey={activeSentenceKey}
+        pinnedSentenceKey={pinnedSentenceKey}
+        onHoverSentence={setHoveredSentenceKey}
+        onTogglePinnedSentence={togglePinnedSentence}
+        onOpenWordPack={onOpenWordPack}
+        onCreateEmpty={onCreateEmpty}
+        onGenerate={onGenerate}
+      />
+      {passage.body_ja ? (
+        <details
+          className="quiz-translation"
+          open={translationOpen}
+          onToggle={(event) => {
+            const nextOpen = event.currentTarget.open;
+            setTranslationOpen(nextOpen);
+            if (!nextOpen) {
+              setHoveredSentenceKey(null);
+              setPinnedSentenceKey(null);
+            }
+          }}
+        >
+          <summary>日本語訳</summary>
+          <QuizTranslationText
+            paragraphs={alignment.japaneseParagraphs}
+            highlightEnabled={translationOpen}
+            activeSentenceKey={activeSentenceKey}
+            pinnedSentenceKey={pinnedSentenceKey}
+            onHoverSentence={setHoveredSentenceKey}
+            onTogglePinnedSentence={togglePinnedSentence}
           />
-        ) : (
-          <React.Fragment key={segment.key}>{segment.text}</React.Fragment>
-        )
-      ))}
-    </p>
+        </details>
+      ) : null}
+    </article>
   );
 };
 
@@ -883,30 +1278,15 @@ export const QuizPage: React.FC = () => {
                   .slice()
                   .sort((a, b) => a.order - b.order)
                   .map((passage) => (
-                    <article key={passage.id} className="quiz-passage">
-                      <div className="quiz-passage__header">
-                        <div>
-                          <p className="quiz-question__meta">{passage.kind}</p>
-                          <h4>{passage.title || `本文 ${passage.order}`}</h4>
-                        </div>
-                        <TTSButton text={passage.body_en} label="本文を聞く" ariaLabel={`${passage.title || `本文 ${passage.order}`}を聞く`} />
-                      </div>
-                      <QuizPassageText
-                        passageId={passage.id}
-                        body={passage.body_en}
-                        links={relatedLinks}
-                        isGuest={isGuest}
-                        onOpenWordPack={setPreviewWordPackId}
-                        onCreateEmpty={createEmpty}
-                        onGenerate={generateWordPack}
-                      />
-                      {passage.body_ja ? (
-                        <details className="quiz-translation">
-                          <summary>日本語訳</summary>
-                          <p>{passage.body_ja}</p>
-                        </details>
-                      ) : null}
-                    </article>
+                    <QuizPassageArticle
+                      key={passage.id}
+                      passage={passage}
+                      links={relatedLinks}
+                      isGuest={isGuest}
+                      onOpenWordPack={setPreviewWordPackId}
+                      onCreateEmpty={createEmpty}
+                      onGenerate={generateWordPack}
+                    />
                   ))}
               </div>
               <div className="quiz-sections">
