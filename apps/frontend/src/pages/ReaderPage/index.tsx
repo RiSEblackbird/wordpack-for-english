@@ -30,7 +30,7 @@ export const ReaderPage: React.FC = () => (
             </div>
             <Badge variant="accent">reader desk</Badge>
           </div>
-          <ArticleImportPanel />
+          <ArticleImportPanel showSidebarControls={false} />
         </section>
         <section className="dictionary-section">
           <ArticleListPanel />

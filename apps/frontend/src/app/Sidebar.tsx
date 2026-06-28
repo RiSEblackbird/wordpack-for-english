@@ -143,7 +143,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={onToggleDesktopCollapse}
               >
                 <CollapseIcon isCollapsed={isSidebarCollapsed} />
-                <span className="sidebar-collapse-label">{isSidebarCollapsed ? '展開' : '折りたたむ'}</span>
               </button>
             ) : null}
           </div>
