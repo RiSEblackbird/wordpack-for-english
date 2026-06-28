@@ -18,7 +18,7 @@
 - このUIが助ける理解・判断・行動: サイドメニュー上部の折りたたみ操作が幅内に収まり、Readerでは本文側のインポート導線だけを見ればよい
 - このUIがなければ困る点: サイドメニュー上部の操作が切れて見え、Readerで同じインポート操作が本文とサイドメニューに重複して判断負荷が増える
 - 削るべき情報・操作: Readerサイドメニュー内の文章インポート、カテゴリ選択、例文生成・記事化、モデル選択
-- 検証仮説・成功指標: desktopサイドバー幅224px内で折りたたみボタンが収まり、Readerではサイドバー側の文章インポート領域がDOMに存在しない
+- 検証仮説・成功指標: desktopサイドバー幅248px内で折りたたみボタンと音声selectが収まり、Readerではサイドバー側の文章インポート領域がDOMに存在しない
 
 ## 3. 初見理解
 
@@ -66,7 +66,7 @@
 - グルーピング: Readerのカテゴリ・モデル・AIパラメータは本文フォーム内にまとまる
 - 余白・密度: サイドメニューのブランド行はWordPackタイトルと38pxボタンに収まる
 - 読みやすさ: 折りたたみボタンの可視文字切れをなくし、title/ariaで意味を補完
-- 狭幅・文字拡大: `.sidebar-title` はellipsis、折りたたみボタンは固定幅で横にはみ出さない
+- 狭幅・文字拡大: `.sidebar-title` はellipsis、折りたたみボタンは固定幅で横にはみ出さない。サイドバー実用幅を248pxへ広げ、右端に余白を残す
 
 ## 7. コピー
 
@@ -114,7 +114,7 @@
 - スクリーンショット: local Playwrightで `/tmp/wordpack-sidebar-after.png` と `/tmp/wordpack-reader-after.png` を取得
 - トレース: なし
 - テスト結果: `npx tsc -p tsconfig.json`、`npm test -- --silent src/App.test.tsx`、`npm test -- --coverage --silent`、`git diff --check`
-- 手動確認: Playwright metricsで sidebar width 224px、toggle right 212.14px、brand scrollWidth 203 / clientWidth 203、Reader body textarea true、sidebar textarea false、sidebar import region false
+- 手動確認: Playwright metricsで sidebar width 248px、collapse toggle right 223.02px、playback / volume select right 228.63px、brand scrollWidth 217 / clientWidth 217、Reader body textarea true、sidebar textarea false、sidebar import region false
 - 取得できなかった証跡と理由: 実ユーザーテストはこの変更範囲では未実施
 
 ## 13. 実行した検証

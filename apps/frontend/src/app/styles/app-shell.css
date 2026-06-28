@@ -65,7 +65,7 @@ footer {
 }
 
 .app-shell {
-  --app-sidebar-width: 224px;
+  --app-sidebar-width: 248px;
   --app-sidebar-collapsed-width: 72px;
   --sidebar-title-toggle-clearance: 3rem;
   margin: 0 auto;
@@ -236,10 +236,13 @@ body.theme-dark .guest-badge {
 }
 
 .sidebar-brand {
-  display: flex;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 38px;
   gap: 0.65rem;
   min-height: 38px;
-  padding: 0.2rem 0.35rem 0.25rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.2rem 0.55rem 0.25rem 0.35rem;
   align-items: center;
 }
 
@@ -258,7 +261,7 @@ body.theme-dark .guest-badge {
   width: 38px;
   height: 38px;
   flex: 0 0 38px;
-  margin-left: auto;
+  justify-self: end;
   border: 1px solid rgba(125, 146, 178, 0.34);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.08);
@@ -456,7 +459,7 @@ body.theme-dark .guest-badge {
 }
 
 .sidebar.is-collapsed .sidebar-collapse-toggle {
-  margin-left: 0;
+  justify-self: center;
 }
 
 .sidebar.is-collapsed .sidebar-nav {
