@@ -22,7 +22,7 @@ Cloud Firestore を使う場合は、プロジェクト ID と認証情報を明
 
 ## インデックス
 
-複合インデックスは `firestore.indexes.json` で管理します。Web Console で手作業登録するのではなく、ファイルを同期します。
+複合インデックスと single-field override は `firestore.indexes.json` で管理します。Web Console で手作業登録するのではなく、ファイルを同期します。
 
 主な対象:
 

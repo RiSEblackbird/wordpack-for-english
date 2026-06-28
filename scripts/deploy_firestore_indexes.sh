@@ -87,8 +87,9 @@ except json.JSONDecodeError as exc:
     sys.exit(1)
 
 indexes = payload.get("indexes", [])
-if not indexes:
-    print("[deploy_firestore_indexes] indexes エントリが存在しません。スキップします。")
+field_overrides = payload.get("fieldOverrides", [])
+if not indexes and not field_overrides:
+    print("[deploy_firestore_indexes] indexes / fieldOverrides エントリが存在しません。スキップします。")
     sys.exit(0)
 
 def normalize_enum(value: str) -> str:
@@ -115,6 +116,21 @@ def build_field_config(field: dict) -> str:
         inner = ",".join(f"{k}={v}" for k, v in vector_config.items())
         parts.append(f"vector-config={{{inner}}}")
     return "--field-config=" + ",".join(parts)
+
+def build_single_field_index_config(index: dict) -> str:
+    query_scope = normalize_enum(index.get("queryScope", "collection"))
+    if query_scope != "collection":
+        raise ValueError("gcloud field override sync only supports queryScope=COLLECTION")
+
+    order = index.get("order")
+    array_config = index.get("arrayConfig")
+    if order and array_config:
+        raise ValueError("single-field indexes must not define both order and arrayConfig")
+    if order:
+        return "--index=order=" + normalize_enum(order)
+    if array_config:
+        return "--index=array-config=" + normalize_enum(array_config)
+    raise ValueError("single-field indexes must define order or arrayConfig")
 
 for index in indexes:
     collection_group = index.get("collectionGroup")
@@ -151,6 +167,40 @@ for index in indexes:
         continue
 
     sys.stderr.write(stderr or stdout)
+    sys.exit(proc.returncode)
+
+for override in field_overrides:
+    collection_group = override.get("collectionGroup")
+    field_path = override.get("fieldPath")
+    if not collection_group or not field_path:
+        raise SystemExit("collectionGroup and fieldPath are required for every fieldOverrides entry")
+
+    cmd = [
+        "gcloud",
+        "firestore",
+        "indexes",
+        "fields",
+        "update",
+        field_path,
+        "--quiet",
+        f"--project={project_id}",
+        f"--collection-group={collection_group}",
+    ]
+    single_field_indexes = override.get("indexes", [])
+    if single_field_indexes:
+        for single_index in single_field_indexes:
+            cmd.append(build_single_field_index_config(single_index))
+    else:
+        cmd.append("--disable-indexes")
+
+    index_label = f"{collection_group}.{field_path}"
+    print(f"[deploy_firestore_indexes] gcloud 実行: {shlex.join(cmd)}")
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode == 0:
+        print(f"[deploy_firestore_indexes] ✅ fieldOverride 同期済み: {index_label}")
+        continue
+
+    sys.stderr.write(proc.stderr or proc.stdout)
     sys.exit(proc.returncode)
 PY
     ;;
