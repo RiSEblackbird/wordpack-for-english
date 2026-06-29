@@ -105,6 +105,30 @@ describe('ArticleDetailModal', () => {
     });
   });
 
+  it('does not enable sentence highlighting for a single-sentence article', () => {
+    const article: ArticleDetailData = {
+      id: 'art:single-sentence',
+      title_en: 'Single Sentence',
+      body_en: 'Only one sentence is available.',
+      body_ja: '利用できる文は1つだけです。',
+      related_word_packs: [],
+    };
+
+    render(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        article={article}
+      />,
+    );
+
+    expect(screen.queryByRole('group', { name: '英文 1: 日本語訳と対応' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '日本語訳 1: 英文と対応' })).not.toBeInTheDocument();
+    const sentence = screen.getByLabelText('英文本文').querySelector('.sentence-pair-highlight');
+    expect(sentence).toBeInTheDocument();
+    expect(sentence).not.toHaveClass('is-paired');
+  });
+
   it('preserves imported article line breaks while highlighting sentences', () => {
     const article: ArticleDetailData = {
       id: 'art:line-breaks',

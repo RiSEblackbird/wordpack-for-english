@@ -174,7 +174,7 @@ const defaultWordPackItems = [
   },
 ];
 
-const setupFetch = (wordPackItems = defaultWordPackItems) => {
+const setupFetch = (wordPackItems = defaultWordPackItems, quizData: Quiz = quiz) => {
   const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.startsWith('/api/quiz?')) {
@@ -182,18 +182,18 @@ const setupFetch = (wordPackItems = defaultWordPackItems) => {
         new Response(JSON.stringify({
           items: [
             {
-              id: quiz.id,
-              title_en: quiz.title_en,
-              format_profile: quiz.format_profile,
-              generation_domain: quiz.generation_domain,
-              domain_intensity: quiz.domain_intensity,
-              difficulty: quiz.difficulty,
-              question_count: 1,
-              passage_count: 1,
-              source_lemmas: quiz.source_lemmas,
-              created_at: quiz.created_at,
-              updated_at: quiz.updated_at,
-              guest_public: true,
+              id: quizData.id,
+              title_en: quizData.title_en,
+              format_profile: quizData.format_profile,
+              generation_domain: quizData.generation_domain,
+              domain_intensity: quizData.domain_intensity,
+              difficulty: quizData.difficulty,
+              question_count: quizData.sections.reduce((sum, section) => sum + section.questions.length, 0),
+              passage_count: quizData.passages.length,
+              source_lemmas: quizData.source_lemmas,
+              created_at: quizData.created_at,
+              updated_at: quizData.updated_at,
+              guest_public: quizData.guest_public,
             },
           ],
           total: 1,
@@ -202,14 +202,14 @@ const setupFetch = (wordPackItems = defaultWordPackItems) => {
         }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
       );
     }
-    if (url === '/api/quiz/quiz%3Aalpha') {
+    if (url === `/api/quiz/${encodeURIComponent(quizData.id)}`) {
       return Promise.resolve(
-        new Response(JSON.stringify(quiz), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+        new Response(JSON.stringify(quizData), { status: 200, headers: { 'Content-Type': 'application/json' } }),
       );
     }
-    if (url === '/api/quiz/quiz%3Aalpha/guest-public' && init?.method === 'POST') {
+    if (url === `/api/quiz/${encodeURIComponent(quizData.id)}/guest-public` && init?.method === 'POST') {
       return Promise.resolve(
-        new Response(JSON.stringify({ quiz_id: quiz.id, guest_public: false }), {
+        new Response(JSON.stringify({ quiz_id: quizData.id, guest_public: false }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         }),
@@ -324,6 +324,37 @@ describe('QuizPage', () => {
 
     expect(englishSecondSentence).toHaveClass('is-pinned');
     expect(japaneseSecondSentence).toHaveClass('is-pinned');
+  });
+
+  it('does not enable translation sentence highlighting for a single-sentence quiz passage', async () => {
+    const singleSentenceQuiz: Quiz = {
+      ...quiz,
+      passages: [
+        {
+          ...quiz.passages[0]!,
+          body_en: 'Only one quiz sentence remains.',
+          body_ja: 'Quizの文は1つだけです。',
+        },
+      ],
+      related_word_packs: [],
+    };
+    setupFetch(defaultWordPackItems, singleSentenceQuiz);
+    const { container } = renderQuizPage();
+    expect(await screen.findByRole('heading', { name: 'Reliable API Deployments' })).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await act(async () => {
+      await user.click(screen.getByText('日本語訳'));
+    });
+
+    expect(screen.queryByRole('group', { name: '英文 1: 日本語訳と対応' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '日本語訳 1: 英文と対応' })).not.toBeInTheDocument();
+    const englishSentence = container.querySelector('.quiz-passage-body .sentence-pair-highlight');
+    const japaneseSentence = container.querySelector('.quiz-translation__body .sentence-pair-highlight');
+    expect(englishSentence).toBeInTheDocument();
+    expect(japaneseSentence).toBeInTheDocument();
+    expect(englishSentence).not.toHaveClass('is-paired');
+    expect(japaneseSentence).not.toHaveClass('is-paired');
   });
 
   it('switches the selected quiz detail into a full-width reading layout', async () => {

@@ -122,6 +122,21 @@ describe('ExampleDetailModal', () => {
     });
   });
 
+  it('does not enable sentence highlighting for a single-sentence example', () => {
+    render(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={item} />
+      </SettingsProvider>
+    );
+
+    expect(screen.queryByRole('group', { name: '英文 1: 日本語訳と対応' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '日本語訳 1: 英文と対応' })).not.toBeInTheDocument();
+    const pairList = screen.getByRole('list', { name: '原文と日本語訳の対応' });
+    const sentence = pairList.querySelector('.sentence-pair-highlight');
+    expect(sentence).toBeInTheDocument();
+    expect(sentence).not.toHaveClass('is-paired');
+  });
+
   it('clears pinned sentence when the example item changes', async () => {
     const firstExample: ExampleItemData = {
       ...item,
@@ -238,19 +253,13 @@ describe('ExampleDetailModal', () => {
       await user.click(screen.getByRole('button', { name: '文字起こしタイピングを開く (0文字)' }));
     });
     const textarea = screen.getByLabelText('文字起こしタイピング入力');
-    await act(async () => {
-      await user.clear(textarea);
-      await user.type(textarea, 'short');
-    });
+    fireEvent.change(textarea, { target: { value: 'short' } });
 
     const recordButton = screen.getByRole('button', { name: '文字起こしを記録' });
     expect(recordButton).toBeDisabled();
     expect(screen.getByText(/入力文字数差:/)).toHaveTextContent(/10文字以内/);
 
-    await act(async () => {
-      await user.clear(textarea);
-      await user.type(textarea, 'Test sentence in English.');
-    });
+    fireEvent.change(textarea, { target: { value: 'Test sentence in English.' } });
     expect(recordButton).toBeEnabled();
   });
 
@@ -278,10 +287,7 @@ describe('ExampleDetailModal', () => {
       await user.click(screen.getByRole('button', { name: '文字起こしタイピングを開く (2文字)' }));
     });
     const textarea = screen.getByLabelText('文字起こしタイピング入力');
-    await act(async () => {
-      await user.clear(textarea);
-      await user.type(textarea, item.en);
-    });
+    fireEvent.change(textarea, { target: { value: item.en } });
 
     await act(async () => {
       await user.click(screen.getByRole('button', { name: '文字起こしを記録' }));
