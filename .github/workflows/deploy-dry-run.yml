@@ -27,6 +27,7 @@ jobs:
       CLOUD_RUN_PROJECT_ID: ci-placeholder-project
       CLOUD_RUN_REGION: asia-northeast1
       CLOUD_RUN_ENV_FILE: configs/cloud-run/ci.env
+      CLOUD_RUN_MIN_INSTANCES: "1"
       GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
     steps:
       - name: Checkout repository
@@ -88,5 +89,6 @@ jobs:
             PROJECT_ID=${{ env.CLOUD_RUN_PROJECT_ID }} \
             REGION=${{ env.CLOUD_RUN_REGION }} \
             ENV_FILE=${{ env.CLOUD_RUN_ENV_FILE }} \
+            MIN_INSTANCES=${{ env.CLOUD_RUN_MIN_INSTANCES }} \
             SKIP_FIRESTORE_INDEX_SYNC=true \
             DRY_RUN=true

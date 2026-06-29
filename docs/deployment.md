@@ -111,6 +111,18 @@ make release-cloud-run \
   RUN_TIMEOUT=360s
 ```
 
+紹介用の本番 URL で cold start による初回待ち時間を避けたい場合は、Cloud Run の minimum instances を `1` にします。後で費用優先へ戻す場合は `0` を指定します。
+
+```bash
+make release-cloud-run \
+  PROJECT_ID=<project-id> \
+  REGION=asia-northeast1 \
+  ENV_FILE=.env.deploy \
+  MIN_INSTANCES=1
+```
+
+`MIN_INSTANCES=0` は Cloud Run service の minimum instances を 0 に戻します。`MIN_INSTANCES=default` を指定すると gcloud の `--min default` に渡し、Cloud Run 側の既定値へ戻します。
+
 既に Firestore インデックスを同期済みの CI/CD 環境では、次のように同期を省略できます。
 
 ```bash
@@ -156,6 +168,7 @@ firebase deploy --only hosting --project <firebase-project-id>
 - 手動実行用に `workflow_dispatch` もあります。
 - PR では本番 deploy job を作りません。
 - CI 成功を必須にする場合は、GitHub の branch protection で必要な check を指定します。
+- Cloud Run の minimum instances は repository variable `CLOUD_RUN_MIN_INSTANCES` で上書きできます。未設定時は紹介用 URL の初回体験を優先して `1` を使います。費用優先へ戻す場合は `0` を設定します。
 
 必要な repository secrets:
 
