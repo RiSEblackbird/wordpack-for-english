@@ -8,7 +8,7 @@
 - frontend は React + Vite の build artifact を Firebase Hosting API で配置します。
 - Firestore の複合インデックスと single-field override は `firestore.indexes.json` を同期します。既定の `gcloud` 経路は gcloud の認証情報で Firestore Admin API を直接呼び、Firebase CLI と `gcloud alpha` component には依存しません。
 - GitHub Actions の本番デプロイは `main` への push と `workflow_dispatch` をトリガーにします。
-- PR では本番デプロイ job を作らず、Cloud Run config guard の dry-run で設定ミスを検知します。
+- PR では本番デプロイ job を作らず、production deploy preflight で Cloud Run dry-run、Firebase Hosting API plan、認証済み read-only probe を非破壊で確認します。
 
 ## 事前準備
 
@@ -166,6 +166,17 @@ firebase deploy --only hosting --project <firebase-project-id>
 | `CLOUD_RUN_ENV_FILE_BASE64` | `.env.deploy` を base64 化した値 |
 
 Firestore index 同期は `gcloud` 認証の Firestore Admin API 経由で行い、Firebase Hosting 更新は `gcloud` 認証の Firebase Hosting API 経由で行います。どちらも Firebase CLI 認証や `gcloud alpha` component に依存させません。長期保存する `FIREBASE_TOKEN` secret や、`gcloud auth print-access-token` で発行した access token の `FIREBASE_TOKEN` 代入は使いません。
+
+### Production deploy preflight
+
+`.github/workflows/production-deploy-preflight.yml` は、PR 時点で本番デプロイの主要な前提を非破壊で確認します。
+
+- `pull_request` では PR コードを checkout し、secrets なしで frontend build、Cloud Run dry-run、Firebase Hosting API の `--plan-only`、production deploy contract guard を実行します。
+- `pull_request_target` では secrets を使うため、PR コードは checkout せず、base branch の信頼済みコードだけで read-only probe を実行します。
+- read-only probe は `gcloud auth print-access-token`、Firestore Admin API の index list、Firebase Hosting API の releases list を確認します。
+- `workflow_dispatch` では選択した ref に対して同じ静的 preflight と read-only probe を手動実行できます。
+
+この preflight は Hosting version 作成、file upload、version finalize、release 作成、Firestore index 作成/更新、Cloud Run 実デプロイを実行しません。そのため write 権限、quota、release 作成時の最終検証までは完全保証できません。実デプロイを伴わない範囲で、API path、認証前提、build artifact、dry-run 可能な設定、禁止 CLI 依存を先に検知するための check です。
 
 サービスアカウントに必要な代表ロール:
 
