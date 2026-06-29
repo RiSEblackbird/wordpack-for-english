@@ -318,6 +318,14 @@ test.describe('WordPack 操作', () => {
       await alphaCard.getByRole('button', { name: '開く' }).click();
       await expect(page.getByRole('dialog', { name: /WordPack プレビュー/ })).toBeVisible();
       await expect(page.getByRole('heading', { name: /例文/ })).toBeVisible();
+      const englishExampleSentence = page.locator('.ex-en .sentence-pair-highlight').first();
+      const japaneseExampleSentence = page.getByRole('group', { name: '日本語訳 1: 英文と対応' }).first();
+      await englishExampleSentence.hover();
+      await expect(englishExampleSentence).toHaveClass(/is-active/);
+      await expect(japaneseExampleSentence).toHaveClass(/is-active/);
+      await japaneseExampleSentence.click();
+      await expect(englishExampleSentence).toHaveClass(/is-pinned/);
+      await expect(japaneseExampleSentence).toHaveClass(/is-pinned/);
       const actionEnd = await page.evaluate(() => {
         performance.mark('wordpack-generate-end');
         const measure = performance.measure(

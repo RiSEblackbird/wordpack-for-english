@@ -90,6 +90,76 @@ describe('ExampleDetailModal', () => {
     expect(pairs[1]).toHaveTextContent('プラットフォームは低遅延を保ちます。');
   });
 
+  it('highlights paired original and translated sentences', async () => {
+    const enriched: ExampleItemData = {
+      ...item,
+      en: 'The cache serves fresh data. The platform keeps latency low.',
+      ja: 'キャッシュは新しいデータを提供します。プラットフォームは低遅延を保ちます。',
+    };
+    render(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={enriched} />
+      </SettingsProvider>
+    );
+
+    const user = userEvent.setup();
+    const englishSecondSentence = screen.getByRole('group', { name: '英文 2: 日本語訳と対応' });
+    const japaneseSecondSentence = screen.getByRole('group', { name: '日本語訳 2: 英文と対応' });
+
+    await user.hover(englishSecondSentence);
+
+    await waitFor(() => {
+      expect(englishSecondSentence).toHaveClass('is-active');
+      expect(japaneseSecondSentence).toHaveClass('is-active');
+    });
+
+    await user.unhover(englishSecondSentence);
+    await user.click(japaneseSecondSentence);
+
+    await waitFor(() => {
+      expect(englishSecondSentence).toHaveClass('is-pinned');
+      expect(japaneseSecondSentence).toHaveClass('is-pinned');
+    });
+  });
+
+  it('clears pinned sentence when the example item changes', async () => {
+    const firstExample: ExampleItemData = {
+      ...item,
+      id: 201,
+      en: 'First example starts. First example pins.',
+      ja: '最初の例文が始まります。最初の例文を固定します。',
+    };
+    const secondExample: ExampleItemData = {
+      ...item,
+      id: 202,
+      en: 'Second example starts. Second example stays clear.',
+      ja: '2つ目の例文が始まります。2つ目の例文は固定されません。',
+    };
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={firstExample} />
+      </SettingsProvider>
+    );
+
+    await user.click(screen.getByRole('group', { name: '日本語訳 2: 英文と対応' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: '英文 2: 日本語訳と対応' })).toHaveClass('is-pinned');
+    });
+
+    rerender(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={secondExample} />
+      </SettingsProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: '英文 2: 日本語訳と対応' })).not.toHaveClass('is-pinned');
+      expect(screen.getByRole('group', { name: '日本語訳 2: 英文と対応' })).not.toHaveClass('is-pinned');
+    });
+  });
+
   it('shows study progress buttons with counts', () => {
     const enriched: ExampleItemData = { ...item, checked_only_count: 2, learned_count: 1 };
     render(
