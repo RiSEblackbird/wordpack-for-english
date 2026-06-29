@@ -2,7 +2,7 @@
 
 ## 1. 概要
 
-- 対象PR / 作業: Quiz限定だった文単位ハイライトを Reader / Example / WordPack 例文へ適用
+- 対象PR / 作業: Quiz限定だった文単位ハイライトを Reader / Example / WordPack 例文へ適用し、1文だけのコンテンツでは無効化
 - 変更した画面・コンポーネント: QuizPage、ArticleDetailModal、ExampleDetailModal、WordPack ExamplesSection
 - 判定: Pass
 - P0件数: 0
@@ -14,8 +14,8 @@
 - 対象ユーザー: 英文と日本語訳を対応させながら読む学習者、Reader / Example / WordPack / Quiz を横断して復習する利用者
 - 利用文脈: 本文や例文を読みながら、訳文のどの文に対応するかを短時間で確認したい場面
 - ユーザー目的: 英文と訳文の対応を見失わず、文ごとに理解を確認する
-- 支援するタスク: 対応文の探索、訳文確認、文単位の読解復習
-- このUIが助ける理解・判断・行動: hover / focus で対応文を一時確認し、click / Enter / Space で確認中の対応を固定できる
+- 支援するタスク: 2文以上あるコンテンツでの対応文探索、訳文確認、文単位の読解復習
+- このUIが助ける理解・判断・行動: hover / focus で対応文を一時確認し、click / Enter / Space で確認中の対応を固定できる。1文だけの場合は全文強調で視認性を落とさないよう操作対象にしない
 - このUIがなければ困る点: Reader や例文では長めの英文と訳文を目で追って対応を探す必要があり、Quizだけ操作感が異なる
 - 削るべき情報・操作: 新しい説明テキストやボタンは追加せず、既存本文上の文単位操作に限定した
 - 検証仮説・成功指標: 対象コンテンツで、対応する英文・訳文が同じ active / pinned 状態になる
@@ -41,6 +41,7 @@
 | 空 | 既存の空状態を変更しない | Pass |
 | 検索結果なし | Example / WordPack の既存検索・絞り込み状態を変更しない | Pass |
 | 部分データ | 訳文がない場合はペア操作を有効化しない | Pass |
+| 1文のみ | 対応する文ペアが1つだけのコンテンツでは `is-paired` とfocusableな `role=group` を付けず、全文だけが光る状態を避ける | Pass |
 | エラー | 既存エラー表示を変更しない | Pass |
 | 入力エラー | 既存フォーム入力エラーを変更しない | Pass |
 | 無効 | 既存 disabled 操作を変更しない | Pass |
@@ -52,7 +53,7 @@
 
 ## 5. アクセシビリティ確認
 
-- キーボード: Reader / Example 詳細 / Quiz は文spanを `role="group"` + `tabIndex=0` にし、Enter / Space で固定可能。WordPack例文は英文ブロックの既存語句操作を維持するため、訳文側から固定可能
+- キーボード: Reader / Example 詳細 / Quiz は2文以上の文spanを `role="group"` + `tabIndex=0` にし、Enter / Space で固定可能。WordPack例文は英文ブロックの既存語句操作を維持するため、訳文側から固定可能。1文だけのコンテンツでは不要なTab停止を作らない
 - フォーカス: `.sentence-pair-highlight:focus-visible` を共通定義し、Quiz固有の `.quiz-sentence:focus-visible` も維持
 - 名前・ラベル: `英文 N: 日本語訳と対応`、`日本語訳 N: 英文と対応` を accessible name として付与
 - 見出し・構造: 既存の見出し、list、region、modal構造を維持
@@ -64,7 +65,7 @@
 
 ## 6. 視覚階層
 
-- 主操作: 本文読解が主目的のため、新しいボタンや説明カードは追加しない
+- 主操作: 本文読解が主目的のため、新しいボタンや説明カードは追加しない。1文だけの本文では全文強調を出さず、読みやすさを優先
 - 情報優先度: 文の強調はユーザーが注目した文だけに限定
 - グルーピング: 同じpairKeyの英文・訳文だけを active / pinned にする
 - 余白・密度: 既存の段落間隔、例文カード密度、Quiz本文密度を維持
@@ -104,6 +105,7 @@
 - 実装を落とす観点で見つけた問題: WordPack例文の英文ブロックは既に関連WordPackを開く操作対象で、文spanをfocusableにするとネストした操作対象になるため、英文側はhoverのみ、訳文側はkeyboard/click対応にした
 - P0候補: InlineWordPackボタンをクリックしたときに文固定が誤発火する問題は、click無視対象で防いだ
 - Codex reviewで見つけた問題: Reader / Exampleのコンテンツ切替時に同じpairKeyの固定状態が持ち越される可能性と、Reader本文の単一改行が再構成で失われる可能性を修正した
+- 利用後に見つけた問題: 1文だけのコンテンツでは全文が強調されるだけで対応探索の価値がなく、むしろ読みにくくなるため、対応文ペアが2つ以上ある場合だけ有効化した
 - 証跡不足: 専用スクリーンショットは未取得。DOMテストとPlaywright実ブラウザ操作で主要状態を確認した
 - 残リスク: Reader長文では文ごとのTab停止数が増える。長大記事向けのroving focusやショートカットは別Issue候補
 
@@ -119,11 +121,12 @@
 - トレース: Playwright smoke 9 passed
 - テスト結果:
   - `cd apps/frontend && npx tsc -p tsconfig.json`: pass
-  - `cd apps/frontend && npm test -- --run src/components/ArticleDetailModal.test.tsx src/components/ExampleDetailModal.test.tsx src/components/wordpack/ExamplesSection.test.tsx src/pages/QuizPage/QuizPage.test.tsx --silent`: 28 passed
-  - `cd apps/frontend && npm test -- --coverage --silent`: 184 passed / 1 skipped
+  - `cd apps/frontend && npm test -- --run src/components/ArticleDetailModal.test.tsx src/components/ExampleDetailModal.test.tsx src/components/wordpack/ExamplesSection.test.tsx src/pages/QuizPage/QuizPage.test.tsx --silent`: 32 passed
+  - `cd apps/frontend && npm test -- --coverage --silent`: 188 passed / 1 skipped
   - `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts`: 9 passed
   - `git diff --check`: pass
-- 手動確認: 差分レビューでQuizの既存ARIA名、Reader/Example/WordPackの適用、UserManual更新、公開文書の秘密情報なしを確認
+  - 公開文書の秘密情報・運用IDキーワードスキャン: no matches
+- 手動確認: 差分レビューでQuizの既存ARIA名、Reader/Example/WordPackの適用、1文だけのコンテンツでは `is-paired` / focusable group が付かないこと、UserManual更新、公開文書の秘密情報なしを確認
 - 取得できなかった証跡と理由: スクリーンショットは未取得。今回の検証では状態クラスとARIA名を自動テストで確認し、Playwright smokeで実ブラウザ操作を確認した
 
 ## 13. 実行した検証

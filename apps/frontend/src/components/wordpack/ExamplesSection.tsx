@@ -209,6 +209,7 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
               {(data.examples[category] as ExampleItem[]).map((ex: ExampleItem, index: number) => {
                 const explanationSections = splitExampleExplanation(ex.grammar_ja);
                 const translationPairs = buildExampleTranslationPairs(ex.en, ex.ja);
+                const canHighlightSentencePairs = translationPairs.length > 1;
                 return (
                   <article
                     key={index}
@@ -231,9 +232,10 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
                       <span className="ex-label">[{index + 1}] 英文</span>
                       <span className="ex-sentence-list">
                         {translationPairs.map((pair, pairIndex) => {
-                          const pairKey = `example-${category}-${index}-sentence-${pair.index}`;
+                          const sentenceKey = `example-${category}-${index}-sentence-${pair.index}`;
+                          const pairKey = canHighlightSentencePairs ? sentenceKey : null;
                           const sentence = createManualSentenceSegment(
-                            `${pairKey}-en`,
+                            `${sentenceKey}-en`,
                             pairKey,
                             pair.index,
                             pair.en,
@@ -259,9 +261,10 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
                       <span className="ex-label">日本語訳</span>
                       <span className="ex-sentence-list">
                         {translationPairs.map((pair, pairIndex) => {
-                          const pairKey = `example-${category}-${index}-sentence-${pair.index}`;
+                          const sentenceKey = `example-${category}-${index}-sentence-${pair.index}`;
+                          const pairKey = canHighlightSentencePairs ? sentenceKey : null;
                           const sentence = createManualSentenceSegment(
-                            `${pairKey}-ja`,
+                            `${sentenceKey}-ja`,
                             pairKey,
                             pair.index,
                             pair.ja,

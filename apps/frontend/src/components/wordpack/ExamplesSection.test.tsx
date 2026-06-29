@@ -32,6 +32,19 @@ describe('ExamplesSection', () => {
     citations: [],
     confidence: 'medium',
   };
+  const multiSentenceData: WordPack = {
+    ...data,
+    examples: {
+      ...data.examples,
+      Dev: [
+        {
+          ...data.examples.Dev[0]!,
+          en: 'The alpha build exposed navigation issues. The beta team fixed them quickly.',
+          ja: 'アルファ版はナビゲーション上の問題を明らかにした。ベータチームはそれらをすぐに修正した。',
+        },
+      ],
+    },
+  };
 
   beforeEach(() => {
     vi.spyOn(AuthContext, 'useAuth').mockReturnValue({ isGuest: false } as any);
@@ -72,7 +85,7 @@ describe('ExamplesSection', () => {
     const user = userEvent.setup();
     const { container } = render(
       <ExamplesSection
-        data={data}
+        data={multiSentenceData}
         currentWordPackId="wp:alpha"
         isActionLoading={false}
         onGenerateExamples={vi.fn()}
@@ -85,8 +98,8 @@ describe('ExamplesSection', () => {
       />,
     );
 
-    const englishSentence = container.querySelector('.ex-en .sentence-pair-highlight') as HTMLElement;
-    const japaneseSentence = screen.getByRole('group', { name: '日本語訳 1: 英文と対応' });
+    const englishSentence = container.querySelectorAll('.ex-en .sentence-pair-highlight')[1] as HTMLElement;
+    const japaneseSentence = screen.getByRole('group', { name: '日本語訳 2: 英文と対応' });
     expect(englishSentence).toBeInTheDocument();
 
     await user.hover(englishSentence);
@@ -107,5 +120,30 @@ describe('ExamplesSection', () => {
     await user.click(screen.getByRole('button', { name: 'Devカテゴリの例文1の語句から関連WordPackを開く' }));
 
     expect(onLemmaOpen).toHaveBeenCalledWith('alpha');
+  });
+
+  it('does not highlight a single-sentence WordPack example', () => {
+    const { container } = render(
+      <ExamplesSection
+        data={data}
+        currentWordPackId="wp:alpha"
+        isActionLoading={false}
+        onGenerateExamples={vi.fn()}
+        onDeleteExample={vi.fn()}
+        onImportArticleFromExample={vi.fn()}
+        onCopyExampleText={vi.fn()}
+        onLemmaOpen={vi.fn()}
+        lookupLemmaMetadata={vi.fn()}
+        triggerUnknownLemmaGeneration={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('group', { name: '日本語訳 1: 英文と対応' })).not.toBeInTheDocument();
+    const englishSentence = container.querySelector('.ex-en .sentence-pair-highlight');
+    const japaneseSentence = container.querySelector('.ex-ja .sentence-pair-highlight');
+    expect(englishSentence).toBeInTheDocument();
+    expect(japaneseSentence).toBeInTheDocument();
+    expect(englishSentence).not.toHaveClass('is-paired');
+    expect(japaneseSentence).not.toHaveClass('is-paired');
   });
 });

@@ -52,6 +52,7 @@ import type {
 import { ApiError } from '../../lib/fetcher';
 import {
   buildSentenceAlignment,
+  countSentencePairs,
   type SentenceParagraph,
   type SentenceSegment,
 } from '../../lib/sentenceAlignment';
@@ -355,13 +356,13 @@ const QuizPassageArticle: React.FC<{
   onGenerate: (lemma: string) => void;
 }> = ({ passage, links, isGuest, onOpenWordPack, onCreateEmpty, onGenerate }) => {
   const [translationOpen, setTranslationOpen] = useState(false);
-  const sentenceHighlight = useSentencePairHighlight(
-    translationOpen,
-    `${passage.id}:${passage.body_en}:${passage.body_ja ?? ''}`,
-  );
   const alignment = useMemo(
     () => buildSentenceAlignment(passage.body_en, passage.body_ja),
     [passage.body_en, passage.body_ja],
+  );
+  const sentenceHighlight = useSentencePairHighlight(
+    translationOpen && countSentencePairs(alignment) > 1,
+    `${passage.id}:${passage.body_en}:${passage.body_ja ?? ''}`,
   );
   return (
     <article className={`quiz-passage ${translationOpen ? 'is-translation-open' : ''}`}>
