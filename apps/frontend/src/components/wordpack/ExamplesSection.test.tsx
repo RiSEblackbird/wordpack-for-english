@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
@@ -91,14 +91,18 @@ describe('ExamplesSection', () => {
 
     await user.hover(englishSentence);
 
-    expect(englishSentence).toHaveClass('is-active');
-    expect(japaneseSentence).toHaveClass('is-active');
+    await waitFor(() => {
+      expect(englishSentence).toHaveClass('is-active');
+      expect(japaneseSentence).toHaveClass('is-active');
+    });
 
     await user.unhover(englishSentence);
     await user.click(japaneseSentence);
 
-    expect(englishSentence).toHaveClass('is-pinned');
-    expect(japaneseSentence).toHaveClass('is-pinned');
+    await waitFor(() => {
+      expect(englishSentence).toHaveClass('is-pinned');
+      expect(japaneseSentence).toHaveClass('is-pinned');
+    });
 
     await user.click(screen.getByRole('button', { name: 'Devカテゴリの例文1の語句から関連WordPackを開く' }));
 

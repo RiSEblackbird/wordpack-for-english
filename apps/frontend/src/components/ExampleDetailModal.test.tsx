@@ -108,14 +108,18 @@ describe('ExampleDetailModal', () => {
 
     await user.hover(englishSecondSentence);
 
-    expect(englishSecondSentence).toHaveClass('is-active');
-    expect(japaneseSecondSentence).toHaveClass('is-active');
+    await waitFor(() => {
+      expect(englishSecondSentence).toHaveClass('is-active');
+      expect(japaneseSecondSentence).toHaveClass('is-active');
+    });
 
     await user.unhover(englishSecondSentence);
     await user.click(japaneseSecondSentence);
 
-    expect(englishSecondSentence).toHaveClass('is-pinned');
-    expect(japaneseSecondSentence).toHaveClass('is-pinned');
+    await waitFor(() => {
+      expect(englishSecondSentence).toHaveClass('is-pinned');
+      expect(japaneseSecondSentence).toHaveClass('is-pinned');
+    });
   });
 
   it('shows study progress buttons with counts', () => {

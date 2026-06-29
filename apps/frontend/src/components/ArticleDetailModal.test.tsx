@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
@@ -91,14 +91,18 @@ describe('ArticleDetailModal', () => {
 
     await user.hover(englishSecondSentence);
 
-    expect(englishSecondSentence).toHaveClass('is-active');
-    expect(japaneseSecondSentence).toHaveClass('is-active');
+    await waitFor(() => {
+      expect(englishSecondSentence).toHaveClass('is-active');
+      expect(japaneseSecondSentence).toHaveClass('is-active');
+    });
 
     await user.unhover(englishSecondSentence);
     await user.click(japaneseSecondSentence);
 
-    expect(englishSecondSentence).toHaveClass('is-pinned');
-    expect(japaneseSecondSentence).toHaveClass('is-pinned');
+    await waitFor(() => {
+      expect(englishSecondSentence).toHaveClass('is-pinned');
+      expect(japaneseSecondSentence).toHaveClass('is-pinned');
+    });
   });
 
   it('selects a related WordPack preview inside the article dialog', async () => {
