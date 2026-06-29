@@ -180,8 +180,44 @@ const setupFetch = () => {
               checked_only_count: 0,
               learned_count: 0,
             },
+            {
+              id: 'wp:fallback-empty',
+              lemma: 'fallback',
+              sense_title: '',
+              created_at: '2024-01-01T00:00:00Z',
+              updated_at: '2024-01-02T00:00:00Z',
+              is_empty: true,
+              guest_public: true,
+              examples_count: { Dev: 0, CS: 0, LLM: 0, Business: 0, Common: 0 },
+              checked_only_count: 0,
+              learned_count: 0,
+            },
+            {
+              id: 'wp:latency',
+              lemma: 'latency',
+              sense_title: '遅延',
+              created_at: '2024-01-01T00:00:00Z',
+              updated_at: '2024-01-02T00:00:00Z',
+              is_empty: false,
+              guest_public: true,
+              examples_count: { Dev: 1, CS: 1, LLM: 0, Business: 0, Common: 0 },
+              checked_only_count: 0,
+              learned_count: 0,
+            },
+            {
+              id: 'wp:reliable',
+              lemma: 'reliable',
+              sense_title: '信頼できる',
+              created_at: '2024-01-01T00:00:00Z',
+              updated_at: '2024-01-02T00:00:00Z',
+              is_empty: false,
+              guest_public: true,
+              examples_count: { Dev: 0, CS: 1, LLM: 0, Business: 1, Common: 0 },
+              checked_only_count: 0,
+              learned_count: 0,
+            },
           ],
-          total: 1,
+          total: 4,
           limit: 100,
           offset: 0,
         }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
@@ -313,6 +349,27 @@ describe('QuizPage', () => {
     expect(screen.getByRole('button', { name: '本文/問題を広げる' })).toHaveAttribute('aria-pressed', 'false');
     expect(generator).toBeVisible();
     expect(savedList).toBeVisible();
+  });
+
+  it('shows only generated WordPacks and auto-fills optional lemmas from them', async () => {
+    renderQuizPage();
+
+    expect(await screen.findByRole('heading', { name: 'Reliable API Deployments' })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'mitigate / 軽減する' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'latency / 遅延' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'reliable / 信頼できる' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'fallback' })).not.toBeInTheDocument();
+    expect(screen.getByText('生成済みWordPackだけを表示します。未生成WordPack1件は候補から除外しています。')).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    const lemmaInput = screen.getByLabelText('任意 lemma');
+    await act(async () => {
+      await user.clear(lemmaInput);
+      await user.click(screen.getByRole('button', { name: 'お任せで3件セット' }));
+    });
+
+    expect(lemmaInput).toHaveValue('mitigate, latency, reliable');
+    expect(screen.getByText('生成済みWordPackから3件のlemmaを任意lemmaにセットしました。')).toBeInTheDocument();
   });
 
   it('lets authenticated users toggle guest public visibility from the quiz list', async () => {
