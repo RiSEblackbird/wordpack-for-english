@@ -6,7 +6,7 @@ import { useAuth } from '../AuthContext';
 import { GuestLock } from './GuestLock';
 import { SentencePairParagraphs, useSentencePairHighlight } from './SentencePairHighlighter';
 import { WordPackPanel, type WordPackPreviewMeta } from './WordPackPanel';
-import { buildSentenceAlignment } from '../lib/sentenceAlignment';
+import { buildSentenceAlignment, countSentencePairs } from '../lib/sentenceAlignment';
 
 export interface ArticleWordPackLink {
   word_pack_id: string;
@@ -61,11 +61,14 @@ export const ArticleDetailModal: React.FC<Props> = ({
 }) => {
   const { isGuest } = useAuth();
   const wordPackPreviewFocusRef = useRef<HTMLElement>(null);
-  const articleHighlightKey = article ? `${article.id}:${article.body_en}:${article.body_ja}` : null;
-  const articleSentenceHighlight = useSentencePairHighlight(Boolean(article?.body_ja?.trim()), articleHighlightKey);
   const articleAlignment = useMemo(
     () => buildSentenceAlignment(article?.body_en ?? '', article?.body_ja ?? ''),
     [article?.body_en, article?.body_ja],
+  );
+  const articleHighlightKey = article ? `${article.id}:${article.body_en}:${article.body_ja}` : null;
+  const articleSentenceHighlight = useSentencePairHighlight(
+    Boolean(article?.body_ja?.trim()) && countSentencePairs(articleAlignment) > 1,
+    articleHighlightKey,
   );
   const formatDateWithFallback = (value?: string | null) => {
     if (!value) return null;

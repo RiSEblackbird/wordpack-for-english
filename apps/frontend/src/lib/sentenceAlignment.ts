@@ -125,6 +125,14 @@ export const flattenSentenceParagraphs = (paragraphs: SentenceParagraph[]) => (
   paragraphs.flatMap((paragraph) => paragraph.sentences)
 );
 
+export const countSentencePairs = (alignment: SentenceAlignment): number => {
+  const englishPairedCount = flattenSentenceParagraphs(alignment.englishParagraphs)
+    .filter((sentence) => Boolean(sentence.pairKey)).length;
+  const japanesePairedCount = flattenSentenceParagraphs(alignment.japaneseParagraphs)
+    .filter((sentence) => Boolean(sentence.pairKey)).length;
+  return Math.min(englishPairedCount, japanesePairedCount);
+};
+
 const regroupJapaneseParagraphs = (
   englishParagraphs: SentenceParagraph[],
   japaneseParagraphs: SentenceParagraph[],

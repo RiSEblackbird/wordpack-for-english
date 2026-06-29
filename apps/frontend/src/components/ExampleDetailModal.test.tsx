@@ -122,6 +122,21 @@ describe('ExampleDetailModal', () => {
     });
   });
 
+  it('does not enable sentence highlighting for a single-sentence example', () => {
+    render(
+      <SettingsProvider>
+        <ExampleDetailModal isOpen onClose={() => {}} item={item} />
+      </SettingsProvider>
+    );
+
+    expect(screen.queryByRole('group', { name: '英文 1: 日本語訳と対応' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '日本語訳 1: 英文と対応' })).not.toBeInTheDocument();
+    const pairList = screen.getByRole('list', { name: '原文と日本語訳の対応' });
+    const sentence = pairList.querySelector('.sentence-pair-highlight');
+    expect(sentence).toBeInTheDocument();
+    expect(sentence).not.toHaveClass('is-paired');
+  });
+
   it('clears pinned sentence when the example item changes', async () => {
     const firstExample: ExampleItemData = {
       ...item,

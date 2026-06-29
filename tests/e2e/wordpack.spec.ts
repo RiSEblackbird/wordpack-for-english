@@ -89,7 +89,13 @@ const createBaseWordPack = (lemma: string): WordPack => ({
   },
   contrast: [],
   examples: {
-    Dev: [{ en: `${lemma} dev example`, ja: `${lemma} の例文`, grammar_ja: '第3文型' }],
+    Dev: [
+      {
+        en: `${lemma} dev example starts. ${lemma} dev example continues.`,
+        ja: `${lemma} の例文が始まります。${lemma} の例文が続きます。`,
+        grammar_ja: '第3文型',
+      },
+    ],
     CS: [],
     LLM: [],
     Business: [],
