@@ -175,7 +175,8 @@ export const ExampleDetailModal: React.FC<ExampleDetailModalProps> = ({
     transcriptionUpdating || !isTranscriptionWithinRange || transcriptionInput.trim().length === 0;
   const explanationSections = splitExampleExplanation(item?.grammar_ja);
   const translationPairs = item ? buildExampleTranslationPairs(item.en, item.ja) : [];
-  const exampleSentenceHighlight = useSentencePairHighlight(Boolean(item?.ja?.trim()));
+  const exampleHighlightKey = item ? `${item.id}:${item.en}:${item.ja}` : null;
+  const exampleSentenceHighlight = useSentencePairHighlight(Boolean(item?.ja?.trim()), exampleHighlightKey);
   const formattedPackUpdatedAt = item?.word_pack_updated_at ? formatDateJst(item.word_pack_updated_at) || item.word_pack_updated_at : null;
   const formattedCreatedAt = item ? formatDateJst(item.created_at) || item.created_at : null;
 

@@ -46,8 +46,19 @@ export const ExamplesSection: React.FC<ExamplesSectionProps> = ({
   getCategorySectionId = (category) => `examples-${category}`,
 }) => {
   const { isGuest } = useAuth();
-  const exampleSentenceHighlight = useSentencePairHighlight(true);
   const exampleCategories = useMemo(() => (['Dev', 'CS', 'LLM', 'Business', 'Common'] as ExampleCategory[]), []);
+  const examplesHighlightKey = useMemo(
+    () => [
+      data.id ?? '',
+      data.lemma,
+      data.sense_title,
+      ...exampleCategories.flatMap((category) => (
+        (data.examples?.[category] ?? []).map((example) => `${category}:${example.en}\u0000${example.ja}`)
+      )),
+    ].join('\u0001'),
+    [data.id, data.lemma, data.sense_title, data.examples, exampleCategories],
+  );
+  const exampleSentenceHighlight = useSentencePairHighlight(true, examplesHighlightKey);
   const styleDefinition = useMemo(
     () => `
       .ex-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }

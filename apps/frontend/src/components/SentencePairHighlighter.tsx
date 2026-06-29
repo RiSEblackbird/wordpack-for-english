@@ -10,26 +10,30 @@ export interface SentencePairHighlightState {
   clearPairs: () => void;
 }
 
-export const useSentencePairHighlight = (enabled = true): SentencePairHighlightState => {
+export const useSentencePairHighlight = (
+  enabled = true,
+  resetKey: string | number | null = null,
+): SentencePairHighlightState => {
   const [hoveredPairKey, setHoveredPairKey] = useState<string | null>(null);
   const [pinnedPairKey, setPinnedPairKey] = useState<string | null>(null);
+  const [currentResetKey, setCurrentResetKey] = useState<string | number | null>(resetKey);
+  const isCurrentScope = currentResetKey === resetKey;
 
   useEffect(() => {
-    if (!enabled) {
-      setHoveredPairKey(null);
-      setPinnedPairKey(null);
-    }
-  }, [enabled]);
+    setCurrentResetKey(resetKey);
+    setHoveredPairKey(null);
+    setPinnedPairKey(null);
+  }, [enabled, resetKey]);
 
   return {
     enabled,
-    activePairKey: enabled ? hoveredPairKey ?? pinnedPairKey : null,
-    pinnedPairKey: enabled ? pinnedPairKey : null,
+    activePairKey: enabled && isCurrentScope ? hoveredPairKey ?? pinnedPairKey : null,
+    pinnedPairKey: enabled && isCurrentScope ? pinnedPairKey : null,
     hoverPair: (key) => {
-      if (enabled) setHoveredPairKey(key);
+      if (enabled && isCurrentScope) setHoveredPairKey(key);
     },
     togglePinnedPair: (key) => {
-      if (!enabled) return;
+      if (!enabled || !isCurrentScope) return;
       setPinnedPairKey((current) => (current === key ? null : key));
     },
     clearPairs: () => {
@@ -123,6 +127,7 @@ export const SentencePairParagraphs: React.FC<{
   paragraphClassName?: string;
   sentenceClassName?: string;
   sentenceInteractive?: boolean;
+  preserveWhitespaceFrom?: string;
   renderSentence?: (sentence: SentenceSegment) => React.ReactNode;
 }> = ({
   paragraphs,
@@ -131,26 +136,37 @@ export const SentencePairParagraphs: React.FC<{
   paragraphClassName,
   sentenceClassName,
   sentenceInteractive = true,
+  preserveWhitespaceFrom,
   renderSentence,
 }) => (
   <>
-    {paragraphs.map((paragraph) => (
-      <p key={paragraph.key} className={paragraphClassName}>
-        {paragraph.sentences.map((sentence, sentenceIndex) => (
-          <React.Fragment key={sentence.key}>
-            <SentencePairSpan
-              sentence={sentence}
-              language={language}
-              highlight={highlight}
-              className={sentenceClassName}
-              interactive={sentenceInteractive}
-            >
-              {renderSentence ? renderSentence(sentence) : sentence.text}
-            </SentencePairSpan>
-            {sentenceIndex < paragraph.sentences.length - 1 ? ' ' : null}
-          </React.Fragment>
-        ))}
-      </p>
-    ))}
+    {paragraphs.map((paragraph) => {
+      let cursor = paragraph.sentences[0]?.start ?? 0;
+      return (
+        <p key={paragraph.key} className={paragraphClassName}>
+          {paragraph.sentences.map((sentence, sentenceIndex) => {
+            const preservedWhitespace = preserveWhitespaceFrom
+              ? preserveWhitespaceFrom.slice(cursor, sentence.start)
+              : null;
+            cursor = sentence.end;
+            return (
+              <React.Fragment key={sentence.key}>
+                {preservedWhitespace}
+                <SentencePairSpan
+                  sentence={sentence}
+                  language={language}
+                  highlight={highlight}
+                  className={sentenceClassName}
+                  interactive={sentenceInteractive}
+                >
+                  {renderSentence ? renderSentence(sentence) : sentence.text}
+                </SentencePairSpan>
+                {!preserveWhitespaceFrom && sentenceIndex < paragraph.sentences.length - 1 ? ' ' : null}
+              </React.Fragment>
+            );
+          })}
+        </p>
+      );
+    })}
   </>
 );

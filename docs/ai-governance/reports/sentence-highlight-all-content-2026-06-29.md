@@ -103,6 +103,7 @@
 
 - 実装を落とす観点で見つけた問題: WordPack例文の英文ブロックは既に関連WordPackを開く操作対象で、文spanをfocusableにするとネストした操作対象になるため、英文側はhoverのみ、訳文側はkeyboard/click対応にした
 - P0候補: InlineWordPackボタンをクリックしたときに文固定が誤発火する問題は、click無視対象で防いだ
+- Codex reviewで見つけた問題: Reader / Exampleのコンテンツ切替時に同じpairKeyの固定状態が持ち越される可能性と、Reader本文の単一改行が再構成で失われる可能性を修正した
 - 証跡不足: 専用スクリーンショットは未取得。DOMテストとPlaywright実ブラウザ操作で主要状態を確認した
 - 残リスク: Reader長文では文ごとのTab停止数が増える。長大記事向けのroving focusやショートカットは別Issue候補
 
@@ -118,8 +119,8 @@
 - トレース: Playwright smoke 9 passed
 - テスト結果:
   - `cd apps/frontend && npx tsc -p tsconfig.json`: pass
-  - `cd apps/frontend && npm test -- --run src/components/ArticleDetailModal.test.tsx src/components/ExampleDetailModal.test.tsx src/components/wordpack/ExamplesSection.test.tsx src/pages/QuizPage/QuizPage.test.tsx --silent`: 23 passed
-  - `cd apps/frontend && npm test -- --coverage --silent`: 179 passed / 1 skipped
+  - `cd apps/frontend && npm test -- --run src/components/ArticleDetailModal.test.tsx src/components/ExampleDetailModal.test.tsx src/components/wordpack/ExamplesSection.test.tsx src/pages/QuizPage/QuizPage.test.tsx --silent`: 28 passed
+  - `cd apps/frontend && npm test -- --coverage --silent`: 184 passed / 1 skipped
   - `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts`: 9 passed
   - `git diff --check`: pass
 - 手動確認: 差分レビューでQuizの既存ARIA名、Reader/Example/WordPackの適用、UserManual更新、公開文書の秘密情報なしを確認

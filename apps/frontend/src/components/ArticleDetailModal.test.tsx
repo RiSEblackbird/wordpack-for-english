@@ -105,6 +105,74 @@ describe('ArticleDetailModal', () => {
     });
   });
 
+  it('preserves imported article line breaks while highlighting sentences', () => {
+    const article: ArticleDetailData = {
+      id: 'art:line-breaks',
+      title_en: 'Line Breaks',
+      body_en: 'First line stays.\nSecond line stays.',
+      body_ja: '1行目を保持します。\n2行目を保持します。',
+      related_word_packs: [],
+    };
+
+    render(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        article={article}
+      />,
+    );
+
+    expect(screen.getByLabelText('英文本文').textContent).toBe(article.body_en);
+    expect(screen.getByLabelText('日本語訳本文').textContent).toBe(article.body_ja);
+    expect(screen.getByRole('group', { name: '英文 2: 日本語訳と対応' })).toHaveTextContent('Second line stays.');
+  });
+
+  it('clears pinned article sentence when the article changes', async () => {
+    const firstArticle: ArticleDetailData = {
+      id: 'art:first',
+      title_en: 'First Article',
+      body_en: 'First article opens. First article pins.',
+      body_ja: '最初の記事を開きます。最初の記事を固定します。',
+      related_word_packs: [],
+    };
+    const secondArticle: ArticleDetailData = {
+      id: 'art:second',
+      title_en: 'Second Article',
+      body_en: 'Second article opens. Second article stays clear.',
+      body_ja: '2つ目の記事を開きます。2つ目の記事は固定されません。',
+      related_word_packs: [],
+    };
+    const user = userEvent.setup();
+
+    const { rerender } = render(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        article={firstArticle}
+      />,
+    );
+
+    const pinnedSentence = screen.getByRole('group', { name: '日本語訳 2: 英文と対応' });
+    await user.click(pinnedSentence);
+
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: '英文 2: 日本語訳と対応' })).toHaveClass('is-pinned');
+    });
+
+    rerender(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        article={secondArticle}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('group', { name: '英文 2: 日本語訳と対応' })).not.toHaveClass('is-pinned');
+      expect(screen.getByRole('group', { name: '日本語訳 2: 英文と対応' })).not.toHaveClass('is-pinned');
+    });
+  });
+
   it('selects a related WordPack preview inside the article dialog', async () => {
     const article: ArticleDetailData = {
       id: 'art:preview',

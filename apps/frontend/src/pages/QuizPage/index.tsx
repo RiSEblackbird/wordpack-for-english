@@ -355,7 +355,10 @@ const QuizPassageArticle: React.FC<{
   onGenerate: (lemma: string) => void;
 }> = ({ passage, links, isGuest, onOpenWordPack, onCreateEmpty, onGenerate }) => {
   const [translationOpen, setTranslationOpen] = useState(false);
-  const sentenceHighlight = useSentencePairHighlight(translationOpen);
+  const sentenceHighlight = useSentencePairHighlight(
+    translationOpen,
+    `${passage.id}:${passage.body_en}:${passage.body_ja ?? ''}`,
+  );
   const alignment = useMemo(
     () => buildSentenceAlignment(passage.body_en, passage.body_ja),
     [passage.body_en, passage.body_ja],

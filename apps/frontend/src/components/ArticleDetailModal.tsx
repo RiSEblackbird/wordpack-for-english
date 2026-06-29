@@ -61,7 +61,8 @@ export const ArticleDetailModal: React.FC<Props> = ({
 }) => {
   const { isGuest } = useAuth();
   const wordPackPreviewFocusRef = useRef<HTMLElement>(null);
-  const articleSentenceHighlight = useSentencePairHighlight(Boolean(article?.body_ja?.trim()));
+  const articleHighlightKey = article ? `${article.id}:${article.body_en}:${article.body_ja}` : null;
+  const articleSentenceHighlight = useSentencePairHighlight(Boolean(article?.body_ja?.trim()), articleHighlightKey);
   const articleAlignment = useMemo(
     () => buildSentenceAlignment(article?.body_en ?? '', article?.body_ja ?? ''),
     [article?.body_en, article?.body_ja],
@@ -308,6 +309,7 @@ export const ArticleDetailModal: React.FC<Props> = ({
                   language="en"
                   highlight={articleSentenceHighlight}
                   paragraphClassName="article-text-paragraph"
+                  preserveWhitespaceFrom={article.body_en}
                 />
               </div>
             </div>
@@ -319,6 +321,7 @@ export const ArticleDetailModal: React.FC<Props> = ({
                   language="ja"
                   highlight={articleSentenceHighlight}
                   paragraphClassName="article-text-paragraph"
+                  preserveWhitespaceFrom={article.body_ja}
                 />
               </div>
             </div>
