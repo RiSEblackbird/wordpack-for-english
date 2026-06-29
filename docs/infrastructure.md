@@ -173,14 +173,13 @@ CD のチェック表示は GitHub Actions と Cloud Build の二経路で行う
 
 ### E2E 実行レイヤ（Playwright）
 
-Playwright の E2E は実行レイヤごとにスコープとブラウザを分離する。PR では最短のスモークのみを CI に含め、回帰は schedule（cron）または手動実行（workflow_dispatch）で起動する専用ワークフローで扱う。
+Playwright の E2E は実行レイヤごとにスコープとブラウザを分離する。PR では最短のスモークのみを CI に含め、フル回帰は必要時に手動実行（workflow_dispatch）で起動する専用ワークフローで扱う。
 
 | レイヤ | トリガー | ブラウザ | 実行コマンド | 成果物 |
 |---|---|---|---|---|
 | PR スモーク | `pull_request` | Chromium | `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/auth.spec.ts tests/e2e/guest.spec.ts tests/e2e/wordpack.spec.ts` | `playwright-report/`, `test-results/` |
 | PR ビジュアル回帰 | `pull_request`（`apps/frontend/src/**`, `apps/frontend/**/*.css`, `apps/frontend/**/*.tsx` の変更時） | Chromium | `npx playwright test -c tests/e2e/playwright.config.ts tests/e2e/visual.spec.ts` | `playwright-report/`, `test-results/` |
-| 夜間回帰 | `schedule (cron: 0 2 * * *)` / `workflow_dispatch` | Chromium | `npx playwright test -c tests/e2e/playwright.config.ts --browser=chromium` | `playwright-report/`, `test-results/` |
-| 週次クロスブラウザ | `schedule (cron: 0 3 * * 1)` / `workflow_dispatch` | Firefox / WebKit | `npx playwright test -c tests/e2e/playwright.config.ts --browser=firefox` / `npx playwright test -c tests/e2e/playwright.config.ts --browser=webkit` | `playwright-report/`, `test-results/` |
+| 手動回帰 | `workflow_dispatch` | Chromium | `npx playwright test -c tests/e2e/playwright.config.ts --browser=chromium` | `playwright-report/`, `test-results/` |
 
 各レイヤの実行前に `npx playwright install --with-deps` を実行してブラウザを取得する。成果物は GitHub Actions の Artifacts として 90 日保持する。ビジュアル回帰の差分画像や HTML レポートは対象ワークフローの実行画面から `playwright-report/` と `test-results/` をダウンロードして確認する。
 
