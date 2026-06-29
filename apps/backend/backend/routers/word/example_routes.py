@@ -5,7 +5,8 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...application.wordpack.errors import handle_flow_runtime_error
-from ...application.wordpack.generate_wordpack import build_llm_info, get_override_value
+from ...config import settings
+from ...infrastructure.llm.wordpack_generator import build_llm_info, get_override_value
 from ...flows.word_pack import WordPackFlow
 from ...models.word import (
     ExampleCategory,
@@ -110,7 +111,8 @@ async def generate_examples_for_word_pack(
         handle_flow_runtime_error(
             exc,
             lemma=lemma,
-            http_error_mapping=example_error_mapping(category.value),
+            strict_mode=settings.strict_mode,
+            error_mapping=example_error_mapping(category.value),
         )
         raise
 

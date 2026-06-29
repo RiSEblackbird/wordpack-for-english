@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import sys
+from importlib import import_module
 from typing import Any, Awaitable, Callable
 
 from fastapi import Request
 
-from ...application.wordpack.generate_wordpack import run_wordpack_flow as _run_wordpack_flow
+from ...infrastructure.llm.wordpack_generator import run_wordpack_flow as _run_wordpack_flow
 from ...auth import get_current_user
 from ...config import settings
 from ...id_factory import generate_word_pack_id as _generate_word_pack_id
@@ -28,7 +28,10 @@ async def require_authenticated_user(request: Request) -> dict[str, str]:
 
 
 def _word_router_package() -> Any | None:
-    return sys.modules.get("backend.routers.word")
+    try:
+        return import_module("backend.routers.word")
+    except Exception:
+        return None
 
 
 def get_store() -> Any:
