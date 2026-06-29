@@ -65,16 +65,18 @@ class _HostingApiHandler(BaseHTTPRequestHandler):
         self._record()
         self._send_json({"name": "projects/-/sites/demo-project/versions/version-1"})
 
+    def do_GET(self) -> None:
+        record = self._record()
+        if record["path"] == "/v1beta1/sites/demo-project/releases":
+            self._send_json({"releases": []})
+            return
+        self.send_error(404)
+
     def log_message(self, format: str, *args: object) -> None:
         return
 
 
-def test_deploy_firebase_hosting_uses_hosting_api_and_gcloud_token(tmp_path: Path) -> None:
-    _HostingApiHandler.requests = []
-    server = HTTPServer(("127.0.0.1", 0), _HostingApiHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
+def _write_hosting_fixture(tmp_path: Path) -> Path:
     public_dir = tmp_path / "dist"
     public_dir.mkdir()
     (public_dir / "index.html").write_text("<div>ok</div>", encoding="utf-8")
@@ -101,7 +103,10 @@ def test_deploy_firebase_hosting_uses_hosting_api_and_gcloud_token(tmp_path: Pat
         ),
         encoding="utf-8",
     )
+    return config_path
 
+
+def _write_fake_gcloud(tmp_path: Path, exit_status: int = 0) -> tuple[Path, Path]:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     gcloud_log = tmp_path / "gcloud.log"
@@ -110,14 +115,30 @@ def test_deploy_firebase_hosting_uses_hosting_api_and_gcloud_token(tmp_path: Pat
         "#!/usr/bin/env bash\n"
         "printf '%s\\n' \"$*\" >> \"${GCLOUD_LOG}\"\n"
         "if [ \"$1\" = \"auth\" ] && [ \"$2\" = \"print-access-token\" ]; then\n"
-        "  printf 'fake-hosting-token\\n'\n"
-        "  exit 0\n"
+        f"  exit_status={exit_status}\n"
+        "  if [ \"$exit_status\" -eq 0 ]; then\n"
+        "    printf 'fake-hosting-token\\n'\n"
+        "  else\n"
+        "    printf 'unexpected gcloud call\\n' >&2\n"
+        "  fi\n"
+        "  exit \"$exit_status\"\n"
         "fi\n"
         "printf 'unexpected gcloud command: %s\\n' \"$*\" >&2\n"
         "exit 2\n",
         encoding="utf-8",
     )
     fake_gcloud.chmod(0o755)
+    return fake_bin, gcloud_log
+
+
+def test_deploy_firebase_hosting_uses_hosting_api_and_gcloud_token(tmp_path: Path) -> None:
+    _HostingApiHandler.requests = []
+    server = HTTPServer(("127.0.0.1", 0), _HostingApiHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    config_path = _write_hosting_fixture(tmp_path)
+    fake_bin, gcloud_log = _write_fake_gcloud(tmp_path)
 
     try:
         proc = subprocess.run(
@@ -166,3 +187,88 @@ def test_deploy_firebase_hosting_uses_hosting_api_and_gcloud_token(tmp_path: Pat
     }
     assert requests[5]["path"] == "/v1beta1/sites/demo-project/releases"
     assert requests[5]["query"] == {"versionName": ["sites/demo-project/versions/version-1"]}
+
+
+def test_deploy_firebase_hosting_plan_only_does_not_call_gcloud_or_api(tmp_path: Path) -> None:
+    config_path = _write_hosting_fixture(tmp_path)
+    fake_bin, gcloud_log = _write_fake_gcloud(tmp_path, exit_status=2)
+
+    proc = subprocess.run(
+        [
+            "python",
+            "scripts/deploy_firebase_hosting.py",
+            "--project",
+            "demo-project",
+            "--site",
+            "demo-project",
+            "--config",
+            str(config_path),
+            "--plan-only",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "GCLOUD_LOG": str(gcloud_log),
+            "FIREBASE_HOSTING_API_BASE_URL": "http://127.0.0.1:9/v1beta1",
+        },
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert not gcloud_log.exists()
+    assert "Plan-only preflight complete" in proc.stdout
+    assert "POST /sites/demo-project/versions" in proc.stdout
+    assert "PATCH /sites/demo-project/versions/{versionId}?update_mask=status,config" in proc.stdout
+
+
+def test_deploy_firebase_hosting_probe_only_uses_read_only_releases_list(tmp_path: Path) -> None:
+    _HostingApiHandler.requests = []
+    server = HTTPServer(("127.0.0.1", 0), _HostingApiHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    config_path = _write_hosting_fixture(tmp_path)
+    fake_bin, gcloud_log = _write_fake_gcloud(tmp_path)
+
+    try:
+        proc = subprocess.run(
+            [
+                "python",
+                "scripts/deploy_firebase_hosting.py",
+                "--project",
+                "demo-project",
+                "--site",
+                "demo-project",
+                "--config",
+                str(config_path),
+                "--probe-only",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "GCLOUD_LOG": str(gcloud_log),
+                "FIREBASE_HOSTING_API_BASE_URL": f"http://127.0.0.1:{server.server_port}/v1beta1",
+            },
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert gcloud_log.read_text(encoding="utf-8").splitlines() == ["auth print-access-token --quiet"]
+    assert "Probe-only preflight complete" in proc.stdout
+    assert _HostingApiHandler.requests == [
+        {
+            "method": "GET",
+            "path": "/v1beta1/sites/demo-project/releases",
+            "query": {"pageSize": ["1"]},
+            "authorization": "Bearer fake-hosting-token",
+            "body": b"",
+        }
+    ]
