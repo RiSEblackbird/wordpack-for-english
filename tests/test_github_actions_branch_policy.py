@@ -163,6 +163,7 @@ def test_production_deploy_preflight_checks_prs_without_deploying() -> None:
             "--probe-only",
             "deploy_cloud_run.sh \\",
             "gcloud auth print-access-token --quiet >/dev/null",
+            "pageSize=0",
             "google-github-actions/auth@v2",
             "scripts/deploy_firebase_hosting.py",
         ],
@@ -172,5 +173,6 @@ def test_production_deploy_preflight_checks_prs_without_deploying() -> None:
         [
             "environment: production",
             "firebase deploy --only hosting",
+            "pageSize=1",
         ],
     )
