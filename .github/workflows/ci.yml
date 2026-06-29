@@ -156,6 +156,10 @@ jobs:
       - name: Run vitest
         run: npm test -- --coverage --silent
 
+      - name: Check frontend architecture boundaries
+        working-directory: ${{ github.workspace }}
+        run: npm run check:frontend-architecture
+
   playwright_smoke:
     name: Playwright smoke (PR critical flows)
     runs-on: ubuntu-latest

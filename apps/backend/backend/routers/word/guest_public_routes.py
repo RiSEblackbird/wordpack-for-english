@@ -1,8 +1,14 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from ...application.wordpack.guest_public import update_guest_public_flag
+from ...application.common.errors import NotFoundError
+from ...application.wordpack.guest_public import (
+    UpdateWordPackGuestPublicCommand,
+    update_guest_public_flag,
+)
+from ...infrastructure.runtime import SystemClock
+from ...logging import logger
 from ...models.word import WordPackGuestPublicRequest, WordPackGuestPublicResponse
 from .dependencies import get_store, require_authenticated_user
 
@@ -22,9 +28,23 @@ async def update_word_pack_guest_public(
 ) -> WordPackGuestPublicResponse:
     """WordPack単位のゲスト公開フラグを更新する。"""
 
-    return update_guest_public_flag(
-        request=request,
-        repository=get_store(),
+    command = UpdateWordPackGuestPublicCommand(
         word_pack_id=word_pack_id,
-        req=req,
+        guest_public=req.guest_public,
+        updated_at=SystemClock().now_iso(),
+    )
+    try:
+        result = update_guest_public_flag(repository=get_store(), command=command)
+    except NotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    logger.info(
+        "wordpack_guest_public_updated",
+        word_pack_id=word_pack_id,
+        user_id=getattr(request.state, "user_id", None),
+        guest_public=req.guest_public,
+    )
+    return WordPackGuestPublicResponse(
+        word_pack_id=result.word_pack_id,
+        guest_public=result.guest_public,
     )

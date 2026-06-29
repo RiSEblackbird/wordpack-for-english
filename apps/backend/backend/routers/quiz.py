@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import uuid
 from collections.abc import Mapping
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from ..application.quiz.generation_jobs import enqueue_quiz_generation_job, get_quiz_generation_job
 from ..application.quiz.scoring import score_quiz_attempt
+from ..infrastructure.llm.quiz_generator import QuizGenerateFlowAdapter
+from ..infrastructure.runtime import AsyncioTaskScheduler, PrefixedUuidGenerator, SystemClock
 from ..models.quiz import (
     Quiz,
     QuizAttemptRequest,
@@ -23,10 +23,6 @@ from ..models.quiz import (
 from .word.dependencies import get_store, require_authenticated_user
 
 router = APIRouter(tags=["quiz"])
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
 
 
 def _question_count(quiz: Quiz) -> int:
@@ -94,7 +90,14 @@ async def create_quiz_generation_job(
     req: QuizGenerateRequest,
     _user: dict[str, str] = Depends(require_authenticated_user),
 ) -> QuizGenerationJobResponse:
-    return await enqueue_quiz_generation_job(req, get_store())
+    return await enqueue_quiz_generation_job(
+        req,
+        get_store(),
+        generator=QuizGenerateFlowAdapter(),
+        scheduler=AsyncioTaskScheduler(),
+        id_generator=PrefixedUuidGenerator("quiz-job:"),
+        clock=SystemClock(),
+    )
 
 
 @router.get(
@@ -106,7 +109,7 @@ async def get_quiz_generation_job_status(
     job_id: str,
     _user: dict[str, str] = Depends(require_authenticated_user),
 ) -> QuizGenerationJobResponse:
-    job = await get_quiz_generation_job(job_id, get_store())
+    job = await get_quiz_generation_job(job_id, get_store(), clock=SystemClock())
     if job is None:
         raise HTTPException(status_code=404, detail="Quiz generation job not found")
     return job
@@ -191,9 +194,9 @@ async def submit_quiz_attempt(
         raise HTTPException(status_code=404, detail="Quiz not found")
     quiz = Quiz.model_validate(row)
     score, total, results = score_quiz_attempt(quiz, req.answers)
-    submitted_at = _now_iso()
+    submitted_at = SystemClock().now_iso()
     percentage = (score / total * 100.0) if total else 0.0
-    attempt_id = f"quiz-attempt:{uuid.uuid4().hex}"
+    attempt_id = PrefixedUuidGenerator("quiz-attempt:").new_id()
     response = QuizAttemptResponse(
         id=attempt_id,
         quiz_id=quiz_id,

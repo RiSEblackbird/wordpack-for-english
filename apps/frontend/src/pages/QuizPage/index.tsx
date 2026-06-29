@@ -49,7 +49,7 @@ import type {
   QuizSection,
   QuizWordPackLink,
 } from '../../features/quiz/types';
-import { ApiError } from '../../lib/fetcher';
+import { ApiError } from '../../shared/api/ApiError';
 import {
   buildSentenceAlignment,
   countSentencePairs,

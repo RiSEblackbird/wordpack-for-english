@@ -5,6 +5,10 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ...application.wordpack.create_empty_wordpack import build_empty_wordpack
+from ...infrastructure.llm.empty_wordpack_title import (
+    EmptyWordPackTitleGenerationError,
+    generate_sense_title_for_empty_wordpack,
+)
 from ...models.word import (
     WordPack,
     WordPackCreateRequest,
@@ -32,7 +36,18 @@ async def create_empty_word_pack(
     if not lemma:
         raise HTTPException(status_code=400, detail="lemma is required")
 
-    empty_word_pack = build_empty_wordpack(lemma)
+    try:
+        generated_title = generate_sense_title_for_empty_wordpack(lemma)
+    except EmptyWordPackTitleGenerationError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": "LLM failed to generate sense_title (strict mode)",
+                "reason_code": "LLM_FAILURE",
+                "diagnostics": {"lemma": lemma, "error": str(exc)[:200]},
+            },
+        ) from exc
+    empty_word_pack = build_empty_wordpack(lemma, generated_title=generated_title)
     word_pack_id = next_word_pack_id()
     get_store().save_word_pack(word_pack_id, lemma, empty_word_pack.model_dump_json())
 

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "check:frontend-architecture": "node ./scripts/check_frontend_architecture_boundaries.mjs",
     "prepare:frontend-env": "node ./scripts/prepare-frontend-env.mjs"
   },
   "devDependencies": {
