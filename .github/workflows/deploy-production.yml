@@ -23,6 +23,7 @@ jobs:
       CLOUD_RUN_PROJECT_ID: ${{ secrets.GCP_SA_PROJECT_ID }}
       CLOUD_RUN_REGION: asia-northeast1
       CLOUD_RUN_ENV_FILE: .env.deploy
+      CLOUD_RUN_MIN_INSTANCES: ${{ vars.CLOUD_RUN_MIN_INSTANCES || '1' }}
       SKIP_FIRESTORE_INDEX_SYNC: "false"
       FIREBASE_PROJECT_ID: ${{ secrets.GCP_SA_PROJECT_ID }}
       TRIGGER_BRANCH: ${{ github.ref_name }}
@@ -130,12 +131,14 @@ jobs:
           CLOUD_RUN_PROJECT_ID: ${{ env.CLOUD_RUN_PROJECT_ID }}
           CLOUD_RUN_REGION: ${{ env.CLOUD_RUN_REGION }}
           CLOUD_RUN_ENV_FILE: ${{ env.CLOUD_RUN_ENV_FILE }}
+          CLOUD_RUN_MIN_INSTANCES: ${{ env.CLOUD_RUN_MIN_INSTANCES }}
           SKIP_FIRESTORE_INDEX_SYNC: ${{ env.SKIP_FIRESTORE_INDEX_SYNC }}
         run: |
           make release-cloud-run \
             PROJECT_ID="${CLOUD_RUN_PROJECT_ID}" \
             REGION="${CLOUD_RUN_REGION}" \
             ENV_FILE="${CLOUD_RUN_ENV_FILE}" \
+            MIN_INSTANCES="${CLOUD_RUN_MIN_INSTANCES}" \
             SKIP_FIRESTORE_INDEX_SYNC="${SKIP_FIRESTORE_INDEX_SYNC}" \
             TOOL=gcloud
 
