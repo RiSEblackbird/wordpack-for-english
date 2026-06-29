@@ -213,7 +213,7 @@ jobs:
               f"/collectionGroups/{quote(collection_group)}"
               "/indexes"
           )
-          url = f"https://firestore.googleapis.com/v1/{path}?pageSize=1"
+          url = f"https://firestore.googleapis.com/v1/{path}?pageSize=0"
           request = urllib.request.Request(
               url,
               headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},

@@ -54,6 +54,8 @@ const FORMAT_PROFILE_OPTIONS = Object.keys(FORMAT_PROFILE_LABELS) as QuizFormatP
 const GENERATION_DOMAIN_OPTIONS = Object.keys(GENERATION_DOMAIN_LABELS) as QuizGenerationDomain[];
 const DOMAIN_INTENSITY_OPTIONS = Object.keys(DOMAIN_INTENSITY_LABELS) as QuizDomainIntensity[];
 const DIFFICULTY_OPTIONS = Object.keys(DIFFICULTY_LABELS) as QuizDifficulty[];
+const AUTO_LEMMA_COUNT = 3;
+const WORD_PACK_PAGE_LIMIT = 100;
 
 const normalizeApiBase = (base: string) => base.replace(/\/+$/, '');
 
@@ -63,6 +65,8 @@ const splitListInput = (value: string): string[] => (
     .map((item) => item.trim())
     .filter(Boolean)
 );
+
+const isGeneratedWordPack = (wordPack: WordPackListItem): boolean => !wordPack.is_empty;
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -815,17 +819,48 @@ export const QuizPage: React.FC = () => {
   const resultMap = useMemo(() => getAttemptResultMap(attempt), [attempt]);
   const questions = useMemo(() => getAllQuestions(selectedQuiz), [selectedQuiz]);
   const linkWarnings = useMemo(() => relatedLinks.filter((link) => Boolean(link.warning)), [relatedLinks]);
+  const generatedWordPacks = useMemo(() => wordPacks.filter(isGeneratedWordPack), [wordPacks]);
+  const generatedWordPackIds = useMemo(() => new Set(generatedWordPacks.map((wordPack) => wordPack.id)), [generatedWordPacks]);
+  const autoLemmaCandidates = useMemo(() => (
+    generatedWordPacks
+      .map((wordPack) => wordPack.lemma.trim())
+      .filter(Boolean)
+      .slice(0, AUTO_LEMMA_COUNT)
+  ), [generatedWordPacks]);
   const unansweredCount = questions.filter((question) => !answers[question.id]).length;
   const generationDisabled = selectedWordPackIds.length === 0 && splitListInput(lemmaInput).length === 0;
+  const hiddenWordPackCount = wordPacks.length - generatedWordPacks.length;
+  const wordPackHelperText = hiddenWordPackCount > 0
+    ? `生成済みWordPackだけを表示します。未生成WordPack${hiddenWordPackCount}件は候補から除外しています。`
+    : '生成済みWordPackだけを表示します。未生成WordPackは候補に含めません。';
+  const autoLemmaHelpText = autoLemmaCandidates.length
+    ? `生成済みWordPackから${autoLemmaCandidates.length}件を任意lemmaにセットします。`
+    : '生成済みWordPackが読み込まれると、最大3件を任意lemmaにセットできます。';
+
+  useEffect(() => {
+    setSelectedWordPackIds((prev) => {
+      const next = prev.filter((id) => generatedWordPackIds.has(id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [generatedWordPackIds]);
 
   const loadWordPacks = useCallback(async () => {
     try {
-      const response = await fetchWordPackList(apiBase, {
-        limit: 100,
-        offset: 0,
-        timeoutMs: settings.requestTimeoutMs,
-      });
-      setWordPacks(response.items);
+      const items: WordPackListItem[] = [];
+      let offset = 0;
+      let total = Number.POSITIVE_INFINITY;
+      while (offset < total) {
+        const response = await fetchWordPackList(apiBase, {
+          limit: WORD_PACK_PAGE_LIMIT,
+          offset,
+          timeoutMs: settings.requestTimeoutMs,
+        });
+        items.push(...response.items);
+        total = response.total;
+        if (!response.items.length) break;
+        offset += response.items.length;
+      }
+      setWordPacks(items);
     } catch (error) {
       console.warn('[QuizPage] failed to load word packs', error);
     }
@@ -891,10 +926,19 @@ export const QuizPage: React.FC = () => {
     )));
   }, []);
 
+  const handleAutoSetLemmas = useCallback(() => {
+    if (!autoLemmaCandidates.length) return;
+    setLemmaInput(autoLemmaCandidates.join(', '));
+    setMessage({
+      kind: 'status',
+      text: `生成済みWordPackから${autoLemmaCandidates.length}件のlemmaを任意lemmaにセットしました。`,
+    });
+  }, [autoLemmaCandidates]);
+
   const handleCreateQuiz = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (generationDisabled) {
-      setMessage({ kind: 'alert', text: '含める WordPack または lemma を1件以上指定してください。' });
+      setMessage({ kind: 'alert', text: '含めるWordPackまたはlemmaを1件以上指定してください。' });
       return;
     }
     setGenerating(true);
@@ -1173,25 +1217,44 @@ export const QuizPage: React.FC = () => {
             </label>
           </div>
           <label>
-            含める WordPack
+            含めるWordPack
             <select
               multiple
               value={selectedWordPackIds}
               onChange={(event) => setSelectedWordPackIds(Array.from(event.currentTarget.selectedOptions).map((option) => option.value))}
               aria-describedby="quiz-wordpack-helper"
             >
-              {wordPacks.map((wordPack) => (
+              {generatedWordPacks.map((wordPack) => (
                 <option key={wordPack.id} value={wordPack.id}>
                   {wordPack.lemma}{wordPack.sense_title ? ` / ${wordPack.sense_title}` : ''}
                 </option>
               ))}
             </select>
           </label>
-          <p id="quiz-wordpack-helper" className="quiz-helper">任意入力の lemma と合わせて、最低1件を指定します。</p>
-          <label>
-            任意 lemma
-            <textarea value={lemmaInput} onChange={(event) => setLemmaInput(event.target.value)} rows={3} placeholder="mitigate, latency, trade-off" />
-          </label>
+          <p id="quiz-wordpack-helper" className="quiz-helper">{wordPackHelperText}</p>
+          <div className="quiz-field">
+            <div className="quiz-field-heading">
+              <label htmlFor="quiz-lemma-input">任意 lemma</label>
+              <button
+                type="button"
+                className="quiz-secondary-button"
+                onClick={handleAutoSetLemmas}
+                disabled={autoLemmaCandidates.length === 0}
+                aria-describedby="quiz-auto-lemma-helper"
+              >
+                お任せで3件セット
+              </button>
+            </div>
+            <textarea
+              id="quiz-lemma-input"
+              value={lemmaInput}
+              onChange={(event) => setLemmaInput(event.target.value)}
+              rows={3}
+              placeholder="mitigate, latency, trade-off"
+              aria-describedby="quiz-auto-lemma-helper"
+            />
+            <p id="quiz-auto-lemma-helper" className="quiz-helper">{autoLemmaHelpText}</p>
+          </div>
           <label>
             topic_seed
             <input value={topicSeed} onChange={(event) => setTopicSeed(event.target.value)} placeholder="API rate limiting" />
@@ -1201,7 +1264,7 @@ export const QuizPage: React.FC = () => {
             <input value={avoidTopics} onChange={(event) => setAvoidTopics(event.target.value)} placeholder="malware, credential theft" />
           </label>
           {generationDisabled ? (
-            <p className="quiz-input-error">含める WordPack または lemma を1件以上指定してください。</p>
+            <p className="quiz-input-error">含めるWordPackまたはlemmaを1件以上指定してください。</p>
           ) : null}
           <GuestLock isGuest={isGuest}>
             <button className="quiz-primary-button" type="submit" disabled={generating || generationDisabled}>
