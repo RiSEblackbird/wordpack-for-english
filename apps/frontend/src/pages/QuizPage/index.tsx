@@ -55,6 +55,7 @@ const GENERATION_DOMAIN_OPTIONS = Object.keys(GENERATION_DOMAIN_LABELS) as QuizG
 const DOMAIN_INTENSITY_OPTIONS = Object.keys(DOMAIN_INTENSITY_LABELS) as QuizDomainIntensity[];
 const DIFFICULTY_OPTIONS = Object.keys(DIFFICULTY_LABELS) as QuizDifficulty[];
 const AUTO_LEMMA_COUNT = 3;
+const WORD_PACK_PAGE_LIMIT = 100;
 
 const normalizeApiBase = (base: string) => base.replace(/\/+$/, '');
 
@@ -845,12 +846,21 @@ export const QuizPage: React.FC = () => {
 
   const loadWordPacks = useCallback(async () => {
     try {
-      const response = await fetchWordPackList(apiBase, {
-        limit: 100,
-        offset: 0,
-        timeoutMs: settings.requestTimeoutMs,
-      });
-      setWordPacks(response.items);
+      const items: WordPackListItem[] = [];
+      let offset = 0;
+      let total = Number.POSITIVE_INFINITY;
+      while (offset < total) {
+        const response = await fetchWordPackList(apiBase, {
+          limit: WORD_PACK_PAGE_LIMIT,
+          offset,
+          timeoutMs: settings.requestTimeoutMs,
+        });
+        items.push(...response.items);
+        total = response.total;
+        if (!response.items.length) break;
+        offset += response.items.length;
+      }
+      setWordPacks(items);
     } catch (error) {
       console.warn('[QuizPage] failed to load word packs', error);
     }

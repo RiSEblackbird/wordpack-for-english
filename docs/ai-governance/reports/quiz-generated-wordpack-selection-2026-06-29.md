@@ -15,7 +15,7 @@
 - 利用文脈: Quiz生成前に、題材に含める語を選ぶ
 - ユーザー目的: 実際に内容が生成済みのWordPackを使って、読解Quizの題材を素早く指定する
 - 支援するタスク: 生成済み候補の選択、任意lemmaの自動入力、Quiz生成前の入力確認
-- このUIが助ける理解・判断・行動: 未生成WordPackを誤って含める判断を避け、生成済み候補から3件を素早く使える
+- このUIが助ける理解・判断・行動: 未生成WordPackを誤って含める判断を避け、後続ページを含む生成済み候補から3件を素早く使える
 - このUIがなければ困る点: 空WordPackを選べてしまい、Quiz生成の題材として使えるかをユーザーが判断し直す必要がある
 - 削るべき情報・操作: 未生成候補は選択肢から削除した。自動入力ボタンは1つに絞り、主操作の生成開始とは視覚的に分けた
 - 検証仮説・成功指標: 未生成WordPackをQuiz sourceへ入れる誤選択が減り、任意lemma入力の手数が減る。計測は未実施
@@ -45,7 +45,7 @@
 | オフライン/利用不可 | 明示的なoffline検知はなし | 既存通信エラー経路に従う | Pass |
 | 狭幅 | ラベルとボタンはflex-wrapで折り返す | 同じ操作を継続 | Pass |
 | 文字拡大 | ボタンとhelperは折り返し、textareaは縦に伸びる | 同じ操作を継続 | Pass |
-| 長文・大量データ | 100件までの既存selectに生成済みだけを表示 | 複数選択または自動セット | Pass |
+| 長文・大量データ | WordPack一覧を全ページ取得し、生成済みだけを表示 | 複数選択または自動セット | Pass |
 
 ## 5. アクセシビリティ確認
 
@@ -98,7 +98,7 @@
 
 ## 10. 反証レビュー
 
-- 実装を落とす観点で見つけた問題: 未生成候補が送信stateに残る可能性を考慮し、候補再読込時に`selectedWordPackIds`を生成済みIDへ同期した
+- 実装を落とす観点で見つけた問題: 未生成候補が送信stateに残る可能性を考慮し、候補再読込時に`selectedWordPackIds`を生成済みIDへ同期した。自動レビューで、先頭100件に未生成が偏ると後続ページの生成済み候補を取りこぼす問題が指摘されたため、WordPack一覧を全ページ取得する実装と回帰テストを追加した
 - P0候補: なし
 - 証跡不足: 実ユーザーテストとmobile実機確認は未実施
 - 残リスク: 自動セットの候補順はAPI一覧順に依存する
@@ -113,7 +113,7 @@
 
 - スクリーンショット: `/private/tmp/wordpack-quiz-before.png`, `/private/tmp/wordpack-quiz-after.png`, `/private/tmp/wordpack-quiz-after-mobile.png`
 - トレース: N/A
-- テスト結果: `npm test -- src/pages/QuizPage/QuizPage.test.tsx --silent`, `npx tsc -p tsconfig.json`, `npm test -- --coverage --silent`
+- テスト結果: `npm test -- src/pages/QuizPage/QuizPage.test.tsx --silent`（7 tests）, `npx tsc -p tsconfig.json`, `npm test -- --coverage --silent`
 - 手動確認: Playwrightで変更前は`fallback`が候補に表示され、変更後は候補から消え、`お任せで3件セット`で`mitigate, latency, reliable`が入力されることを確認。mobile viewportではボタンとtextareaのbounding boxが重ならないことを確認
 - 取得できなかった証跡と理由: 実ユーザーテストは実施していない。production実データは今回のUI実装範囲外
 
