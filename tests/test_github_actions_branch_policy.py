@@ -155,6 +155,7 @@ def test_production_deploy_preflight_checks_prs_without_deploying() -> None:
         [
             "Static deploy preflight",
             "Authenticated deploy read-only probe",
+            "production-deploy-preflight-${{ github.workflow }}-${{ github.event_name }}-",
             "github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'",
             "github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch'",
             "ref: ${{ github.event.pull_request.base.sha }}",
