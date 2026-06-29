@@ -68,6 +68,39 @@ describe('ArticleDetailModal', () => {
     expect(heading.compareDocumentPosition(meta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('highlights paired English and Japanese article sentences', async () => {
+    const article: ArticleDetailData = {
+      id: 'art:highlight',
+      title_en: 'Sentence Pairing',
+      body_en: 'The cache serves fresh data. The platform keeps latency low.',
+      body_ja: 'キャッシュは新しいデータを提供します。プラットフォームは低遅延を保ちます。',
+      related_word_packs: [],
+    };
+    const user = userEvent.setup();
+
+    render(
+      <ArticleDetailModal
+        isOpen
+        onClose={() => {}}
+        article={article}
+      />,
+    );
+
+    const englishSecondSentence = screen.getByRole('group', { name: '英文 2: 日本語訳と対応' });
+    const japaneseSecondSentence = screen.getByRole('group', { name: '日本語訳 2: 英文と対応' });
+
+    await user.hover(englishSecondSentence);
+
+    expect(englishSecondSentence).toHaveClass('is-active');
+    expect(japaneseSecondSentence).toHaveClass('is-active');
+
+    await user.unhover(englishSecondSentence);
+    await user.click(japaneseSecondSentence);
+
+    expect(englishSecondSentence).toHaveClass('is-pinned');
+    expect(japaneseSecondSentence).toHaveClass('is-pinned');
+  });
+
   it('selects a related WordPack preview inside the article dialog', async () => {
     const article: ArticleDetailData = {
       id: 'art:preview',
