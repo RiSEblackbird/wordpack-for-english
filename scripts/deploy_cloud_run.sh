@@ -398,15 +398,6 @@ cleanup_generated_buildconfig() {
 trap cleanup_generated_buildconfig EXIT
 
 SUBSTITUTIONS=("_IMAGE_URI=${IMAGE_URI}")
-# GitHub Checks API に Cloud Build の結果を可視化したい場合は、
-# GitHub Actions から渡されたトークン/メタ情報を Cloud Build へ伝搬する。
-# cloudbuild.backend.yaml はこれらの substitution を参照するため、token がない場合も
-# 空値を渡して Cloud Build の missing substitution error を避ける。Cloud Build 側の
-# Checks API step は token/repo/sha が欠けていれば安全に skip する。
-SUBSTITUTIONS+=("_GITHUB_CHECKS_TOKEN=${GITHUB_CHECKS_TOKEN:-}")
-SUBSTITUTIONS+=("_GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-}")
-SUBSTITUTIONS+=("_GITHUB_SHA=${GITHUB_SHA:-}")
-SUBSTITUTIONS+=("_GITHUB_RUN_URL=${GITHUB_RUN_URL:-}")
 CONFIG_TO_USE="$BUILDCONFIG_PATH"
 
 if [[ ${#EXTRA_BUILD_ARGS[@]} -gt 0 ]]; then
