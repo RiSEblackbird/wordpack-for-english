@@ -172,7 +172,7 @@ flowchart LR
 
 Cloud Run dry-run と `Deploy to production` は `main` ブランチへの push で直接起動し、GitHub のコミットチェック一覧に CD の状態を表示する。PR では本番デプロイ job を作らず、`Production deploy preflight` で非破壊の事前検証を行う。CI 成功を必須にする場合は main ブランチ保護でチェックを必須化する。
 
-CD のチェック表示は GitHub Actions と Cloud Build の二経路で行う。main への push または手動リリース時は `Deploy to production` ワークフローが起動する。Cloud Build は `cloudbuild.backend.yaml` 内で GitHub Checks API に結果を送信する。`deploy-production.yml` から `GITHUB_CHECKS_TOKEN` を渡すことで、Cloud Build の成功結果もコミットチェック一覧に追加される。
+CD のチェック表示は GitHub Actions に集約する。main への push または手動リリース時は `Deploy to production` ワークフローが起動し、その job の成功/失敗で本番デプロイの状態を確認する。Cloud Build は `cloudbuild.backend.yaml` でバックエンド image build のみを担当し、GitHub Checks API への通知は行わない。これにより Cloud Build 内の外部通知が詰まって Cloud Run デプロイ開始前に止まるリスクを避ける。
 
 ### E2E 実行レイヤ（Playwright）
 
